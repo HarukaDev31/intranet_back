@@ -11,6 +11,7 @@ use App\Models\SoporteTi\SoporteTiChatSala;
 use App\Models\SoporteTi\SoporteTiMensajeLectura;
 use App\Jobs\SoporteTi\ProcessSoporteTiMarcarLeidosJob;
 use App\Models\SoporteTi\SoporteTiEstado;
+use App\Models\SoporteTi\SoporteTiEstadoTransicion;
 use App\Models\SoporteTi\SoporteTiMaqueta;
 use App\Models\SoporteTi\SoporteTiMensaje;
 use App\Models\SoporteTi\SoporteTiMensajeImagen;
@@ -103,12 +104,10 @@ class SoporteTiService
         if (!$authUser) {
             throw new AuthorizationException('No autenticado');
         }
-        if (!$this->usuarioEsStaffSoporteTi($authUser)) {
-            $uid = (int) $authUser->getKey();
-            if ($s->solicitante_user_id === null || (int) $s->solicitante_user_id !== $uid) {
-                throw new AuthorizationException('No autorizado para acceder a esta solicitud');
-            }
+        if (!$this->usuarioPuedeVerSolicitud($s, $authUser)) {
+            throw new AuthorizationException('No autorizado para acceder a esta solicitud');
         }
+
         return $s;
     }
 
@@ -122,13 +121,49 @@ class SoporteTiService
         if (!$authUser) {
             throw new AuthorizationException('No autenticado');
         }
-        if ($this->usuarioEsStaffSoporteTi($authUser)) {
-            return;
-        }
-        $uid = (int) $authUser->getKey();
-        if ($s->solicitante_user_id === null || (int) $s->solicitante_user_id !== $uid) {
+        if (!$this->usuarioPuedeVerSolicitud($s, $authUser)) {
             throw new AuthorizationException('No autorizado para acceder a esta solicitud');
         }
+    }
+
+    /**
+     * Acceso: staff global, solicitante, PM/analista asignados o miembro de la sala.
+     */
+    protected function usuarioPuedeVerSolicitud(SoporteTiSolicitud $s, Authenticatable $authUser): bool
+    {
+        if ($this->usuarioEsStaffSoporteTi($authUser)) {
+            return true;
+        }
+
+        $uid = (int) $authUser->getKey();
+        if ($uid <= 0) {
+            return false;
+        }
+
+        if ($s->solicitante_user_id !== null && (int) $s->solicitante_user_id === $uid) {
+            return true;
+        }
+        if ($s->pm_user_id !== null && (int) $s->pm_user_id === $uid) {
+            return true;
+        }
+        if ($s->analista_user_id !== null && (int) $s->analista_user_id === $uid) {
+            return true;
+        }
+
+        $salaId = null;
+        if ($s->relationLoaded('salaChat') && $s->salaChat) {
+            $salaId = (int) $s->salaChat->id;
+        } elseif ($s->salaChat()->exists()) {
+            $salaId = (int) $s->salaChat()->value('id');
+        }
+
+        if ($salaId) {
+            return SoporteTiChatMiembro::where('sala_id', $salaId)
+                ->where('usuario_id', $uid)
+                ->exists();
+        }
+
+        return false;
     }
 
     /**
@@ -180,7 +215,15 @@ class SoporteTiService
                 ->orderBy('created_at', 'desc');
 
             if ($authUser && !$this->usuarioEsStaffSoporteTi($authUser)) {
-                $query->where('solicitante_user_id', (int) $authUser->getKey());
+                $uid = (int) $authUser->getKey();
+                $query->where(function ($q) use ($uid) {
+                    $q->where('solicitante_user_id', $uid)
+                        ->orWhere('pm_user_id', $uid)
+                        ->orWhere('analista_user_id', $uid)
+                        ->orWhereHas('salaChat.miembros', function ($mq) use ($uid) {
+                            $mq->where('usuario_id', $uid);
+                        });
+                });
             }
 
             if (!empty($filters['q'])) {
@@ -188,12 +231,32 @@ class SoporteTiService
                 $query->where(function ($sub) use ($q) {
                     $sub->where('codigo', 'like', '%' . $q . '%')
                         ->orWhere('titulo', 'like', '%' . $q . '%')
-                        ->orWhere('solicitante', 'like', '%' . $q . '%');
+                        ->orWhere('solicitante', 'like', '%' . $q . '%')
+                        ->orWhere('pm', 'like', '%' . $q . '%')
+                        ->orWhere('analista', 'like', '%' . $q . '%');
                 });
             }
 
             if (!empty($filters['tipo_solicitud']) && $filters['tipo_solicitud'] !== 'todos') {
                 $query->where('tipo_solicitud', $filters['tipo_solicitud']);
+            }
+
+            if (!empty($filters['estado_codigo']) && $filters['estado_codigo'] !== 'todos') {
+                $codigo = (string) $filters['estado_codigo'];
+                $query->whereHas('estadoActual', function ($eq) use ($codigo) {
+                    $eq->where('codigo', $codigo);
+                });
+            }
+
+            if (!empty($filters['prioridad']) && (int) $filters['prioridad'] > 0) {
+                $query->where('prioridad', (int) $filters['prioridad']);
+            }
+
+            if (!empty($filters['solo_mias']) && $authUser && $this->usuarioEsStaffSoporteTi($authUser)) {
+                $uid = (int) $authUser->getKey();
+                $query->where(function ($q) use ($uid) {
+                    $q->where('pm_user_id', $uid)->orWhere('analista_user_id', $uid);
+                });
             }
 
             $rows = $query->get();
@@ -1132,6 +1195,7 @@ class SoporteTiService
             'puede_complejidad' => $esStaff && !$esTipoA,
             'puede_complejidad_pm' => $puedeComplejidadPm,
             'puede_complejidad_analista' => $puedeComplejidadAnalista,
+            'puede_asignacion' => $esStaff,
             'puede_estado' => $esCreador || $esStaff,
             'estados' => $estadosSelect,
             'estado_valor' => $estadoCodigo,
@@ -1226,15 +1290,67 @@ class SoporteTiService
 
     protected function validarTransicionEstado(SoporteTiSolicitud $solicitud, SoporteTiEstado $nuevoEstado)
     {
-        if ($nuevoEstado->codigo !== 'en_progreso') {
+        if ($nuevoEstado->codigo === 'en_progreso') {
+            if (!$this->puedeEnProgreso($solicitud)) {
+                throw new \InvalidArgumentException(
+                    'No se puede pasar a En progreso. Revise la complejidad y el flujo del ticket.'
+                );
+            }
+        }
+
+        if (!config('soporte-ti.enforce_transiciones')) {
             return;
         }
 
-        if (!$this->puedeEnProgreso($solicitud)) {
-            throw new \InvalidArgumentException(
-                'No se puede pasar a En progreso. Revise la complejidad y el flujo del ticket.'
-            );
+        if (!SoporteTiEstadoTransicion::query()->exists()) {
+            return;
         }
+
+        $origenId = (int) $solicitud->estado_actual_id;
+        $destinoId = (int) $nuevoEstado->id;
+        $rol = $this->rolParaTransicion($solicitud, Auth::user());
+
+        $allowed = SoporteTiEstadoTransicion::query()
+            ->where('estado_origen_id', $origenId)
+            ->where('estado_destino_id', $destinoId)
+            ->where(function ($q) use ($rol) {
+                $q->where('rol', $rol);
+                if ($rol === 'pm' || $rol === 'analista') {
+                    $q->orWhere('rol', 'staff');
+                }
+            })
+            ->where(function ($q) use ($solicitud) {
+                $q->whereNull('tipo_solicitud')
+                    ->orWhere('tipo_solicitud', $solicitud->tipo_solicitud);
+            })
+            ->exists();
+
+        if (!$allowed) {
+            throw new \InvalidArgumentException('Transición de estado no permitida para este rol.');
+        }
+    }
+
+    /**
+     * @return string solicitante|pm|analista|staff
+     */
+    protected function rolParaTransicion(SoporteTiSolicitud $solicitud, ?Authenticatable $user = null)
+    {
+        $user = $user ?: Auth::user();
+        if ($this->esCreadorSolicitud($solicitud, $user)) {
+            return 'solicitante';
+        }
+        $helperA = $this->tipoASla();
+        if ($helperA->usuarioEsPm($user)) {
+            return 'pm';
+        }
+        if ($helperA->usuarioEsAnalista($user)) {
+            return 'analista';
+        }
+        if ($this->usuarioEsStaffSoporteTi($user)) {
+            return 'staff';
+        }
+
+        return 'solicitante';
     }
 
     /**
@@ -1295,6 +1411,145 @@ class SoporteTiService
         $this->cache->invalidateAfterSolicitudWrite($solicitud);
 
         return $mapped;
+    }
+
+    /**
+     * Staff (PM / Soporte) asignables a un ticket.
+     *
+     * @return array<int, array{id:int,nombre:string,rol:string}>
+     */
+    public function listarStaffAsignable(?Authenticatable $user = null)
+    {
+        $user = $user ?: Auth::user();
+        if (!$this->usuarioEsStaffSoporteTi($user)) {
+            throw new AuthorizationException('Solo soporte o PM puede listar el staff asignable.');
+        }
+
+        $roles = array(Usuario::ROL_PM, Usuario::ROL_SOPORTE);
+
+        $rows = Usuario::query()
+            ->with('grupo')
+            ->where(function ($q) {
+                $q->where('Nu_Estado', 1)->orWhereNull('Nu_Estado');
+            })
+            ->whereHas('grupo', function ($q) use ($roles) {
+                $q->whereIn('No_Grupo', $roles);
+            })
+            ->orderBy('No_Nombres_Apellidos')
+            ->get(array('ID_Usuario', 'No_Nombres_Apellidos', 'ID_Grupo'));
+
+        return $rows->map(function (Usuario $u) {
+            $rol = $u->grupo ? trim((string) $u->grupo->No_Grupo) : '';
+
+            return array(
+                'id' => (int) $u->ID_Usuario,
+                'nombre' => trim((string) $u->No_Nombres_Apellidos) ?: ('Usuario #' . $u->ID_Usuario),
+                'rol' => $rol,
+            );
+        })->values()->all();
+    }
+
+    /**
+     * Asigna PM y/o analista a la solicitud (staff).
+     *
+     * @param int|string $id
+     * @param array{pm_user_id?:int|null,analista_user_id?:int|null} $data
+     * @return array
+     */
+    public function actualizarAsignacion($id, array $data, ?Authenticatable $user = null)
+    {
+        $user = $user ?: Auth::user();
+        if (!$this->usuarioEsStaffSoporteTi($user)) {
+            throw new AuthorizationException('Solo soporte o PM puede asignar responsables.');
+        }
+
+        $solicitud = $this->asegurarAccesoSolicitud(
+            $id,
+            $user,
+            array('estadoActual', 'salaChat', 'maqueta', 'evidencias')
+        );
+
+        $patch = array();
+        $rolesPermitidos = array(Usuario::ROL_PM, Usuario::ROL_SOPORTE);
+
+        if (array_key_exists('pm_user_id', $data)) {
+            $pmId = $data['pm_user_id'];
+            if ($pmId === null || $pmId === '' || (int) $pmId <= 0) {
+                $patch['pm_user_id'] = null;
+                $patch['pm'] = $solicitud->tipo_solicitud === 'A' ? 'Por asignar' : null;
+            } else {
+                $pm = $this->resolverUsuarioStaffAsignable((int) $pmId, $rolesPermitidos);
+                $patch['pm_user_id'] = (int) $pm->ID_Usuario;
+                $patch['pm'] = trim((string) $pm->No_Nombres_Apellidos) ?: ('Usuario #' . $pm->ID_Usuario);
+            }
+        }
+
+        if (array_key_exists('analista_user_id', $data)) {
+            $anId = $data['analista_user_id'];
+            if ($anId === null || $anId === '' || (int) $anId <= 0) {
+                $patch['analista_user_id'] = null;
+                $patch['analista'] = 'Por asignar';
+            } else {
+                $analista = $this->resolverUsuarioStaffAsignable((int) $anId, $rolesPermitidos);
+                $patch['analista_user_id'] = (int) $analista->ID_Usuario;
+                $patch['analista'] = trim((string) $analista->No_Nombres_Apellidos)
+                    ?: ('Usuario #' . $analista->ID_Usuario);
+            }
+        }
+
+        if ($patch === array()) {
+            throw new \InvalidArgumentException('Debe indicar pm_user_id y/o analista_user_id.');
+        }
+
+        $patch['ultima_actualizacion'] = Carbon::now();
+        $solicitud->fill($patch);
+        $solicitud->save();
+
+        if ($solicitud->salaChat) {
+            if (!empty($patch['pm_user_id'])) {
+                $this->agregarMiembroSala($solicitud->salaChat->id, (int) $patch['pm_user_id'], 'pm');
+            }
+            if (!empty($patch['analista_user_id'])) {
+                $this->agregarMiembroSala($solicitud->salaChat->id, (int) $patch['analista_user_id'], 'analista');
+            }
+        }
+
+        $cambios = array();
+        if (isset($patch['pm'])) {
+            $cambios[] = 'PM: ' . $patch['pm'];
+        }
+        if (isset($patch['analista'])) {
+            $cambios[] = 'Analista: ' . $patch['analista'];
+        }
+        if ($cambios !== array() && $solicitud->salaChat) {
+            $this->crearMensajeSistema(
+                $solicitud->salaChat,
+                $solicitud,
+                'Asignación actualizada — ' . implode(' · ', $cambios)
+            );
+        }
+
+        $mapped = $this->mapSolicitudRecargada($solicitud, $user);
+        $this->cache->invalidateAfterSolicitudWrite($solicitud);
+
+        return $mapped;
+    }
+
+    /**
+     * @param array<int, string> $rolesPermitidos
+     */
+    protected function resolverUsuarioStaffAsignable($userId, array $rolesPermitidos)
+    {
+        $u = Usuario::with('grupo')->find($userId);
+        if (!$u) {
+            throw new \InvalidArgumentException('Usuario no encontrado.');
+        }
+        $rol = $u->grupo ? trim((string) $u->grupo->No_Grupo) : '';
+        if (!in_array($rol, $rolesPermitidos, true)) {
+            throw new \InvalidArgumentException('El usuario no pertenece a PM o Soporte.');
+        }
+
+        return $u;
     }
 
     /**
@@ -2352,7 +2607,9 @@ class SoporteTiService
             'solicitante' => $s->solicitante,
             'solicitante_user_id' => $s->solicitante_user_id !== null ? (int) $s->solicitante_user_id : null,
             'pm' => $s->pm,
+            'pm_user_id' => $s->pm_user_id !== null ? (int) $s->pm_user_id : null,
             'analista' => $s->analista,
+            'analista_user_id' => $s->analista_user_id !== null ? (int) $s->analista_user_id : null,
             'criticidad' => $s->criticidad,
             'complejidad_pm' => $s->complejidad_pm,
             'complejidad_analista' => $s->complejidad_analista,

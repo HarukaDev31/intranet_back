@@ -2,7 +2,7 @@
 
 namespace App\Jobs\SoporteTi;
 
-use App\Events\SoporteTi\SoporteTiMensajeCreado;
+use App\Events\SoporteTi\SoporteTiMensajeActualizado;
 use App\Models\SoporteTi\SoporteTiMensaje;
 use App\Models\SoporteTi\SoporteTiMensajeImagen;
 use App\Models\SoporteTi\SoporteTiSolicitud;
@@ -118,7 +118,7 @@ class ProcessSoporteTiChatAdjuntosJob implements ShouldQueue
                 'mensaje_id' => $mensaje->id,
                 'tipo' => 'imagen',
                 'texto' => null,
-                'url' => $url,
+                'url' => $publicRel,
                 'nombre' => $nombre,
                 'tamano' => $tamano,
                 'mime' => $mime,
@@ -127,7 +127,10 @@ class ProcessSoporteTiChatAdjuntosJob implements ShouldQueue
         }
 
         $mensaje->load(array('imagenes', 'replyTo'));
-        event(new SoporteTiMensajeCreado($solicitud, $service->mapMensaje($mensaje, null)));
+        event(new SoporteTiMensajeActualizado(
+            $solicitud,
+            $service->mapMensaje($mensaje, null)
+        ));
 
         $cache = app(SoporteTiCacheService::class);
         $cache->invalidateAfterMensajeWrite(
