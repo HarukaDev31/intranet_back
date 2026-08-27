@@ -292,6 +292,26 @@ class SoporteTiService
     }
 
     /**
+     * Soft-delete: solo el creador (solicitante_user_id) puede eliminar su solicitud.
+     *
+     * @param int|string $id
+     * @param Authenticatable|null $authUser
+     * @return void
+     */
+    public function eliminarSolicitud($id, ?Authenticatable $authUser = null)
+    {
+        $authUser = $authUser ?: Auth::user();
+        $solicitud = $this->asegurarAccesoSolicitud($id, $authUser, array('salaChat'));
+
+        if (!$this->esCreadorSolicitud($solicitud, $authUser)) {
+            throw new AuthorizationException('Solo el creador puede eliminar esta solicitud');
+        }
+
+        $solicitud->delete();
+        $this->cache->invalidateAfterSolicitudWrite($solicitud);
+    }
+
+    /**
      * Crea solicitud. El usuario debe ser el modelo intranet (p. ej. App\Models\Usuario).
      * Opcional: $imagenesIniciales — cada archivo genera mensaje de chat propio y registro en solicitud_evidencias.
      *
@@ -1197,6 +1217,7 @@ class SoporteTiService
             'puede_complejidad_analista' => $puedeComplejidadAnalista,
             'puede_asignacion' => $esStaff,
             'puede_estado' => $esCreador || $esStaff,
+            'puede_eliminar' => $esCreador,
             'estados' => $estadosSelect,
             'estado_valor' => $estadoCodigo,
             'complejidad_valor' => $complejidadOk && !$esTipoA ? trim((string) $solicitud->criticidad) : null,

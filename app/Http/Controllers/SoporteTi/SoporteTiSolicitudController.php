@@ -44,6 +44,17 @@ class SoporteTiSolicitudController extends Controller
         }
     }
 
+    public function destroy($id)
+    {
+        try {
+            $this->service->eliminarSolicitud($id, Auth::user());
+
+            return $this->soporteTiOk(null, 'Solicitud eliminada');
+        } catch (\Throwable $e) {
+            return $this->soporteTiFail($e);
+        }
+    }
+
     public function store(Request $request)
     {
         $request->validate(array(
