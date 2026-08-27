@@ -1028,6 +1028,9 @@ class SoporteTiService
         }
 
         if ($correAhora) {
+            if ($codigoNuevo === 'en_progreso') {
+                $this->reiniciarFechaFinSlaAlEntrarEnProgreso($solicitud);
+            }
             $this->iniciarSegmentoSla($solicitud);
         } else {
             // Pausa (p. ej. Desplegado): deja acumulado y sin segmento abierto.
@@ -1035,6 +1038,31 @@ class SoporteTiService
         }
 
         $this->persistirHorasTranscurridasSla($solicitud);
+    }
+
+    /**
+     * Al pasar a En progreso, el plazo SLA parte desde ahora con las horas del tipo (A o B).
+     *
+     * @param SoporteTiSolicitud $solicitud
+     */
+    protected function reiniciarFechaFinSlaAlEntrarEnProgreso(SoporteTiSolicitud $solicitud)
+    {
+        if ($solicitud->tipo_solicitud === 'A') {
+            $this->tipoASla()->aplicarSlaEnSolicitud($solicitud);
+        }
+
+        if (!$this->slaConfigurado($solicitud)) {
+            return;
+        }
+
+        $horas = (int) $solicitud->sla_horas;
+        if ($horas <= 0) {
+            $solicitud->fecha_fin_estimado = null;
+
+            return;
+        }
+
+        $solicitud->fecha_fin_estimado = Carbon::now()->addHours($horas)->toDateString();
     }
 
     /**
@@ -1082,7 +1110,12 @@ class SoporteTiService
         $prevCodigo = $solicitud->estadoActual ? $solicitud->estadoActual->codigo : null;
         if ($solicitud->tipo_solicitud === 'A') {
             if ($prevCodigo === 'en_maqueta') {
-                return $this->tipoASla()->complejidadValida($solicitud->complejidad_pm);
+                if (!$this->tipoASla()->complejidadValida($solicitud->complejidad_pm)) {
+                    return false;
+                }
+                $solicitud->loadMissing('maqueta');
+
+                return $solicitud->maqueta && (bool) $solicitud->maqueta->aprobada;
             }
             if ($prevCodigo === 'observado') {
                 return true;
@@ -1495,7 +1528,8 @@ class SoporteTiService
             $patch['progreso'] = (int) $data['progreso'];
         }
         if (array_key_exists('maqueta', $data)) {
-            $this->syncMaqueta($solicitud, $data['maqueta'], $user);
+            $this->aplicarCambioMaqueta($solicitud, $data['maqueta'], $user);
+            $solicitud['ultima_actualizacion'] = Carbon::now();
         }
         if (isset($data['prioridad'])) {
             if (!$this->tipoASla()->usuarioEsPm($user)) {
@@ -2416,6 +2450,74 @@ class SoporteTiService
                 'subida_por_user_id' => $this->authUserId($user),
             )
         );
+    }
+
+    /**
+     * Creador: aprueba o rechaza maqueta en En maqueta.
+     * Staff: puede sincronizar/reemplazar el archivo de maqueta.
+     *
+     * @param SoporteTiSolicitud $solicitud
+     * @param array|null         $data
+     * @param Authenticatable|null $user
+     */
+    protected function aplicarCambioMaqueta(SoporteTiSolicitud $solicitud, $data, ?Authenticatable $user = null)
+    {
+        $user = $user ?: Auth::user();
+        $esCreador = $this->esCreadorSolicitud($solicitud, $user);
+        $esStaff = $this->usuarioEsStaffSoporteTi($user);
+        $estadoCodigo = $solicitud->estadoActual ? $solicitud->estadoActual->codigo : null;
+
+        if ($data === null) {
+            if (!$esCreador && !$esStaff) {
+                throw new AuthorizationException('No puede rechazar la maqueta.');
+            }
+            if ($esCreador && $estadoCodigo !== 'en_maqueta') {
+                throw new \InvalidArgumentException('Solo puede rechazar la maqueta en estado En maqueta.');
+            }
+            SoporteTiMaqueta::where('solicitud_id', $solicitud->id)->delete();
+            if ($solicitud->salaChat) {
+                $this->crearMensajeSistema(
+                    $solicitud->salaChat,
+                    $solicitud,
+                    'Maqueta rechazada. El PM debe subir una nueva versión.'
+                );
+            }
+
+            return;
+        }
+
+        if (!is_array($data)) {
+            return;
+        }
+
+        $aprueba = !empty($data['aprobada']);
+        $solicitud->loadMissing('maqueta', 'salaChat');
+
+        if ($aprueba && $esCreador) {
+            if ($estadoCodigo !== 'en_maqueta') {
+                throw new \InvalidArgumentException('Solo puede aprobar la maqueta en estado En maqueta.');
+            }
+            if (!$solicitud->maqueta) {
+                throw new \InvalidArgumentException('No hay maqueta para aprobar.');
+            }
+            $solicitud->maqueta->aprobada = true;
+            $solicitud->maqueta->save();
+            if ($solicitud->salaChat) {
+                $this->crearMensajeSistema(
+                    $solicitud->salaChat,
+                    $solicitud,
+                    'Maqueta aprobada por el solicitante. El Analista puede avanzar a En progreso.'
+                );
+            }
+
+            return;
+        }
+
+        if (!$esStaff) {
+            throw new AuthorizationException('Solo el creador puede aprobar/rechazar, o el staff subir la maqueta.');
+        }
+
+        $this->syncMaqueta($solicitud, $data, $user);
     }
 
     /**
