@@ -39,9 +39,10 @@ class SoporteTiService
     const TZ_PERU = 'America/Lima';
 
     /** Estados en los que el tiempo SLA del solicitante sigue corriendo. */
-    const ESTADOS_SLA_CORRE = array('en_progreso', 'hecho');
+    /** Estados en los que el SLA corre (descuenta tiempo). */
+    const ESTADOS_SLA_CORRE = array('en_progreso', 'hecho', 'observado');
 
-    /** Estados en los que se muestra el contador (corriendo o pausado). */
+    /** Estados en los que se muestra el contador (corriendo o pausado en Desplegado). */
     const ESTADOS_SLA_CONTADOR_VISIBLE = array('en_progreso', 'hecho', 'desplegado', 'observado');
 
     /** @var SoporteTiCacheService */
@@ -812,7 +813,8 @@ class SoporteTiService
     }
 
     /**
-     * Suma segundos en los que el ticket estuvo en estados donde el SLA corre (historial).
+     * Suma segundos en los que el ticket estuvo en estados donde el SLA corre
+     * (En progreso, Hecho, Observado) según el historial.
      *
      * @param SoporteTiSolicitud $solicitud
      * @return int
@@ -926,13 +928,41 @@ class SoporteTiService
     }
 
     /**
+     * Si el ticket está en un estado donde el SLA corre y aún no hay segmento abierto,
+     * abre uno (y persiste) para que el contador descuente tiempo.
+     *
+     * @param SoporteTiSolicitud $solicitud
+     */
+    protected function asegurarSegmentoSlaCorriendo(SoporteTiSolicitud $solicitud)
+    {
+        if (!$this->slaConfigurado($solicitud)) {
+            return;
+        }
+
+        $codigo = $solicitud->estadoActual ? $solicitud->estadoActual->codigo : null;
+        if (!in_array($codigo, self::ESTADOS_SLA_CORRE, true)) {
+            return;
+        }
+
+        $this->asegurarSlaContadorSincronizado($solicitud);
+
+        if ($solicitud->sla_reanudado_en) {
+            return;
+        }
+
+        $this->iniciarSegmentoSla($solicitud);
+        $solicitud->horas_transcurridas = round($this->segundosSlaTranscurridosRaw($solicitud) / 3600, 2);
+        $solicitud->save();
+    }
+
+    /**
+     * Segundos SLA sin side-effects (no abre segmento ni guarda).
+     *
      * @param SoporteTiSolicitud $solicitud
      * @return int
      */
-    protected function segundosSlaTranscurridos(SoporteTiSolicitud $solicitud)
+    protected function segundosSlaTranscurridosRaw(SoporteTiSolicitud $solicitud)
     {
-        $this->asegurarSlaContadorSincronizado($solicitud);
-
         $seg = (int) $solicitud->sla_segundos_acumulados;
         $codigo = $solicitud->estadoActual ? $solicitud->estadoActual->codigo : null;
         if (
@@ -948,14 +978,31 @@ class SoporteTiService
 
     /**
      * @param SoporteTiSolicitud $solicitud
+     * @return int
+     */
+    protected function segundosSlaTranscurridos(SoporteTiSolicitud $solicitud)
+    {
+        $this->asegurarSegmentoSlaCorriendo($solicitud);
+
+        return $this->segundosSlaTranscurridosRaw($solicitud);
+    }
+
+    /**
+     * @param SoporteTiSolicitud $solicitud
      */
     protected function persistirHorasTranscurridasSla(SoporteTiSolicitud $solicitud)
     {
-        $solicitud->horas_transcurridas = round($this->segundosSlaTranscurridos($solicitud) / 3600, 2);
+        $solicitud->horas_transcurridas = round($this->segundosSlaTranscurridosRaw($solicitud) / 3600, 2);
     }
 
     /**
      * Pausa o reanuda el contador SLA según el cambio de estado.
+     *
+     * Ciclo:
+     * - Corre desde En progreso (también Hecho).
+     * - Pausa en Desplegado.
+     * - Retoma en Observado (desde el tiempo restante).
+     * - Cierra en Operativo.
      *
      * @param SoporteTiSolicitud $solicitud
      * @param string|null        $codigoAnterior
@@ -963,12 +1010,27 @@ class SoporteTiService
      */
     protected function gestionarSlaContadorTransicion(SoporteTiSolicitud $solicitud, $codigoAnterior, $codigoNuevo)
     {
-        if ($codigoAnterior && in_array($codigoAnterior, self::ESTADOS_SLA_CORRE, true)) {
+        $corríaAntes = $codigoAnterior && in_array($codigoAnterior, self::ESTADOS_SLA_CORRE, true);
+        $correAhora = in_array($codigoNuevo, self::ESTADOS_SLA_CORRE, true);
+
+        if ($corríaAntes) {
             $this->acumularSegmentoSlaActivo($solicitud);
         }
-        if (in_array($codigoNuevo, self::ESTADOS_SLA_CORRE, true)) {
-            $this->iniciarSegmentoSla($solicitud);
+
+        if ($codigoNuevo === 'operativo') {
+            $solicitud->sla_reanudado_en = null;
+            $this->persistirHorasTranscurridasSla($solicitud);
+
+            return;
         }
+
+        if ($correAhora) {
+            $this->iniciarSegmentoSla($solicitud);
+        } else {
+            // Pausa (p. ej. Desplegado): deja acumulado y sin segmento abierto.
+            $solicitud->sla_reanudado_en = null;
+        }
+
         $this->persistirHorasTranscurridasSla($solicitud);
     }
 
@@ -1132,7 +1194,8 @@ class SoporteTiService
 
         $transcurridos = $this->segundosSlaTranscurridos($solicitud);
         $restanteSeg = max(0, $totalSeg - $transcurridos);
-        $pausado = !in_array($estadoCodigo, self::ESTADOS_SLA_CORRE, true);
+        // Corre en En progreso / Hecho / Observado; pausa en Desplegado; cerrado fuera de visibles.
+        $pausado = $estadoCodigo === 'desplegado';
         $vencido = $restanteSeg <= 0;
         $finIso = $this->calcularIsoFinContadorSla($solicitud, $totalSeg, $pausado, $restanteSeg);
 
@@ -1627,6 +1690,12 @@ class SoporteTiService
         $this->aplicarSlaYFechaPorComplejidad($solicitud, $c);
         $solicitud->ultima_actualizacion = Carbon::now();
         $solicitud->save();
+
+        // Si ya está en En progreso / Hecho / Observado, el contador debe empezar a correr.
+        $codigo = $solicitud->estadoActual ? $solicitud->estadoActual->codigo : null;
+        if ($codigo && in_array($codigo, self::ESTADOS_SLA_CORRE, true)) {
+            $this->asegurarSegmentoSlaCorriendo($solicitud);
+        }
 
         $mapped = $this->mapSolicitudRecargada($solicitud, $user);
         $this->cache->invalidateAfterSolicitudWrite($solicitud);
