@@ -148,3 +148,14 @@ Broadcast::channel('soporte-ti.chat.{chatUuid}', function ($user, $chatUuid) {
         ->where('usuario_id', $uid)
         ->exists();
 });
+// Avisos globales Soporte TI para PM / Analista (p. ej. solicitud nueva)
+Broadcast::channel('soporte-ti.staff', function ($user) {
+    if (!$user) {
+        return false;
+    }
+    $user->loadMissing('grupo');
+    $grupo = $user->grupo ? strtolower(trim((string) $user->grupo->No_Grupo)) : '';
+
+    return $grupo === strtolower(\App\Models\Usuario::ROL_PM)
+        || $grupo === strtolower(\App\Models\Usuario::ROL_SOPORTE);
+});
