@@ -22,6 +22,7 @@ use App\Models\SoporteTi\SoporteTiSolicitud;
 use App\Models\SoporteTi\SoporteTiSolicitudEstado;
 use App\Models\SoporteTi\SoporteTiSolicitudEvidencia;
 use App\Models\Usuario;
+use App\Support\SoporteTi\SoporteTiWhatsappGrupoMensajeBuilder;
 use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -451,9 +452,10 @@ class SoporteTiService
     }
 
     /**
-     * Aviso al grupo WhatsApp (instancia soporte) en crear / desplegado / operativo.
+     * Aviso al grupo WhatsApp (instancia soporte).
+     * Plantillas: MSJS.docx — creado, en_progreso, desplegado, observado.
      *
-     * @param string $evento creado|desplegado|operativo
+     * @param string $evento creado|en_progreso|desplegado|observado
      * @return void
      */
     protected function encolarWhatsappGrupoSoporteTi($evento, SoporteTiSolicitud $solicitud)
@@ -462,28 +464,12 @@ class SoporteTiService
             return;
         }
 
-        $codigo = (string) $solicitud->codigo;
-        $titulo = (string) $solicitud->titulo;
-        $solicitante = (string) $solicitud->solicitante;
-        $area = (string) $solicitud->area;
-        $tipo = (string) $solicitud->tipo_solicitud;
-
-        if ($evento === 'creado') {
-            $header = '*Soporte TI — Ticket creado*';
-        } elseif ($evento === 'desplegado') {
-            $header = '*Soporte TI — Desplegado (validación)*';
-        } elseif ($evento === 'operativo') {
-            $header = '*Soporte TI — Operativo*';
-        } else {
+        $mensaje = SoporteTiWhatsappGrupoMensajeBuilder::build($evento, $solicitud);
+        if ($mensaje === null || trim($mensaje) === '') {
             return;
         }
 
-        $mensaje = $header . "\n"
-            . 'Código: *' . $codigo . "*\n"
-            . 'Título: ' . $titulo . "\n"
-            . 'Solicitante: ' . $solicitante . "\n"
-            . 'Área: ' . $area . "\n"
-            . 'Tipo: ' . $tipo;
+        $codigo = (string) $solicitud->codigo;
 
         Log::info('SoporteTi: encolando WhatsApp grupo', array(
             'app_env' => app()->environment(),
@@ -1854,7 +1840,7 @@ class SoporteTiService
         $mapped = $this->mapSolicitudRecargada($solicitud, $user);
         $this->cache->invalidateAfterSolicitudWrite($solicitud);
 
-        if ($nuevoEstado->codigo === 'desplegado' || $nuevoEstado->codigo === 'operativo') {
+        if (in_array($nuevoEstado->codigo, array('en_progreso', 'desplegado', 'observado'), true)) {
             $this->encolarWhatsappGrupoSoporteTi($nuevoEstado->codigo, $solicitud);
         }
 
