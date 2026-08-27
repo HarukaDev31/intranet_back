@@ -4,6 +4,7 @@ namespace App\Services\SoporteTi;
 
 use App\Events\SoporteTi\SoporteTiEstadoActualizado;
 use App\Events\SoporteTi\SoporteTiMensajeCreado;
+use App\Events\SoporteTi\SoporteTiSolicitudCreada;
 use App\Jobs\SoporteTi\ProcessSoporteTiChatAdjuntosJob;
 use App\Jobs\SoporteTi\ProcessSoporteTiMaquetaUploadJob;
 use App\Models\SoporteTi\SoporteTiChatMiembro;
@@ -354,6 +355,7 @@ class SoporteTiService
                 'chat_uuid' => (string) Str::uuid(),
                 'solicitud_id' => $solicitud->id,
             ));
+            $solicitud->setRelation('salaChat', $sala);
 
             if ($user) {
                 $this->agregarMiembroSala($sala->id, $this->authUserId($user), 'solicitante');
@@ -433,6 +435,8 @@ class SoporteTiService
         if ($fresh) {
             $this->cache->invalidateAfterSolicitudWrite($fresh);
         }
+
+        event(new SoporteTiSolicitudCreada($mapped));
 
         return $mapped;
     }
