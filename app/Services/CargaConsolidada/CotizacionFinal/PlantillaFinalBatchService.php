@@ -12,6 +12,7 @@ use App\Traits\UsesObjectStorage;
 use App\Support\PhpSpreadsheet\PhpSpreadsheetRuntime;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use ZipArchive;
 
@@ -265,6 +266,10 @@ class PlantillaFinalBatchService
             ->whereNull('cc.id_cliente_importacion')
             ->get();
 
+        $calculadorasByCotizacion = $this->loadCalculadorasByCotizacionIds(
+            $result->pluck('id')->map(fn ($id) => (int) $id)->filter()->values()->all()
+        );
+
         foreach ($data as &$cliente) {
             $nombreCliente = $cliente['cliente']['nombre'] ?? '';
             $dniCliente = $cliente['cliente']['dni'] ?? '';
@@ -281,7 +286,18 @@ class PlantillaFinalBatchService
                     $tipoCliente = trim((string) ($cliente['cliente']['tipo'] ?? ''));
                 }
 
-                $cliente['cliente']['tarifa'] = $this->resolveTarifa($item, $volumenAsignado, $tipoCliente);
+                $calc = $calculadorasByCotizacion[(int) $item->id] ?? null;
+                $tarifaCalculadora = $calc !== null && is_numeric($calc->tarifa ?? null)
+                    ? (float) $calc->tarifa
+                    : null;
+
+                $cliente['cliente']['tarifa'] = $this->resolveTarifa(
+                    $item,
+                    $volumenAsignado,
+                    $tipoCliente,
+                    $tarifaCalculadora
+                );
+                $cliente['cliente']['calculadora_extras'] = $this->extrasFromCalculadoraRow($calc);
                 $cliente['cliente']['correo'] = $item->correo ?? '';
                 $cliente['cliente']['tipo_cliente'] = $tipoCliente;
                 $cliente['cliente']['id_tipo_cliente'] = $item->id_tipo_cliente ?? 0;
@@ -294,6 +310,7 @@ class PlantillaFinalBatchService
                     'nombres_bd' => $result->pluck('nombre')->values()->all(),
                 ]);
                 $cliente['cliente']['tarifa'] = 0;
+                $cliente['cliente']['calculadora_extras'] = ['recargos' => 0.0, 'descuento' => 0.0];
                 $cliente['cliente']['correo'] = '';
                 $cliente['cliente']['tipo_cliente'] = '';
                 $cliente['cliente']['id_tipo_cliente'] = 0;
@@ -746,8 +763,70 @@ class PlantillaFinalBatchService
         return 0.0;
     }
 
-    protected function resolveTarifa($item, $volumen, $tipoCliente): float
+    /**
+     * Una sola query: última calculadora por id_cotizacion (tarifa + extras).
+     *
+     * @param  array<int, int>  $cotizacionIds
+     * @return array<int, object>
+     */
+    protected function loadCalculadorasByCotizacionIds(array $cotizacionIds): array
     {
+        $cotizacionIds = array_values(array_unique(array_filter(array_map('intval', $cotizacionIds))));
+        if ($cotizacionIds === [] || ! Schema::hasTable('calculadora_importacion')) {
+            return [];
+        }
+
+        $rows = DB::table('calculadora_importacion')
+            ->whereIn('id_cotizacion', $cotizacionIds)
+            ->orderByDesc('id')
+            ->get([
+                'id',
+                'id_cotizacion',
+                'tarifa',
+                'tarifa_total_extra_proveedor',
+                'tarifa_total_extra_item',
+                'tarifa_descuento',
+            ]);
+
+        $byCotizacion = [];
+        foreach ($rows as $row) {
+            $cid = (int) $row->id_cotizacion;
+            if (! isset($byCotizacion[$cid])) {
+                $byCotizacion[$cid] = $row;
+            }
+        }
+
+        return $byCotizacion;
+    }
+
+    /**
+     * @return array{recargos: float, descuento: float}
+     */
+    protected function extrasFromCalculadoraRow(?object $row): array
+    {
+        if (! $row) {
+            return ['recargos' => 0.0, 'descuento' => 0.0];
+        }
+
+        $recargos = (float) ($row->tarifa_total_extra_proveedor ?? 0)
+            + (float) ($row->tarifa_total_extra_item ?? 0);
+        $descuento = (float) ($row->tarifa_descuento ?? 0);
+
+        return [
+            'recargos' => round($recargos, 2),
+            'descuento' => round($descuento, 2),
+        ];
+    }
+
+    /**
+     * Prioridad: tarifa snapshot de calculadora → cc.tarifa → tabla legacy por tipo/CBM.
+     */
+    protected function resolveTarifa($item, $volumen, $tipoCliente, ?float $tarifaCalculadora = null): float
+    {
+        if ($tarifaCalculadora !== null && $tarifaCalculadora > 0) {
+            return $tarifaCalculadora;
+        }
+
         $tarifa = is_numeric($item->tarifa ?? null) ? (float) $item->tarifa : 0.0;
         if ($tarifa > 0) {
             return $tarifa;

@@ -30,9 +30,9 @@ class PlantillaFinalBatchMatchTest extends TestCase
                 return $this->volumenFromExcelCliente($cliente);
             }
 
-            public function tarifa($item, $volumen, $tipoCliente)
+            public function tarifa($item, $volumen, $tipoCliente, ?float $tarifaCalculadora = null)
             {
-                return $this->resolveTarifa($item, $volumen, $tipoCliente);
+                return $this->resolveTarifa($item, $volumen, $tipoCliente, $tarifaCalculadora);
             }
         };
     }
@@ -85,6 +85,16 @@ class PlantillaFinalBatchMatchTest extends TestCase
         $this->assertEquals(350.0, $svc->tarifa($itemSinTarifa, 1.00, 'ANTIGUO'));
         $this->assertEquals(250.0, $svc->tarifa($itemSinTarifa, 0.82, 'SOCIO'));
         $this->assertEquals(280.0, $svc->tarifa((object) ['tarifa' => '280.00'], 0, 'NUEVO'));
+    }
+
+    public function test_tarifa_prioriza_calculadora_sobre_bd_y_tabla_legacy(): void
+    {
+        $svc = $this->service();
+        $item = (object) ['tarifa' => 380.0];
+
+        $this->assertEquals(300.0, $svc->tarifa($item, 1.00, 'NUEVO', 300.0));
+        $this->assertEquals(380.0, $svc->tarifa($item, 1.00, 'NUEVO', null));
+        $this->assertEquals(380.0, $svc->tarifa($item, 1.00, 'NUEVO', 0.0));
     }
 
     public function test_calculator_incluye_limites_exactos(): void
