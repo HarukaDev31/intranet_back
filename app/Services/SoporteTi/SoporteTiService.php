@@ -28,6 +28,7 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use App\Traits\FileTrait;
 
@@ -484,7 +485,17 @@ class SoporteTiService
             . 'Área: ' . $area . "\n"
             . 'Tipo: ' . $tipo;
 
-        SendSoporteTiWhatsappGrupoJob::dispatch($mensaje);
+        Log::info('SoporteTi: encolando WhatsApp grupo', array(
+            'app_env' => app()->environment(),
+            'evento' => $evento,
+            'solicitud_id' => (int) $solicitud->id,
+            'codigo' => $codigo,
+            'groupId' => config('soporte-ti.whatsapp_group_id'),
+            'fromNumber' => config('soporte-ti.whatsapp_from_number'),
+            'queue' => config('soporte-ti.whatsapp_queue', 'notificaciones'),
+        ));
+
+        SendSoporteTiWhatsappGrupoJob::dispatch($mensaje, $evento, (int) $solicitud->id, $codigo);
     }
 
     /**
