@@ -98,6 +98,7 @@ class ExcelConfirmacionController extends Controller
                 );
             }
 
+            $this->formService->notifyCoordinacionExcelConfirmacionCliente($result);
             $this->formService->notifyClientExcelConfRecibido($uuid);
 
             return ExcelConfirmacionClientResponse::success([], 'GUARDADO_OK', 200);

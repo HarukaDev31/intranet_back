@@ -18,6 +18,7 @@ use App\Models\Almacen;
 use App\Models\Departamento;
 use App\Models\Distrito;
 use App\Models\Provincia;
+use App\Models\Notificacion;
 use App\Helpers\CodeIgniterEncryption;
 use App\Http\Controllers\MenuController;
 use App\Http\Requests\RegisterRequest;
@@ -177,12 +178,22 @@ class AuthController extends Controller
                             $photoUrl = $this->safePhotoUrl($usuario->Txt_Foto);
                         }
 
+                        // Conteos de notificaciones filtrados por rol/usuario (campana sidebar)
+                        $notificacionesNoLeidas = 0;
+                        try {
+                            $usuario->loadMissing('grupo');
+                            $notificacionesNoLeidas = (int) Notificacion::paraUsuario($usuario, ['no_leidas' => true])->count();
+                        } catch (\Throwable $e) {
+                            Log::warning('AuthController::login — conteo notificaciones: ' . $e->getMessage());
+                        }
+
                         $payload = [
                             'success' => true,
                             'message' => $result['sMessage'],
                             'token' => $token,
                             'token_type' => 'bearer',
                             'expires_in' => 24 * config('jwt.ttl') * 60,
+                            'notificaciones_no_leidas' => $notificacionesNoLeidas,
                             'user' => [
                                 'id' => $usuario->ID_Usuario,
                                 'nombre' => $usuario->No_Usuario,

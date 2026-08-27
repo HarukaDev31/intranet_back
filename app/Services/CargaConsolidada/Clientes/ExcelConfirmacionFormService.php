@@ -5,7 +5,10 @@ namespace App\Services\CargaConsolidada\Clientes;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\CotizacionProveedorItemExcelConf;
 use App\Models\CargaConsolidada\CotizacionProveedorItems;
+use App\Events\ExcelConfirmacionClienteActualizado;
 use App\Jobs\WhatsApp\SendCoordinacionWhatsAppJob;
+use App\Models\Notificacion;
+use App\Models\Usuario;
 use App\Services\Storage\S3ObjectStorageConnector;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Traits\UsesObjectStorage;
@@ -122,6 +125,8 @@ class ExcelConfirmacionFormService
             ->pluck('id')
             ->all();
 
+        $proveedoresGuardadosIds = [];
+
         DB::beginTransaction();
 
         try {
@@ -140,6 +145,7 @@ class ExcelConfirmacionFormService
                 }
 
                 $savedAny = true;
+                $proveedoresGuardadosIds[] = $proveedorId;
 
                 $itemIdsProveedor = CotizacionProveedorItems::where('id_proveedor', $proveedorId)
                     ->pluck('id')
@@ -205,13 +211,225 @@ class ExcelConfirmacionFormService
 
             DB::commit();
 
-            return ['success' => true, 'code' => 'GUARDADO_OK', 'status' => 200];
+            $completo = false;
+            if (!$ignoreCerrado && $savedAny) {
+                $completo = $this->isCotizacionExcelConfCompleta((int) $cotizacion->id, $labelsMap);
+            }
+
+            return [
+                'success' => true,
+                'code' => 'GUARDADO_OK',
+                'status' => 200,
+                'uuid' => (string) $cotizacion->uuid,
+                'cotizacion_id' => (int) $cotizacion->id,
+                'id_contenedor' => (int) ($cotizacion->id_contenedor ?? 0),
+                'nombre_cliente' => trim((string) ($cotizacion->nombre ?? '')),
+                'proveedores_guardados' => $proveedoresGuardadosIds,
+                'completo' => $completo,
+                'from_cliente' => !$ignoreCerrado,
+            ];
         } catch (\Throwable $e) {
             DB::rollBack();
             Log::error('ExcelConfirmacionFormService::saveConfirmation — ' . $e->getMessage(), ['uuid' => $uuid]);
 
             return ['success' => false, 'code' => 'ERROR_INTERNO', 'status' => 500];
         }
+    }
+
+    /**
+     * Notifica a Coordinación (DB + WS) cuando el cliente guarda el Excel de confirmación.
+     *
+     * @param  array<string, mixed>  $saveResult
+     */
+    public function notifyCoordinacionExcelConfirmacionCliente(array $saveResult): void
+    {
+        if (empty($saveResult['success']) || empty($saveResult['from_cliente'])) {
+            return;
+        }
+
+        try {
+            $cotizacionId = (int) ($saveResult['cotizacion_id'] ?? 0);
+            $uuid = (string) ($saveResult['uuid'] ?? '');
+            $nombreCliente = (string) ($saveResult['nombre_cliente'] ?? '');
+            $idContenedor = (int) ($saveResult['id_contenedor'] ?? 0);
+            $completo = !empty($saveResult['completo']);
+
+            if ($cotizacionId <= 0 || $uuid === '') {
+                return;
+            }
+
+            $cargaCode = $this->resolveCargaCode($idContenedor);
+            $navigateTo = 'cargaconsolidada/coordinacion/abiertos/clientes/excel-confirmacion/' . $uuid;
+
+            $this->crearNotificacionYBroadcastExcelConf(
+                $cotizacionId,
+                $uuid,
+                $nombreCliente,
+                $idContenedor,
+                $cargaCode,
+                $navigateTo,
+                'actualizado'
+            );
+
+            if ($completo) {
+                $this->crearNotificacionYBroadcastExcelConf(
+                    $cotizacionId,
+                    $uuid,
+                    $nombreCliente,
+                    $idContenedor,
+                    $cargaCode,
+                    $navigateTo,
+                    'completo'
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::error('ExcelConfirmacionFormService::notifyCoordinacionExcelConfirmacionCliente — ' . $e->getMessage(), [
+                'saveResult' => $saveResult,
+            ]);
+        }
+    }
+
+    /**
+     * @param  'actualizado'|'completo'  $tipoEvento
+     */
+    private function crearNotificacionYBroadcastExcelConf(
+        int $cotizacionId,
+        string $uuid,
+        string $nombreCliente,
+        int $idContenedor,
+        string $cargaCode,
+        string $navigateTo,
+        string $tipoEvento
+    ): void {
+        $esCompleto = $tipoEvento === 'completo';
+        $titulo = $esCompleto
+            ? 'Excel de confirmación completo'
+            : 'Excel de confirmación actualizado';
+        $mensaje = $esCompleto
+            ? "El cliente {$nombreCliente} completó el Excel de confirmación (carga {$cargaCode})."
+            : "El cliente {$nombreCliente} actualizó el Excel de confirmación (carga {$cargaCode}).";
+        $descripcion = "Cotización #{$cotizacionId} | Cliente: {$nombreCliente} | Contenedor: {$cargaCode} | UUID: {$uuid}";
+
+        $notificacion = Notificacion::create([
+            'titulo' => $titulo,
+            'mensaje' => $mensaje,
+            'descripcion' => $descripcion,
+            'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
+            'rol_destinatario' => Usuario::ROL_COORDINACION,
+            'navigate_to' => $navigateTo,
+            'navigate_params' => [
+                'idContenedor' => $idContenedor,
+                'idCotizacion' => $cotizacionId,
+                'uuid' => $uuid,
+            ],
+            'tipo' => $esCompleto ? Notificacion::TIPO_SUCCESS : Notificacion::TIPO_INFO,
+            'icono' => $esCompleto ? 'mdi:clipboard-check' : 'mdi:file-excel',
+            'prioridad' => $esCompleto ? Notificacion::PRIORIDAD_ALTA : Notificacion::PRIORIDAD_MEDIA,
+            'referencia_tipo' => 'excel_confirmacion',
+            'referencia_id' => $cotizacionId,
+            'activa' => true,
+            'creado_por' => null,
+            'configuracion_roles' => [
+                Usuario::ROL_COORDINACION => [
+                    'titulo' => $titulo,
+                    'mensaje' => $mensaje,
+                    'descripcion' => $descripcion,
+                ],
+            ],
+        ]);
+
+        ExcelConfirmacionClienteActualizado::dispatch([
+            'notificacion_id' => $notificacion->id,
+            'tipo_evento' => $tipoEvento,
+            'cotizacion_id' => $cotizacionId,
+            'uuid' => $uuid,
+            'nombre_cliente' => $nombreCliente,
+            'id_contenedor' => $idContenedor,
+            'carga' => $cargaCode,
+            'titulo' => $titulo,
+            'mensaje' => $mensaje,
+            'navigate_to' => $navigateTo,
+            'updated_at' => now()->toIso8601String(),
+        ]);
+    }
+
+    private function resolveCargaCode(int $idContenedor): string
+    {
+        if ($idContenedor <= 0) {
+            return '';
+        }
+
+        $contenedor = DB::table('carga_consolidada_contenedor')
+            ->select('carga')
+            ->where('id', $idContenedor)
+            ->first();
+
+        $carga = $contenedor->carga ?? '';
+
+        return is_numeric($carga)
+            ? str_pad((string) $carga, 2, '0', STR_PAD_LEFT)
+            : (string) $carga;
+    }
+
+    /**
+     * True si todos los proveedores no Revisados de la cotización tienen ítems completos.
+     *
+     * @param  array<string, array<int, string>>  $labelsMap
+     */
+    private function isCotizacionExcelConfCompleta(int $cotizacionId, array $labelsMap): bool
+    {
+        $proveedores = CotizacionProveedor::where('id_cotizacion', $cotizacionId)->get(['id', 'excel_conf_status']);
+        if ($proveedores->isEmpty()) {
+            return false;
+        }
+
+        $evaluables = $proveedores->filter(function (CotizacionProveedor $p) {
+            return strcasecmp((string) $p->excel_conf_status, 'Revisado') !== 0;
+        });
+
+        if ($evaluables->isEmpty()) {
+            return false;
+        }
+
+        foreach ($evaluables as $proveedor) {
+            if (!$this->isProveedorExcelConfCompleto((int) $proveedor->id, $labelsMap)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param  array<string, array<int, string>>  $labelsMap
+     */
+    private function isProveedorExcelConfCompleto(int $proveedorId, array $labelsMap): bool
+    {
+        $originalItems = CotizacionProveedorItems::where('id_proveedor', $proveedorId)->get();
+        $excelConfItems = CotizacionProveedorItemExcelConf::where('id_proveedor', $proveedorId)->get();
+        $overlaysByOrigen = $excelConfItems
+            ->filter(fn (CotizacionProveedorItemExcelConf $item) => $item->id_item_origen !== null)
+            ->keyBy('id_item_origen');
+        $newItems = $excelConfItems->filter(fn (CotizacionProveedorItemExcelConf $item) => $item->id_item_origen === null);
+
+        if ($originalItems->isEmpty() && $newItems->isEmpty()) {
+            return false;
+        }
+
+        foreach ($originalItems as $item) {
+            $overlay = $overlaysByOrigen->get($item->id);
+            if (!$overlay instanceof CotizacionProveedorItemExcelConf || !$this->isItemComplete($overlay, $labelsMap)) {
+                return false;
+            }
+        }
+
+        foreach ($newItems as $item) {
+            if (!$this->isItemComplete($item, $labelsMap)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
