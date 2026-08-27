@@ -7,6 +7,7 @@ use App\Events\SoporteTi\SoporteTiMensajeCreado;
 use App\Events\SoporteTi\SoporteTiSolicitudCreada;
 use App\Jobs\SoporteTi\ProcessSoporteTiChatAdjuntosJob;
 use App\Jobs\SoporteTi\ProcessSoporteTiMaquetaUploadJob;
+use App\Jobs\SoporteTi\SendSoporteTiWhatsappGrupoJob;
 use App\Models\SoporteTi\SoporteTiChatMiembro;
 use App\Models\SoporteTi\SoporteTiChatSala;
 use App\Models\SoporteTi\SoporteTiMensajeLectura;
@@ -441,7 +442,49 @@ class SoporteTiService
 
         event(new SoporteTiSolicitudCreada($mapped));
 
+        if ($fresh) {
+            $this->encolarWhatsappGrupoSoporteTi('creado', $fresh);
+        }
+
         return $mapped;
+    }
+
+    /**
+     * Aviso al grupo WhatsApp (instancia soporte) en crear / desplegado / operativo.
+     *
+     * @param string $evento creado|desplegado|operativo
+     * @return void
+     */
+    protected function encolarWhatsappGrupoSoporteTi($evento, SoporteTiSolicitud $solicitud)
+    {
+        if (!(bool) config('soporte-ti.whatsapp_enabled', true)) {
+            return;
+        }
+
+        $codigo = (string) $solicitud->codigo;
+        $titulo = (string) $solicitud->titulo;
+        $solicitante = (string) $solicitud->solicitante;
+        $area = (string) $solicitud->area;
+        $tipo = (string) $solicitud->tipo_solicitud;
+
+        if ($evento === 'creado') {
+            $header = '*Soporte TI — Ticket creado*';
+        } elseif ($evento === 'desplegado') {
+            $header = '*Soporte TI — Desplegado (validación)*';
+        } elseif ($evento === 'operativo') {
+            $header = '*Soporte TI — Operativo*';
+        } else {
+            return;
+        }
+
+        $mensaje = $header . "\n"
+            . 'Código: *' . $codigo . "*\n"
+            . 'Título: ' . $titulo . "\n"
+            . 'Solicitante: ' . $solicitante . "\n"
+            . 'Área: ' . $area . "\n"
+            . 'Tipo: ' . $tipo;
+
+        SendSoporteTiWhatsappGrupoJob::dispatch($mensaje);
     }
 
     /**
@@ -1799,6 +1842,10 @@ class SoporteTiService
 
         $mapped = $this->mapSolicitudRecargada($solicitud, $user);
         $this->cache->invalidateAfterSolicitudWrite($solicitud);
+
+        if ($nuevoEstado->codigo === 'desplegado' || $nuevoEstado->codigo === 'operativo') {
+            $this->encolarWhatsappGrupoSoporteTi($nuevoEstado->codigo, $solicitud);
+        }
 
         return $mapped;
     }

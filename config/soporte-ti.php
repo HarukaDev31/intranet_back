@@ -20,4 +20,13 @@ return array(
     | saltos de kanban del staff hasta afinar el grafo.
     */
     'enforce_transiciones' => (bool) env('SOPORTE_TI_ENFORCE_TRANSICIONES', false),
+
+    /*
+    | WhatsApp: avisos al grupo de Soporte (crear / desplegado / operativo).
+    | from_number = instancia en redis.probusiness.pe (igual que "administracion").
+    */
+    'whatsapp_enabled' => (bool) env('SOPORTE_TI_WHATSAPP_ENABLED', true),
+    'whatsapp_from_number' => env('SOPORTE_TI_WHATSAPP_FROM', 'soporte'),
+    'whatsapp_group_id' => env('SOPORTE_TI_WHATSAPP_GROUP', '120363402844775385@g.us'),
+    'whatsapp_queue' => env('SOPORTE_TI_WHATSAPP_QUEUE', 'notificaciones'),
 );
