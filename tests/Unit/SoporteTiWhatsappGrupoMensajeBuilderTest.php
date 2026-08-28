@@ -90,4 +90,21 @@ class SoporteTiWhatsappGrupoMensajeBuilderTest extends TestCase
         $this->assertStringContainsString('*Soporte TI — Ticket creado*', $msg);
         $this->assertStringNotContainsString('Proyecto creado', $msg);
     }
+
+    public function test_etiqueta_solicitante_si_hay_telefono(): void
+    {
+        $msg = SoporteTiWhatsappGrupoMensajeBuilder::build('creado', $this->proyecto(), '51987654321');
+        $this->assertStringContainsString('Solicitante: Danitza López @51987654321', $msg);
+
+        $msg = SoporteTiWhatsappGrupoMensajeBuilder::build('en_maqueta', $this->proyecto(), '51987654321');
+        $this->assertStringContainsString('Hola @51987654321,', $msg);
+        $this->assertStringNotContainsString('Hola Danitza,', $msg);
+    }
+
+    public function test_sin_telefono_no_cambia_el_saludo(): void
+    {
+        $msg = SoporteTiWhatsappGrupoMensajeBuilder::build('en_maqueta', $this->proyecto(), null);
+        $this->assertStringContainsString('Hola Danitza,', $msg);
+        $this->assertStringNotContainsString('@51', $msg);
+    }
 }

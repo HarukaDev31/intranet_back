@@ -12,33 +12,37 @@ class SoporteTiWhatsappGrupoMensajeBuilder
 {
     /**
      * @param string $evento creado|en_maqueta|en_progreso|desplegado|observado
+     * @param string|null $mentionWa Número WhatsApp (51XXXXXXXXX) para etiquetar al solicitante
      */
-    public static function build($evento, SoporteTiSolicitud $solicitud)
+    public static function build($evento, SoporteTiSolicitud $solicitud, $mentionWa = null)
     {
+        $mentionWa = self::mentionWaNormalizado($mentionWa);
+
         if (self::esProyecto($solicitud)) {
-            return self::buildProyecto($evento, $solicitud);
+            return self::buildProyecto($evento, $solicitud, $mentionWa);
         }
 
-        return self::buildRequerimiento($evento, $solicitud);
+        return self::buildRequerimiento($evento, $solicitud, $mentionWa);
     }
 
     /**
      * @param string $evento
+     * @param string|null $mentionWa
      * @return string|null
      */
-    private static function buildProyecto($evento, SoporteTiSolicitud $solicitud)
+    private static function buildProyecto($evento, SoporteTiSolicitud $solicitud, $mentionWa)
     {
         switch ($evento) {
             case 'creado':
-                return self::proyectoCreado($solicitud);
+                return self::proyectoCreado($solicitud, $mentionWa);
             case 'en_maqueta':
-                return self::proyectoEnMaqueta($solicitud);
+                return self::proyectoEnMaqueta($solicitud, $mentionWa);
             case 'en_progreso':
-                return self::proyectoEnProgreso($solicitud);
+                return self::proyectoEnProgreso($solicitud, $mentionWa);
             case 'desplegado':
-                return self::proyectoDesplegado($solicitud);
+                return self::proyectoDesplegado($solicitud, $mentionWa);
             case 'observado':
-                return self::proyectoObservado($solicitud);
+                return self::proyectoObservado($solicitud, $mentionWa);
             default:
                 return null;
         }
@@ -46,42 +50,45 @@ class SoporteTiWhatsappGrupoMensajeBuilder
 
     /**
      * @param string $evento
+     * @param string|null $mentionWa
      * @return string|null
      */
-    private static function buildRequerimiento($evento, SoporteTiSolicitud $solicitud)
+    private static function buildRequerimiento($evento, SoporteTiSolicitud $solicitud, $mentionWa)
     {
         switch ($evento) {
             case 'creado':
-                return self::ticketCreado($solicitud);
+                return self::ticketCreado($solicitud, $mentionWa);
             case 'en_progreso':
-                return self::enProceso($solicitud);
+                return self::enProceso($solicitud, $mentionWa);
             case 'desplegado':
-                return self::desplegado($solicitud);
+                return self::desplegado($solicitud, $mentionWa);
             case 'observado':
-                return self::observado($solicitud);
+                return self::observado($solicitud, $mentionWa);
             default:
                 return null;
         }
     }
 
     /**
+     * @param string|null $mentionWa
      * @return string
      */
-    private static function proyectoCreado(SoporteTiSolicitud $solicitud)
+    private static function proyectoCreado(SoporteTiSolicitud $solicitud, $mentionWa)
     {
         return "🎫 *Soporte TI — Proyecto creado*\n"
             . '➡️Código: ' . self::codigo($solicitud) . "\n"
             . '➡️Título: ' . self::titulo($solicitud) . "\n"
-            . '➡️Solicitante: ' . self::solicitante($solicitud) . "\n"
+            . '➡️Solicitante: ' . self::solicitanteConMencion($solicitud, $mentionWa) . "\n"
             . '➡️Área: ' . self::area($solicitud);
     }
 
     /**
+     * @param string|null $mentionWa
      * @return string
      */
-    private static function proyectoEnMaqueta(SoporteTiSolicitud $solicitud)
+    private static function proyectoEnMaqueta(SoporteTiSolicitud $solicitud, $mentionWa)
     {
-        $nombre = self::primerNombre($solicitud);
+        $nombre = self::saludo($solicitud, $mentionWa);
 
         return "🎨 *Soporte TI — En maqueta*\n"
             . '➡️Código: ' . self::codigo($solicitud) . "\n"
@@ -90,11 +97,12 @@ class SoporteTiWhatsappGrupoMensajeBuilder
     }
 
     /**
+     * @param string|null $mentionWa
      * @return string
      */
-    private static function proyectoEnProgreso(SoporteTiSolicitud $solicitud)
+    private static function proyectoEnProgreso(SoporteTiSolicitud $solicitud, $mentionWa)
     {
-        $nombre = self::primerNombre($solicitud);
+        $nombre = self::saludo($solicitud, $mentionWa);
 
         return "🔧 *Soporte TI — En progreso*\n"
             . '➡️Código: ' . self::codigo($solicitud) . "\n"
@@ -104,11 +112,12 @@ class SoporteTiWhatsappGrupoMensajeBuilder
     }
 
     /**
+     * @param string|null $mentionWa
      * @return string
      */
-    private static function proyectoDesplegado(SoporteTiSolicitud $solicitud)
+    private static function proyectoDesplegado(SoporteTiSolicitud $solicitud, $mentionWa)
     {
-        $nombre = self::primerNombre($solicitud);
+        $nombre = self::saludo($solicitud, $mentionWa);
 
         return "🚀 *Soporte TI — Desplegado*\n"
             . '➡️Código: ' . self::codigo($solicitud) . "\n"
@@ -117,11 +126,12 @@ class SoporteTiWhatsappGrupoMensajeBuilder
     }
 
     /**
+     * @param string|null $mentionWa
      * @return string
      */
-    private static function proyectoObservado(SoporteTiSolicitud $solicitud)
+    private static function proyectoObservado(SoporteTiSolicitud $solicitud, $mentionWa)
     {
-        $nombre = self::primerNombre($solicitud);
+        $nombre = self::saludo($solicitud, $mentionWa);
 
         return "🚀 *Soporte TI — Observado*\n"
             . '➡️Código: ' . self::codigo($solicitud) . "\n"
@@ -130,23 +140,25 @@ class SoporteTiWhatsappGrupoMensajeBuilder
     }
 
     /**
+     * @param string|null $mentionWa
      * @return string
      */
-    private static function ticketCreado(SoporteTiSolicitud $solicitud)
+    private static function ticketCreado(SoporteTiSolicitud $solicitud, $mentionWa)
     {
         return "🎫 *Soporte TI — Ticket creado*\n"
             . '➡️Código: ' . self::codigo($solicitud) . "\n"
             . '➡️Título: ' . self::titulo($solicitud) . "\n"
-            . '➡️Solicitante: ' . self::solicitante($solicitud) . "\n"
+            . '➡️Solicitante: ' . self::solicitanteConMencion($solicitud, $mentionWa) . "\n"
             . '➡️Área: ' . self::area($solicitud);
     }
 
     /**
+     * @param string|null $mentionWa
      * @return string
      */
-    private static function enProceso(SoporteTiSolicitud $solicitud)
+    private static function enProceso(SoporteTiSolicitud $solicitud, $mentionWa)
     {
-        $nombre = self::primerNombre($solicitud);
+        $nombre = self::saludo($solicitud, $mentionWa);
 
         return "🔧 *Soporte TI — En proceso*\n"
             . '➡️Código: ' . self::codigo($solicitud) . "\n"
@@ -156,11 +168,12 @@ class SoporteTiWhatsappGrupoMensajeBuilder
     }
 
     /**
+     * @param string|null $mentionWa
      * @return string
      */
-    private static function desplegado(SoporteTiSolicitud $solicitud)
+    private static function desplegado(SoporteTiSolicitud $solicitud, $mentionWa)
     {
-        $nombre = self::primerNombre($solicitud);
+        $nombre = self::saludo($solicitud, $mentionWa);
         $base = "🚀 *Soporte TI — Desplegado*\n"
             . '➡️Código: ' . self::codigo($solicitud) . "\n"
             . '➡️Título: ' . self::titulo($solicitud) . "\n";
@@ -175,11 +188,12 @@ class SoporteTiWhatsappGrupoMensajeBuilder
     }
 
     /**
+     * @param string|null $mentionWa
      * @return string
      */
-    private static function observado(SoporteTiSolicitud $solicitud)
+    private static function observado(SoporteTiSolicitud $solicitud, $mentionWa)
     {
-        $nombre = self::primerNombre($solicitud);
+        $nombre = self::saludo($solicitud, $mentionWa);
 
         return "🚀 *Soporte TI — Observado*\n"
             . '➡️ Código: ' . self::codigo($solicitud) . "\n"
@@ -246,6 +260,52 @@ class SoporteTiWhatsappGrupoMensajeBuilder
         $partes = preg_split('/\s+/u', $solicitante);
 
         return $partes[0] !== '' ? $partes[0] : $solicitante;
+    }
+
+    /**
+     * @param mixed $mentionWa
+     * @return string|null
+     */
+    private static function mentionWaNormalizado($mentionWa)
+    {
+        if (!is_string($mentionWa)) {
+            return null;
+        }
+
+        $digits = preg_replace('/\D+/', '', $mentionWa);
+
+        return $digits !== '' ? $digits : null;
+    }
+
+    /**
+     * WhatsApp reemplaza @51XXXXXXXXX por el nombre del contacto si está en mentioned.
+     *
+     * @param string|null $mentionWa
+     * @return string
+     */
+    private static function saludo(SoporteTiSolicitud $solicitud, $mentionWa)
+    {
+        if ($mentionWa) {
+            return '@' . $mentionWa;
+        }
+
+        return self::primerNombre($solicitud);
+    }
+
+    /**
+     * @param string|null $mentionWa
+     * @return string
+     */
+    private static function solicitanteConMencion(SoporteTiSolicitud $solicitud, $mentionWa)
+    {
+        $nombre = self::solicitante($solicitud);
+        if (!$mentionWa) {
+            return $nombre;
+        }
+
+        $tag = '@' . $mentionWa;
+
+        return $nombre === '' ? $tag : $nombre . ' ' . $tag;
     }
 
     /**
