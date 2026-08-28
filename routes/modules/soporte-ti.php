@@ -6,6 +6,7 @@ use App\Http\Controllers\SoporteTi\SoporteTiEstadoController;
 use App\Http\Controllers\SoporteTi\SoporteTiChatController;
 use App\Http\Controllers\SoporteTi\SoporteTiSlaHorasController;
 use App\Http\Controllers\SoporteTi\SoporteTiFaseHorasController;
+use App\Http\Controllers\SoporteTi\SoporteTiAreaController;
 
 /*
 |--------------------------------------------------------------------------
@@ -14,6 +15,11 @@ use App\Http\Controllers\SoporteTi\SoporteTiFaseHorasController;
 */
 
 Route::group(['prefix' => 'soporte-ti', 'middleware' => 'jwt.auth'], function () {
+    Route::get('/areas/catalogo', [SoporteTiAreaController::class, 'catalogo']);
+    Route::get('/areas', [SoporteTiAreaController::class, 'index']);
+    Route::post('/areas', [SoporteTiAreaController::class, 'store']);
+    Route::put('/areas/{id}', [SoporteTiAreaController::class, 'update']);
+    Route::delete('/areas/{id}', [SoporteTiAreaController::class, 'destroy']);
     Route::get('/estados', [SoporteTiEstadoController::class, 'index']);
     Route::get('/sla-horas', [SoporteTiSlaHorasController::class, 'index']);
     Route::put('/sla-horas', [SoporteTiSlaHorasController::class, 'update']);

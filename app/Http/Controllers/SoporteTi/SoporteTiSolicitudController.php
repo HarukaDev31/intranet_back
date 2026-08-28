@@ -68,10 +68,16 @@ class SoporteTiSolicitudController extends Controller
             'imagenes.*' => 'file|mimes:jpg,jpeg,png,gif,webp,bmp|max:10240',
         ));
 
+        $payload = $request->except('imagenes');
         $imagenes = $this->extraerImagenesRequest($request);
 
+        if (isset($payload['tipo_solicitud']) && $payload['tipo_solicitud'] === 'A') {
+            unset($payload['seccion_ruta']);
+            $imagenes = array();
+        }
+
         try {
-            $data = $this->service->crearSolicitud($request->except('imagenes'), Auth::user(), $imagenes);
+            $data = $this->service->crearSolicitud($payload, Auth::user(), $imagenes);
 
             return $this->soporteTiOk($data, null, 201);
         } catch (\Throwable $e) {

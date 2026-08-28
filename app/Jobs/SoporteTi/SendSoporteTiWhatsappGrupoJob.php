@@ -33,18 +33,23 @@ class SendSoporteTiWhatsappGrupoJob implements ShouldQueue
     /** @var string|null */
     public $codigo;
 
+    /** @var string[] Números WhatsApp (51XXXXXXXXX) a etiquetar en el grupo */
+    public $mentioned;
+
     /**
      * @param string $message
      * @param string $evento
      * @param int|null $solicitudId
      * @param string|null $codigo
+     * @param string[]|null $mentioned
      */
-    public function __construct($message, $evento = 'creado', $solicitudId = null, $codigo = null)
+    public function __construct($message, $evento = 'creado', $solicitudId = null, $codigo = null, $mentioned = null)
     {
         $this->message = (string) $message;
         $this->evento = (string) $evento;
         $this->solicitudId = $solicitudId !== null ? (int) $solicitudId : null;
         $this->codigo = $codigo !== null ? (string) $codigo : null;
+        $this->mentioned = is_array($mentioned) ? array_values(array_filter($mentioned)) : array();
         $this->onQueue((string) config('soporte-ti.whatsapp_queue', 'notificaciones'));
     }
 
@@ -68,6 +73,7 @@ class SendSoporteTiWhatsappGrupoJob implements ShouldQueue
             'groupId' => $groupId,
             'fromNumber' => $fromNumber,
             'queue' => $queueName,
+            'mentioned' => $this->mentioned,
         );
 
         if (!$enabled) {
@@ -89,7 +95,7 @@ class SendSoporteTiWhatsappGrupoJob implements ShouldQueue
         )));
 
         try {
-            $result = $this->sendMessage($this->message, $groupId, 0, $fromNumber);
+            $result = $this->sendMessage($this->message, $groupId, 0, $fromNumber, null, $this->mentioned);
             $ok = !empty($result['status']);
 
             if ($ok) {

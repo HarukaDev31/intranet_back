@@ -127,6 +127,17 @@ class SoporteTiCacheService
     }
 
     /**
+     * @param callable $resolver
+     * @return array
+     */
+    public function rememberAreas(callable $resolver)
+    {
+        $key = $this->key('areas:v2:' . $this->catalogEpoch('areas'));
+
+        return $this->remember($key, $this->ttlCatalog(), $resolver);
+    }
+
+    /**
      * @param int $userId
      */
     public function invalidateUsuario($userId)

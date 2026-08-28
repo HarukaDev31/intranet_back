@@ -396,9 +396,10 @@ trait WhatsappTrait
      *   cursos) usa sendMediaInspection(), sendWelcome() o sendMessageCurso().
      *
      * @param  array<string, mixed>|null  $meta  Payload Meta (template, body_parameters, chat_preview). Ver CoordinacionWhatsappPayload.
+     * @param  string[]|null  $mentioned  Números a etiquetar en grupos (Evolution `mentioned`).
      * @return array ['status' => bool, 'response' => array]
      */
-    public function sendMessage($message, $phoneNumberId = null, $sleep = 0, $fromNumber = 'consolidado', $meta = null): array
+    public function sendMessage($message, $phoneNumberId = null, $sleep = 0, $fromNumber = 'consolidado', $meta = null, $mentioned = null): array
     {
         $phoneNumberId = $this->resolvePhoneNumberForWhatsApp($phoneNumberId ? $phoneNumberId : $this->phoneNumberId);
 
@@ -426,12 +427,17 @@ trait WhatsappTrait
             }
         }
 
-        return $this->_callApi('/messageV2', [
+        $payload = [
             'message' => $message,
             'phoneNumberId' => $phoneNumberId,
             'sleep' => $sleep,
             'fromNumber' => $fromNumber
-        ]);
+        ];
+        if (is_array($mentioned) && count($mentioned) > 0) {
+            $payload['mentioned'] = array_values($mentioned);
+        }
+
+        return $this->_callApi('/messageV2', $payload);
     }
     public function sendMessageVentas($message, $phoneNumberId = null, $sleep = 0): array
     {

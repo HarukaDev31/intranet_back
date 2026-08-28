@@ -330,6 +330,11 @@ class SoporteTiService
         $tipo = isset($data['tipo_solicitud']) ? $data['tipo_solicitud'] : 'B';
         $now = Carbon::now();
 
+        if ($tipo === 'A') {
+            $imagenesIniciales = array();
+            unset($data['seccion_ruta']);
+        }
+
         $mapped = DB::transaction(function () use ($data, $user, $tipo, $now, $imagenesIniciales) {
                 $subtipoB = $tipo === 'B'
                     ? (isset($data['subtipo_b']) ? $data['subtipo_b'] : null)
@@ -352,7 +357,9 @@ class SoporteTiService
                 'progreso' => 0,
                 'sla_horas' => 0,
                 'horas_transcurridas' => 0,
-                'seccion_ruta' => isset($data['seccion_ruta']) ? $data['seccion_ruta'] : null,
+                'seccion_ruta' => $tipo === 'A'
+                    ? null
+                    : (isset($data['seccion_ruta']) ? $data['seccion_ruta'] : null),
                 'descripcion' => isset($data['descripcion']) ? $data['descripcion'] : null,
                 'ultima_actualizacion' => $now,
             ));
@@ -464,12 +471,14 @@ class SoporteTiService
             return;
         }
 
-        $mensaje = SoporteTiWhatsappGrupoMensajeBuilder::build($evento, $solicitud);
+        $mentionWa = $this->whatsappMentionNumberSolicitante($solicitud);
+        $mensaje = SoporteTiWhatsappGrupoMensajeBuilder::build($evento, $solicitud, $mentionWa);
         if ($mensaje === null || trim($mensaje) === '') {
             return;
         }
 
         $codigo = (string) $solicitud->codigo;
+        $mentioned = $mentionWa ? array($mentionWa) : array();
 
         Log::info('SoporteTi: encolando WhatsApp grupo', array(
             'app_env' => app()->environment(),
@@ -479,9 +488,45 @@ class SoporteTiService
             'groupId' => config('soporte-ti.whatsapp_group_id'),
             'fromNumber' => config('soporte-ti.whatsapp_from_number'),
             'queue' => config('soporte-ti.whatsapp_queue', 'notificaciones'),
+            'mention_wa' => $mentionWa,
         ));
 
-        SendSoporteTiWhatsappGrupoJob::dispatch($mensaje, $evento, (int) $solicitud->id, $codigo);
+        SendSoporteTiWhatsappGrupoJob::dispatch($mensaje, $evento, (int) $solicitud->id, $codigo, $mentioned);
+    }
+
+    /**
+     * Número internacional (51XXXXXXXXX) del solicitante si tiene celular en perfil.
+     *
+     * @return string|null
+     */
+    protected function whatsappMentionNumberSolicitante(SoporteTiSolicitud $solicitud)
+    {
+        if ($solicitud->solicitante_user_id === null) {
+            return null;
+        }
+
+        $usuario = Usuario::query()
+            ->select(array('ID_Usuario', 'Nu_Celular'))
+            ->find((int) $solicitud->solicitante_user_id);
+
+        if (!$usuario || trim((string) $usuario->Nu_Celular) === '') {
+            return null;
+        }
+
+        $nine = function_exists('normalizePhone')
+            ? normalizePhone((string) $usuario->Nu_Celular)
+            : preg_replace('/\D+/', '', (string) $usuario->Nu_Celular);
+
+        if (is_string($nine) && strlen($nine) === 9 && ctype_digit($nine)) {
+            return '51' . $nine;
+        }
+
+        $digits = preg_replace('/\D+/', '', (string) $usuario->Nu_Celular);
+        if (is_string($digits) && strlen($digits) >= 10 && strlen($digits) <= 15) {
+            return $digits;
+        }
+
+        return null;
     }
 
     /**
