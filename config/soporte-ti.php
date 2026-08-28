@@ -22,7 +22,7 @@ return array(
     'enforce_transiciones' => (bool) env('SOPORTE_TI_ENFORCE_TRANSICIONES', false),
 
     /*
-    | WhatsApp: avisos al grupo de Soporte (creado / en_progreso / desplegado / observado).
+    | WhatsApp: avisos al grupo de Soporte (creado / en_maqueta / en_progreso / desplegado / observado).
     | Textos en App\Support\SoporteTi\SoporteTiWhatsappGrupoMensajeBuilder (plantilla MSJS).
     | from_number = instancia en redis.probusiness.pe (igual que "administracion").
     */
