@@ -26,9 +26,12 @@ return array(
     | Textos en App\Support\SoporteTi\SoporteTiWhatsappGrupoMensajeBuilder (plantilla MSJS).
     | Si el solicitante tiene Nu_Celular en perfil, se le etiqueta (@) en el grupo.
     | from_number = instancia en redis.probusiness.pe (igual que "administracion").
+    | QA usa grupo propio (SOPORTE_TI_WHATSAPP_GROUP_QA); prod el de SOPORTE_TI_WHATSAPP_GROUP.
     */
     'whatsapp_enabled' => (bool) env('SOPORTE_TI_WHATSAPP_ENABLED', true),
     'whatsapp_from_number' => env('SOPORTE_TI_WHATSAPP_FROM', 'soporte'),
-    'whatsapp_group_id' => env('SOPORTE_TI_WHATSAPP_GROUP', '120363402844775385@g.us'),
+    'whatsapp_group_id' => app()->environment('qa')
+        ? env('SOPORTE_TI_WHATSAPP_GROUP_QA', '120363428760131024@g.us')
+        : env('SOPORTE_TI_WHATSAPP_GROUP', '120363402844775385@g.us'),
     'whatsapp_queue' => env('SOPORTE_TI_WHATSAPP_QUEUE', 'notificaciones'),
 );

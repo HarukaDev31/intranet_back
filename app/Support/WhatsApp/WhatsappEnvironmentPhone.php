@@ -30,6 +30,11 @@ class WhatsappEnvironmentPhone
             return $phoneNumberId;
         }
 
+        // Grupos (@g.us) no se redirigen al número de prueba: en QA deben llegar al grupo real.
+        if (self::isGroupDestination($phoneNumberId)) {
+            return $phoneNumberId;
+        }
+
         if (!self::shouldUseDefaultNumber($domain)) {
             return $phoneNumberId;
         }
@@ -42,6 +47,24 @@ class WhatsappEnvironmentPhone
         ]);
 
         return $default;
+    }
+
+    /**
+     * JIDs de grupo WhatsApp (p. ej. 120363...@g.us). No reescribir en QA/local.
+     */
+    public static function isGroupDestination(?string $phoneNumberId): bool
+    {
+        if ($phoneNumberId === null || trim($phoneNumberId) === '') {
+            return false;
+        }
+
+        if (stripos($phoneNumberId, '@g.us') !== false) {
+            return true;
+        }
+
+        $digits = preg_replace('/\D+/', '', $phoneNumberId);
+
+        return is_string($digits) && strlen($digits) >= 15 && strpos($digits, '120363') === 0;
     }
 
     public static function inferDomain(): ?string
