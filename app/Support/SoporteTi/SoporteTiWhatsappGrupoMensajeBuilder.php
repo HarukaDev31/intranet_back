@@ -6,13 +6,49 @@ use App\Models\SoporteTi\SoporteTiSolicitud;
 
 /**
  * Textos WhatsApp al grupo Soporte TI (plantilla MSJS.docx).
+ * Tipo A = proyectos (PRY). Tipo B = requerimientos (INC / CFG / REQ).
  */
 class SoporteTiWhatsappGrupoMensajeBuilder
 {
     /**
-     * @param string $evento creado|en_progreso|desplegado|observado
+     * @param string $evento creado|en_maqueta|en_progreso|desplegado|observado
      */
     public static function build($evento, SoporteTiSolicitud $solicitud)
+    {
+        if (self::esProyecto($solicitud)) {
+            return self::buildProyecto($evento, $solicitud);
+        }
+
+        return self::buildRequerimiento($evento, $solicitud);
+    }
+
+    /**
+     * @param string $evento
+     * @return string|null
+     */
+    private static function buildProyecto($evento, SoporteTiSolicitud $solicitud)
+    {
+        switch ($evento) {
+            case 'creado':
+                return self::proyectoCreado($solicitud);
+            case 'en_maqueta':
+                return self::proyectoEnMaqueta($solicitud);
+            case 'en_progreso':
+                return self::proyectoEnProgreso($solicitud);
+            case 'desplegado':
+                return self::proyectoDesplegado($solicitud);
+            case 'observado':
+                return self::proyectoObservado($solicitud);
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * @param string $evento
+     * @return string|null
+     */
+    private static function buildRequerimiento($evento, SoporteTiSolicitud $solicitud)
     {
         switch ($evento) {
             case 'creado':
@@ -26,6 +62,71 @@ class SoporteTiWhatsappGrupoMensajeBuilder
             default:
                 return null;
         }
+    }
+
+    /**
+     * @return string
+     */
+    private static function proyectoCreado(SoporteTiSolicitud $solicitud)
+    {
+        return "🎫 *Soporte TI — Proyecto creado*\n"
+            . '➡️Código: ' . self::codigo($solicitud) . "\n"
+            . '➡️Título: ' . self::titulo($solicitud) . "\n"
+            . '➡️Solicitante: ' . self::solicitante($solicitud) . "\n"
+            . '➡️Área: ' . self::area($solicitud);
+    }
+
+    /**
+     * @return string
+     */
+    private static function proyectoEnMaqueta(SoporteTiSolicitud $solicitud)
+    {
+        $nombre = self::primerNombre($solicitud);
+
+        return "🎨 *Soporte TI — En maqueta*\n"
+            . '➡️Código: ' . self::codigo($solicitud) . "\n"
+            . '➡️Título: ' . self::titulo($solicitud) . "\n"
+            . '🤖 Hola ' . $nombre . ', tu proyecto pasó a etapa de maqueta y el equipo de TI la está revisando. Ante cualquier consulta, nos estaremos comunicando contigo.';
+    }
+
+    /**
+     * @return string
+     */
+    private static function proyectoEnProgreso(SoporteTiSolicitud $solicitud)
+    {
+        $nombre = self::primerNombre($solicitud);
+
+        return "🔧 *Soporte TI — En progreso*\n"
+            . '➡️Código: ' . self::codigo($solicitud) . "\n"
+            . '➡️Título: ' . self::titulo($solicitud) . "\n"
+            . '➡️Complejidad: ' . self::complejidadEtiqueta($solicitud) . "\n"
+            . '🤖 Hola ' . $nombre . ', el equipo de TI ya está configurando tu proyecto.';
+    }
+
+    /**
+     * @return string
+     */
+    private static function proyectoDesplegado(SoporteTiSolicitud $solicitud)
+    {
+        $nombre = self::primerNombre($solicitud);
+
+        return "🚀 *Soporte TI — Desplegado*\n"
+            . '➡️Código: ' . self::codigo($solicitud) . "\n"
+            . '➡️Título: ' . self::titulo($solicitud) . "\n"
+            . '🤖 Hola ' . $nombre . ', tu proyecto ya fue subido al sistema QA. Ingresa al intranet, valida y marca Observado u Operativo.';
+    }
+
+    /**
+     * @return string
+     */
+    private static function proyectoObservado(SoporteTiSolicitud $solicitud)
+    {
+        $nombre = self::primerNombre($solicitud);
+
+        return "🚀 *Soporte TI — Observado*\n"
+            . '➡️Código: ' . self::codigo($solicitud) . "\n"
+            . '➡️Título: ' . self::titulo($solicitud) . "\n"
+            . '🤖 Hola ' . $nombre . ', se identificaron correcciones pendientes en tu proyecto, se está revisando.';
     }
 
     /**
@@ -84,6 +185,20 @@ class SoporteTiWhatsappGrupoMensajeBuilder
             . '➡️ Código: ' . self::codigo($solicitud) . "\n"
             . '➡️Título: ' . self::titulo($solicitud) . "\n"
             . '🤖 Hola ' . $nombre . ', has reportado una observación tras el despliegue, se está revisando.';
+    }
+
+    /**
+     * Tipo A o código PRY- = proyecto.
+     */
+    private static function esProyecto(SoporteTiSolicitud $solicitud)
+    {
+        if (strtoupper((string) $solicitud->tipo_solicitud) === 'A') {
+            return true;
+        }
+
+        $codigo = strtoupper(self::codigo($solicitud));
+
+        return strpos($codigo, 'PRY-') === 0;
     }
 
     /**

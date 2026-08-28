@@ -453,9 +453,9 @@ class SoporteTiService
 
     /**
      * Aviso al grupo WhatsApp (instancia soporte).
-     * Plantillas: MSJS.docx — creado, en_progreso, desplegado, observado.
+     * Plantillas: MSJS.docx — creado, en_maqueta (tipo A), en_progreso, desplegado, observado.
      *
-     * @param string $evento creado|en_progreso|desplegado|observado
+     * @param string $evento creado|en_maqueta|en_progreso|desplegado|observado
      * @return void
      */
     protected function encolarWhatsappGrupoSoporteTi($evento, SoporteTiSolicitud $solicitud)
@@ -1840,7 +1840,7 @@ class SoporteTiService
         $mapped = $this->mapSolicitudRecargada($solicitud, $user);
         $this->cache->invalidateAfterSolicitudWrite($solicitud);
 
-        if (in_array($nuevoEstado->codigo, array('en_progreso', 'desplegado', 'observado'), true)) {
+        if (in_array($nuevoEstado->codigo, array('en_maqueta', 'en_progreso', 'desplegado', 'observado'), true)) {
             $this->encolarWhatsappGrupoSoporteTi($nuevoEstado->codigo, $solicitud);
         }
 
