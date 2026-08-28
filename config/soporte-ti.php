@@ -30,7 +30,7 @@ return array(
     */
     'whatsapp_enabled' => (bool) env('SOPORTE_TI_WHATSAPP_ENABLED', true),
     'whatsapp_from_number' => env('SOPORTE_TI_WHATSAPP_FROM', 'soporte'),
-    'whatsapp_group_id' => app()->environment('qa')
+    'whatsapp_group_id' => env('APP_ENV') === 'qa'
         ? env('SOPORTE_TI_WHATSAPP_GROUP_QA', '120363428760131024@g.us')
         : env('SOPORTE_TI_WHATSAPP_GROUP', '120363402844775385@g.us'),
     'whatsapp_queue' => env('SOPORTE_TI_WHATSAPP_QUEUE', 'notificaciones'),
