@@ -295,6 +295,9 @@ class PlantillaFinalBatchService
                     $tarifaCalculadora
                 );
                 $cliente['cliente']['calculadora_extras'] = $this->extrasFromCalculadoraRow($calc);
+                $cliente['cliente']['tipo_cambio'] = ($calc !== null && is_numeric($calc->tc ?? null) && (float) $calc->tc > 0)
+                    ? (float) $calc->tc
+                    : 3.75;
                 $cliente['cliente']['correo'] = $item->correo ?? '';
                 $cliente['cliente']['tipo_cliente'] = $item->tipoCliente ?? '';
                 $cliente['cliente']['id_tipo_cliente'] = $item->id_tipo_cliente ?? 0;
@@ -303,6 +306,7 @@ class PlantillaFinalBatchService
             } else {
                 $cliente['cliente']['tarifa'] = 0;
                 $cliente['cliente']['calculadora_extras'] = ['recargos' => 0.0, 'descuento' => 0.0];
+                $cliente['cliente']['tipo_cambio'] = 3.75;
                 $cliente['cliente']['correo'] = '';
                 $cliente['cliente']['tipo_cliente'] = '';
                 $cliente['cliente']['id_tipo_cliente'] = 0;
@@ -697,6 +701,7 @@ class PlantillaFinalBatchService
                 'tarifa_total_extra_proveedor',
                 'tarifa_total_extra_item',
                 'tarifa_descuento',
+                'tc',
             ]);
 
         $byCotizacion = [];
