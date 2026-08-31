@@ -478,7 +478,22 @@ class SeguimientoConsolidadoDriveService
             ->select(['excel_seguimiento_drive_link', 'excel_seguimiento_link_status', 'f_inicio'])
             ->first();
 
-        if (!$row || empty($row->excel_seguimiento_drive_link)) {
+        if (!$row) {
+            return;
+        }
+
+        if (empty($row->excel_seguimiento_drive_link)) {
+            $contenedor = Contenedor::find($idContenedor);
+            if ($contenedor && SeguimientoConsolidadoVincularEligibility::puedeVincular($contenedor)) {
+                $this->log('info', 'Sync: consolidado sin Drive, se encola vinculación inicial', [
+                    'flow' => 'seguimiento_drive',
+                    'step' => 'queue_vincular_desde_sync',
+                    'id_contenedor' => $idContenedor,
+                    'estado_china' => $contenedor->estado_china,
+                ]);
+                $this->queueVincular($idContenedor);
+            }
+
             return;
         }
 
@@ -684,6 +699,11 @@ class SeguimientoConsolidadoDriveService
             ->whereNotNull('excel_seguimiento_drive_link')
             ->whereNotNull('f_inicio')
             ->where('estado_finanzas', 'PENDIENTE')
+            ->where(function ($q) {
+                $q->whereNull('estado_china')
+                    ->orWhere('estado_china', '')
+                    ->orWhere('estado_china', '!=', 'COMPLETADO');
+            })
             ->select('id');
 
         if ($idContenedor !== null) {

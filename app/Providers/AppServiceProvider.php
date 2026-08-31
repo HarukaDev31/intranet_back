@@ -41,9 +41,9 @@ class AppServiceProvider extends ServiceProvider
         WslLocalDatabaseConnection::applyForQueueWorkers();
 
         // Registrar observer para sincronizar estados entre Cotizacion y CalculadoraImportacion
+        Contenedor::observe(ContenedorObserver::class);
         Cotizacion::observe(CotizacionObserver::class);
         CotizacionProveedor::observe(CotizacionProveedorObserver::class);
-        Contenedor::observe(ContenedorObserver::class);
 
         Event::listen(BeforeExport::class, function () {
             $limit = (string) env('EXCEL_MEMORY_LIMIT', '1024M');

@@ -12,7 +12,7 @@ class SeguimientoConsolidadoSyncLinkedCommand extends Command
 {
     protected $signature = 'segimiento-consolidado:sync-linked';
 
-    protected $description = 'Encola sincronización de Excel en Drive para consolidados vinculados con estado_finanzas PENDIENTE';
+    protected $description = 'Encola sync de Excel Drive (finanzas PENDIENTE, china PENDIENTE o RECIBIENDO)';
 
     /**
      * @return int
@@ -23,6 +23,11 @@ class SeguimientoConsolidadoSyncLinkedCommand extends Command
             ->whereNotNull('excel_seguimiento_drive_link')
             ->whereNotNull('f_inicio')
             ->where('estado_finanzas', 'PENDIENTE')
+            ->where(function ($q) {
+                $q->whereNull('estado_china')
+                    ->orWhere('estado_china', '')
+                    ->orWhere('estado_china', '!=', 'COMPLETADO');
+            })
             ->where(function ($q) {
                 $q->whereNull('excel_seguimiento_link_status')
                     ->orWhereNotIn('excel_seguimiento_link_status', [

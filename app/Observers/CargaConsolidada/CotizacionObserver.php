@@ -60,6 +60,10 @@ class CotizacionObserver
 
     public function created(Cotizacion $cotizacion): void
     {
+        if (!empty($cotizacion->id_contenedor)) {
+            app(SeguimientoConsolidadoDriveService::class)->queueSyncIfLinked((int) $cotizacion->id_contenedor);
+        }
+
         $this->cache->invalidateModule();
     }
 
