@@ -19,6 +19,7 @@ use App\Traits\UsesObjectStorage;
 use App\Traits\WhatsappTrait;
 use App\Models\ContenedorCotizacionProveedor;
 use App\Jobs\SendInspectionMediaJob;
+use App\Services\CargaConsolidada\CargaConsolidadaCacheService;
 use App\Services\CargaConsolidada\ReminderInicialWhatsappService;
 use App\Jobs\ForceSendRotuladoJob;
 use App\Jobs\SendRecordatorioDatosProveedorJob;
@@ -804,6 +805,9 @@ class CotizacionProveedorController extends Controller
             DB::table($this->table_contenedor_cotizacion)
                 ->where('id', $idCotizacion)
                 ->update(['estado_cliente' => $estadoCliente]);
+
+            // DB::table no dispara CotizacionProveedorObserver: invalidar cache HTTP ya.
+            app(CargaConsolidadaCacheService::class)->invalidateModule();
 
             // Llamada al manejador de actualización de cotización
             $data = $this->handlerUpdateCotizacionProveedor($estado, $idProveedor, $idCotizacion);

@@ -15,7 +15,7 @@ class CargaConsolidadaCacheService
 {
     public const TAG = 'carga-consolidada';
 
-    private const VERSION = 'v1';
+    private const VERSION = 'v2';
     private const TTL_MINUTES = 3;
     private const LOCK_SECONDS = 20;
     private const BLOCK_SECONDS = 8;
@@ -228,12 +228,12 @@ class CargaConsolidadaCacheService
 
     private function isModuleRequest(Request $request): bool
     {
-        $path = strtolower('/' . ltrim($request->path(), '/'));
+        $path = strtolower(trim($request->path(), '/'));
 
-        return str_starts_with($path, '/api/carga-consolidada')
-            || str_starts_with($path, 'api/carga-consolidada')
-            || str_starts_with($path, '/api/consolidado')
-            || str_starts_with($path, 'api/consolidado');
+        return str_starts_with($path, 'api/carga-consolidada')
+            || str_starts_with($path, 'carga-consolidada')
+            || str_starts_with($path, 'api/consolidado')
+            || str_starts_with($path, 'consolidado');
     }
 
     private function pathMatchesSkipPatterns(Request $request): bool
