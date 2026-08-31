@@ -107,4 +107,23 @@ class SoporteTiWhatsappGrupoMensajeBuilderTest extends TestCase
         $this->assertStringContainsString('Hola Danitza,', $msg);
         $this->assertStringNotContainsString('@51', $msg);
     }
+
+    public function test_ticket_en_proceso_usa_criticidad(): void
+    {
+        $msg = SoporteTiWhatsappGrupoMensajeBuilder::build('en_progreso', $this->ticket(array(
+            'complejidad_analista' => 'Por definir',
+            'criticidad' => 'Media',
+        )));
+        $this->assertStringContainsString('Complejidad: Media', $msg);
+        $this->assertStringNotContainsString('Por definir', $msg);
+    }
+
+    public function test_proyecto_en_progreso_usa_complejidad_analista_si_pm_sin_definir(): void
+    {
+        $msg = SoporteTiWhatsappGrupoMensajeBuilder::build('en_progreso', $this->proyecto(array(
+            'complejidad_pm' => 'Por definir',
+            'complejidad_analista' => 'Alta',
+        )));
+        $this->assertStringContainsString('Complejidad: Alta', $msg);
+    }
 }
