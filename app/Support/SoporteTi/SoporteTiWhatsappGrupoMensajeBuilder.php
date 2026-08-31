@@ -232,19 +232,31 @@ class SoporteTiWhatsappGrupoMensajeBuilder
     }
 
     /**
+     * Complejidad mostrada en WhatsApp (En progreso / En proceso).
+     * Tipo B persiste en criticidad; tipo A en complejidad_pm / complejidad_analista (+ criticidad espejo).
+     *
      * @return string
      */
     private static function complejidadEtiqueta(SoporteTiSolicitud $solicitud)
     {
-        $valor = strtoupper(trim((string) $solicitud->tipo_solicitud)) === 'A'
-            ? trim((string) $solicitud->complejidad_pm)
-            : trim((string) $solicitud->complejidad_analista);
+        $candidatos = strtoupper(trim((string) $solicitud->tipo_solicitud)) === 'A'
+            ? array(
+                trim((string) $solicitud->complejidad_pm),
+                trim((string) $solicitud->complejidad_analista),
+                trim((string) $solicitud->criticidad),
+            )
+            : array(
+                trim((string) $solicitud->criticidad),
+                trim((string) $solicitud->complejidad_analista),
+            );
 
-        if ($valor === '' || stripos($valor, 'definir') !== false) {
-            return 'Por definir';
+        foreach ($candidatos as $valor) {
+            if ($valor !== '' && stripos($valor, 'definir') === false) {
+                return $valor;
+            }
         }
 
-        return $valor;
+        return 'Por definir';
     }
 
     /**
