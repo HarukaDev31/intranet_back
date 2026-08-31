@@ -702,11 +702,10 @@ class CotizacionController extends Controller
      */
     private function excelSeguimientoDrivePayload($idContenedor, $user)
     {
-        if (!SeguimientoConsolidadoDriveService::userCanManageDriveSeguimiento($user)) {
-            return null;
-        }
+        $driveService = app(SeguimientoConsolidadoDriveService::class);
+        $driveService->ensureVinculadoIfEligible((int) $idContenedor);
 
-        $status = app(SeguimientoConsolidadoDriveService::class)->getStatus((int) $idContenedor);
+        $status = $driveService->getStatus((int) $idContenedor);
 
         return !empty($status['success']) ? ($status['data'] ?? null) : null;
     }

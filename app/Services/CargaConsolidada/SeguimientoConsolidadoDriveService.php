@@ -197,6 +197,22 @@ class SeguimientoConsolidadoDriveService
     }
 
     /**
+     * Si el consolidado es elegible y aún no tiene Excel en Drive, encola la vinculación.
+     *
+     * @param int $idContenedor
+     */
+    public function ensureVinculadoIfEligible($idContenedor)
+    {
+        $idContenedor = (int) $idContenedor;
+        $contenedor = Contenedor::find($idContenedor);
+        if (!$contenedor || !SeguimientoConsolidadoVincularEligibility::puedeVincular($contenedor)) {
+            return;
+        }
+
+        $this->queueVincular($idContenedor);
+    }
+
+    /**
      * Encola vinculación inicial para consolidados elegibles sin Excel en Drive (cron).
      *
      * @return array{encolados: int, total: int, ids: int[]}
