@@ -121,7 +121,7 @@ class SeguimientoConsolidadoVincularEligibility
             return false;
         }
 
-        if (!empty($contenedor->excel_seguimiento_drive_link)) {
+        if (self::tieneExcelDrivePropio($contenedor)) {
             return false;
         }
 
@@ -130,6 +130,31 @@ class SeguimientoConsolidadoVincularEligibility
         }
 
         return self::cumpleUmbralCarga($contenedor);
+    }
+
+    /**
+     * True si este consolidado tiene un Excel en Drive que no comparte con otro (p. ej. clone al partir).
+     *
+     * @param Contenedor $contenedor
+     * @return bool
+     */
+    public static function tieneExcelDrivePropio(Contenedor $contenedor)
+    {
+        $fileId = trim((string) ($contenedor->excel_seguimiento_drive_file_id ?? ''));
+        $link = trim((string) ($contenedor->excel_seguimiento_drive_link ?? ''));
+
+        if ($fileId === '' && $link === '') {
+            return false;
+        }
+
+        if ($fileId === '') {
+            return true;
+        }
+
+        return !Contenedor::query()
+            ->where('id', '!=', $contenedor->id)
+            ->where('excel_seguimiento_drive_file_id', $fileId)
+            ->exists();
     }
 
     /**
@@ -192,7 +217,15 @@ class SeguimientoConsolidadoVincularEligibility
             })
             ->where(function ($q) {
                 $q->whereNull('excel_seguimiento_drive_link')
-                    ->orWhere('excel_seguimiento_drive_link', '');
+                    ->orWhere('excel_seguimiento_drive_link', '')
+                    ->orWhereIn('excel_seguimiento_drive_file_id', function ($sub) {
+                        $sub->select('excel_seguimiento_drive_file_id')
+                            ->from('carga_consolidada_contenedor')
+                            ->whereNotNull('excel_seguimiento_drive_file_id')
+                            ->where('excel_seguimiento_drive_file_id', '!=', '')
+                            ->groupBy('excel_seguimiento_drive_file_id')
+                            ->havingRaw('COUNT(*) > 1');
+                    });
             })
             ->where(function ($q) {
                 $q->whereNull('excel_seguimiento_link_status')

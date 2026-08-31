@@ -129,7 +129,11 @@ class SeguimientoConsolidadoExcelService
         $spreadsheet = $this->buildSpreadsheet($idContenedor, $request);
         $contenedor = Contenedor::find($idContenedor);
         $carga = $contenedor ? (string) $contenedor->carga : (string) $idContenedor;
-        $fileName = $this->buildFileName($carga);
+        $fileName = $this->buildFileName(
+            $carga,
+            $contenedor ? (string) ($contenedor->parte ?? '') : '',
+            (int) $idContenedor
+        );
         $tmp = sys_get_temp_dir() . DIRECTORY_SEPARATOR . uniqid('seg_consolidado_') . '_' . $fileName;
 
         $saveStartedAt = microtime(true);
@@ -151,12 +155,21 @@ class SeguimientoConsolidadoExcelService
      * @param string $carga
      * @return string
      */
-    public function buildFileName($carga)
+    public function buildFileName($carga, $parte = '', $idContenedor = 0)
     {
         $now = Carbon::now('America/Lima');
+        $label = preg_replace('/\s+/', '', (string) $carga);
+        $parte = strtoupper(trim((string) $parte));
+        if ($parte !== '') {
+            $label .= $parte;
+        }
 
-        return 'cotizaciones_#'
-            . $carga
+        $name = 'cotizaciones_#' . $label;
+        if ((int) $idContenedor > 0) {
+            $name .= '_' . (int) $idContenedor;
+        }
+
+        return $name
             . '_'
             . $now->format('Y-m-d')
             . '_'

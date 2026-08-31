@@ -769,6 +769,12 @@ class ContenedorController extends Controller
                     $nuevo = $origen->replicate();
                     $nuevo->parte = $partes[$i];
                     $nuevo->id_contenedor_origen = $origen->id;
+                    $nuevo->excel_seguimiento_drive_file_id = null;
+                    $nuevo->excel_seguimiento_drive_link = null;
+                    $nuevo->excel_seguimiento_vinculado_at = null;
+                    $nuevo->excel_seguimiento_file_name = null;
+                    $nuevo->excel_seguimiento_link_status = null;
+                    $nuevo->excel_seguimiento_link_error = null;
                     $nuevo->save();
                     $this->generateSteps($nuevo->id);
 
