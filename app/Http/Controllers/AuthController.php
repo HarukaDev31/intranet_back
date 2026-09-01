@@ -495,6 +495,7 @@ class AuthController extends Controller
                     $phoneExists = DB::table('usuario')
                         ->where('Nu_Celular', $phone)
                         ->where('ID_Usuario', '!=', $idUsuario)
+                        ->whereNull('ID_Entidad')
                         ->exists();
                     if ($phoneExists) {
                         return response()->json([
