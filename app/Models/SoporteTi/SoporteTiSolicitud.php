@@ -2,9 +2,21 @@
 
 namespace App\Models\SoporteTi;
 
+use App\Models\Usuario;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+/**
+ * @property-read SoporteTiEstado|null $estadoActual
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, SoporteTiSolicitudEstado> $historialEstados
+ * @property-read SoporteTiChatSala|null $salaChat
+ * @property-read SoporteTiMaqueta|null $maqueta
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, SoporteTiSolicitudEvidencia> $evidencias
+ * @property-read Usuario|null $solicitanteUsuario
+ */
 class SoporteTiSolicitud extends Model
 {
     use SoftDeletes;
@@ -52,28 +64,33 @@ class SoporteTiSolicitud extends Model
         'ultima_actualizacion' => 'datetime',
     ];
 
-    public function estadoActual()
+    public function estadoActual(): BelongsTo
     {
         return $this->belongsTo(SoporteTiEstado::class, 'estado_actual_id');
     }
 
-    public function historialEstados()
+    public function historialEstados(): HasMany
     {
         return $this->hasMany(SoporteTiSolicitudEstado::class, 'solicitud_id')->orderBy('id', 'desc');
     }
 
-    public function salaChat()
+    public function salaChat(): HasOne
     {
         return $this->hasOne(SoporteTiChatSala::class, 'solicitud_id');
     }
 
-    public function maqueta()
+    public function maqueta(): HasOne
     {
         return $this->hasOne(SoporteTiMaqueta::class, 'solicitud_id');
     }
 
-    public function evidencias()
+    public function evidencias(): HasMany
     {
         return $this->hasMany(SoporteTiSolicitudEvidencia::class, 'solicitud_id')->orderBy('orden')->orderBy('id');
+    }
+
+    public function solicitanteUsuario(): BelongsTo
+    {
+        return $this->belongsTo(Usuario::class, 'solicitante_user_id', 'ID_Usuario');
     }
 }

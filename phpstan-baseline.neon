@@ -655,28 +655,10 @@ parameters:
 			path: app/Console/Commands/VincularCotizacionesCalculadoraMasivo.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiSolicitud\:\:\$estadoActual\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Events/SoporteTi/SoporteTiEstadoActualizado.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiSolicitud\:\:\$salaChat\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Events/SoporteTi/SoporteTiEstadoActualizado.php
-
-		-
 			message: '#^Call to an undefined method App\\Events\\SoporteTi\\SoporteTiEstadoActualizado\:\:onQueue\(\)\.$#'
 			identifier: method.notFound
 			count: 1
 			path: app/Events/SoporteTi/SoporteTiEstadoActualizado.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiSolicitud\:\:\$salaChat\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Events/SoporteTi/SoporteTiMensajeActualizado.php
 
 		-
 			message: '#^Call to an undefined method App\\Events\\SoporteTi\\SoporteTiMensajeActualizado\:\:onQueue\(\)\.$#'
@@ -685,22 +667,10 @@ parameters:
 			path: app/Events/SoporteTi/SoporteTiMensajeActualizado.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiSolicitud\:\:\$salaChat\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Events/SoporteTi/SoporteTiMensajeCreado.php
-
-		-
 			message: '#^Call to an undefined method App\\Events\\SoporteTi\\SoporteTiMensajeCreado\:\:onQueue\(\)\.$#'
 			identifier: method.notFound
 			count: 1
 			path: app/Events/SoporteTi/SoporteTiMensajeCreado.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiSolicitud\:\:\$salaChat\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Events/SoporteTi/SoporteTiMensajesLeidos.php
 
 		-
 			message: '#^Call to an undefined method App\\Events\\SoporteTi\\SoporteTiMensajesLeidos\:\:onQueue\(\)\.$#'
@@ -7909,46 +7879,10 @@ parameters:
 			path: app/Jobs/SolicitarDocumentosWhatsAppJob.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiSolicitud\:\:\$salaChat\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/SoporteTi/ProcessSoporteTiChatAdjuntosJob.php
-
-		-
-			message: '#^Relation ''salaChat'' is not found in App\\Models\\SoporteTi\\SoporteTiSolicitud model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Jobs/SoporteTi/ProcessSoporteTiChatAdjuntosJob.php
-
-		-
 			message: '#^Ternary operator condition is always true\.$#'
 			identifier: ternary.alwaysTrue
 			count: 1
 			path: app/Jobs/SoporteTi/ProcessSoporteTiChatAdjuntosJob.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiSolicitud\:\:\$salaChat\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/SoporteTi/ProcessSoporteTiMaquetaUploadJob.php
-
-		-
-			message: '#^Relation ''salaChat'' is not found in App\\Models\\SoporteTi\\SoporteTiSolicitud model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Jobs/SoporteTi/ProcessSoporteTiMaquetaUploadJob.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiSolicitud\:\:\$salaChat\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/SoporteTi/ProcessSoporteTiMarcarLeidosJob.php
-
-		-
-			message: '#^Relation ''salaChat'' is not found in App\\Models\\SoporteTi\\SoporteTiSolicitud model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Jobs/SoporteTi/ProcessSoporteTiMarcarLeidosJob.php
 
 		-
 			message: '#^Call to method getTemplateHeaderFormat\(\) on an unknown class App\\Traits\\WhatsappInboxTemplateService\.$#'
@@ -10135,12 +10069,6 @@ parameters:
 			path: app/Services/SoporteTi/SoporteTiAreaService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiSolicitud\:\:\$salaChat\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/SoporteTi/SoporteTiCacheService.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiChatSala\:\:\$solicitud\.$#'
 			identifier: property.notFound
 			count: 3
@@ -10166,54 +10094,6 @@ parameters:
 
 		-
 			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiMensajeLectura\:\:\$usuario\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/SoporteTi/SoporteTiService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiSolicitud\:\:\$estadoActual\.$#'
-			identifier: property.notFound
-			count: 14
-			path: app/Services/SoporteTi/SoporteTiService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiSolicitud\:\:\$evidencias\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/SoporteTi/SoporteTiService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiSolicitud\:\:\$maqueta\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Services/SoporteTi/SoporteTiService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiSolicitud\:\:\$salaChat\.$#'
-			identifier: property.notFound
-			count: 8
-			path: app/Services/SoporteTi/SoporteTiService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiSolicitud\:\:\$solicitanteUsuario\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/SoporteTi/SoporteTiService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiSolicitudEstado\:\:\$estado\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/SoporteTi/SoporteTiService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiSolicitudEstado\:\:\$estadoAnterior\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/SoporteTi/SoporteTiService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiSolicitudEstado\:\:\$usuario\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Services/SoporteTi/SoporteTiService.php
@@ -10279,24 +10159,6 @@ parameters:
 			path: app/Services/SoporteTi/SoporteTiService.php
 
 		-
-			message: '#^Relation ''estado'' is not found in App\\Models\\SoporteTi\\SoporteTiSolicitudEstado model\.$#'
-			identifier: larastan.relationExistence
-			count: 2
-			path: app/Services/SoporteTi/SoporteTiService.php
-
-		-
-			message: '#^Relation ''estadoActual'' is not found in App\\Models\\SoporteTi\\SoporteTiSolicitud model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Services/SoporteTi/SoporteTiService.php
-
-		-
-			message: '#^Relation ''estadoAnterior'' is not found in App\\Models\\SoporteTi\\SoporteTiSolicitudEstado model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Services/SoporteTi/SoporteTiService.php
-
-		-
 			message: '#^Relation ''grupo'' is not found in App\\Models\\Usuario model\.$#'
 			identifier: larastan.relationExistence
 			count: 3
@@ -10315,18 +10177,6 @@ parameters:
 			path: app/Services/SoporteTi/SoporteTiService.php
 
 		-
-			message: '#^Relation ''salaChat'' is not found in App\\Models\\SoporteTi\\SoporteTiSolicitud model\.$#'
-			identifier: larastan.relationExistence
-			count: 3
-			path: app/Services/SoporteTi/SoporteTiService.php
-
-		-
-			message: '#^Relation ''solicitanteUsuario'' is not found in App\\Models\\SoporteTi\\SoporteTiSolicitud model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Services/SoporteTi/SoporteTiService.php
-
-		-
 			message: '#^Relation ''solicitud'' is not found in App\\Models\\SoporteTi\\SoporteTiChatSala model\.$#'
 			identifier: larastan.relationExistence
 			count: 3
@@ -10340,12 +10190,6 @@ parameters:
 
 		-
 			message: '#^Relation ''usuario'' is not found in App\\Models\\SoporteTi\\SoporteTiMensajeLectura model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Services/SoporteTi/SoporteTiService.php
-
-		-
-			message: '#^Relation ''usuario'' is not found in App\\Models\\SoporteTi\\SoporteTiSolicitudEstado model\.$#'
 			identifier: larastan.relationExistence
 			count: 1
 			path: app/Services/SoporteTi/SoporteTiService.php
