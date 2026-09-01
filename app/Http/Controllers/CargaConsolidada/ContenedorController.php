@@ -153,7 +153,7 @@ class ContenedorController extends Controller
         if ($completado === null) {
             $completado = false;
         }
-        if ($effectiveRole == Usuario::ROL_DOCUMENTACION || Usuario::rolesEquivalentesJefeImportacion($effectiveRole) ) {
+        if ($effectiveRole == Usuario::ROL_DOCUMENTACION || Usuario::rolEquivaleJefeImportacion($effectiveRole)) {
             if ($completado) {
                 $query->where('estado_documentacion', '=', Contenedor::CONTEDOR_CERRADO);
             } else {
@@ -838,7 +838,7 @@ class ContenedorController extends Controller
             $role = $user->getNombreGrupo();
             // Si el token es Jefe Importación y la petición envía "role" (query), usar ese rol para decidir qué pasos devolver
             // El role puede venir separado por coma (ej. "Coordinación,Documentacion"), se toma el primer rol válido
-            if (Usuario::rolesEquivalentesJefeImportacion($role) && $request->filled('role')) {
+            if (Usuario::rolEquivaleJefeImportacion($role) && $request->filled('role')) {
                 $rolesPermitidos = [
                     Usuario::ROL_COTIZADOR,
                     Usuario::ROL_COORDINACION,
