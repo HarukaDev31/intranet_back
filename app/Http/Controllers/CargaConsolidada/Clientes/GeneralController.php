@@ -181,14 +181,14 @@ class GeneralController extends Controller
         // Estado permiso por tipo, por cotización (para roles Coordinación, Documentación, Jefe Importación, Cotizador)
         $estadoPermisoPorCotizacion = [];
         $effectiveRole = $user ? $user->getNombreGrupo() : null;
-        if ($user && $user->esComoJefeImportacion() && $request->filled('role')) {
+        if ($user && $user->usuarioEquivaleJefeImportacion() && $request->filled('role')) {
             $requestedRole = trim((string) $request->role);
             if (in_array($requestedRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
                 $effectiveRole = $requestedRole;
             }
         }
         $idTramitePorCotizacion = [];
-        if (in_array($effectiveRole, array_merge([Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_COTIZADOR], Usuario::rolesComoJefeImportacion()), true) && !empty($ids)) {
+        if (in_array($effectiveRole, array_merge([Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_COTIZADOR], Usuario::rolesEquivalentesJefeImportacion()), true) && !empty($ids)) {
             $tramites = ConsolidadoCotizacionAduanaTramite::where('id_consolidado', (int) $idContenedor)
                 ->whereIn('id_cotizacion', $ids)
                 ->with(['tiposPermiso' => function ($q) { $q->withTrashed(); }])
@@ -230,7 +230,7 @@ class GeneralController extends Controller
                 Usuario::ROL_ADMINISTRACION,
                 Usuario::ROL_CONTABILIDAD,
             ],
-            Usuario::rolesComoJefeImportacion()
+            Usuario::rolesEquivalentesJefeImportacion()
         );
         $proveedores = collect();
         if (!empty($ids) && $user && in_array($user->getNombreGrupo(), $rolesConProveedores, true)) {
@@ -289,7 +289,7 @@ class GeneralController extends Controller
                 Usuario::ROL_COORDINACION,
                 Usuario::ROL_ADMINISTRACION,
                 Usuario::ROL_CONTABILIDAD,
-            ], Usuario::rolesComoJefeImportacion()), true) && $proveedores) {
+            ], Usuario::rolesEquivalentesJefeImportacion()), true) && $proveedores) {
                 // clave usada en groupBy es id_cotizacion
                 $cotKey = $cot->id_cotizacion ?? $cot->id ?? null;
                 if ($cotKey !== null && (is_array($proveedores) ? isset($proveedores[$cotKey]) : $proveedores->has($cotKey))) {

@@ -92,7 +92,7 @@ Broadcast::channel('Cotizador-notifications', function ($user) {
     return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_COTIZADOR;
 }); 
 Broadcast::channel('JefeImportacion-notifications', function ($user) {
-    return $user->grupo && Usuario::rolEsComoJefeImportacion($user->grupo->No_Grupo);
+    return $user->grupo && Usuario::rolesEquivalentesJefeImportacion($user->grupo->No_Grupo);
 });
 Broadcast::channel('Contabilidad-notifications', function ($user) {
     return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_CONTABILIDAD;

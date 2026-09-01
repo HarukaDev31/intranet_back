@@ -333,14 +333,14 @@ class CotizacionController extends Controller
             // Estado permiso por tipo, por cotización (para roles Coordinación, Documentación, Jefe Importación, Cotizador)
             $estadoPermisoPorCotizacion = [];
             $effectiveRole = $rol;
-            if ($user->esComoJefeImportacion() && $request->filled('role')) {
+            if ($user->usuarioEquivaleJefeImportacion() && $request->filled('role')) {
                 $requestedRole = trim((string) $request->role);
                 if (in_array($requestedRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
                     $effectiveRole = $requestedRole;
                 }
             }
             $idTramitePorCotizacion = [];
-            if (in_array($effectiveRole, array_merge([Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_COTIZADOR], Usuario::rolesComoJefeImportacion()), true)) {
+            if (in_array($effectiveRole, array_merge([Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_COTIZADOR], Usuario::rolesEquivalentesJefeImportacion()), true)) {
                 $cotizacionIds = $results->pluck('id')->filter()->values()->all();
                 if (!empty($cotizacionIds)) {
                     $tramites = ConsolidadoCotizacionAduanaTramite::where('id_consolidado', (int) $idContenedor)

@@ -192,7 +192,7 @@ class Usuario extends Authenticatable implements JWTSubject
      *
      * @return string[]
      */
-    public static function rolesComoJefeImportacion()
+    public static function rolesEquivalentesJefeImportacion()
     {
         return [
             self::ROL_JEFE_IMPORTACION,
@@ -200,18 +200,18 @@ class Usuario extends Authenticatable implements JWTSubject
         ];
     }
 
-    public static function rolEsComoJefeImportacion($rol)
+    public static function rolEquivaleJefeImportacion($rol)
     {
         if ($rol === null || $rol === '') {
             return false;
         }
 
-        return in_array(trim((string) $rol), self::rolesComoJefeImportacion(), true);
+        return in_array(trim((string) $rol), self::rolesEquivalentesJefeImportacion(), true);
     }
 
-    public function esComoJefeImportacion()
+    public function usuarioEquivaleJefeImportacion()
     {
-        return self::rolEsComoJefeImportacion($this->getNombreGrupo());
+        return self::rolEquivaleJefeImportacion($this->getNombreGrupo());
     }
 
     public static function rolesConAccesoWhatsappInbox()
@@ -222,7 +222,7 @@ class Usuario extends Authenticatable implements JWTSubject
                 self::ROL_CONTABILIDAD,
                 self::ROL_ADMINISTRACION,
             ],
-            self::rolesComoJefeImportacion()
+            self::rolesEquivalentesJefeImportacion()
         )));
     }
 

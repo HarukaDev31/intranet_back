@@ -189,7 +189,7 @@ class BroadcastController extends Controller
             if (strpos($channelName, $seguimientoPrefix) === 0) {
                 $allowedRoles = array_merge(
                     [Usuario::ROL_COTIZADOR, Usuario::ROL_COORDINACION, Usuario::ROL_ADMINISTRACION],
-                    Usuario::rolesComoJefeImportacion()
+                    Usuario::rolesEquivalentesJefeImportacion()
                 );
 
                 if ($user->grupo && in_array($user->grupo->No_Grupo, $allowedRoles, true)) {

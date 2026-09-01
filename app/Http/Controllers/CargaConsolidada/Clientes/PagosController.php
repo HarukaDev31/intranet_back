@@ -129,13 +129,13 @@ class PagosController extends Controller
             $estadoPermisoPorCotizacion = [];
             $idTramitePorCotizacion = [];
             $effectiveRole = $user->getNombreGrupo();
-            if ($user->esComoJefeImportacion() && $request->filled('role')) {
+            if ($user->usuarioEquivaleJefeImportacion() && $request->filled('role')) {
                 $requestedRole = trim((string) $request->role);
                 if (in_array($requestedRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
                     $effectiveRole = $requestedRole;
                 }
             }
-            if (in_array($effectiveRole, array_merge([Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_COTIZADOR], Usuario::rolesComoJefeImportacion()), true)) {
+            if (in_array($effectiveRole, array_merge([Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_COTIZADOR], Usuario::rolesEquivalentesJefeImportacion()), true)) {
                 $cotizacionIds = array_filter(array_map(function ($item) { return $item->id_cotizacion ?? null; }, $items));
                 if (!empty($cotizacionIds)) {
                     $tramites = ConsolidadoCotizacionAduanaTramite::where('id_consolidado', (int) $idContenedor)

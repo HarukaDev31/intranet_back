@@ -127,7 +127,7 @@ class ContenedorController extends Controller
         try {
             $user = JWTAuth::parseToken()->authenticate();
             $effectiveRole = $user->getNombreGrupo();
-            if ($user->esComoJefeImportacion() && $request->filled('role')) {
+            if ($user->usuarioEquivaleJefeImportacion() && $request->filled('role')) {
                 $requestedRole = trim((string) $request->role);
                 if (in_array($requestedRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
                     $effectiveRole = $requestedRole;
@@ -153,7 +153,7 @@ class ContenedorController extends Controller
         if ($completado === null) {
             $completado = false;
         }
-        if ($effectiveRole == Usuario::ROL_DOCUMENTACION || Usuario::rolEsComoJefeImportacion($effectiveRole) ) {
+        if ($effectiveRole == Usuario::ROL_DOCUMENTACION || Usuario::rolesEquivalentesJefeImportacion($effectiveRole) ) {
             if ($completado) {
                 $query->where('estado_documentacion', '=', Contenedor::CONTEDOR_CERRADO);
             } else {
@@ -597,13 +597,13 @@ class ContenedorController extends Controller
         $data['tc_yuan'] = $contenedor->tcYuan ? (float) $contenedor->tcYuan->tc_yuan : null;
         $user = JWTAuth::parseToken()->authenticate();
         $effectiveRole = $user->getNombreGrupo();
-        if ($user->esComoJefeImportacion() && $request->filled('role')) {
+        if ($user->usuarioEquivaleJefeImportacion() && $request->filled('role')) {
             $requestedRole = trim((string) $request->role);
             if (in_array($requestedRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
                 $effectiveRole = $requestedRole;
             }
         }
-        $rolesConEstadoPermiso = array_merge([Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_COTIZADOR], Usuario::rolesComoJefeImportacion());
+        $rolesConEstadoPermiso = array_merge([Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_COTIZADOR], Usuario::rolesEquivalentesJefeImportacion());
         if (in_array($effectiveRole, $rolesConEstadoPermiso, true)) {
             $tramites = ConsolidadoCotizacionAduanaTramite::where('id_consolidado', (int) $id)
                 ->with(['tiposPermiso' => function ($q) { $q->withTrashed(); }])
@@ -838,7 +838,7 @@ class ContenedorController extends Controller
             $role = $user->getNombreGrupo();
             // Si el token es Jefe Importación y la petición envía "role" (query), usar ese rol para decidir qué pasos devolver
             // El role puede venir separado por coma (ej. "Coordinación,Documentacion"), se toma el primer rol válido
-            if (Usuario::rolEsComoJefeImportacion($role) && $request->filled('role')) {
+            if (Usuario::rolesEquivalentesJefeImportacion($role) && $request->filled('role')) {
                 $rolesPermitidos = [
                     Usuario::ROL_COTIZADOR,
                     Usuario::ROL_COORDINACION,

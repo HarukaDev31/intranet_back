@@ -263,7 +263,7 @@ class ExcelConfirmacionCoordinacionController extends Controller
 
         $allowed = array_merge(
             [Usuario::ROL_COORDINACION, Usuario::ROL_ADMINISTRACION, Usuario::ROL_CONTABILIDAD],
-            Usuario::rolesComoJefeImportacion()
+            Usuario::rolesEquivalentesJefeImportacion()
         );
 
         if (!in_array($user->getNombreGrupo(), $allowed, true)) {
