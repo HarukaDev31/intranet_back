@@ -18,5 +18,6 @@ yarn-error.log
 /.idea
 /.vscode
 .deploy/
+/storage/phpstan
 storage/credentials.json
 /storage/app/google-drive-oauth-token.json

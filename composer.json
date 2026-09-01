@@ -28,9 +28,11 @@
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
+        "larastan/larastan": "^3.10",
         "laravel/sail": "^1.26",
         "mockery/mockery": "^1.6.7",
         "nunomaduro/collision": "^8.8",
+        "phpstan/phpstan": "^2.2",
         "phpunit/phpunit": "^12.0",
         "spatie/laravel-ignition": "^2.4"
     },
@@ -69,6 +71,16 @@
         ],
         "manual:scan-write": [
             "@php artisan manual:scan-front-widgets --write --no-backup"
+        ],
+        "lint:php-syntax": [
+            "bash scripts/check-php-syntax.sh"
+        ],
+        "phpstan": [
+            "phpstan analyse --memory-limit=2G --no-progress"
+        ],
+        "analyse": [
+            "@lint:php-syntax",
+            "@phpstan"
         ]
     },
     "extra": {
