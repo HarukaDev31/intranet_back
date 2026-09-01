@@ -334,10 +334,11 @@ class SoporteTiService
             )
             ->groupBy($table . '.solicitante_user_id')
             ->orderBy('nombre')
+            ->toBase()
             ->get()
-            ->map(function ($row) {
-                $id = (int) $row->id;
-                $nombre = trim((string) $row->nombre);
+            ->map(static function (\stdClass $row): array {
+                $id = (int) ($row->id ?? 0);
+                $nombre = trim((string) ($row->nombre ?? ''));
 
                 return array(
                     'id' => $id,
