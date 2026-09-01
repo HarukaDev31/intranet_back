@@ -373,6 +373,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
         Route::get('contenedores', [BoletinQuimicoController::class, 'getContenedores']);
         Route::get('contenedor/{idContenedor}/clientes', [BoletinQuimicoController::class, 'getClientesByContenedor']);
         Route::get('cotizacion/{idCotizacion}/items', [BoletinQuimicoController::class, 'getItemsByCotizacion']);
+        Route::get('cotizacion/{idCotizacion}/registros', [BoletinQuimicoController::class, 'getRegistrosByCotizacion']);
         Route::get('contenedor/{idContenedor}/items', [BoletinQuimicoController::class, 'getItemsByContenedor']);
         Route::get('item/{id}/pagos', [BoletinQuimicoController::class, 'getPagosByItem']);
         Route::get('item/{id}', [BoletinQuimicoController::class, 'getItemDetalle']);
