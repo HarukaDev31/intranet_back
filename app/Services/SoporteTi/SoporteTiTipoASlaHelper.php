@@ -283,6 +283,7 @@ class SoporteTiTipoASlaHelper
     return in_array($nombre, array(
         strtolower(Usuario::ROL_PM),
         strtolower(Usuario::ROL_SOPORTE),
+        strtolower(Usuario::ROL_COORDINADOR_GENERAL),
     ), true);
   }
 

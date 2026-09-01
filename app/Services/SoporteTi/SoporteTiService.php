@@ -94,7 +94,11 @@ class SoporteTiService
         }
         $user->loadMissing('grupo');
         $nombre = $user->grupo ? strtolower(trim((string) $user->grupo->No_Grupo)) : '';
-        return $nombre === strtolower(Usuario::ROL_PM) || $nombre === strtolower(Usuario::ROL_SOPORTE);
+        return in_array($nombre, array(
+            strtolower(Usuario::ROL_PM),
+            strtolower(Usuario::ROL_SOPORTE),
+            strtolower(Usuario::ROL_COORDINADOR_GENERAL),
+        ), true);
     }
 
     /**
@@ -214,54 +218,15 @@ class SoporteTiService
         $viewerId = $this->authUserId($authUser) ?: 0;
         $isStaff = $this->usuarioEsStaffSoporteTi($authUser);
 
-        return $this->cache->rememberListado($viewerId, $isStaff, $filters, function () use ($filters, $authUser) {
+        return $this->cache->rememberListado($viewerId, $isStaff, $filters, function () use ($filters, $authUser, $isStaff) {
             $query = SoporteTiSolicitud::with(array('estadoActual', 'salaChat', 'maqueta', 'evidencias', 'solicitanteUsuario.grupo'))
                 ->orderBy('prioridad', 'asc')
                 ->orderBy('created_at', 'desc');
 
-            if ($authUser && !$this->usuarioEsStaffSoporteTi($authUser)) {
-                $uid = (int) $authUser->getKey();
-                $query->where(function ($q) use ($uid) {
-                    $q->where('solicitante_user_id', $uid)
-                        ->orWhere('pm_user_id', $uid)
-                        ->orWhere('analista_user_id', $uid)
-                        ->orWhereHas('salaChat.miembros', function ($mq) use ($uid) {
-                            $mq->where('usuario_id', $uid);
-                        });
-                });
-            }
+            $this->aplicarFiltrosListadoSolicitudes($query, $filters, $authUser);
 
-            if (!empty($filters['q'])) {
-                $q = $filters['q'];
-                $query->where(function ($sub) use ($q) {
-                    $sub->where('codigo', 'like', '%' . $q . '%')
-                        ->orWhere('titulo', 'like', '%' . $q . '%')
-                        ->orWhere('solicitante', 'like', '%' . $q . '%')
-                        ->orWhere('pm', 'like', '%' . $q . '%')
-                        ->orWhere('analista', 'like', '%' . $q . '%');
-                });
-            }
-
-            if (!empty($filters['tipo_solicitud']) && $filters['tipo_solicitud'] !== 'todos') {
-                $query->where('tipo_solicitud', $filters['tipo_solicitud']);
-            }
-
-            if (!empty($filters['estado_codigo']) && $filters['estado_codigo'] !== 'todos') {
-                $codigo = (string) $filters['estado_codigo'];
-                $query->whereHas('estadoActual', function ($eq) use ($codigo) {
-                    $eq->where('codigo', $codigo);
-                });
-            }
-
-            if (!empty($filters['prioridad']) && (int) $filters['prioridad'] > 0) {
-                $query->where('prioridad', (int) $filters['prioridad']);
-            }
-
-            if (!empty($filters['solo_mias']) && $authUser && $this->usuarioEsStaffSoporteTi($authUser)) {
-                $uid = (int) $authUser->getKey();
-                $query->where(function ($q) use ($uid) {
-                    $q->where('pm_user_id', $uid)->orWhere('analista_user_id', $uid);
-                });
+            if (!empty($filters['creador_user_id']) && (int) $filters['creador_user_id'] > 0 && $isStaff) {
+                $query->where('solicitante_user_id', (int) $filters['creador_user_id']);
             }
 
             $rows = $query->get();
@@ -275,6 +240,112 @@ class SoporteTiService
                 'resumen' => $resumen,
             );
         });
+    }
+
+    /**
+     * Creadores distintos de soporte_ti_solicitudes (filtro staff).
+     *
+     * @return array<int, array{id:int,nombre:string}>
+     */
+    public function listarCreadoresFiltro(array $filters = array(), ?Authenticatable $authUser = null)
+    {
+        $authUser = $authUser ?: Auth::user();
+        if (!$this->usuarioEsStaffSoporteTi($authUser)) {
+            throw new AuthorizationException('Solo staff puede listar creadores.');
+        }
+
+        unset($filters['creador_user_id']);
+
+        $query = SoporteTiSolicitud::query();
+        $this->aplicarFiltrosListadoSolicitudes($query, $filters, $authUser);
+
+        return $this->distinctCreadoresDesdeQuery($query);
+    }
+
+    /**
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @param array $filters
+     * @param Authenticatable|null $authUser
+     * @return void
+     */
+    protected function aplicarFiltrosListadoSolicitudes($query, array $filters, ?Authenticatable $authUser)
+    {
+        if ($authUser && !$this->usuarioEsStaffSoporteTi($authUser)) {
+            $uid = (int) $authUser->getKey();
+            $query->where(function ($q) use ($uid) {
+                $q->where('solicitante_user_id', $uid)
+                    ->orWhere('pm_user_id', $uid)
+                    ->orWhere('analista_user_id', $uid)
+                    ->orWhereHas('salaChat.miembros', function ($mq) use ($uid) {
+                        $mq->where('usuario_id', $uid);
+                    });
+            });
+        }
+
+        if (!empty($filters['q'])) {
+            $q = $filters['q'];
+            $query->where(function ($sub) use ($q) {
+                $sub->where('codigo', 'like', '%' . $q . '%')
+                    ->orWhere('titulo', 'like', '%' . $q . '%')
+                    ->orWhere('solicitante', 'like', '%' . $q . '%')
+                    ->orWhere('pm', 'like', '%' . $q . '%')
+                    ->orWhere('analista', 'like', '%' . $q . '%');
+            });
+        }
+
+        if (!empty($filters['tipo_solicitud']) && $filters['tipo_solicitud'] !== 'todos') {
+            $query->where('tipo_solicitud', $filters['tipo_solicitud']);
+        }
+
+        if (!empty($filters['estado_codigo']) && $filters['estado_codigo'] !== 'todos') {
+            $codigo = (string) $filters['estado_codigo'];
+            $query->whereHas('estadoActual', function ($eq) use ($codigo) {
+                $eq->where('codigo', $codigo);
+            });
+        }
+
+        if (!empty($filters['prioridad']) && (int) $filters['prioridad'] > 0) {
+            $query->where('prioridad', (int) $filters['prioridad']);
+        }
+
+        if (!empty($filters['solo_mias']) && $authUser && $this->usuarioEsStaffSoporteTi($authUser)) {
+            $uid = (int) $authUser->getKey();
+            $query->where(function ($q) use ($uid) {
+                $q->where('pm_user_id', $uid)->orWhere('analista_user_id', $uid);
+            });
+        }
+    }
+
+    /**
+     * Opciones de creador para filtro staff (respeta el resto de filtros activos).
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @return array<int, array{id:int,nombre:string}>
+     */
+    protected function distinctCreadoresDesdeQuery($query)
+    {
+        $table = (new SoporteTiSolicitud())->getTable();
+
+        return $query->setEagerLoads(array())
+            ->whereNotNull($table . '.solicitante_user_id')
+            ->reorder()
+            ->selectRaw(
+                $table . '.solicitante_user_id as id, MAX(' . $table . '.solicitante) as nombre'
+            )
+            ->groupBy($table . '.solicitante_user_id')
+            ->orderBy('nombre')
+            ->get()
+            ->map(function ($row) {
+                $id = (int) $row->id;
+                $nombre = trim((string) $row->nombre);
+
+                return array(
+                    'id' => $id,
+                    'nombre' => $nombre !== '' ? $nombre : ('Usuario #' . $id),
+                );
+            })
+            ->values()
+            ->all();
     }
 
     /**

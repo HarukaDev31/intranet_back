@@ -35,6 +35,15 @@ class SoporteTiSolicitudController extends Controller
         }
     }
 
+    public function listarCreadores(Request $request)
+    {
+        try {
+            return $this->soporteTiOk($this->service->listarCreadoresFiltro($request->all(), Auth::user()));
+        } catch (\Throwable $e) {
+            return $this->soporteTiFail($e);
+        }
+    }
+
     public function show($id)
     {
         try {

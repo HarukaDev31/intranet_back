@@ -30,6 +30,7 @@ Route::group(['prefix' => 'soporte-ti', 'middleware' => 'jwt.auth'], function ()
     Route::post('/chats/{chatUuid}/mensajes/leidos', [SoporteTiChatController::class, 'marcarLeidos']);
     Route::get('/chats/{chatUuid}/mensajes/{mensajeId}/info', [SoporteTiChatController::class, 'infoMensaje']);
 
+    Route::get('/solicitudes/creadores', [SoporteTiSolicitudController::class, 'listarCreadores']);
     Route::get('/solicitudes', [SoporteTiSolicitudController::class, 'index']);
     Route::post('/solicitudes', [SoporteTiSolicitudController::class, 'store']);
 
