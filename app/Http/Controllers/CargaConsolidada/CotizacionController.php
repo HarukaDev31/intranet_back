@@ -333,14 +333,14 @@ class CotizacionController extends Controller
             // Estado permiso por tipo, por cotización (para roles Coordinación, Documentación, Jefe Importación, Cotizador)
             $estadoPermisoPorCotizacion = [];
             $effectiveRole = $rol;
-            if ($user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION && $request->filled('role')) {
+            if ($user->esComoJefeImportacion() && $request->filled('role')) {
                 $requestedRole = trim((string) $request->role);
                 if (in_array($requestedRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
                     $effectiveRole = $requestedRole;
                 }
             }
             $idTramitePorCotizacion = [];
-            if (in_array($effectiveRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_JEFE_IMPORTACION, Usuario::ROL_COTIZADOR], true)) {
+            if (in_array($effectiveRole, array_merge([Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_COTIZADOR], Usuario::rolesComoJefeImportacion()), true)) {
                 $cotizacionIds = $results->pluck('id')->filter()->values()->all();
                 if (!empty($cotizacionIds)) {
                     $tramites = ConsolidadoCotizacionAduanaTramite::where('id_consolidado', (int) $idContenedor)
@@ -530,6 +530,7 @@ class CotizacionController extends Controller
             Usuario::ROL_COORDINACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
             Usuario::ROL_CONTABILIDAD => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado', 'total_diferencia_logistica'],
             Usuario::ROL_JEFE_IMPORTACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
+            Usuario::ROL_COORDINADOR_GENERAL => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
             Usuario::JEFE_MARKETING => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'], 
         ];
         $userIdCheck = $user->ID_Usuario;

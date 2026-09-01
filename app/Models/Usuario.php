@@ -17,6 +17,7 @@ class Usuario extends Authenticatable implements JWTSubject
     const ROL_DOCUMENTACION = 'Documentacion';
     const ROL_CATALOGO_CHINA = 'CatalogoChina';
     const ROL_JEFE_IMPORTACION = 'Jefe Importacion';
+    const ROL_COORDINADOR_GENERAL = 'Coordinador General';
     const ROL_CONTABILIDAD = 'Contabilidad';
     const ROL_GERENCIA = 'GERENCIA';
     const JEFE_MARKETING = 'Jefe Marketing';
@@ -186,14 +187,43 @@ class Usuario extends Authenticatable implements JWTSubject
      *
      * @return string[]
      */
-    public static function rolesConAccesoWhatsappInbox()
+    /**
+     * Roles con los mismos permisos operativos que Jefe de Importaciones en carga consolidada.
+     *
+     * @return string[]
+     */
+    public static function rolesComoJefeImportacion()
     {
         return [
-            self::ROL_COORDINACION,
-            self::ROL_CONTABILIDAD,
-            self::ROL_ADMINISTRACION,
             self::ROL_JEFE_IMPORTACION,
+            self::ROL_COORDINADOR_GENERAL,
         ];
+    }
+
+    public static function rolEsComoJefeImportacion($rol)
+    {
+        if ($rol === null || $rol === '') {
+            return false;
+        }
+
+        return in_array(trim((string) $rol), self::rolesComoJefeImportacion(), true);
+    }
+
+    public function esComoJefeImportacion()
+    {
+        return self::rolEsComoJefeImportacion($this->getNombreGrupo());
+    }
+
+    public static function rolesConAccesoWhatsappInbox()
+    {
+        return array_values(array_unique(array_merge(
+            [
+                self::ROL_COORDINACION,
+                self::ROL_CONTABILIDAD,
+                self::ROL_ADMINISTRACION,
+            ],
+            self::rolesComoJefeImportacion()
+        )));
     }
 
     /**

@@ -211,7 +211,7 @@ class CargaConsolidadaCacheService
 
             $role = method_exists($user, 'getNombreGrupo') ? (string) $user->getNombreGrupo() : '';
             $effectiveRole = $role;
-            if ($role === Usuario::ROL_JEFE_IMPORTACION && $request->filled('role')) {
+            if (Usuario::rolEsComoJefeImportacion($role) && $request->filled('role')) {
                 $requestedRole = trim((string) $request->input('role'));
                 if (in_array($requestedRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
                     $effectiveRole = $requestedRole;

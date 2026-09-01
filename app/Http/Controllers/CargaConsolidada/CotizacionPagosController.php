@@ -217,6 +217,7 @@ class CotizacionPagosController extends Controller
                         Usuario::ROL_CATALOGO_CHINA => 'estado_china',
                         Usuario::ROL_DOCUMENTACION => 'estado',
                         Usuario::ROL_JEFE_IMPORTACION => 'estado',
+                        Usuario::ROL_COORDINADOR_GENERAL => 'estado',
                     ];
                     
                     if (isset($fieldToFilter[$user->No_Grupo])) {
@@ -238,14 +239,14 @@ class CotizacionPagosController extends Controller
             // Estado permiso por tipo, por cotización (para roles Coordinación, Documentación, Jefe Importación, Cotizador)
             $estadoPermisoPorCotizacion = [];
             $effectiveRole = $user->getNombreGrupo();
-            if ($user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION && $request->filled('role')) {
+            if ($user->esComoJefeImportacion() && $request->filled('role')) {
                 $requestedRole = trim((string) $request->role);
                 if (in_array($requestedRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
                     $effectiveRole = $requestedRole;
                 }
             }
             $idTramitePorCotizacion = [];
-            if (in_array($effectiveRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_JEFE_IMPORTACION, Usuario::ROL_COTIZADOR], true)) {
+            if (in_array($effectiveRole, array_merge([Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_COTIZADOR], Usuario::rolesComoJefeImportacion()), true)) {
                 $cotizacionIds = $filteredResults->pluck('id_cotizacion')->filter()->values()->unique()->all();
                 if (!empty($cotizacionIds)) {
                     $tramites = ConsolidadoCotizacionAduanaTramite::where('id_consolidado', (int) $idContenedor)

@@ -261,12 +261,10 @@ class ExcelConfirmacionCoordinacionController extends Controller
             return response()->json(['success' => false, 'message' => 'No autenticado'], 401);
         }
 
-        $allowed = [
-            Usuario::ROL_COORDINACION,
-            Usuario::ROL_JEFE_IMPORTACION,
-            Usuario::ROL_ADMINISTRACION,
-            Usuario::ROL_CONTABILIDAD,
-        ];
+        $allowed = array_merge(
+            [Usuario::ROL_COORDINACION, Usuario::ROL_ADMINISTRACION, Usuario::ROL_CONTABILIDAD],
+            Usuario::rolesComoJefeImportacion()
+        );
 
         if (!in_array($user->getNombreGrupo(), $allowed, true)) {
             return response()->json(['success' => false, 'message' => 'Sin permisos'], 403);

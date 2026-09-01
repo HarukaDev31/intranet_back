@@ -668,6 +668,11 @@ class CalendarEventService
                     'mensaje' => "Actividad \"{$eventName}\" {$accion}",
                     'descripcion' => "Evento ID: {$eventId}{$contenedorTexto}",
                 ],
+                Usuario::ROL_COORDINADOR_GENERAL => [
+                    'titulo' => "Calendario - Actividad {$accion}",
+                    'mensaje' => "Actividad \"{$eventName}\" {$accion}",
+                    'descripcion' => "Evento ID: {$eventId}{$contenedorTexto}",
+                ],
             ],
         ]);
         } catch (\Throwable $e) {

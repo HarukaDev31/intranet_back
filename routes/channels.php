@@ -32,7 +32,8 @@ Broadcast::channel('ContenedorConsolidado-notifications', function ($user) {
         Usuario::ROL_ADMINISTRACION,
         Usuario::ROL_COTIZADOR,
         Usuario::ROL_DOCUMENTACION,
-        Usuario::ROL_JEFE_IMPORTACION
+        Usuario::ROL_JEFE_IMPORTACION,
+        Usuario::ROL_COORDINADOR_GENERAL
     ];
     
     return $user->grupo && in_array($user->grupo->No_Grupo, $allowedRoles);
@@ -62,6 +63,7 @@ Broadcast::channel('carga-consolidada.seguimiento-drive.{idContenedor}', functio
         Usuario::ROL_COORDINACION,
         Usuario::ROL_ADMINISTRACION,
         Usuario::ROL_JEFE_IMPORTACION,
+        Usuario::ROL_COORDINADOR_GENERAL,
     ];
 
     return in_array($user->grupo->No_Grupo, $allowedRoles, true);
@@ -90,7 +92,7 @@ Broadcast::channel('Cotizador-notifications', function ($user) {
     return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_COTIZADOR;
 }); 
 Broadcast::channel('JefeImportacion-notifications', function ($user) {
-    return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_JEFE_IMPORTACION;
+    return $user->grupo && Usuario::rolEsComoJefeImportacion($user->grupo->No_Grupo);
 });
 Broadcast::channel('Contabilidad-notifications', function ($user) {
     return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_CONTABILIDAD;

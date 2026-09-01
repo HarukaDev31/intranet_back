@@ -723,7 +723,7 @@ class CalendarActivityController extends Controller
                 } else {
                     // Sin grupo: fallback a roles legacy (Coordinación, Documentación, Jefe Importación)
                     $users = Usuario::whereHas('grupo', function ($q) {
-                        $q->whereIn('No_Grupo', [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_JEFE_IMPORTACION]);
+                        $q->whereIn('No_Grupo', array_merge([Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], Usuario::rolesComoJefeImportacion()));
                     })
                         ->where('Nu_Estado', 1)
                         ->orderBy('No_Nombres_Apellidos')

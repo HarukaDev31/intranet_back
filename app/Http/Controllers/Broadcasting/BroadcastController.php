@@ -187,12 +187,10 @@ class BroadcastController extends Controller
             // Canal seguimiento Drive por contenedor
             $seguimientoPrefix = 'private-carga-consolidada.seguimiento-drive.';
             if (strpos($channelName, $seguimientoPrefix) === 0) {
-                $allowedRoles = [
-                    Usuario::ROL_COTIZADOR,
-                    Usuario::ROL_COORDINACION,
-                    Usuario::ROL_ADMINISTRACION,
-                    Usuario::ROL_JEFE_IMPORTACION,
-                ];
+                $allowedRoles = array_merge(
+                    [Usuario::ROL_COTIZADOR, Usuario::ROL_COORDINACION, Usuario::ROL_ADMINISTRACION],
+                    Usuario::rolesComoJefeImportacion()
+                );
 
                 if ($user->grupo && in_array($user->grupo->No_Grupo, $allowedRoles, true)) {
                     return response()->json($this->pusherAuthPayload($request, $channelName));

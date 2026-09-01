@@ -280,7 +280,10 @@ class SoporteTiTipoASlaHelper
     }
     $user->loadMissing('grupo');
     $nombre = $user->grupo ? strtolower(trim((string) $user->grupo->No_Grupo)) : '';
-    return $nombre === strtolower(Usuario::ROL_PM);
+    return in_array($nombre, array(
+        strtolower(Usuario::ROL_PM),
+        strtolower(Usuario::ROL_SOPORTE),
+    ), true);
   }
 
   /**
