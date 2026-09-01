@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\CargaConsolidada\BoletinQuimicoCotizacionItem;
 use App\Models\CargaConsolidada\Pago;
 use App\Models\CargaConsolidada\PagoConcept;
 use Illuminate\Support\Facades\Log;
@@ -3484,6 +3485,38 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
     }
 
     /**
+     * Al quitar BQ de cargos extra, elimina los ítems de boletín químico de la cotización.
+     * No elimina ítems que ya tienen pagos registrados.
+     *
+     * @return array{blocked?: bool, message?: string, deleted?: int}|null
+     */
+    private function deleteBoletinQuimicoItemsForCotizacion(int $idCotizacion): ?array
+    {
+        $items = BoletinQuimicoCotizacionItem::where('id_cotizacion', $idCotizacion)->get();
+        if ($items->isEmpty()) {
+            return null;
+        }
+
+        $withPagos = $items->filter(function ($item) {
+            return $item->pagos()->exists();
+        });
+        if ($withPagos->isNotEmpty()) {
+            return [
+                'blocked' => true,
+                'message' => 'No se puede eliminar BQ: hay ítems de boletín químico con pagos registrados.',
+            ];
+        }
+
+        $deleted = 0;
+        foreach ($items as $item) {
+            $item->delete();
+            $deleted++;
+        }
+
+        return ['deleted' => $deleted];
+    }
+
+    /**
      * Eliminar una línea de servicio.
      */
     public function deleteDeliveryServicioLine($idLinea)
@@ -3495,6 +3528,18 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                 return response()->json(['message' => 'Línea no encontrada', 'success' => false], 404);
             }
             $idCot = (int) $row->id_cotizacion;
+            $tipoNorm = strtoupper(trim((string) $row->tipo_servicio));
+
+            if ($tipoNorm === 'BQ') {
+                $bqResult = $this->deleteBoletinQuimicoItemsForCotizacion($idCot);
+                if ($bqResult !== null && !empty($bqResult['blocked'])) {
+                    return response()->json([
+                        'message' => $bqResult['message'],
+                        'success' => false,
+                    ], 422);
+                }
+            }
+
             DB::table($this->table_delivery_servicio)->where('id', $idLinea)->delete();
             $this->syncParentFromDeliveryServicios($idCot);
 
