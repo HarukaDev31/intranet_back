@@ -215,7 +215,7 @@ class SoporteTiService
         $isStaff = $this->usuarioEsStaffSoporteTi($authUser);
 
         return $this->cache->rememberListado($viewerId, $isStaff, $filters, function () use ($filters, $authUser) {
-            $query = SoporteTiSolicitud::with(array('estadoActual', 'salaChat', 'maqueta', 'evidencias'))
+            $query = SoporteTiSolicitud::with(array('estadoActual', 'salaChat', 'maqueta', 'evidencias', 'solicitanteUsuario.grupo'))
                 ->orderBy('prioridad', 'asc')
                 ->orderBy('created_at', 'desc');
 
@@ -2675,6 +2675,20 @@ class SoporteTiService
     }
 
     /**
+     * @param Usuario|null $user
+     */
+    protected function rolGrupoUsuario($user)
+    {
+        if (!$user instanceof Usuario || !$user->grupo) {
+            return null;
+        }
+
+        $rol = trim((string) $user->grupo->No_Grupo);
+
+        return $rol !== '' ? $rol : null;
+    }
+
+    /**
      * @param string|null $rolDemo PM|Solicitante|Analista
      * @return array
      */
@@ -2940,6 +2954,7 @@ class SoporteTiService
             'area' => $s->area,
             'solicitante' => $s->solicitante,
             'solicitante_user_id' => $s->solicitante_user_id !== null ? (int) $s->solicitante_user_id : null,
+            'solicitante_rol' => $this->rolGrupoUsuario($s->solicitanteUsuario),
             'pm' => $s->pm,
             'pm_user_id' => $s->pm_user_id !== null ? (int) $s->pm_user_id : null,
             'analista' => $s->analista,
