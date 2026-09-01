@@ -10,3 +10,6 @@ parameters:
     checkOctaneCompatibility: false
     checkModelProperties: true
     treatPhpDocTypesAsCertain: false
+    reportUnmatchedIgnoredErrors: false
+    stubFiles:
+        - phpstan/stubs/JWTAuthFacade.stub

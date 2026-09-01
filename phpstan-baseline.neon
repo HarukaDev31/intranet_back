@@ -427,60 +427,6 @@ parameters:
 			path: app/Console/Commands/TestJWTAuth.php
 
 		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$ID_Usuario\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Console/Commands/TestJWTAuth.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$No_Usuario\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Console/Commands/TestJWTAuth.php
-
-		-
-			message: '#^Parameter \#2 \$checkBlacklist of method Tymon\\JWTAuth\\Manager\:\:decode\(\) expects bool, string given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Console/Commands/TestJWTAuth.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$ID_Empresa\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Console/Commands/TestJWTToken.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$ID_Organizacion\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Console/Commands/TestJWTToken.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$ID_Usuario\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Console/Commands/TestJWTToken.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$No_Usuario\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Console/Commands/TestJWTToken.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$Nu_Estado\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Console/Commands/TestJWTToken.php
-
-		-
-			message: '#^Parameter \#2 \$checkBlacklist of method Tymon\\JWTAuth\\Manager\:\:decode\(\) expects bool, string given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Console/Commands/TestJWTToken.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Usuario\:\:\$ID_Empresa\.$#'
 			identifier: property.notFound
 			count: 1
@@ -622,18 +568,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Models\\Usuario\:\:\$Nu_Estado\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Console/Commands/TestUsuario.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$ID_Usuario\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Console/Commands/TestUsuario.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$No_Usuario\.$#'
-			identifier: property.notFound
-			count: 2
 			path: app/Console/Commands/TestUsuario.php
 
 		-
@@ -1117,114 +1051,6 @@ parameters:
 			path: app/Http/Controllers/AuthController.php
 
 		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$birth_date\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/AuthController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$departamento\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/AuthController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$departamento_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/AuthController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$distrito\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/AuthController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$distrito_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/AuthController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$dni\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/AuthController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$domicilio_fiscal\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/AuthController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/AuthController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$full_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/AuthController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$goals\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/AuthController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/AuthController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$pais\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/AuthController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$pais_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/AuthController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$photo_url\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/AuthController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$provincia\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/AuthController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$provincia_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/AuthController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$userBusiness\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/AuthController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$whatsapp\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/AuthController.php
-
-		-
 			message: '#^Array has 2 duplicate keys with value ''success'' \(''success'', ''success''\)\.$#'
 			identifier: array.duplicateKey
 			count: 1
@@ -1243,12 +1069,6 @@ parameters:
 			path: app/Http/Controllers/AuthController.php
 
 		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:load\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Http/Controllers/AuthController.php
-
-		-
 			message: '#^Call to function is_array\(\) with array\<mixed\> will always evaluate to true\.$#'
 			identifier: function.alreadyNarrowedType
 			count: 1
@@ -1263,18 +1083,6 @@ parameters:
 		-
 			message: '#^Class App\\Mail\\RegisterConfirmationMail constructor invoked with 9 parameters, 5 required\.$#'
 			identifier: arguments.count
-			count: 1
-			path: app/Http/Controllers/AuthController.php
-
-		-
-			message: '#^Parameter \#1 \$forceForever of static method Tymon\\JWTAuth\\JWT\:\:invalidate\(\) expects bool, Tymon\\JWTAuth\\Token\|null given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Http/Controllers/AuthController.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Http\\Controllers\\AuthController\:\:obtenerMenusUsuarioExterno\(\) expects App\\Models\\User, Tymon\\JWTAuth\\Contracts\\JWTSubject given\.$#'
-			identifier: argument.type
 			count: 1
 			path: app/Http/Controllers/AuthController.php
 
@@ -1843,12 +1651,6 @@ parameters:
 			path: app/Http/Controllers/BaseDatos/Regulaciones/PermisoController.php
 
 		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/BaseDatos/UsuarioDatosFacturacionImportController.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiChatSala\:\:\$solicitud\.$#'
 			identifier: property.notFound
 			count: 1
@@ -1861,51 +1663,9 @@ parameters:
 			path: app/Http/Controllers/Broadcasting/BroadcastController.php
 
 		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$ID_Usuario\.$#'
-			identifier: property.notFound
-			count: 10
-			path: app/Http/Controllers/Broadcasting/BroadcastController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$grupo\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Broadcasting/BroadcastController.php
-
-		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:loadMissing\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Http/Controllers/Broadcasting/BroadcastController.php
-
-		-
 			message: '#^Method App\\Http\\Controllers\\Broadcasting\\BroadcastController\:\:authenticate\(\) should return Illuminate\\Http\\Response but returns Illuminate\\Http\\JsonResponse\.$#'
 			identifier: return.type
 			count: 18
-			path: app/Http/Controllers/Broadcasting/BroadcastController.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Http\\Controllers\\Broadcasting\\BroadcastController\:\:usuarioPuedeAccederDocumentacionExpedienteObservaciones\(\) expects App\\Models\\Usuario, Tymon\\JWTAuth\\Contracts\\JWTSubject given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Http/Controllers/Broadcasting/BroadcastController.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Http\\Controllers\\Broadcasting\\BroadcastController\:\:usuarioPuedeAccederSalaSoporteTi\(\) expects App\\Models\\Usuario, Tymon\\JWTAuth\\Contracts\\JWTSubject given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Http/Controllers/Broadcasting/BroadcastController.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Http\\Controllers\\Broadcasting\\BroadcastController\:\:usuarioPuedeAccederWaCopilotoVentas\(\) expects App\\Models\\Usuario, Tymon\\JWTAuth\\Contracts\\JWTSubject given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Http/Controllers/Broadcasting/BroadcastController.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Http\\Controllers\\Broadcasting\\BroadcastController\:\:usuarioPuedeAccederWhatsappInbox\(\) expects App\\Models\\Usuario, Tymon\\JWTAuth\\Contracts\\JWTSubject given\.$#'
-			identifier: argument.type
-			count: 1
 			path: app/Http/Controllers/Broadcasting/BroadcastController.php
 
 		-
@@ -2197,21 +1957,9 @@ parameters:
 			path: app/Http/Controllers/Calendar/CalendarActivityController.php
 
 		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:getIdUsuario\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: app/Http/Controllers/Calendar/CalendarActivityController.php
-
-		-
 			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
 			identifier: larastan.noEnvCallsOutsideOfConfig
 			count: 1
-			path: app/Http/Controllers/Calendar/CalendarActivityController.php
-
-		-
-			message: '#^Cannot call method getIdUsuario\(\) on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: method.nonObject
-			count: 43
 			path: app/Http/Controllers/Calendar/CalendarActivityController.php
 
 		-
@@ -2233,60 +1981,6 @@ parameters:
 			path: app/Http/Controllers/Calendar/CalendarActivityController.php
 
 		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Calendar\\CalendarPermissionService\:\:canChangeAnyChargeStatus\(\) expects App\\Models\\Usuario, Tymon\\JWTAuth\\Contracts\\JWTSubject\|false given\.$#'
-			identifier: argument.type
-			count: 3
-			path: app/Http/Controllers/Calendar/CalendarActivityController.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Calendar\\CalendarPermissionService\:\:canChangeAnyChargeStatusForRoleGroup\(\) expects App\\Models\\Usuario, Tymon\\JWTAuth\\Contracts\\JWTSubject\|false given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Http/Controllers/Calendar/CalendarActivityController.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Calendar\\CalendarPermissionService\:\:canManageActivities\(\) expects App\\Models\\Usuario, Tymon\\JWTAuth\\Contracts\\JWTSubject\|false given\.$#'
-			identifier: argument.type
-			count: 9
-			path: app/Http/Controllers/Calendar/CalendarActivityController.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Calendar\\CalendarPermissionService\:\:canManageColors\(\) expects App\\Models\\Usuario, Tymon\\JWTAuth\\Contracts\\JWTSubject\|false given\.$#'
-			identifier: argument.type
-			count: 2
-			path: app/Http/Controllers/Calendar/CalendarActivityController.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Calendar\\CalendarPermissionService\:\:canManageResponsables\(\) expects App\\Models\\Usuario, Tymon\\JWTAuth\\Contracts\\JWTSubject\|false given\.$#'
-			identifier: argument.type
-			count: 2
-			path: app/Http/Controllers/Calendar/CalendarActivityController.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Calendar\\CalendarPermissionService\:\:canViewTeamProgress\(\) expects App\\Models\\Usuario, Tymon\\JWTAuth\\Contracts\\JWTSubject\|false given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Http/Controllers/Calendar/CalendarActivityController.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Calendar\\CalendarPermissionService\:\:getCalendarConfigForUser\(\) expects App\\Models\\Usuario, Tymon\\JWTAuth\\Contracts\\JWTSubject\|false given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Http/Controllers/Calendar/CalendarActivityController.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Calendar\\CalendarPermissionService\:\:isJefeImportaciones\(\) expects App\\Models\\Usuario, Tymon\\JWTAuth\\Contracts\\JWTSubject\|false given\.$#'
-			identifier: argument.type
-			count: 2
-			path: app/Http/Controllers/Calendar/CalendarActivityController.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Calendar\\CalendarPermissionService\:\:userBelongsToRoleGroup\(\) expects App\\Models\\Usuario, Tymon\\JWTAuth\\Contracts\\JWTSubject\|false given\.$#'
-			identifier: argument.type
-			count: 3
-			path: app/Http/Controllers/Calendar/CalendarActivityController.php
-
-		-
 			message: '#^Relation ''grupo'' is not found in App\\Models\\Usuario model\.$#'
 			identifier: larastan.relationExistence
 			count: 2
@@ -2295,36 +1989,6 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$role_group_id\.$#'
 			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Calendar/CalendarController.php
-
-		-
-			message: '#^Cannot call method getIdUsuario\(\) on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: method.nonObject
-			count: 6
-			path: app/Http/Controllers/Calendar/CalendarController.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Calendar\\CalendarPermissionService\:\:canChangeAnyChargeStatusForRoleGroup\(\) expects App\\Models\\Usuario, Tymon\\JWTAuth\\Contracts\\JWTSubject\|false given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Http/Controllers/Calendar/CalendarController.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Calendar\\CalendarPermissionService\:\:canManageActivities\(\) expects App\\Models\\Usuario, Tymon\\JWTAuth\\Contracts\\JWTSubject\|false given\.$#'
-			identifier: argument.type
-			count: 5
-			path: app/Http/Controllers/Calendar/CalendarController.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Calendar\\CalendarPermissionService\:\:isJefeImportaciones\(\) expects App\\Models\\Usuario, Tymon\\JWTAuth\\Contracts\\JWTSubject\|false given\.$#'
-			identifier: argument.type
-			count: 2
-			path: app/Http/Controllers/Calendar/CalendarController.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Calendar\\CalendarPermissionService\:\:userBelongsToRoleGroup\(\) expects App\\Models\\Usuario, Tymon\\JWTAuth\\Contracts\\JWTSubject\|false given\.$#'
-			identifier: argument.type
 			count: 1
 			path: app/Http/Controllers/Calendar/CalendarController.php
 
@@ -2371,12 +2035,6 @@ parameters:
 			path: app/Http/Controllers/Calendar/CalendarRoleGroupController.php
 
 		-
-			message: '#^Cannot call method getIdUsuario\(\) on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Http/Controllers/Calendar/CalendarRoleGroupController.php
-
-		-
 			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\Calendar\\CalendarRoleGroup\>\:\:map\(\) contains unresolvable type\.$#'
 			identifier: argument.unresolvableType
 			count: 1
@@ -2393,18 +2051,6 @@ parameters:
 			identifier: argument.unresolvableType
 			count: 1
 			path: app/Http/Controllers/Calendar/CalendarRoleGroupController.php
-
-		-
-			message: '#^Parameter \#1 \$user of method App\\Services\\Calendar\\CalendarPermissionService\:\:canManageActivities\(\) expects App\\Models\\Usuario, Tymon\\JWTAuth\\Contracts\\JWTSubject\|false given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Http/Controllers/Calendar/CalendarRoleGroupController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$ID_Empresa\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/CampaignController.php
 
 		-
 			message: '#^Strict comparison using \!\=\= between mixed~\(0\|0\.0\|''''\|''0''\|array\{\}\|false\|null\) and '''' will always evaluate to true\.$#'
@@ -2659,18 +2305,6 @@ parameters:
 			path: app/Http/Controllers/CargaConsolidada/Clientes/GeneralController.php
 
 		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:getNombreGrupo\(\)\.$#'
-			identifier: method.notFound
-			count: 3
-			path: app/Http/Controllers/CargaConsolidada/Clientes/GeneralController.php
-
-		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:usuarioEquivaleJefeImportacion\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Http/Controllers/CargaConsolidada/Clientes/GeneralController.php
-
-		-
 			message: '#^Call to function is_array\(\) with mixed will always evaluate to false\.$#'
 			identifier: function.impossibleType
 			count: 1
@@ -2686,12 +2320,6 @@ parameters:
 			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
 			identifier: larastan.noEnvCallsOutsideOfConfig
 			count: 1
-			path: app/Http/Controllers/CargaConsolidada/Clientes/GeneralController.php
-
-		-
-			message: '#^Cannot call method getNombreGrupo\(\) on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: method.nonObject
-			count: 2
 			path: app/Http/Controllers/CargaConsolidada/Clientes/GeneralController.php
 
 		-
@@ -2757,24 +2385,6 @@ parameters:
 		-
 			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
 			identifier: larastan.noEnvCallsOutsideOfConfig
-			count: 1
-			path: app/Http/Controllers/CargaConsolidada/Clientes/PagosController.php
-
-		-
-			message: '#^Cannot access property \$ID_Usuario on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: property.nonObject
-			count: 4
-			path: app/Http/Controllers/CargaConsolidada/Clientes/PagosController.php
-
-		-
-			message: '#^Cannot call method getNombreGrupo\(\) on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: method.nonObject
-			count: 4
-			path: app/Http/Controllers/CargaConsolidada/Clientes/PagosController.php
-
-		-
-			message: '#^Cannot call method usuarioEquivaleJefeImportacion\(\) on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: method.nonObject
 			count: 1
 			path: app/Http/Controllers/CargaConsolidada/Clientes/PagosController.php
 
@@ -3109,27 +2719,9 @@ parameters:
 			path: app/Http/Controllers/CargaConsolidada/ContenedorController.php
 
 		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$ID_Usuario\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/CargaConsolidada/ContenedorController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$No_Grupo\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/CargaConsolidada/ContenedorController.php
-
-		-
 			message: '#^Call to an undefined method App\\Contracts\\ObjectStorageConnectorInterface\:\:existsOnS3\(\)\.$#'
 			identifier: method.notFound
 			count: 3
-			path: app/Http/Controllers/CargaConsolidada/ContenedorController.php
-
-		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:getNombreGrupo\(\)\.$#'
-			identifier: method.notFound
-			count: 2
 			path: app/Http/Controllers/CargaConsolidada/ContenedorController.php
 
 		-
@@ -3142,18 +2734,6 @@ parameters:
 			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
 			identifier: larastan.noEnvCallsOutsideOfConfig
 			count: 1
-			path: app/Http/Controllers/CargaConsolidada/ContenedorController.php
-
-		-
-			message: '#^Cannot call method getNombreGrupo\(\) on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: method.nonObject
-			count: 2
-			path: app/Http/Controllers/CargaConsolidada/ContenedorController.php
-
-		-
-			message: '#^Cannot call method usuarioEquivaleJefeImportacion\(\) on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: method.nonObject
-			count: 2
 			path: app/Http/Controllers/CargaConsolidada/ContenedorController.php
 
 		-
@@ -3238,12 +2818,6 @@ parameters:
 			message: '#^Relation ''tcYuan'' is not found in App\\Models\\CargaConsolidada\\Contenedor model\.$#'
 			identifier: larastan.relationExistence
 			count: 3
-			path: app/Http/Controllers/CargaConsolidada/ContenedorController.php
-
-		-
-			message: '#^Static method App\\Models\\Usuario\:\:rolesEquivalentesJefeImportacion\(\) invoked with 1 parameter, 0 required\.$#'
-			identifier: arguments.count
-			count: 2
 			path: app/Http/Controllers/CargaConsolidada/ContenedorController.php
 
 		-
@@ -3787,30 +3361,6 @@ parameters:
 			path: app/Http/Controllers/CargaConsolidada/CotizacionController.php
 
 		-
-			message: '#^Cannot access property \$ID_Usuario on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: property.nonObject
-			count: 1
-			path: app/Http/Controllers/CargaConsolidada/CotizacionController.php
-
-		-
-			message: '#^Cannot call method getIdUsuario\(\) on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: method.nonObject
-			count: 3
-			path: app/Http/Controllers/CargaConsolidada/CotizacionController.php
-
-		-
-			message: '#^Cannot call method getNombreGrupo\(\) on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: method.nonObject
-			count: 2
-			path: app/Http/Controllers/CargaConsolidada/CotizacionController.php
-
-		-
-			message: '#^Cannot call method usuarioEquivaleJefeImportacion\(\) on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Http/Controllers/CargaConsolidada/CotizacionController.php
-
-		-
 			message: '#^If condition is always true\.$#'
 			identifier: if.alwaysTrue
 			count: 1
@@ -3886,12 +3436,6 @@ parameters:
 			message: '#^Parameter \#1 \$string of function str_pad expects string, int given\.$#'
 			identifier: argument.type
 			count: 1
-			path: app/Http/Controllers/CargaConsolidada/CotizacionController.php
-
-		-
-			message: '#^Parameter \#2 \$user of method App\\Http\\Controllers\\CargaConsolidada\\CotizacionController\:\:excelSeguimientoDrivePayload\(\) expects App\\Models\\Usuario, Tymon\\JWTAuth\\Contracts\\JWTSubject\|false given\.$#'
-			identifier: argument.type
-			count: 2
 			path: app/Http/Controllers/CargaConsolidada/CotizacionController.php
 
 		-
@@ -4159,12 +3703,6 @@ parameters:
 			path: app/Http/Controllers/CargaConsolidada/CotizacionFinal/CotizacionFinalController.php
 
 		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/CargaConsolidada/CotizacionFinal/CotizacionFinalController.php
-
-		-
 			message: '#^Anonymous function has an unused use \$worksheet\.$#'
 			identifier: closure.unusedUse
 			count: 1
@@ -4174,12 +3712,6 @@ parameters:
 			message: '#^Call to an undefined method App\\Contracts\\ObjectStorageConnectorInterface\:\:existsOnS3\(\)\.$#'
 			identifier: method.notFound
 			count: 3
-			path: app/Http/Controllers/CargaConsolidada/CotizacionFinal/CotizacionFinalController.php
-
-		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:getNombreGrupo\(\)\.$#'
-			identifier: method.notFound
-			count: 1
 			path: app/Http/Controllers/CargaConsolidada/CotizacionFinal/CotizacionFinalController.php
 
 		-
@@ -4209,12 +3741,6 @@ parameters:
 		-
 			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
 			identifier: larastan.noEnvCallsOutsideOfConfig
-			count: 1
-			path: app/Http/Controllers/CargaConsolidada/CotizacionFinal/CotizacionFinalController.php
-
-		-
-			message: '#^Cannot access property \$ID_Usuario on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: property.nonObject
 			count: 1
 			path: app/Http/Controllers/CargaConsolidada/CotizacionFinal/CotizacionFinalController.php
 
@@ -4599,12 +4125,6 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$pivot\.$#'
 			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/CargaConsolidada/CotizacionPagosController.php
-
-		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:getNombreGrupo\(\)\.$#'
-			identifier: method.notFound
 			count: 1
 			path: app/Http/Controllers/CargaConsolidada/CotizacionPagosController.php
 
@@ -5071,18 +4591,6 @@ parameters:
 			path: app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php
 
 		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$ID_Usuario\.$#'
-			identifier: property.notFound
-			count: 7
-			path: app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$No_Grupo\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php
-
-		-
 			message: '#^Anonymous function has an unused use \$search\.$#'
 			identifier: closure.unusedUse
 			count: 2
@@ -5101,18 +4609,6 @@ parameters:
 			path: app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php
 
 		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:getIdUsuario\(\)\.$#'
-			identifier: method.notFound
-			count: 6
-			path: app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php
-
-		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:getNombreGrupo\(\)\.$#'
-			identifier: method.notFound
-			count: 6
-			path: app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php
-
-		-
 			message: '#^Call to method getTemplateHeaderFormat\(\) on an unknown class App\\Traits\\WhatsappInboxTemplateService\.$#'
 			identifier: class.notFound
 			count: 1
@@ -5121,24 +4617,6 @@ parameters:
 		-
 			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
 			identifier: larastan.noEnvCallsOutsideOfConfig
-			count: 1
-			path: app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php
-
-		-
-			message: '#^Cannot access property \$No_Grupo on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: property.nonObject
-			count: 1
-			path: app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php
-
-		-
-			message: '#^Cannot access property \$id on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: property.nonObject
-			count: 1
-			path: app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php
-
-		-
-			message: '#^Cannot call method getNombreGrupo\(\) on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: method.nonObject
 			count: 1
 			path: app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php
 
@@ -5425,12 +4903,6 @@ parameters:
 			path: app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php
 
 		-
-			message: '#^Method App\\Http\\Controllers\\CargaConsolidada\\DashboardUsuarioController\:\:getAuthenticatedUser\(\) should return App\\Models\\Usuario but returns Tymon\\JWTAuth\\Contracts\\JWTSubject\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Http/Controllers/CargaConsolidada/DashboardUsuarioController.php
-
-		-
 			message: '#^Property App\\Http\\Controllers\\CargaConsolidada\\DashboardUsuarioController\:\:\$table_pagos is never read, only written\.$#'
 			identifier: property.onlyWritten
 			count: 1
@@ -5551,25 +5023,7 @@ parameters:
 			path: app/Http/Controllers/CargaConsolidada/Documentacion/DocumentacionController.php
 
 		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$ID_Usuario\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/CargaConsolidada/Documentacion/DocumentacionController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$No_Nombres_Apellidos\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/CargaConsolidada/Documentacion/DocumentacionController.php
-
-		-
 			message: '#^Call to an undefined method App\\Contracts\\ObjectStorageConnectorInterface\:\:existsOnS3\(\)\.$#'
-			identifier: method.notFound
-			count: 3
-			path: app/Http/Controllers/CargaConsolidada/Documentacion/DocumentacionController.php
-
-		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:getNombreGrupo\(\)\.$#'
 			identifier: method.notFound
 			count: 3
 			path: app/Http/Controllers/CargaConsolidada/Documentacion/DocumentacionController.php
@@ -5609,18 +5063,6 @@ parameters:
 			identifier: variable.undefined
 			count: 1
 			path: app/Http/Controllers/CargaConsolidada/Documentacion/DocumentacionController.php
-
-		-
-			message: '#^Parameter \#3 \$user of method App\\Services\\CargaConsolidada\\DocumentacionObservacionService\:\:crear\(\) expects App\\Models\\Usuario, Tymon\\JWTAuth\\Contracts\\JWTSubject\|false given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Http/Controllers/CargaConsolidada/Documentacion/DocumentacionObservacionController.php
-
-		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:getIdUsuario\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Http/Controllers/CargaConsolidada/Documentacion/FacturaComercialBatchController.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\CargaConsolidada\\Contenedor\:\:\$carga\.$#'
@@ -5771,12 +5213,6 @@ parameters:
 			identifier: notIdentical.alwaysTrue
 			count: 3
 			path: app/Http/Controllers/CargaConsolidada/EntregaController.php
-
-		-
-			message: '#^Cannot call method getNombreGrupo\(\) on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Http/Controllers/CargaConsolidada/ExcelConfirmacionCoordinacionController.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\CargaConsolidada\\Comprobante\:\:\$constancia\.$#'
@@ -6661,12 +6097,6 @@ parameters:
 			path: app/Http/Controllers/Clientes/ComprobanteFormController.php
 
 		-
-			message: '#^Cannot access property \$id on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: property.nonObject
-			count: 5
-			path: app/Http/Controllers/Clientes/ComprobanteFormController.php
-
-		-
 			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\CargaConsolidada\\Cotizacion\>\:\:map\(\) contains unresolvable type\.$#'
 			identifier: argument.unresolvableType
 			count: 1
@@ -6734,12 +6164,6 @@ parameters:
 
 		-
 			message: '#^Access to an undefined property App\\Models\\CargaConsolidada\\Contenedor\:\:\$lista_embarque_uploaded_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Clientes/ContainersController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Clientes/ContainersController.php
@@ -6826,12 +6250,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Models\\UsuarioDatosFacturacion\:\:\$updated_from\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Http/Controllers/Clientes/DeliveryController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 4
 			path: app/Http/Controllers/Clientes/DeliveryController.php
 
 		-
@@ -7003,24 +6421,6 @@ parameters:
 			path: app/Http/Controllers/Clientes/ImportacionesController.php
 
 		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$dni\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Clientes/ImportacionesController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Clientes/ImportacionesController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$whatsapp\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Http/Controllers/Clientes/ImportacionesController.php
-
-		-
 			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
 			identifier: larastan.noEnvCallsOutsideOfConfig
 			count: 1
@@ -7141,18 +6541,6 @@ parameters:
 			path: app/Http/Controllers/Curso/CursoController.php
 
 		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$ID_Empresa\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Http/Controllers/Curso/CursoController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$ID_Usuario\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Curso/CursoController.php
-
-		-
 			message: '#^Call to an undefined method App\\Contracts\\ObjectStorageConnectorInterface\:\:existsOnS3\(\)\.$#'
 			identifier: method.notFound
 			count: 3
@@ -7259,30 +6647,6 @@ parameters:
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/MenuController.php
-
-		-
-			message: '#^Cannot access property \$No_Usuario on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: property.nonObject
-			count: 1
-			path: app/Http/Controllers/NewsController.php
-
-		-
-			message: '#^Cannot call method getIdUsuario\(\) on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Http/Controllers/NewsController.php
-
-		-
-			message: '#^Cannot call method getNombreGrupo\(\) on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Http/Controllers/NewsController.php
-
-		-
-			message: '#^Cannot call method isAdmin\(\) on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: method.nonObject
-			count: 3
-			path: app/Http/Controllers/NewsController.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\User\|App\\Models\\Usuario\:\:\$grupo\.$#'
@@ -7513,159 +6877,9 @@ parameters:
 			path: app/Http/Controllers/PanelAcceso/MenuCatalogoController.php
 
 		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$ID_Usuario\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/TestController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$No_Usuario\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/TestController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$Nu_Estado\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/TestController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 5
-			path: app/Http/Controllers/UserBusinessController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$id_user_business\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/UserBusinessController.php
-
-		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:update\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Http/Controllers/UserBusinessController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$birth_date\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/UserProfileController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$departamento\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/UserProfileController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$departamento_id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/UserProfileController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$distrito\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/UserProfileController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$distrito_id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/UserProfileController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$dni\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/UserProfileController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$domicilio_fiscal\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Http/Controllers/UserProfileController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/UserProfileController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$full_name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/UserProfileController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$goals\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/UserProfileController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Http/Controllers/UserProfileController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$pais\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/UserProfileController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$pais_id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/UserProfileController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$photo_url\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Http/Controllers/UserProfileController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$provincia\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/UserProfileController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$provincia_id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/UserProfileController.php
-
-		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$whatsapp\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/UserProfileController.php
-
-		-
 			message: '#^Call to an undefined method App\\Contracts\\ObjectStorageConnectorInterface\:\:existsOnS3\(\)\.$#'
 			identifier: method.notFound
 			count: 3
-			path: app/Http/Controllers/UserProfileController.php
-
-		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:load\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: app/Http/Controllers/UserProfileController.php
-
-		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:update\(\)\.$#'
-			identifier: method.notFound
-			count: 1
 			path: app/Http/Controllers/UserProfileController.php
 
 		-
@@ -7879,52 +7093,10 @@ parameters:
 			path: app/Http/Controllers/WaCopiloto/WaCopilotoController.php
 
 		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:getIdUsuario\(\)\.$#'
-			identifier: method.notFound
-			count: 12
-			path: app/Http/Controllers/WaCopiloto/WaCopilotoController.php
-
-		-
 			message: '#^Relation ''session'' is not found in App\\Models\\WaCopiloto\\WaCopilotoConversation model\.$#'
 			identifier: larastan.relationExistence
 			count: 1
 			path: app/Http/Controllers/WaCopiloto/WaCopilotoController.php
-
-		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:getIdUsuario\(\)\.$#'
-			identifier: method.notFound
-			count: 3
-			path: app/Http/Controllers/WhatsappInbox/WhatsappInboxController.php
-
-		-
-			message: '#^Parameter \#1 \$user of static method Illuminate\\Support\\Facades\\Auth\:\:login\(\) expects Illuminate\\Contracts\\Auth\\Authenticatable, Tymon\\JWTAuth\\Contracts\\JWTSubject\|false given\.$#'
-			identifier: argument.type
-			count: 2
-			path: app/Http/Middleware/BroadcastingAuth.php
-
-		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:getNombreGrupo\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Http/Middleware/EnsureCoordinacionRole.php
-
-		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:getIdUsuario\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Http/Middleware/EnsureCopilotoWaAccess.php
-
-		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:getNombreGrupo\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Http/Middleware/EnsureCopilotoWaAccess.php
-
-		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:puedeAccederWhatsappInbox\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Http/Middleware/EnsureWhatsappInboxAccess.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\LandingConsolidadoLead\|App\\Models\\LandingCursoLead\:\:\$bitrix_sync_errors\.$#'
@@ -9949,28 +9121,10 @@ parameters:
 			path: app/Services/Calendar/CalendarPermissionService.php
 
 		-
-			message: '#^Access to an undefined property Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:\$ID_Empresa\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/CampaignStudentsExportService.php
-
-		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:getNombreGrupo\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Services/CampaignStudentsExportService.php
-
-		-
 			message: '#^Strict comparison using \!\=\= between mixed~\(0\|0\.0\|''''\|''0''\|array\{\}\|false\|null\) and '''' will always evaluate to true\.$#'
 			identifier: notIdentical.alwaysTrue
 			count: 1
 			path: app/Services/CampaignStudentsExportService.php
-
-		-
-			message: '#^Static method App\\Models\\Usuario\:\:rolesEquivalentesJefeImportacion\(\) invoked with 1 parameter, 0 required\.$#'
-			identifier: arguments.count
-			count: 1
-			path: app/Services/CargaConsolidada/CargaConsolidadaCacheService.php
 
 		-
 			message: '#^Call to an undefined method App\\Contracts\\ObjectStorageConnectorInterface\:\:existsOnS3\(\)\.$#'
@@ -10126,12 +9280,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Models\\CargaConsolidada\\Cotizacion\:\:\$tipoCliente\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Services/CargaConsolidada/CotizacionExportService.php
-
-		-
-			message: '#^Call to an undefined method Tymon\\JWTAuth\\Contracts\\JWTSubject\:\:getNombreGrupo\(\)\.$#'
-			identifier: method.notFound
-			count: 2
 			path: app/Services/CargaConsolidada/CotizacionExportService.php
 
 		-
@@ -10365,18 +9513,6 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Models\\CargaConsolidada\\Cotizacion\:\:\$volumen_final\.$#'
 			identifier: property.notFound
-			count: 1
-			path: app/Services/CargaConsolidada/CotizacionService.php
-
-		-
-			message: '#^Cannot call method getIdUsuario\(\) on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: method.nonObject
-			count: 2
-			path: app/Services/CargaConsolidada/CotizacionService.php
-
-		-
-			message: '#^Cannot call method getNombreGrupo\(\) on Tymon\\JWTAuth\\Contracts\\JWTSubject\|false\.$#'
-			identifier: method.nonObject
 			count: 1
 			path: app/Services/CargaConsolidada/CotizacionService.php
 
@@ -11059,6 +10195,12 @@ parameters:
 			path: app/Services/SoporteTi/SoporteTiService.php
 
 		-
+			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiSolicitud\:\:\$solicitanteUsuario\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/SoporteTi/SoporteTiService.php
+
+		-
 			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiSolicitudEstado\:\:\$estado\.$#'
 			identifier: property.notFound
 			count: 2
@@ -11097,7 +10239,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Models\\Usuario\:\:\$grupo\.$#'
 			identifier: property.notFound
-			count: 2
+			count: 3
 			path: app/Services/SoporteTi/SoporteTiService.php
 
 		-
@@ -11145,17 +10287,11 @@ parameters:
 		-
 			message: '#^Relation ''estadoActual'' is not found in App\\Models\\SoporteTi\\SoporteTiSolicitud model\.$#'
 			identifier: larastan.relationExistence
-			count: 2
-			path: app/Services/SoporteTi/SoporteTiService.php
-
-		-
-			message: '#^Relation ''estadoAnterior'' is not found in App\\Models\\SoporteTi\\SoporteTiSolicitudEstado model\.$#'
-			identifier: larastan.relationExistence
 			count: 1
 			path: app/Services/SoporteTi/SoporteTiService.php
 
 		-
-			message: '#^Relation ''evidencias'' is not found in App\\Models\\SoporteTi\\SoporteTiSolicitud model\.$#'
+			message: '#^Relation ''estadoAnterior'' is not found in App\\Models\\SoporteTi\\SoporteTiSolicitudEstado model\.$#'
 			identifier: larastan.relationExistence
 			count: 1
 			path: app/Services/SoporteTi/SoporteTiService.php
@@ -11173,12 +10309,6 @@ parameters:
 			path: app/Services/SoporteTi/SoporteTiService.php
 
 		-
-			message: '#^Relation ''maqueta'' is not found in App\\Models\\SoporteTi\\SoporteTiSolicitud model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Services/SoporteTi/SoporteTiService.php
-
-		-
 			message: '#^Relation ''replyTo'' is not found in App\\Models\\SoporteTi\\SoporteTiMensaje model\.$#'
 			identifier: larastan.relationExistence
 			count: 2
@@ -11187,7 +10317,13 @@ parameters:
 		-
 			message: '#^Relation ''salaChat'' is not found in App\\Models\\SoporteTi\\SoporteTiSolicitud model\.$#'
 			identifier: larastan.relationExistence
-			count: 4
+			count: 3
+			path: app/Services/SoporteTi/SoporteTiService.php
+
+		-
+			message: '#^Relation ''solicitanteUsuario'' is not found in App\\Models\\SoporteTi\\SoporteTiSolicitud model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
 			path: app/Services/SoporteTi/SoporteTiService.php
 
 		-
