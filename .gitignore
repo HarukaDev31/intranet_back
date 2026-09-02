@@ -21,3 +21,4 @@ yarn-error.log
 storage/credentials.json
 /storage/app/google-drive-oauth-token.json
 /public/assets/fonts/NotoSansSC-Regular.otf
+/public/assets/fonts/NotoSansSC-Regular.ttf

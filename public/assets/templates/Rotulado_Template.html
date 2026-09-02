@@ -13,7 +13,7 @@
             font-family: 'noto sans sc';
             font-style: normal;
             font-weight: normal;
-            src: url('assets/fonts/NotoSansSC-Regular.otf') format('opentype');
+            src: url('assets/fonts/NotoSansSC-Regular.otf') format('truetype');
         }
 
         * {
@@ -27,6 +27,12 @@
             font-size: 11pt;
             color: #111111;
             line-height: 1.35;
+        }
+
+        .header-banner {
+            width: 100%;
+            display: block;
+            margin-bottom: 8px;
         }
 
         .label {
@@ -115,6 +121,7 @@
         }
 
         .item-cn {
+            font-family: 'noto sans sc', sans-serif;
             font-size: 10pt;
         }
 
@@ -152,6 +159,8 @@
 
 <body>
     <div class="label">
+        <img src="{{header_image}}" alt="Rotulado Header" class="header-banner">
+
         <table class="header-table">
             <tr>
                 <td class="title">CONSOLIDADO #{{carga}}</td>
