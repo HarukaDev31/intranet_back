@@ -19,9 +19,32 @@ class RotuladoPdfService
 
     private const HEADER_IMAGE_RELATIVE_PATH = 'assets/templates/ROTULADO_HEADER.png';
 
+    private const ICONS_DIR = 'assets/templates/rotulado_icons';
+
+    private const ICON_DISPLAY_SIZE = 22;
+
+    private const FOOTER_ICON_SIZE = 28;
+
     private const MIN_FONT_BYTES = 1000000;
 
-    private const HEADER_MAX_HEIGHT = 92;
+    /** Altura máxima del banner (px). Ajustar si el PDF pasa a 2 páginas. */
+    private const HEADER_MAX_HEIGHT = 140;
+
+    /**
+     * @var array<string, string>
+     */
+    private static $iconPlaceholders = array(
+        '{{icon_company}}' => 'company.png',
+        '{{icon_contact}}' => 'contact.png',
+        '{{icon_location}}' => 'location.png',
+        '{{icon_box}}' => 'box.png',
+        '{{icon_qty}}' => 'qty.png',
+        '{{icon_weight}}' => 'weight.png',
+        '{{icon_measure}}' => 'measure.png',
+        '{{icon_barcode}}' => 'barcode.png',
+        '{{icon_peru_flag}}' => 'peru_flag.png',
+        '{{icon_footer_box}}' => 'box.png',
+    );
 
     /**
      * @param string $cliente
@@ -50,7 +73,7 @@ class RotuladoPdfService
         $htmlContent = str_replace('{{supplier_code}}', htmlspecialchars((string) $supplierCode, ENT_QUOTES, 'UTF-8'), $htmlContent);
         $htmlContent = str_replace('{{carga}}', htmlspecialchars((string) $carga, ENT_QUOTES, 'UTF-8'), $htmlContent);
 
-        return $this->embedHeaderImage($htmlContent);
+        return $this->embedAssets($htmlContent);
     }
 
     /**
@@ -107,6 +130,39 @@ class RotuladoPdfService
      * @param string $htmlContent
      * @return string
      */
+    private function embedAssets($htmlContent)
+    {
+        $htmlContent = $this->embedHeaderImage($htmlContent);
+
+        foreach (self::$iconPlaceholders as $placeholder => $filename) {
+            $htmlContent = str_replace($placeholder, $this->pngDataUri($filename), $htmlContent);
+        }
+
+        return $htmlContent;
+    }
+
+    /**
+     * @param string $filename
+     * @return string
+     */
+    private function pngDataUri($filename)
+    {
+        $path = public_path(self::ICONS_DIR . '/' . $filename);
+        if (!is_file($path)) {
+            Log::warning('RotuladoPdfService: icono no encontrado', array('file' => $filename));
+
+            return '';
+        }
+
+        $data = file_get_contents($path);
+
+        return $data !== false ? 'data:image/png;base64,' . base64_encode($data) : '';
+    }
+
+    /**
+     * @param string $htmlContent
+     * @return string
+     */
     private function embedHeaderImage($htmlContent)
     {
         $headerImagePath = public_path(self::HEADER_IMAGE_RELATIVE_PATH);
@@ -126,6 +182,8 @@ class RotuladoPdfService
         $htmlContent = str_replace('{{header_image}}', $headerImageSrc, $htmlContent);
         $htmlContent = str_replace('{{header_image_width}}', (string) $headerWidth, $htmlContent);
         $htmlContent = str_replace('{{header_image_height}}', (string) $headerHeight, $htmlContent);
+        $htmlContent = str_replace('{{icon_display_size}}', (string) self::ICON_DISPLAY_SIZE, $htmlContent);
+        $htmlContent = str_replace('{{footer_icon_size}}', (string) self::FOOTER_ICON_SIZE, $htmlContent);
         $htmlContent = str_replace('{{base_url}}/assets/templates/ROTULADO_HEADER.png', $headerImageSrc, $htmlContent);
 
         return $htmlContent;
@@ -178,8 +236,6 @@ class RotuladoPdfService
     }
 
     /**
-     * Registra la fuente antes de renderizar (DomPDF @font-face ignora format('opentype')).
-     *
      * @param Dompdf $dompdf
      */
     private function registerChineseFont(Dompdf $dompdf)
