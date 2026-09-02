@@ -4,6 +4,7 @@ namespace App\Services\CargaConsolidada;
 
 use Dompdf\Dompdf;
 use Dompdf\Options;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Generación del PDF de rotulado consolidado (plantilla Rotulado_Template.html).
@@ -15,6 +16,8 @@ class RotuladoPdfService
     public const FONT_RELATIVE_PATH = 'assets/fonts/NotoSansSC-Regular.otf';
 
     public const FONT_DOWNLOAD_URL = 'https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf';
+
+    private const HEADER_IMAGE_RELATIVE_PATH = 'assets/templates/ROTULADO_HEADER.png';
 
     private const MIN_FONT_BYTES = 1000000;
 
@@ -45,7 +48,7 @@ class RotuladoPdfService
         $htmlContent = str_replace('{{supplier_code}}', htmlspecialchars((string) $supplierCode, ENT_QUOTES, 'UTF-8'), $htmlContent);
         $htmlContent = str_replace('{{carga}}', htmlspecialchars((string) $carga, ENT_QUOTES, 'UTF-8'), $htmlContent);
 
-        return $htmlContent;
+        return $this->embedHeaderImage($htmlContent);
     }
 
     /**
@@ -54,20 +57,21 @@ class RotuladoPdfService
      */
     public function renderPdf($htmlContent)
     {
+        $fontDir = storage_path('fonts');
+        if (!is_dir($fontDir)) {
+            @mkdir($fontDir, 0755, true);
+        }
+
         $options = new Options();
         $options->set('isHtml5ParserEnabled', true);
         $options->set('isFontSubsettingEnabled', true);
-        $options->set('isRemoteEnabled', true);
+        $options->set('isRemoteEnabled', false);
         $options->set('isPhpEnabled', false);
         $options->set('chroot', public_path());
+        $options->set('fontDir', $fontDir);
+        $options->set('fontCache', $fontDir);
         $options->set('defaultFont', self::FONT_FAMILY);
         $options->set('defaultMediaType', 'print');
-
-        $fontDir = public_path('assets/fonts');
-        if (is_dir($fontDir)) {
-            $options->set('fontDir', $fontDir);
-            $options->set('fontCache', storage_path('fonts/dompdf'));
-        }
 
         $dompdf = new Dompdf($options);
         $this->registerChineseFont($dompdf);
@@ -98,22 +102,43 @@ class RotuladoPdfService
     }
 
     /**
+     * @param string $htmlContent
+     * @return string
+     */
+    private function embedHeaderImage($htmlContent)
+    {
+        $headerImagePath = public_path(self::HEADER_IMAGE_RELATIVE_PATH);
+        $headerImageSrc = '';
+
+        if (is_file($headerImagePath)) {
+            $imageData = file_get_contents($headerImagePath);
+            if ($imageData !== false) {
+                $headerImageSrc = 'data:image/png;base64,' . base64_encode($imageData);
+            }
+        }
+
+        $htmlContent = str_replace('{{header_image}}', $headerImageSrc, $htmlContent);
+        $htmlContent = str_replace('{{base_url}}/assets/templates/ROTULADO_HEADER.png', $headerImageSrc, $htmlContent);
+
+        return $htmlContent;
+    }
+
+    /**
+     * Registra la fuente antes de renderizar (DomPDF @font-face ignora format('opentype')).
+     *
      * @param Dompdf $dompdf
      */
     private function registerChineseFont(Dompdf $dompdf)
     {
         $fontPath = self::fontAbsolutePath();
         if (!is_file($fontPath)) {
+            Log::warning('RotuladoPdfService: fuente Noto Sans SC no instalada. Ejecute php artisan rotulado:download-font');
+
             return;
         }
 
-        $cacheDir = storage_path('fonts/dompdf');
-        if (!is_dir($cacheDir)) {
-            @mkdir($cacheDir, 0755, true);
-        }
-
         try {
-            $dompdf->getFontMetrics()->registerFont(
+            $registered = $dompdf->getFontMetrics()->registerFont(
                 array(
                     'family' => self::FONT_FAMILY,
                     'style' => 'normal',
@@ -121,8 +146,14 @@ class RotuladoPdfService
                 ),
                 $fontPath
             );
+
+            if (!$registered) {
+                Log::warning('RotuladoPdfService: no se pudo registrar la fuente china en DomPDF', array(
+                    'path' => $fontPath,
+                ));
+            }
         } catch (\Throwable $e) {
-            // Si ya está registrada o falla el cache, DomPDF puede seguir con @font-face del HTML.
+            Log::warning('RotuladoPdfService: error registrando fuente china: ' . $e->getMessage());
         }
     }
 }

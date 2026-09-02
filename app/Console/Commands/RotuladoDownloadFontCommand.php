@@ -20,6 +20,11 @@ class RotuladoDownloadFontCommand extends Command
     {
         $destPath = RotuladoPdfService::fontAbsolutePath();
         $destDir = dirname($destPath);
+        $legacyTtf = $destDir . DIRECTORY_SEPARATOR . 'NotoSansSC-Regular.ttf';
+
+        if (is_dir($destDir) && is_file($legacyTtf)) {
+            @unlink($legacyTtf);
+        }
 
         if (!is_dir($destDir) && !mkdir($destDir, 0755, true) && !is_dir($destDir)) {
             $this->error('No se pudo crear el directorio: ' . $destDir);
