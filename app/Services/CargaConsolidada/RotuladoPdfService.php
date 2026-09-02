@@ -28,7 +28,7 @@ class RotuladoPdfService
     private const MIN_FONT_BYTES = 1000000;
 
     /** Altura máxima del banner (px). Ajustar si el PDF pasa a 2 páginas. */
-    private const HEADER_MAX_HEIGHT = 140;
+    private const HEADER_MAX_HEIGHT = 160;
 
     /**
      * @var array<string, string>
