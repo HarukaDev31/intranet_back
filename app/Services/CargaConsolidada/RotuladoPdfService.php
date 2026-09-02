@@ -21,6 +21,8 @@ class RotuladoPdfService
 
     private const MIN_FONT_BYTES = 1000000;
 
+    private const HEADER_MAX_HEIGHT = 92;
+
     /**
      * @param string $cliente
      * @param string $supplierCode
@@ -109,18 +111,70 @@ class RotuladoPdfService
     {
         $headerImagePath = public_path(self::HEADER_IMAGE_RELATIVE_PATH);
         $headerImageSrc = '';
+        $headerWidth = 515;
+        $headerHeight = self::HEADER_MAX_HEIGHT;
 
         if (is_file($headerImagePath)) {
-            $imageData = file_get_contents($headerImagePath);
-            if ($imageData !== false) {
-                $headerImageSrc = 'data:image/png;base64,' . base64_encode($imageData);
+            $resized = $this->resizeHeaderPng($headerImagePath, self::HEADER_MAX_HEIGHT);
+            if ($resized !== null) {
+                $headerImageSrc = 'data:image/png;base64,' . base64_encode($resized['data']);
+                $headerWidth = $resized['width'];
+                $headerHeight = $resized['height'];
             }
         }
 
         $htmlContent = str_replace('{{header_image}}', $headerImageSrc, $htmlContent);
+        $htmlContent = str_replace('{{header_image_width}}', (string) $headerWidth, $htmlContent);
+        $htmlContent = str_replace('{{header_image_height}}', (string) $headerHeight, $htmlContent);
         $htmlContent = str_replace('{{base_url}}/assets/templates/ROTULADO_HEADER.png', $headerImageSrc, $htmlContent);
 
         return $htmlContent;
+    }
+
+    /**
+     * @param string $path
+     * @param int $maxHeight
+     * @return array{data: string, width: int, height: int}|null
+     */
+    private function resizeHeaderPng($path, $maxHeight)
+    {
+        if (!function_exists('imagecreatefrompng')) {
+            $data = file_get_contents($path);
+
+            return $data !== false
+                ? array('data' => $data, 'width' => 515, 'height' => $maxHeight)
+                : null;
+        }
+
+        $img = @imagecreatefrompng($path);
+        if ($img === false) {
+            return null;
+        }
+
+        $origW = imagesx($img);
+        $origH = imagesy($img);
+        $newH = min($maxHeight, $origH);
+        $newW = (int) round($origW * ($newH / $origH));
+        $resized = imagecreatetruecolor($newW, $newH);
+        imagealphablending($resized, false);
+        imagesavealpha($resized, true);
+        imagecopyresampled($resized, $img, 0, 0, 0, 0, $newW, $newH, $origW, $origH);
+        imagedestroy($img);
+
+        ob_start();
+        imagepng($resized);
+        $data = ob_get_clean();
+        imagedestroy($resized);
+
+        if ($data === false) {
+            return null;
+        }
+
+        return array(
+            'data' => $data,
+            'width' => $newW,
+            'height' => $newH,
+        );
     }
 
     /**
