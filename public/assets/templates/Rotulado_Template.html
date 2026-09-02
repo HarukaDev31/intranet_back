@@ -28,7 +28,7 @@
         }
 
         .header-banner {
-            width: 100%;
+            display: block;
             margin: 0 0 4px 0;
         }
 
@@ -75,7 +75,7 @@
         }
 
         .col-icon {
-            width: 28px;
+            width: 30px;
             text-align: center;
         }
 
@@ -112,11 +112,6 @@
             font-weight: bold;
             letter-spacing: 0.5px;
         }
-
-        .icon {
-            width: 20px;
-            height: 20px;
-        }
     </style>
 </head>
 
@@ -133,8 +128,7 @@
                             <table class="peru-box" cellspacing="0" cellpadding="0" align="right">
                                 <tr>
                                     <td>
-                                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAgCAIAAADbtmxLAAAAXklEQVR4nM3OsRVAQADA0MgEzMC7/dfh2cEKet1V8usUWc51Z8Z47qn+2o6pXmIkRmIkRmIkRmIkRmIkRmIkRmIkRmIkRmIkRmIkRmIkRmIkRmIkRmIkRmIkxr8Hvl7pxARMaCeglQAAAABJRU5ErkJggg=="
-                                            width="40" height="26" alt="">
+                                        <img src="{{icon_peru_flag}}" width="40" height="26" alt="">
                                     </td>
                                     <td class="peru-text">PERU</td>
                                 </tr>
@@ -149,63 +143,63 @@
                 <table width="100%" cellspacing="0" cellpadding="0" style="page-break-inside: avoid;">
                     <tr class="data-row">
                         <td class="col-icon">
-                            <img class="icon" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDIwIDIwIj48cmVjdCB4PSIzIiB5PSI5IiB3aWR0aD0iMTQiIGhlaWdodD0iOSIgZmlsbD0iIzExMSIvPjxyZWN0IHg9IjEiIHk9IjMiIHdpZHRoPSIxOCIgaGVpZ2h0PSI1IiBmaWxsPSIjMTExIi8+PC9zdmc+" alt="">
+                            <img src="{{icon_company}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
                         </td>
                         <td class="col-label">COMPANY:</td>
                         <td class="col-value">PRO MUNDO COMEX S.A.C</td>
                     </tr>
                     <tr class="data-row">
                         <td class="col-icon">
-                            <img class="icon" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDIwIDIwIj48cmVjdCB4PSI3IiB5PSIyIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSIjMTExIi8+PHJlY3QgeD0iNCIgeT0iOSIgd2lkdGg9IjEyIiBoZWlnaHQ9IjkiIGZpbGw9IiMxMTEiLz48L3N2Zz4=" alt="">
+                            <img src="{{icon_contact}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
                         </td>
                         <td class="col-label">CONTACT:</td>
                         <td class="col-value">{{cliente}}</td>
                     </tr>
                     <tr class="data-row">
                         <td class="col-icon">
-                            <img class="icon" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDIwIDIwIj48cmVjdCB4PSI4IiB5PSIyIiB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjMTExIi8+PHJlY3QgeD0iNSIgeT0iNyIgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSIjMTExIi8+PC9zdmc+" alt="">
+                            <img src="{{icon_location}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
                         </td>
                         <td class="col-label">TO:</td>
                         <td class="col-value">PERU</td>
                     </tr>
                     <tr class="data-row">
                         <td class="col-icon">
-                            <img class="icon" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDIwIDIwIj48cmVjdCB4PSIzIiB5PSI1IiB3aWR0aD0iMTQiIGhlaWdodD0iMTIiIGZpbGw9IiMxMTEiLz48cmVjdCB4PSI1IiB5PSI3IiB3aWR0aD0iMTAiIGhlaWdodD0iMiIgZmlsbD0iI0ZGRiIvPjwvc3ZnPg==" alt="">
+                            <img src="{{icon_box}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
                         </td>
                         <td class="col-label">ITEM NRO:</td>
                         <td class="col-value item-cn">这里写产品货号（如果很多款式在箱子里要写每一款的货号和数量。如果你们货没有货号随便给一个）</td>
                     </tr>
                     <tr class="data-row">
                         <td class="col-icon">
-                            <img class="icon" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDIwIDIwIj48cmVjdCB4PSI0IiB5PSIxMCIgd2lkdGg9IjMiIGhlaWdodD0iMyIgZmlsbD0iIzExMSIvPjxyZWN0IHg9IjkiIHk9IjEwIiB3aWR0aD0iMyIgaGVpZ2h0PSIzIiBmaWxsPSIjMTExIi8+PHJlY3QgeD0iMTQiIHk9IjEwIiB3aWR0aD0iMyIgaGVpZ2h0PSIzIiBmaWxsPSIjMTExIi8+PHJlY3QgeD0iNiIgeT0iNiIgd2lkdGg9IjMiIGhlaWdodD0iMyIgZmlsbD0iIzExMSIvPjxyZWN0IHg9IjExIiB5PSI2IiB3aWR0aD0iMyIgaGVpZ2h0PSIzIiBmaWxsPSIjMTExIi8+PC9zdmc+" alt="">
+                            <img src="{{icon_qty}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
                         </td>
                         <td class="col-label">QTY:</td>
                         <td class="col-value item-cn">装箱数 PCS</td>
                     </tr>
                     <tr class="data-row">
                         <td class="col-icon">
-                            <img class="icon" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDIwIDIwIj48cmVjdCB4PSIzIiB5PSIxMCIgd2lkdGg9IjE0IiBoZWlnaHQ9IjMiIGZpbGw9IiMxMTEiLz48cmVjdCB4PSI4IiB5PSI0IiB3aWR0aD0iNCIgaGVpZ2h0PSI2IiBmaWxsPSIjMTExIi8+PHJlY3QgeD0iMyIgeT0iMTUiIHdpZHRoPSIxNCIgaGVpZ2h0PSIyIiBmaWxsPSIjMTExIi8+PC9zdmc+" alt="">
+                            <img src="{{icon_weight}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
                         </td>
                         <td class="col-label">N.W:</td>
                         <td class="col-value item-cn">净重 KGS</td>
                     </tr>
                     <tr class="data-row">
                         <td class="col-icon">
-                            <img class="icon" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDIwIDIwIj48cmVjdCB4PSIzIiB5PSIxMCIgd2lkdGg9IjE0IiBoZWlnaHQ9IjMiIGZpbGw9IiMxMTEiLz48cmVjdCB4PSI4IiB5PSI0IiB3aWR0aD0iNCIgaGVpZ2h0PSI2IiBmaWxsPSIjMTExIi8+PHJlY3QgeD0iMyIgeT0iMTUiIHdpZHRoPSIxNCIgaGVpZ2h0PSIyIiBmaWxsPSIjMTExIi8+PC9zdmc+" alt="">
+                            <img src="{{icon_weight}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
                         </td>
                         <td class="col-label">G.W:</td>
                         <td class="col-value item-cn">毛重 KGS</td>
                     </tr>
                     <tr class="data-row">
                         <td class="col-icon">
-                            <img class="icon" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDIwIDIwIj48cmVjdCB4PSIzIiB5PSI1IiB3aWR0aD0iMTQiIGhlaWdodD0iMiIgZmlsbD0iIzExMSIvPjxyZWN0IHg9IjMiIHk9IjkiIHdpZHRoPSIxNCIgaGVpZ2h0PSIyIiBmaWxsPSIjMTExIi8+PHJlY3QgeD0iMyIgeT0iMTMiIHdpZHRoPSIxNCIgaGVpZ2h0PSIyIiBmaWxsPSIjMTExIi8+PC9zdmc+" alt="">
+                            <img src="{{icon_measure}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
                         </td>
                         <td class="col-label">MEASURE:</td>
                         <td class="col-value item-cn">箱子规格 CM</td>
                     </tr>
                     <tr class="data-row">
                         <td class="col-icon">
-                            <img class="icon" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDIwIDIwIj48cmVjdCB4PSIzIiB5PSI0IiB3aWR0aD0iMiIgaGVpZ2h0PSIxMiIgZmlsbD0iIzExMSIvPjxyZWN0IHg9IjciIHk9IjQiIHdpZHRoPSIxIiBoZWlnaHQ9IjEyIiBmaWxsPSIjMTExIi8+PHJlY3QgeD0iMTAiIHk9IjQiIHdpZHRoPSIzIiBoZWlnaHQ9IjEyIiBmaWxsPSIjMTExIi8+PHJlY3QgeD0iMTUiIHk9IjQiIHdpZHRoPSIxIiBoZWlnaHQ9IjEyIiBmaWxsPSIjMTExIi8+PC9zdmc+" alt="">
+                            <img src="{{icon_barcode}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
                         </td>
                         <td class="col-label">SUPPLIER CODE:</td>
                         <td class="col-value">{{supplier_code}}</td>
@@ -215,8 +209,8 @@
                 <table class="footer-table" cellspacing="0" cellpadding="0">
                     <tr>
                         <td>
-                            <img class="icon" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDIwIDIwIj48cmVjdCB4PSIzIiB5PSI1IiB3aWR0aD0iMTQiIGhlaWdodD0iMTIiIGZpbGw9IiMxMTEiLz48cmVjdCB4PSI1IiB5PSI3IiB3aWR0aD0iMTAiIGhlaWdodD0iMiIgZmlsbD0iI0ZGRiIvPjwvc3ZnPg==" alt="" style="vertical-align: middle; margin-right: 10px;">
-                            <span class="footer-text">HECHO EN CHINA</span>
+                            <img src="{{icon_footer_box}}" width="{{footer_icon_size}}" height="{{footer_icon_size}}" alt="">
+                            <span class="footer-text"> HECHO EN CHINA</span>
                         </td>
                     </tr>
                 </table>
