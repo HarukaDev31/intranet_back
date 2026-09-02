@@ -20,3 +20,4 @@ yarn-error.log
 .deploy/
 storage/credentials.json
 /storage/app/google-drive-oauth-token.json
+/public/assets/fonts/NotoSansSC-Regular.otf
