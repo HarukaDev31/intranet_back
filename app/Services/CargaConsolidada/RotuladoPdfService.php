@@ -27,8 +27,11 @@ class RotuladoPdfService
 
     private const MIN_FONT_BYTES = 1000000;
 
-    /** Altura máxima del banner (px). Ajustar si el PDF pasa a 2 páginas. */
-    private const HEADER_MAX_HEIGHT = 160;
+    /** Ancho del banner en px (~ancho útil A4 en DomPDF). */
+    private const HEADER_TARGET_WIDTH = 530;
+
+    /** Altura máxima del banner; si sobra imagen se recorta por arriba. */
+    private const HEADER_MAX_HEIGHT = 240;
 
     /**
      * @var array<string, string>
@@ -167,11 +170,15 @@ class RotuladoPdfService
     {
         $headerImagePath = public_path(self::HEADER_IMAGE_RELATIVE_PATH);
         $headerImageSrc = '';
-        $headerWidth = 515;
+        $headerWidth = self::HEADER_TARGET_WIDTH;
         $headerHeight = self::HEADER_MAX_HEIGHT;
 
         if (is_file($headerImagePath)) {
-            $resized = $this->resizeHeaderPng($headerImagePath, self::HEADER_MAX_HEIGHT);
+            $resized = $this->resizeHeaderPng(
+                $headerImagePath,
+                self::HEADER_TARGET_WIDTH,
+                self::HEADER_MAX_HEIGHT
+            );
             if ($resized !== null) {
                 $headerImageSrc = 'data:image/png;base64,' . base64_encode($resized['data']);
                 $headerWidth = $resized['width'];
@@ -190,17 +197,20 @@ class RotuladoPdfService
     }
 
     /**
+     * Escala el header a ancho completo y recorta por abajo si supera la altura máxima.
+     *
      * @param string $path
+     * @param int $targetWidth
      * @param int $maxHeight
      * @return array{data: string, width: int, height: int}|null
      */
-    private function resizeHeaderPng($path, $maxHeight)
+    private function resizeHeaderPng($path, $targetWidth, $maxHeight)
     {
         if (!function_exists('imagecreatefrompng')) {
             $data = file_get_contents($path);
 
             return $data !== false
-                ? array('data' => $data, 'width' => 515, 'height' => $maxHeight)
+                ? array('data' => $data, 'width' => $targetWidth, 'height' => $maxHeight)
                 : null;
         }
 
@@ -211,13 +221,24 @@ class RotuladoPdfService
 
         $origW = imagesx($img);
         $origH = imagesy($img);
-        $newH = min($maxHeight, $origH);
-        $newW = (int) round($origW * ($newH / $origH));
-        $resized = imagecreatetruecolor($newW, $newH);
+        $scaledH = (int) round($origH * ($targetWidth / $origW));
+        $scaledW = $targetWidth;
+
+        $scaled = imagecreatetruecolor($scaledW, $scaledH);
+        imagealphablending($scaled, false);
+        imagesavealpha($scaled, true);
+        $transparent = imagecolorallocatealpha($scaled, 0, 0, 0, 127);
+        imagefill($scaled, 0, 0, $transparent);
+        imagecopyresampled($scaled, $img, 0, 0, 0, 0, $scaledW, $scaledH, $origW, $origH);
+        imagedestroy($img);
+
+        $newH = min($scaledH, $maxHeight);
+        $resized = imagecreatetruecolor($scaledW, $newH);
         imagealphablending($resized, false);
         imagesavealpha($resized, true);
-        imagecopyresampled($resized, $img, 0, 0, 0, 0, $newW, $newH, $origW, $origH);
-        imagedestroy($img);
+        imagefill($resized, 0, 0, $transparent);
+        imagecopy($resized, $scaled, 0, 0, 0, 0, $scaledW, $newH);
+        imagedestroy($scaled);
 
         ob_start();
         imagepng($resized);
@@ -230,7 +251,7 @@ class RotuladoPdfService
 
         return array(
             'data' => $data,
-            'width' => $newW,
+            'width' => $scaledW,
             'height' => $newH,
         );
     }
