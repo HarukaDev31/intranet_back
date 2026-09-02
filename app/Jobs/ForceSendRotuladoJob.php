@@ -188,31 +188,8 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 $products = $proveedorArray['products'] ?? '';
                 $sleepSendMedia += 1;
 
-                // Procesar plantilla de rotulado
-                $htmlFilePath = public_path('assets/templates/Rotulado_Template.html');
-                if (!file_exists($htmlFilePath)) {
-                    Log::error('No se encontró plantilla de rotulado: ' . $htmlFilePath);
-                    throw new Exception("No se encontró la plantilla de rotulado");
-                }
-
-                $htmlContent = file_get_contents($htmlFilePath);
-                $htmlContent = mb_convert_encoding($htmlContent, 'UTF-8', mb_detect_encoding($htmlContent));
-
-                // Convertir imagen a base64
-                $headerImagePath = public_path('assets/templates/ROTULADO_HEADER.png');
-                $headerImageBase64 = '';
-                if (file_exists($headerImagePath)) {
-                    $imageData = file_get_contents($headerImagePath);
-                    $headerImageBase64 = 'data:image/png;base64,' . base64_encode($imageData);
-                    Log::info('Imagen convertida a base64 exitosamente');
-                } else {
-                    Log::error('No se encontró la imagen header: ' . $headerImagePath);
-                }
-
-                $htmlContent = str_replace('{{cliente}}', $cliente, $htmlContent);
-                $htmlContent = str_replace('{{supplier_code}}', $supplierCode, $htmlContent);
-                $htmlContent = str_replace('{{carga}}', $carga, $htmlContent);
-                $htmlContent = str_replace('{{base_url}}/assets/templates/ROTULADO_HEADER.png', $headerImageBase64, $htmlContent);
+                $pdfService = app(\App\Services\CargaConsolidada\RotuladoPdfService::class);
+                $htmlContent = $pdfService->buildHtml($cliente, $supplierCode, $carga);
 
                 Log::info('HTML procesado para proveedor: ' . $supplierCode);
 
@@ -220,15 +197,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 try {
                     Log::info('Iniciando generación de PDF para proveedor: ' . $supplierCode);
 
-                    $dompdf = new Dompdf($options);
-                    $dompdf->loadHtml($htmlContent);
-                    $dompdf->setPaper('A4', 'portrait');
-
-                    Log::info('PDF configurado, iniciando render...');
-                    $dompdf->render();
-
-                    Log::info('Render completado, obteniendo output...');
-                    $pdfContent = $dompdf->output();
+                    $pdfContent = $pdfService->renderPdf($htmlContent);
 
                     Log::info('PDF generado exitosamente');
                 } catch (Exception $pdfException) {

@@ -542,28 +542,11 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
      */
     private function generateRotuladoGeneral($supplierCode, $products)
     {
-        $htmlFilePath = public_path('assets/templates/Rotulado_Template.html');
-        if (!file_exists($htmlFilePath)) {
-            throw new \Exception("No se encontró la plantilla de rotulado general");
-        }
+        $service = app(\App\Services\CargaConsolidada\RotuladoPdfService::class);
 
-        $htmlContent = file_get_contents($htmlFilePath);
-        $htmlContent = mb_convert_encoding($htmlContent, 'UTF-8', mb_detect_encoding($htmlContent));
-
-        // Convertir imagen a base64
-        $headerImagePath = public_path('assets/templates/ROTULADO_HEADER.png');
-        $headerImageBase64 = '';
-        if (file_exists($headerImagePath)) {
-            $imageData = file_get_contents($headerImagePath);
-            $headerImageBase64 = 'data:image/png;base64,' . base64_encode($imageData);
-        }
-
-        $htmlContent = str_replace('{{cliente}}', $this->cliente, $htmlContent);
-        $htmlContent = str_replace('{{supplier_code}}', $supplierCode, $htmlContent);
-        $htmlContent = str_replace('{{carga}}', $this->carga, $htmlContent);
-        $htmlContent = str_replace('{{base_url}}/assets/templates/ROTULADO_HEADER.png', $headerImageBase64, $htmlContent);
-
-        return $this->generatePDF($htmlContent);
+        return $service->renderPdf(
+            $service->buildHtml($this->cliente, $supplierCode, $this->carga)
+        );
     }
 
     /**
@@ -708,20 +691,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
      */
     private function generatePDF($htmlContent)
     {
-        $options = new Options();
-        $options->set('isHtml5ParserEnabled', false);
-        $options->set('isFontSubsettingEnabled', true);
-        $options->set('isRemoteEnabled', true);
-        $options->set('isPhpEnabled', true);
-        $options->set('chroot', public_path());
-        $options->set('defaultFont', 'DejaVu Sans');
-
-        $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($htmlContent);
-        $dompdf->setPaper('A4', 'portrait');
-        $dompdf->render();
-
-        return $dompdf->output();
+        return app(\App\Services\CargaConsolidada\RotuladoPdfService::class)->renderPdf($htmlContent);
     }
 
     /**
