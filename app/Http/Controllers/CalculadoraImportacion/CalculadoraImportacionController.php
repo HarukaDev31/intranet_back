@@ -148,9 +148,18 @@ class CalculadoraImportacionController extends Controller
                         ];
                     }
 
-                    $at = $this->tarifaService->referenceInstantForCalculadora($calculadora);
-                    if (! $at) {
-                        $at = $calculadora->created_at ? Carbon::parse($calculadora->created_at) : Carbon::now();
+                    // Sin cotización vinculada: tarifas vigentes actuales (permite cambiar NUEVO→SOCIO
+                    // aunque SOCIO se haya versionado minutos después de NUEVO).
+                    // Con cotización: generación congelada al created_at de la calculadora.
+                    if (! empty($calculadora->id_cotizacion)) {
+                        $at = $this->tarifaService->referenceInstantForCalculadora($calculadora);
+                        if (! $at) {
+                            $at = $calculadora->created_at ? Carbon::parse($calculadora->created_at) : Carbon::now();
+                        }
+                        $historical = true;
+                    } else {
+                        $at = Carbon::now();
+                        $historical = false;
                     }
 
                     $tarifas = $this->tarifaService->findAllTarifasVigentesAt($at);
@@ -173,7 +182,7 @@ class CalculadoraImportacionController extends Controller
                         'meta' => [
                             'calculadora_id' => $calculadoraId,
                             'generation_at' => $at->toIso8601String(),
-                            'historical' => true,
+                            'historical' => $historical,
                         ],
                     ];
                 });

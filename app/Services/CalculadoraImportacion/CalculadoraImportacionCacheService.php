@@ -21,7 +21,7 @@ class CalculadoraImportacionCacheService
 
     public function rememberTarifasForCalculadora(int $calculadoraId, callable $resolver): array
     {
-        $key = $this->key("tarifas:calc:{$calculadoraId}");
+        $key = $this->key('tarifas:' . $this->tarifasEpoch() . ":calc:{$calculadoraId}");
         return $this->remember($key, now()->addMinutes(30), $resolver);
     }
 
@@ -62,6 +62,7 @@ class CalculadoraImportacionCacheService
         if ($calculadora) {
             Cache::forget($this->key("show:{$calculadora->id}"));
             Cache::forget($this->key("tarifas:calc:{$calculadora->id}"));
+            Cache::forget($this->key('tarifas:' . $this->tarifasEpoch() . ":calc:{$calculadora->id}"));
             if (!empty($calculadora->dni_cliente)) {
                 Cache::forget($this->key('por-cliente:' . trim($calculadora->dni_cliente)));
             }
@@ -84,6 +85,23 @@ class CalculadoraImportacionCacheService
     public function flushTarifas(): void
     {
         Cache::forget($this->key('tarifas'));
+        // Invalida también tarifas?calculadora_id=* (keys con epoch).
+        $this->bumpTarifasEpoch();
+    }
+
+    private function tarifasEpoch(): string
+    {
+        $epoch = Cache::get($this->key('tarifas-epoch'));
+        if (! is_string($epoch) || $epoch === '') {
+            $epoch = '0';
+        }
+
+        return $epoch;
+    }
+
+    private function bumpTarifasEpoch(): void
+    {
+        Cache::forever($this->key('tarifas-epoch'), (string) microtime(true));
     }
 
     private function invalidateWhatsapp(string $whatsapp): void
