@@ -44,10 +44,22 @@ class LandingCursoLeadsExport implements FromCollection, WithHeadings, WithMappi
             $row->email,
             $row->experiencia_importando,
             $row->codigo_campana,
-            $row->form_source,
+            $this->mapFormSource($row->form_source ?? null),
             $row->ip_address,
             $row->created_at ? date('d/m/Y H:i', strtotime($row->created_at)) : '',
         ];
+    }
+
+    private function mapFormSource(?string $value): string
+    {
+        if ($value === 'landing_curso_v2') {
+            return 'META CURSO';
+        }
+        if ($value === 'probusiness_pe') {
+            return 'WEB';
+        }
+
+        return $value ?: '';
     }
 }
 
