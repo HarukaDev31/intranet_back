@@ -1635,7 +1635,7 @@ parameters:
 		-
 			message: '#^Method App\\Http\\Controllers\\Broadcasting\\BroadcastController\:\:authenticate\(\) should return Illuminate\\Http\\Response but returns Illuminate\\Http\\JsonResponse\.$#'
 			identifier: return.type
-			count: 18
+			count: 22
 			path: app/Http/Controllers/Broadcasting/BroadcastController.php
 
 		-
