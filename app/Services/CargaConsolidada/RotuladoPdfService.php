@@ -13,9 +13,9 @@ class RotuladoPdfService
 {
     public const FONT_FAMILY = 'noto sans sc';
 
-    public const FONT_RELATIVE_PATH = 'assets/fonts/NotoSansSC-Regular.otf';
+    public const FONT_RELATIVE_PATH = 'assets/fonts/NotoSansSC-Regular.ttf';
 
-    public const FONT_DOWNLOAD_URL = 'https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf';
+    public const FONT_DOWNLOAD_URL = 'https://cdn.jsdelivr.net/fontsource/fonts/noto-sans-sc@5.2.5/chinese-simplified-400-normal.ttf';
 
     private const HEADER_IMAGE_RELATIVE_PATH = 'assets/templates/ROTULADO_HEADER.png';
 
