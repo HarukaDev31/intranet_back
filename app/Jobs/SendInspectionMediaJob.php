@@ -182,7 +182,7 @@ class SendInspectionMediaJob implements ShouldQueue
                 $sendStatus = false;
             }
 
-            // Enviar mensaje principal (fotos/videos se envían después por separado): incluir link a vista inspección
+            // Solo pb_inspeccion_llegada_v1 (máx. 1 vez/proveedor). Sin imagen/video WA.
             $qtyBoxChina = (int) ($proveedor->qty_box_china ?? $proveedor->qty_box ?? 0);
             $qtyPalletChina = (int) ($proveedor->qty_pallet_china ?? 0);
             $baseUrl = rtrim((string) config('app.url_clientes'), '/');
@@ -195,97 +195,52 @@ class SendInspectionMediaJob implements ShouldQueue
                 $inspeccionLink
             );
 
-            $metaLlegada = CoordinacionWhatsappPayload::inspeccionLlegada(
-                $telefono,
-                (string) $cliente,
-                (string) $proveedor->code_supplier,
-                $qtyBoxChina,
-                $qtyPalletChina,
-                $inspeccionLink,
-                $message
-            );
-            $this->sendMessage($message, $telefono, 0, 'consolidado', $metaLlegada);
-            Log::info("Mensaje principal enviado", ['telefono' => $telefono]);
+            $alreadySentLlegada = AlmacenInspection::where('id_proveedor', $this->idProveedor)
+                ->where('send_status', 'SENDED')
+                ->exists();
 
+            $llegadaEnviada = false;
+            if (!$alreadySentLlegada) {
+                $metaLlegada = CoordinacionWhatsappPayload::inspeccionLlegada(
+                    $telefono,
+                    (string) $cliente,
+                    (string) $proveedor->code_supplier,
+                    $qtyBoxChina,
+                    $qtyPalletChina,
+                    $inspeccionLink,
+                    $message
+                );
+                $this->sendMessage($message, $telefono, 0, 'consolidado', $metaLlegada);
+                $llegadaEnviada = true;
+                Log::info('Mensaje pb_inspeccion_llegada_v1 enviado', ['telefono' => $telefono]);
+            } else {
+                Log::info('Inspección job: se omite pb_inspeccion_llegada_v1 (ya enviado)', [
+                    'id_proveedor' => $this->idProveedor,
+                ]);
+            }
 
-            // Obtener código del proveedor para el mensaje
-            $codeSupplier = $proveedor->code_supplier;
-
-            // Procesar y enviar imágenes
-            $imagenesEnviadas = 0;
+            // Marcar media como SENDED sin enviar plantillas imagen/video
+            $imagenesMarcadas = 0;
             foreach ($imagesUrls as $image) {
-                // Generar URL pública del archivo
-                $publicUrl = $this->generatePublicUrl($image->file_path);
-                
-                if ($publicUrl) {
-                    $caption = '📦 Inspección — proveedor ' . $codeSupplier . ' 📦';
-                    $meta = CoordinacionWhatsappPayload::inspeccionImagen(
-                        $telefono,
-                        (string) $codeSupplier,
-                        (string) $image->file_path,
-                        $caption
-                    );
-                    $this->sendMediaInspectionToController(
-                        $image->file_path,
-                        $image->file_type,
-                        $codeSupplier,
-                        $telefono,
-                        0,
-                        $image->id,
-                        null,
-                        $meta
-                    );
-                    $imagenesEnviadas++;
-                    Log::info('Imagen enviada con URL', [
-                        'file_path' => $image->file_path,
-                        'url' => $publicUrl,
-                        'code_supplier' => $codeSupplier
-                    ]);
-                } else {
-                    Log::error('No se pudo generar URL pública para imagen: ' . $image->file_path);
+                if (($image->send_status ?? '') !== 'SENDED') {
+                    AlmacenInspection::where('id', $image->id)->update(['send_status' => 'SENDED']);
+                    $imagenesMarcadas++;
                 }
             }
-
-            // Procesar y enviar videos
-            $videosEnviados = 0;
+            $videosMarcados = 0;
             foreach ($videosUrls as $video) {
-                // Generar URL pública del archivo
-                $publicUrl = $this->generatePublicUrl($video->file_path);
-                
-                if ($publicUrl) {
-                    $caption = '📦 Inspección — proveedor ' . $codeSupplier . ' 📦';
-                    $meta = CoordinacionWhatsappPayload::inspeccionVideo(
-                        $telefono,
-                        (string) $codeSupplier,
-                        (string) $video->file_path,
-                        $caption
-                    );
-                    $this->sendMediaInspectionToController(
-                        $video->file_path,
-                        $video->file_type,
-                        $codeSupplier,
-                        $telefono,
-                        0,
-                        $video->id,
-                        null,
-                        $meta
-                    );
-                    $videosEnviados++;
-                    Log::info('Video enviado con URL', [
-                        'file_path' => $video->file_path,
-                        'url' => $publicUrl,
-                        'code_supplier' => $codeSupplier
-                    ]);
-                } else {
-                    Log::error('No se pudo generar URL pública para video: ' . $video->file_path);
+                if (($video->send_status ?? '') !== 'SENDED') {
+                    AlmacenInspection::where('id', $video->id)->update(['send_status' => 'SENDED']);
+                    $videosMarcados++;
                 }
             }
 
-            Log::info("Job de inspección completado exitosamente", [
+            Log::info('Job de inspección completado exitosamente', [
                 'id_proveedor' => $this->idProveedor,
-                'imagenes_enviadas' => $imagenesEnviadas,
-                'videos_enviados' => $videosEnviados,
-                'mensaje_principal_enviado' => $sendStatus
+                'llegada_enviada' => $llegadaEnviada,
+                'imagenes_marcadas' => $imagenesMarcadas,
+                'videos_marcados' => $videosMarcados,
+                'mensaje_principal_enviado' => $sendStatus,
             ]);
         } catch (\Exception $e) {
             Log::error('Error en SendInspectionMediaJob: ' . $e->getMessage(), [

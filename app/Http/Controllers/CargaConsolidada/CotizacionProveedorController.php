@@ -2158,7 +2158,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $qtyBoxChina = (int) ($proveedor->qty_box_china ?? $proveedor->qty_box ?? 0);
             $qtyPalletChina = (int) ($proveedor->qty_pallet_china ?? 0);
 
-            // Preparar mensaje inicial de inspección (se enviará solo una vez; incluir link a vista inspección)
+            // Preparar mensaje inicial de inspección (solo pb_inspeccion_llegada_v1; 1 vez por proveedor)
             $baseUrl = rtrim((string) config('app.url_clientes'), '/');
             $cotizacionUuid = Cotizacion::where('id', $idCotizacion)->value('uuid');
             $inspeccionViewUrl = $baseUrl . '/inspeccion/' . ($cotizacionUuid ?? '') . '?id_proveedor=' . $idProveedor;
@@ -2172,7 +2172,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $proveedorsWithFilesSended = AlmacenInspection::where('id_cotizacion', $idCotizacion)
                 ->where('send_status', 'SENDED')
                 ->count();
-            // Enviar archivos de inspección (el mensaje se envía una sola vez dentro de esta función)
+            // Solo llegada (sin imagen/video WA); llegada máximo 1 vez por proveedor
             $sentFiles = $this->sendInspectionFiles(
                 $inspectionFiles,
                 $inspectionMessage,
@@ -2181,7 +2181,8 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 (string) $cotizacion->nombre,
                 $qtyBoxChina,
                 $qtyPalletChina,
-                $inspeccionViewUrl
+                $inspeccionViewUrl,
+                (int) $idProveedor
             );
             $usuarioActual = JWTAuth::parseToken()->authenticate();
             $cotizacion = Cotizacion::find($idCotizacion);
@@ -2311,7 +2312,8 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
     }
 
     /**
-     * Enviar archivos de inspección
+     * Al inspeccionar: solo plantilla pb_inspeccion_llegada_v1 (1 vez/proveedor).
+     * No envía pb_inspeccion_imagen_v1 ni pb_inspeccion_video_v1; el cliente ve media en el link.
      */
     private function sendInspectionFiles(
         $inspectionFiles,
@@ -2321,15 +2323,23 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
         ?string $nombreCliente = null,
         ?int $qtyBoxChina = null,
         ?int $qtyPalletChina = null,
-        ?string $linkInspeccion = null
+        ?string $linkInspeccion = null,
+        ?int $idProveedor = null
     ) {
-        $sentFiles = ['images' => 0, 'videos' => 0];
+        $sentFiles = ['images' => 0, 'videos' => 0, 'llegada_enviada' => false];
 
-        // Contar total de archivos a enviar
         $totalFiles = count($inspectionFiles['images']) + count($inspectionFiles['videos']);
+        if ($totalFiles === 0) {
+            return $sentFiles;
+        }
 
-        // Solo enviar mensaje si hay archivos para enviar
-        if ($totalFiles > 0) {
+        $alreadySentLlegada = $idProveedor
+            ? AlmacenInspection::where('id_proveedor', $idProveedor)
+                ->where('send_status', 'SENDED')
+                ->exists()
+            : false;
+
+        if (!$alreadySentLlegada) {
             $metaLlegada = CoordinacionWhatsappPayload::inspeccionLlegada(
                 (string) $telefono,
                 (string) ($nombreCliente ?? ''),
@@ -2340,20 +2350,21 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 $message
             );
             $this->sendMessage($message, $telefono, 0, 'consolidado', $metaLlegada);
+            $sentFiles['llegada_enviada'] = true;
+        } else {
+            Log::info('Inspección: se omite pb_inspeccion_llegada_v1 (ya enviado para el proveedor)', [
+                'id_proveedor' => $idProveedor,
+            ]);
         }
 
-        // Enviar imágenes sin mensaje adicional
+        // Marcar pendientes como SENDED sin WhatsApp de imagen/video
         foreach ($inspectionFiles['images'] as $image) {
-            if ($this->sendSingleInspectionFile($image, $message, $telefono, $codeSupplier)) {
-                $sentFiles['images']++;
-            }
+            $image->update(['send_status' => 'SENDED']);
+            $sentFiles['images']++;
         }
-
-        // Enviar videos sin mensaje adicional
         foreach ($inspectionFiles['videos'] as $video) {
-            if ($this->sendSingleInspectionFile($video, $message, $telefono, $codeSupplier)) {
-                $sentFiles['videos']++;
-            }
+            $video->update(['send_status' => 'SENDED']);
+            $sentFiles['videos']++;
         }
 
         return $sentFiles;
