@@ -87,6 +87,7 @@ class ContenedorController extends Controller
         $this->defaultJefeMarketing = array(
             ["name" => "COTIZACION", "iconURL" => $host . '/assets/icons/cotizacion.png'],
             ["name" => "CLIENTES", "iconURL" => $host . '/assets/icons/clientes.png'],
+            ["name" => "COTIZACION FINAL", "iconURL" => $host . '/assets/icons/cotizacion_final.png'],
             ["name" => "ENTREGA", "iconURL" => $host . '/assets/icons/entrega.png'],
         );
         $this->defaultFinanzas = array(

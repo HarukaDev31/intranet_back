@@ -1152,6 +1152,17 @@ class CotizacionFinalController extends Controller
     public function updateEstadoCotizacionFinal(Request $request)
     {
         try {
+            $user = JWTAuth::parseToken()->authenticate();
+            if ($user) {
+                $rol = trim((string) $user->getNombreGrupo());
+                if (in_array($rol, [Usuario::JEFE_MARKETING, Usuario::ROL_FINANZAS], true)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No autorizado para modificar el estado de cotización final',
+                    ], 403);
+                }
+            }
+
             $cotizacion = Cotizacion::find($request->idCotizacion);
             if (!$cotizacion) {
                 return response()->json([
