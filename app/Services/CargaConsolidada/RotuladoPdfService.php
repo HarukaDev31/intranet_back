@@ -24,9 +24,9 @@ class RotuladoPdfService
 
     private const ICONS_DIR = 'assets/templates/rotulado_icons';
 
-    private const ICON_DISPLAY_SIZE = 22;
+    private const ICON_DISPLAY_SIZE = 16;
 
-    private const FOOTER_ICON_SIZE = 28;
+    private const FOOTER_ICON_SIZE = 22;
 
     private const MIN_FONT_BYTES = 1000000;
 
