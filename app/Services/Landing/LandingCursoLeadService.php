@@ -13,6 +13,7 @@ class LandingCursoLeadService
     {
         Log::info('LandingCursoLeadService: iniciando almacenamiento de lead', [
             'codigo_campana' => $data['codigo_campana'] ?? null,
+            'form_source' => $data['form_source'] ?? LandingCursoLead::FORM_SOURCE_PROBUSINESS_PE,
             'has_request' => (bool) $request,
         ]);
 
@@ -24,6 +25,7 @@ class LandingCursoLeadService
             'codigo_campana' => isset($data['codigo_campana'])
                 ? (trim((string) $data['codigo_campana']) ?: null)
                 : null,
+            'form_source' => $data['form_source'] ?? LandingCursoLead::FORM_SOURCE_PROBUSINESS_PE,
         ];
 
         if ($request) {

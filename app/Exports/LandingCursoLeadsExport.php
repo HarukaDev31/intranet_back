@@ -28,6 +28,8 @@ class LandingCursoLeadsExport implements FromCollection, WithHeadings, WithMappi
             'WhatsApp',
             'Email',
             'Experiencia importando',
+            'Campaña',
+            'Origen formulario',
             'IP',
             'Fecha',
         ];
@@ -41,6 +43,8 @@ class LandingCursoLeadsExport implements FromCollection, WithHeadings, WithMappi
             $row->whatsapp,
             $row->email,
             $row->experiencia_importando,
+            $row->codigo_campana,
+            $row->form_source,
             $row->ip_address,
             $row->created_at ? date('d/m/Y H:i', strtotime($row->created_at)) : '',
         ];

@@ -357,11 +357,7 @@ class PagosController extends Controller
      */
     private function determinarEstadoPago($totalPagos, $totalPagosMonto, $aPagar)
     {
-        Log::info('totalPagos: ' . $totalPagos);
-        Log::info('totalPagosMonto: ' . $totalPagosMonto);
-        Log::info('aPagar: ' . $aPagar);
-        Log::info('round($totalPagosMonto, 2): ' . round($totalPagosMonto, 2));
-        Log::info('round($aPagar, 2): ' . round($aPagar, 2));
+  
         if ($totalPagos == 0) {
             return 'PENDIENTE';
         } else if (round($totalPagosMonto, 2) < round($aPagar, 2)) {
