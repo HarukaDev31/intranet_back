@@ -3,26 +3,23 @@
 namespace App\Jobs;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\AlmacenInspection;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
-use App\Traits\UsesObjectStorage;
 use App\Traits\WhatsappTrait;
 use App\Traits\DatabaseConnectionTrait;
 use Carbon\Carbon;
 
 class SendInspectionMediaJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, UsesObjectStorage, WhatsappTrait, DatabaseConnectionTrait;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait, DatabaseConnectionTrait;
 
     protected $idProveedor;
     protected $idCotizacion;
@@ -271,50 +268,5 @@ class SendInspectionMediaJob implements ShouldQueue
 
         // Aquí podrías enviar una notificación al administrador o revertir cambios
         // Por ejemplo, cambiar el estado del proveedor de vuelta si es necesario
-    }
-
-    /**
-     * Genera una URL pública para un archivo almacenado
-     * 
-     * @param string $filePath Ruta del archivo (puede ser relativa o absoluta)
-     * @return string|null URL pública del archivo o null si falla
-     */
-    private function generatePublicUrl($filePath)
-    {
-        try {
-            // Si ya es una URL completa, devolverla tal como está
-            if (filter_var($filePath, FILTER_VALIDATE_URL)) {
-                return $filePath;
-            }
-
-            // Limpiar la ruta
-            $ruta = ltrim($filePath, '/');
-
-            // Si la ruta empieza con 'public/', removerlo
-            if (strpos($ruta, 'public/') === 0) {
-                $ruta = substr($ruta, 7);
-            }
-
-            // Construir URL manualmente
-            $baseUrl = config('app.url');
-            $baseUrl = rtrim($baseUrl, '/');
-            $ruta = ltrim($ruta, '/');
-
-            // Generar URL completa
-            $publicUrl = $baseUrl . '/storage/' . $ruta;
-
-            Log::info("URL pública generada", [
-                'file_path' => $filePath,
-                'public_url' => $publicUrl
-            ]);
-
-            return $publicUrl;
-        } catch (\Exception $e) {
-            Log::error("Error al generar URL pública: " . $e->getMessage(), [
-                'file_path' => $filePath,
-                'trace' => $e->getTraceAsString()
-            ]);
-            return null;
-        }
     }
 }
