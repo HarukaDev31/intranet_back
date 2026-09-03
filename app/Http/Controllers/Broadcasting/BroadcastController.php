@@ -138,6 +138,37 @@ class BroadcastController extends Controller
                 return response()->json(['message' => 'No autorizado para este canal'], 403);
             }
 
+            // Notificaciones Soporte TI por usuario: private-soporte-ti.user.{id}
+            $soporteTiUserPrefix = 'private-soporte-ti.user.';
+            if (strpos($channelName, $soporteTiUserPrefix) === 0) {
+                $channelUserId = (int) substr($channelName, strlen($soporteTiUserPrefix));
+                if ((int) $user->ID_Usuario === $channelUserId) {
+                    return response()->json($this->pusherAuthPayload($request, $channelName));
+                }
+                Log::error('User not authorized for soporte-ti user channel', [
+                    'user_id' => $user->ID_Usuario,
+                    'channel' => $channelName,
+                    'channel_user_id' => $channelUserId,
+                ]);
+                return response()->json(['message' => 'No autorizado para este canal'], 403);
+            }
+
+            // Staff Soporte TI: private-soporte-ti.staff
+            if ($channelName === 'private-soporte-ti.staff') {
+                $grupo = $user->grupo ? strtolower(trim((string) $user->grupo->No_Grupo)) : '';
+                $esStaff = $grupo === strtolower(Usuario::ROL_PM)
+                    || $grupo === strtolower(Usuario::ROL_SOPORTE);
+                if ($esStaff) {
+                    return response()->json($this->pusherAuthPayload($request, $channelName));
+                }
+                Log::error('User not authorized for soporte-ti staff channel', [
+                    'user_id' => $user->ID_Usuario,
+                    'channel' => $channelName,
+                    'user_grupo' => $user->grupo ? $user->grupo->No_Grupo : 'Sin grupo',
+                ]);
+                return response()->json(['message' => 'No autorizado para este canal'], 403);
+            }
+
             // Verificar si el canal está en nuestra lista de canales configurados (por rol)
             if (isset($this->CHANNELS[$channelName])) {
                 $requiredRole = $this->CHANNELS[$channelName];
