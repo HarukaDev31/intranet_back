@@ -177,15 +177,15 @@ class RotuladoPdfService
         $headerHeight = self::HEADER_MAX_HEIGHT;
 
         if (is_file($headerImagePath)) {
-            $resized = $this->resizeHeaderPng(
+            $prepared = $this->preparePngForPdf(
                 $headerImagePath,
                 self::HEADER_TARGET_WIDTH,
                 self::HEADER_MAX_HEIGHT
             );
-            if ($resized !== null) {
-                $headerImageSrc = 'data:image/png;base64,' . base64_encode($resized['data']);
-                $headerWidth = $resized['width'];
-                $headerHeight = $resized['height'];
+            if ($prepared !== null) {
+                $headerImageSrc = 'data:image/png;base64,' . base64_encode($prepared['data']);
+                $headerWidth = $prepared['display_width'];
+                $headerHeight = $prepared['display_height'];
             }
         }
 
@@ -211,15 +211,16 @@ class RotuladoPdfService
         $stepsHeight = 105;
 
         if (is_file($stepsPath)) {
-            $resized = $this->resizeHeaderPng(
+            // Embebe a resolución original; DomPDF solo escala en pantalla.
+            $prepared = $this->preparePngForPdf(
                 $stepsPath,
                 self::HEADER_TARGET_WIDTH,
-                200
+                220
             );
-            if ($resized !== null) {
-                $stepsSrc = 'data:image/png;base64,' . base64_encode($resized['data']);
-                $stepsWidth = $resized['width'];
-                $stepsHeight = $resized['height'];
+            if ($prepared !== null) {
+                $stepsSrc = 'data:image/png;base64,' . base64_encode($prepared['data']);
+                $stepsWidth = $prepared['display_width'];
+                $stepsHeight = $prepared['display_height'];
             }
         }
 
@@ -231,20 +232,26 @@ class RotuladoPdfService
     }
 
     /**
-     * Escala el header a ancho completo y recorta por abajo si supera la altura máxima.
+     * Recorta si hace falta a resolución original (sin downsample) y
+     * devuelve el PNG + tamaño de visualización para DomPDF.
+     * Así el PDF queda más nítido que reescalar con GD antes.
      *
      * @param string $path
-     * @param int $targetWidth
-     * @param int $maxHeight
-     * @return array{data: string, width: int, height: int}|null
+     * @param int $displayWidth
+     * @param int $maxDisplayHeight
+     * @return array{data: string, display_width: int, display_height: int}|null
      */
-    private function resizeHeaderPng($path, $targetWidth, $maxHeight)
+    private function preparePngForPdf($path, $displayWidth, $maxDisplayHeight)
     {
         if (!function_exists('imagecreatefrompng')) {
             $data = file_get_contents($path);
 
             return $data !== false
-                ? array('data' => $data, 'width' => $targetWidth, 'height' => $maxHeight)
+                ? array(
+                    'data' => $data,
+                    'display_width' => $displayWidth,
+                    'display_height' => $maxDisplayHeight,
+                )
                 : null;
         }
 
@@ -255,29 +262,27 @@ class RotuladoPdfService
 
         $origW = imagesx($img);
         $origH = imagesy($img);
-        $scaledH = (int) round($origH * ($targetWidth / $origW));
-        $scaledW = $targetWidth;
+        $scale = $displayWidth / $origW;
+        $fullDisplayH = (int) round($origH * $scale);
+        $displayH = min($fullDisplayH, $maxDisplayHeight);
+        $cropOrigH = (int) round($displayH / $scale);
+        $cropOrigH = max(1, min($origH, $cropOrigH));
 
-        $scaled = imagecreatetruecolor($scaledW, $scaledH);
-        imagealphablending($scaled, false);
-        imagesavealpha($scaled, true);
-        $transparent = imagecolorallocatealpha($scaled, 0, 0, 0, 127);
-        imagefill($scaled, 0, 0, $transparent);
-        imagecopyresampled($scaled, $img, 0, 0, 0, 0, $scaledW, $scaledH, $origW, $origH);
-        imagedestroy($img);
-
-        $newH = min($scaledH, $maxHeight);
-        $resized = imagecreatetruecolor($scaledW, $newH);
-        imagealphablending($resized, false);
-        imagesavealpha($resized, true);
-        imagefill($resized, 0, 0, $transparent);
-        imagecopy($resized, $scaled, 0, 0, 0, 0, $scaledW, $newH);
-        imagedestroy($scaled);
+        if ($cropOrigH < $origH) {
+            $cropped = imagecreatetruecolor($origW, $cropOrigH);
+            imagealphablending($cropped, false);
+            imagesavealpha($cropped, true);
+            $transparent = imagecolorallocatealpha($cropped, 0, 0, 0, 127);
+            imagefill($cropped, 0, 0, $transparent);
+            imagecopy($cropped, $img, 0, 0, 0, 0, $origW, $cropOrigH);
+            imagedestroy($img);
+            $img = $cropped;
+        }
 
         ob_start();
-        imagepng($resized);
+        imagepng($img, null, 6);
         $data = ob_get_clean();
-        imagedestroy($resized);
+        imagedestroy($img);
 
         if ($data === false) {
             return null;
@@ -285,8 +290,8 @@ class RotuladoPdfService
 
         return array(
             'data' => $data,
-            'width' => $scaledW,
-            'height' => $newH,
+            'display_width' => $displayWidth,
+            'display_height' => $displayH,
         );
     }
 
