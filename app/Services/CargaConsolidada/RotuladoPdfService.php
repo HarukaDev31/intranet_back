@@ -31,7 +31,7 @@ class RotuladoPdfService
     private const HEADER_TARGET_WIDTH = 530;
 
     /** Altura máxima del banner; si sobra imagen se recorta por arriba. */
-    private const HEADER_MAX_HEIGHT = 240;
+    private const HEADER_MAX_HEIGHT = 270;
 
     /**
      * @var array<string, string>
