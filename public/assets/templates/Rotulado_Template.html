@@ -2,46 +2,50 @@
 <html lang="zh">
 
 <head>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; font-src 'self' https://fonts.gstatic.com data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; script-src 'self' 'unsafe-inline';">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rotulado Consolidado</title>
     <style>
-        @page {
-            margin: 6mm 10mm;
+        html {
+            margin: 5px;
         }
 
         body {
             margin: 0;
             padding: 0;
-            font-family: 'noto sans sc', 'DejaVu Sans', sans-serif;
-            font-weight: normal;
-            font-size: 10pt;
-            color: #111111;
             line-height: 1.25;
+            font-family: 'Noto Sans SC', 'DejaVu Sans', sans-serif;
+            font-size: 11pt;
+            color: #111111;
+        }
+
+        * {
+            font-family: 'Noto Sans SC', 'DejaVu Sans', sans-serif;
+        }
+
+        .container {
+            width: 95%;
+            margin: 0 auto;
+            padding: 10px 12px 16px 12px;
+        }
+
+        .header-banner {
+            width: 100%;
+            display: block;
+            margin: 0 0 12px 0;
         }
 
         table {
             border-collapse: collapse;
         }
 
-        .page-wrap {
-            width: 100%;
-            page-break-inside: avoid;
-        }
-
-        .header-banner {
-            display: block;
-            width: 100%;
-            margin: 0;
-        }
-
-        .steps-banner {
-            display: block;
-            width: 100%;
-            margin: 0 0 10px 0;
-        }
-
         .title-cell {
-            font-size: 20pt;
+            font-size: 18pt;
             font-weight: bold;
             padding: 0 0 6px 0;
             vertical-align: middle;
@@ -94,13 +98,12 @@
         }
 
         .col-value {
-            font-family: 'noto sans sc', 'DejaVu Sans', sans-serif;
-            font-weight: normal;
             font-size: 10pt;
+            font-weight: normal;
         }
 
         .item-cn {
-            font-family: 'noto sans sc', 'DejaVu Sans', sans-serif;
+            font-family: 'Noto Sans SC', 'DejaVu Sans', sans-serif;
             font-weight: normal;
             font-size: 9.5pt;
         }
@@ -108,7 +111,6 @@
         .footer-table {
             width: 100%;
             margin-top: 10px;
-            page-break-inside: avoid;
         }
 
         .footer-table td {
@@ -118,7 +120,7 @@
         }
 
         .footer-text {
-            font-size: 22pt;
+            font-size: 20pt;
             font-weight: bold;
             letter-spacing: 0.5px;
         }
@@ -126,108 +128,104 @@
 </head>
 
 <body>
-    <table class="page-wrap" width="100%" cellspacing="0" cellpadding="0">
-        <tr>
-            <td>
-                <img src="{{header_image}}" width="{{header_image_width}}" height="{{header_image_height}}" alt="" class="header-banner">
-                <img src="{{steps_image}}" width="{{steps_image_width}}" height="{{steps_image_height}}" alt="" class="steps-banner">
+    <div class="container">
+        <img src="{{header_image}}" alt="Rotulado Header" class="header-banner">
 
-                <table width="100%" cellspacing="0" cellpadding="0">
-                    <tr>
-                        <td class="title-cell">CONSOLIDADO #{{carga}}</td>
-                        <td class="peru-cell">
-                            <table class="peru-box" cellspacing="0" cellpadding="0" align="right">
-                                <tr>
-                                    <td>
-                                        <img src="{{icon_peru_flag}}" width="40" height="26" alt="">
-                                    </td>
-                                    <td class="peru-text">PERU</td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                    <tr class="divider-row">
-                        <td colspan="2">&nbsp;</td>
-                    </tr>
-                </table>
+        <!-- Bloque nuevo (extra) -->
+        <table width="100%" cellspacing="0" cellpadding="0">
+            <tr>
+                <td class="title-cell">CONSOLIDADO #{{carga}}</td>
+                <td class="peru-cell">
+                    <table class="peru-box" cellspacing="0" cellpadding="0" align="right">
+                        <tr>
+                            <td>
+                                <img src="{{icon_peru_flag}}" width="40" height="26" alt="">
+                            </td>
+                            <td class="peru-text">PERU</td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+            <tr class="divider-row">
+                <td colspan="2">&nbsp;</td>
+            </tr>
+        </table>
 
-                <table width="100%" cellspacing="0" cellpadding="0" style="page-break-inside: avoid;">
-                    <tr class="data-row">
-                        <td class="col-icon">
-                            <img src="{{icon_company}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
-                        </td>
-                        <td class="col-label">COMPANY:</td>
-                        <td class="col-value">PRO MUNDO COMEX S.A.C</td>
-                    </tr>
-                    <tr class="data-row">
-                        <td class="col-icon">
-                            <img src="{{icon_contact}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
-                        </td>
-                        <td class="col-label">CONTACT:</td>
-                        <td class="col-value">{{cliente}}</td>
-                    </tr>
-                    <tr class="data-row">
-                        <td class="col-icon">
-                            <img src="{{icon_location}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
-                        </td>
-                        <td class="col-label">TO:</td>
-                        <td class="col-value">PERU</td>
-                    </tr>
-                    <tr class="data-row">
-                        <td class="col-icon">
-                            <img src="{{icon_box}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
-                        </td>
-                        <td class="col-label">ITEM NRO:</td>
-                        <td class="col-value item-cn">这里写产品货号（如果很多款式在箱子里要写每一款的货号和数量。如果你们货没有货号随便给一个）</td>
-                    </tr>
-                    <tr class="data-row">
-                        <td class="col-icon">
-                            <img src="{{icon_qty}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
-                        </td>
-                        <td class="col-label">QTY:</td>
-                        <td class="col-value item-cn">装箱数 PCS</td>
-                    </tr>
-                    <tr class="data-row">
-                        <td class="col-icon">
-                            <img src="{{icon_weight}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
-                        </td>
-                        <td class="col-label">N.W:</td>
-                        <td class="col-value item-cn">净重 KGS</td>
-                    </tr>
-                    <tr class="data-row">
-                        <td class="col-icon">
-                            <img src="{{icon_weight}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
-                        </td>
-                        <td class="col-label">G.W:</td>
-                        <td class="col-value item-cn">毛重 KGS</td>
-                    </tr>
-                    <tr class="data-row">
-                        <td class="col-icon">
-                            <img src="{{icon_measure}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
-                        </td>
-                        <td class="col-label">MEASURE:</td>
-                        <td class="col-value item-cn">箱子规格 CM</td>
-                    </tr>
-                    <tr class="data-row">
-                        <td class="col-icon">
-                            <img src="{{icon_barcode}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
-                        </td>
-                        <td class="col-label">SUPPLIER CODE:</td>
-                        <td class="col-value">{{supplier_code}}</td>
-                    </tr>
-                </table>
+        <table width="100%" cellspacing="0" cellpadding="0">
+            <tr class="data-row">
+                <td class="col-icon">
+                    <img src="{{icon_company}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
+                </td>
+                <td class="col-label">COMPANY:</td>
+                <td class="col-value">PRO MUNDO COMEX S.A.C</td>
+            </tr>
+            <tr class="data-row">
+                <td class="col-icon">
+                    <img src="{{icon_contact}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
+                </td>
+                <td class="col-label">CONTACT:</td>
+                <td class="col-value">{{cliente}}</td>
+            </tr>
+            <tr class="data-row">
+                <td class="col-icon">
+                    <img src="{{icon_location}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
+                </td>
+                <td class="col-label">TO:</td>
+                <td class="col-value">PERU</td>
+            </tr>
+            <tr class="data-row">
+                <td class="col-icon">
+                    <img src="{{icon_box}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
+                </td>
+                <td class="col-label">ITEM NRO:</td>
+                <td class="col-value item-cn">这里写产品货号（如果很多款式在箱子里要写每一款的货号和数量。如果你们货没有货号随便给一个）</td>
+            </tr>
+            <tr class="data-row">
+                <td class="col-icon">
+                    <img src="{{icon_qty}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
+                </td>
+                <td class="col-label">QTY:</td>
+                <td class="col-value item-cn">装箱数 PCS</td>
+            </tr>
+            <tr class="data-row">
+                <td class="col-icon">
+                    <img src="{{icon_weight}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
+                </td>
+                <td class="col-label">N.W:</td>
+                <td class="col-value item-cn">净重 KGS</td>
+            </tr>
+            <tr class="data-row">
+                <td class="col-icon">
+                    <img src="{{icon_weight}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
+                </td>
+                <td class="col-label">G.W:</td>
+                <td class="col-value item-cn">毛重 KGS</td>
+            </tr>
+            <tr class="data-row">
+                <td class="col-icon">
+                    <img src="{{icon_measure}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
+                </td>
+                <td class="col-label">MEASURE:</td>
+                <td class="col-value item-cn">箱子规格 CM</td>
+            </tr>
+            <tr class="data-row">
+                <td class="col-icon">
+                    <img src="{{icon_barcode}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
+                </td>
+                <td class="col-label">SUPPLIER CODE:</td>
+                <td class="col-value">{{supplier_code}}</td>
+            </tr>
+        </table>
 
-                <table class="footer-table" cellspacing="0" cellpadding="0">
-                    <tr>
-                        <td>
-                            <img src="{{icon_footer_box}}" width="{{footer_icon_size}}" height="{{footer_icon_size}}" alt="">
-                            <span class="footer-text"> HECHO EN CHINA</span>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-    </table>
+        <table class="footer-table" cellspacing="0" cellpadding="0">
+            <tr>
+                <td>
+                    <img src="{{icon_footer_box}}" width="{{footer_icon_size}}" height="{{footer_icon_size}}" alt="">
+                    <span class="footer-text"> HECHO EN CHINA</span>
+                </td>
+            </tr>
+        </table>
+    </div>
 </body>
 
 </html>

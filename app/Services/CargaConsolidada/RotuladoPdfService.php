@@ -8,6 +8,9 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Generación del PDF de rotulado consolidado (plantilla Rotulado_Template.html).
+ *
+ * Usa el mismo enfoque estable de antes (DejaVu + Noto remoto via Google Fonts)
+ * y embebe el header completo a resolución original.
  */
 class RotuladoPdfService
 {
@@ -19,8 +22,6 @@ class RotuladoPdfService
 
     private const HEADER_IMAGE_RELATIVE_PATH = 'assets/templates/ROTULADO_HEADER.png';
 
-    private const STEPS_IMAGE_RELATIVE_PATH = 'assets/templates/ROTULADO_STEPS.png';
-
     private const ICONS_DIR = 'assets/templates/rotulado_icons';
 
     private const ICON_DISPLAY_SIZE = 22;
@@ -28,12 +29,6 @@ class RotuladoPdfService
     private const FOOTER_ICON_SIZE = 28;
 
     private const MIN_FONT_BYTES = 1000000;
-
-    /** Ancho del banner en px (~ancho útil A4 en DomPDF). */
-    private const HEADER_TARGET_WIDTH = 530;
-
-    /** Altura máxima del banner; si sobra imagen se recorta por arriba. */
-    private const HEADER_MAX_HEIGHT = 400;
 
     /**
      * @var array<string, string>
@@ -82,30 +77,22 @@ class RotuladoPdfService
     }
 
     /**
+     * Mismo setup DomPDF que el job original (estable en Adobe/navegador).
+     *
      * @param string $htmlContent UTF-8
      * @return string PDF binario
      */
     public function renderPdf($htmlContent)
     {
-        $fontDir = storage_path('fonts');
-        if (!is_dir($fontDir)) {
-            @mkdir($fontDir, 0755, true);
-        }
-
         $options = new Options();
-        $options->set('isHtml5ParserEnabled', true);
+        $options->set('isHtml5ParserEnabled', false);
         $options->set('isFontSubsettingEnabled', true);
-        $options->set('isRemoteEnabled', false);
-        $options->set('isPhpEnabled', false);
+        $options->set('isRemoteEnabled', true);
+        $options->set('isPhpEnabled', true);
         $options->set('chroot', public_path());
-        $options->set('fontDir', $fontDir);
-        $options->set('fontCache', $fontDir);
-        $options->set('defaultFont', self::FONT_FAMILY);
-        $options->set('defaultMediaType', 'print');
+        $options->set('defaultFont', 'DejaVu Sans');
 
         $dompdf = new Dompdf($options);
-        $this->registerChineseFont($dompdf);
-
         $dompdf->loadHtml($htmlContent, 'UTF-8');
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
@@ -138,11 +125,39 @@ class RotuladoPdfService
     private function embedAssets($htmlContent)
     {
         $htmlContent = $this->embedHeaderImage($htmlContent);
-        $htmlContent = $this->embedStepsImage($htmlContent);
 
         foreach (self::$iconPlaceholders as $placeholder => $filename) {
             $htmlContent = str_replace($placeholder, $this->pngDataUri($filename), $htmlContent);
         }
+
+        $htmlContent = str_replace('{{icon_display_size}}', (string) self::ICON_DISPLAY_SIZE, $htmlContent);
+        $htmlContent = str_replace('{{footer_icon_size}}', (string) self::FOOTER_ICON_SIZE, $htmlContent);
+
+        return $htmlContent;
+    }
+
+    /**
+     * Header completo a resolución original (como antes).
+     *
+     * @param string $htmlContent
+     * @return string
+     */
+    private function embedHeaderImage($htmlContent)
+    {
+        $headerImagePath = public_path(self::HEADER_IMAGE_RELATIVE_PATH);
+        $headerImageSrc = '';
+
+        if (is_file($headerImagePath)) {
+            $imageData = file_get_contents($headerImagePath);
+            if ($imageData !== false) {
+                $headerImageSrc = 'data:image/png;base64,' . base64_encode($imageData);
+            }
+        } else {
+            Log::warning('RotuladoPdfService: no se encontró ROTULADO_HEADER.png');
+        }
+
+        $htmlContent = str_replace('{{header_image}}', $headerImageSrc, $htmlContent);
+        $htmlContent = str_replace('{{base_url}}/assets/templates/ROTULADO_HEADER.png', $headerImageSrc, $htmlContent);
 
         return $htmlContent;
     }
@@ -163,171 +178,5 @@ class RotuladoPdfService
         $data = file_get_contents($path);
 
         return $data !== false ? 'data:image/png;base64,' . base64_encode($data) : '';
-    }
-
-    /**
-     * @param string $htmlContent
-     * @return string
-     */
-    private function embedHeaderImage($htmlContent)
-    {
-        $headerImagePath = public_path(self::HEADER_IMAGE_RELATIVE_PATH);
-        $headerImageSrc = '';
-        $headerWidth = self::HEADER_TARGET_WIDTH;
-        $headerHeight = self::HEADER_MAX_HEIGHT;
-
-        if (is_file($headerImagePath)) {
-            $prepared = $this->preparePngForPdf(
-                $headerImagePath,
-                self::HEADER_TARGET_WIDTH,
-                self::HEADER_MAX_HEIGHT
-            );
-            if ($prepared !== null) {
-                $headerImageSrc = 'data:image/png;base64,' . base64_encode($prepared['data']);
-                $headerWidth = $prepared['display_width'];
-                $headerHeight = $prepared['display_height'];
-            }
-        }
-
-        $htmlContent = str_replace('{{header_image}}', $headerImageSrc, $htmlContent);
-        $htmlContent = str_replace('{{header_image_width}}', (string) $headerWidth, $htmlContent);
-        $htmlContent = str_replace('{{header_image_height}}', (string) $headerHeight, $htmlContent);
-        $htmlContent = str_replace('{{icon_display_size}}', (string) self::ICON_DISPLAY_SIZE, $htmlContent);
-        $htmlContent = str_replace('{{footer_icon_size}}', (string) self::FOOTER_ICON_SIZE, $htmlContent);
-        $htmlContent = str_replace('{{base_url}}/assets/templates/ROTULADO_HEADER.png', $headerImageSrc, $htmlContent);
-
-        return $htmlContent;
-    }
-
-    /**
-     * @param string $htmlContent
-     * @return string
-     */
-    private function embedStepsImage($htmlContent)
-    {
-        $stepsPath = public_path(self::STEPS_IMAGE_RELATIVE_PATH);
-        $stepsSrc = '';
-        $stepsWidth = self::HEADER_TARGET_WIDTH;
-        $stepsHeight = 105;
-
-        if (is_file($stepsPath)) {
-            // Embebe a resolución original; DomPDF solo escala en pantalla.
-            $prepared = $this->preparePngForPdf(
-                $stepsPath,
-                self::HEADER_TARGET_WIDTH,
-                220
-            );
-            if ($prepared !== null) {
-                $stepsSrc = 'data:image/png;base64,' . base64_encode($prepared['data']);
-                $stepsWidth = $prepared['display_width'];
-                $stepsHeight = $prepared['display_height'];
-            }
-        }
-
-        $htmlContent = str_replace('{{steps_image}}', $stepsSrc, $htmlContent);
-        $htmlContent = str_replace('{{steps_image_width}}', (string) $stepsWidth, $htmlContent);
-        $htmlContent = str_replace('{{steps_image_height}}', (string) $stepsHeight, $htmlContent);
-
-        return $htmlContent;
-    }
-
-    /**
-     * Recorta si hace falta a resolución original (sin downsample) y
-     * devuelve el PNG + tamaño de visualización para DomPDF.
-     * Así el PDF queda más nítido que reescalar con GD antes.
-     *
-     * @param string $path
-     * @param int $displayWidth
-     * @param int $maxDisplayHeight
-     * @return array{data: string, display_width: int, display_height: int}|null
-     */
-    private function preparePngForPdf($path, $displayWidth, $maxDisplayHeight)
-    {
-        if (!function_exists('imagecreatefrompng')) {
-            $data = file_get_contents($path);
-
-            return $data !== false
-                ? array(
-                    'data' => $data,
-                    'display_width' => $displayWidth,
-                    'display_height' => $maxDisplayHeight,
-                )
-                : null;
-        }
-
-        $img = @imagecreatefrompng($path);
-        if ($img === false) {
-            return null;
-        }
-
-        $origW = imagesx($img);
-        $origH = imagesy($img);
-        $scale = $displayWidth / $origW;
-        $fullDisplayH = (int) round($origH * $scale);
-        $displayH = min($fullDisplayH, $maxDisplayHeight);
-        $cropOrigH = (int) round($displayH / $scale);
-        $cropOrigH = max(1, min($origH, $cropOrigH));
-
-        if ($cropOrigH < $origH) {
-            $cropped = imagecreatetruecolor($origW, $cropOrigH);
-            imagealphablending($cropped, false);
-            imagesavealpha($cropped, true);
-            $transparent = imagecolorallocatealpha($cropped, 0, 0, 0, 127);
-            imagefill($cropped, 0, 0, $transparent);
-            imagecopy($cropped, $img, 0, 0, 0, 0, $origW, $cropOrigH);
-            imagedestroy($img);
-            $img = $cropped;
-        }
-
-        ob_start();
-        imagepng($img, null, 6);
-        $data = ob_get_clean();
-        imagedestroy($img);
-
-        if ($data === false) {
-            return null;
-        }
-
-        return array(
-            'data' => $data,
-            'display_width' => $displayWidth,
-            'display_height' => $displayH,
-        );
-    }
-
-    /**
-     * @param Dompdf $dompdf
-     */
-    private function registerChineseFont(Dompdf $dompdf)
-    {
-        $fontPath = self::fontAbsolutePath();
-        if (!is_file($fontPath)) {
-            Log::warning('RotuladoPdfService: fuente Noto Sans SC no instalada. Ejecute php artisan rotulado:download-font');
-
-            return;
-        }
-
-        try {
-            $weights = array('normal', 'bold');
-            foreach ($weights as $weight) {
-                $registered = $dompdf->getFontMetrics()->registerFont(
-                    array(
-                        'family' => self::FONT_FAMILY,
-                        'style' => 'normal',
-                        'weight' => $weight,
-                    ),
-                    $fontPath
-                );
-
-                if (!$registered) {
-                    Log::warning('RotuladoPdfService: no se pudo registrar la fuente china en DomPDF', array(
-                        'path' => $fontPath,
-                        'weight' => $weight,
-                    ));
-                }
-            }
-        } catch (\Throwable $e) {
-            Log::warning('RotuladoPdfService: error registrando fuente china: ' . $e->getMessage());
-        }
     }
 }
