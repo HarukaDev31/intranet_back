@@ -219,9 +219,7 @@ class SoporteTiService
         $isStaff = $this->usuarioEsStaffSoporteTi($authUser);
 
         return $this->cache->rememberListado($viewerId, $isStaff, $filters, function () use ($filters, $authUser, $isStaff) {
-            $query = SoporteTiSolicitud::with(array('estadoActual', 'salaChat', 'maqueta', 'evidencias', 'solicitanteUsuario.grupo'))
-                ->orderBy('prioridad', 'asc')
-                ->orderBy('created_at', 'desc');
+            $query = SoporteTiSolicitud::with(array('estadoActual', 'salaChat', 'maqueta', 'evidencias', 'solicitanteUsuario.grupo'));
 
             $this->aplicarFiltrosListadoSolicitudes($query, $filters, $authUser);
 
@@ -297,15 +295,21 @@ class SoporteTiService
             $query->where('tipo_solicitud', $filters['tipo_solicitud']);
         }
 
-        if (!empty($filters['estado_codigo']) && $filters['estado_codigo'] !== 'todos') {
-            $codigo = (string) $filters['estado_codigo'];
-            $query->whereHas('estadoActual', function ($eq) use ($codigo) {
-                $eq->where('codigo', $codigo);
+        $estados = $this->normalizeFiltroLista($filters['estado_codigo'] ?? null, array('todos'));
+        if (!empty($estados)) {
+            $query->whereHas('estadoActual', function ($eq) use ($estados) {
+                $eq->whereIn('codigo', $estados);
             });
         }
 
-        if (!empty($filters['prioridad']) && (int) $filters['prioridad'] > 0) {
-            $query->where('prioridad', (int) $filters['prioridad']);
+        $prioridades = $this->normalizeFiltroListaEnteros($filters['prioridad'] ?? null);
+        if (!empty($prioridades)) {
+            $query->whereIn('prioridad', $prioridades);
+        }
+
+        $areas = $this->normalizeFiltroLista($filters['area'] ?? null, array('todos'));
+        if (!empty($areas)) {
+            $query->whereIn('area', $areas);
         }
 
         if (!empty($filters['solo_mias']) && $authUser && $this->usuarioEsStaffSoporteTi($authUser)) {
@@ -314,6 +318,88 @@ class SoporteTiService
                 $q->where('pm_user_id', $uid)->orWhere('analista_user_id', $uid);
             });
         }
+
+        $this->aplicarOrdenListadoSolicitudes($query, $filters);
+    }
+
+    /**
+     * @param mixed $value
+     * @param array<int, string> $ignoreValues
+     * @return array<int, string>
+     */
+    protected function normalizeFiltroLista($value, array $ignoreValues = array())
+    {
+        $items = array();
+        if (is_array($value)) {
+            $items = $value;
+        } elseif (is_string($value) && $value !== '') {
+            $items = strpos($value, ',') !== false ? explode(',', $value) : array($value);
+        }
+
+        $out = array();
+        foreach ($items as $item) {
+            $s = trim((string) $item);
+            if ($s === '' || in_array($s, $ignoreValues, true)) {
+                continue;
+            }
+            $out[] = $s;
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    /**
+     * @param mixed $value
+     * @return array<int, int>
+     */
+    protected function normalizeFiltroListaEnteros($value)
+    {
+        $out = array();
+        foreach ($this->normalizeFiltroLista($value) as $item) {
+            $n = (int) $item;
+            if ($n > 0) {
+                $out[] = $n;
+            }
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    /**
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @param array $filters
+     * @return void
+     */
+    protected function aplicarOrdenListadoSolicitudes($query, array $filters)
+    {
+        $sortBy = isset($filters['sort_by']) ? trim((string) $filters['sort_by']) : '';
+        $sortDir = strtolower((string) (isset($filters['sort_dir']) ? $filters['sort_dir'] : 'asc'));
+        if ($sortDir !== 'desc') {
+            $sortDir = 'asc';
+        }
+
+        $allowed = array(
+            'codigo' => 'codigo',
+            'titulo' => 'titulo',
+            'area' => 'area',
+            'prioridad' => 'prioridad',
+            'tipo' => 'tipo_solicitud',
+            'tipo_solicitud' => 'tipo_solicitud',
+            'created_at' => 'created_at',
+            'fecha_registro' => 'created_at',
+            'solicitante' => 'solicitante',
+            'creador' => 'solicitante',
+        );
+
+        if ($sortBy !== '' && isset($allowed[$sortBy])) {
+            $query->reorder($allowed[$sortBy], $sortDir);
+            if ($allowed[$sortBy] !== 'created_at') {
+                $query->orderBy('created_at', 'desc');
+            }
+            return;
+        }
+
+        $query->reorder('prioridad', 'asc')->orderBy('created_at', 'desc');
     }
 
     /**
