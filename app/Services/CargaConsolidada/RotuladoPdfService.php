@@ -19,6 +19,8 @@ class RotuladoPdfService
 
     private const HEADER_IMAGE_RELATIVE_PATH = 'assets/templates/ROTULADO_HEADER.png';
 
+    private const STEPS_IMAGE_RELATIVE_PATH = 'assets/templates/ROTULADO_STEPS.png';
+
     private const ICONS_DIR = 'assets/templates/rotulado_icons';
 
     private const ICON_DISPLAY_SIZE = 22;
@@ -136,6 +138,7 @@ class RotuladoPdfService
     private function embedAssets($htmlContent)
     {
         $htmlContent = $this->embedHeaderImage($htmlContent);
+        $htmlContent = $this->embedStepsImage($htmlContent);
 
         foreach (self::$iconPlaceholders as $placeholder => $filename) {
             $htmlContent = str_replace($placeholder, $this->pngDataUri($filename), $htmlContent);
@@ -192,6 +195,37 @@ class RotuladoPdfService
         $htmlContent = str_replace('{{icon_display_size}}', (string) self::ICON_DISPLAY_SIZE, $htmlContent);
         $htmlContent = str_replace('{{footer_icon_size}}', (string) self::FOOTER_ICON_SIZE, $htmlContent);
         $htmlContent = str_replace('{{base_url}}/assets/templates/ROTULADO_HEADER.png', $headerImageSrc, $htmlContent);
+
+        return $htmlContent;
+    }
+
+    /**
+     * @param string $htmlContent
+     * @return string
+     */
+    private function embedStepsImage($htmlContent)
+    {
+        $stepsPath = public_path(self::STEPS_IMAGE_RELATIVE_PATH);
+        $stepsSrc = '';
+        $stepsWidth = self::HEADER_TARGET_WIDTH;
+        $stepsHeight = 105;
+
+        if (is_file($stepsPath)) {
+            $resized = $this->resizeHeaderPng(
+                $stepsPath,
+                self::HEADER_TARGET_WIDTH,
+                200
+            );
+            if ($resized !== null) {
+                $stepsSrc = 'data:image/png;base64,' . base64_encode($resized['data']);
+                $stepsWidth = $resized['width'];
+                $stepsHeight = $resized['height'];
+            }
+        }
+
+        $htmlContent = str_replace('{{steps_image}}', $stepsSrc, $htmlContent);
+        $htmlContent = str_replace('{{steps_image_width}}', (string) $stepsWidth, $htmlContent);
+        $htmlContent = str_replace('{{steps_image_height}}', (string) $stepsHeight, $htmlContent);
 
         return $htmlContent;
     }
@@ -269,19 +303,23 @@ class RotuladoPdfService
         }
 
         try {
-            $registered = $dompdf->getFontMetrics()->registerFont(
-                array(
-                    'family' => self::FONT_FAMILY,
-                    'style' => 'normal',
-                    'weight' => 'normal',
-                ),
-                $fontPath
-            );
+            $weights = array('normal', 'bold');
+            foreach ($weights as $weight) {
+                $registered = $dompdf->getFontMetrics()->registerFont(
+                    array(
+                        'family' => self::FONT_FAMILY,
+                        'style' => 'normal',
+                        'weight' => $weight,
+                    ),
+                    $fontPath
+                );
 
-            if (!$registered) {
-                Log::warning('RotuladoPdfService: no se pudo registrar la fuente china en DomPDF', array(
-                    'path' => $fontPath,
-                ));
+                if (!$registered) {
+                    Log::warning('RotuladoPdfService: no se pudo registrar la fuente china en DomPDF', array(
+                        'path' => $fontPath,
+                        'weight' => $weight,
+                    ));
+                }
             }
         } catch (\Throwable $e) {
             Log::warning('RotuladoPdfService: error registrando fuente china: ' . $e->getMessage());
