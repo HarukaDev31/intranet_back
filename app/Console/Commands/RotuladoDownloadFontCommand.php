@@ -20,11 +20,13 @@ class RotuladoDownloadFontCommand extends Command
     {
         $destPath = RotuladoPdfService::fontAbsolutePath();
         $destDir = dirname($destPath);
-        $legacyTtf = $destDir . DIRECTORY_SEPARATOR . 'NotoSansSC-Regular.ttf';
+        $legacyOtf = $destDir . DIRECTORY_SEPARATOR . 'NotoSansSC-Regular.otf';
 
-        if (is_dir($destDir) && is_file($legacyTtf)) {
-            @unlink($legacyTtf);
+        if (is_dir($destDir) && is_file($legacyOtf)) {
+            @unlink($legacyOtf);
         }
+
+        $this->clearDompdfFontCache();
 
         if (!is_dir($destDir) && !mkdir($destDir, 0755, true) && !is_dir($destDir)) {
             $this->error('No se pudo crear el directorio: ' . $destDir);
@@ -81,9 +83,29 @@ class RotuladoDownloadFontCommand extends Command
         $this->info('Fuente instalada correctamente.');
         $this->line('Tamaño: ' . $this->formatBytes($size));
         $this->newLine();
-        $this->line('En Docker: docker compose exec app php artisan rotulado:download-font');
+        $this->line('En Docker: docker compose exec app php artisan rotulado:download-font --force');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Limpia el cache DomPDF de Noto para forzar re-registro del TTF.
+     */
+    private function clearDompdfFontCache()
+    {
+        $fontCacheDir = storage_path('fonts');
+        if (!is_dir($fontCacheDir)) {
+            return;
+        }
+
+        foreach (glob($fontCacheDir . DIRECTORY_SEPARATOR . 'noto_sans_sc_*') ?: array() as $file) {
+            @unlink($file);
+        }
+
+        $installed = $fontCacheDir . DIRECTORY_SEPARATOR . 'installed-fonts.json';
+        if (is_file($installed)) {
+            @unlink($installed);
+        }
     }
 
     /**
