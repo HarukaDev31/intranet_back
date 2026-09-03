@@ -5,9 +5,9 @@ namespace App\Events\SoporteTi;
 use App\Models\SoporteTi\SoporteTiSolicitud;
 use App\Models\SoporteTi\SoporteTiSolicitudEstado;
 use App\Services\SoporteTi\SoporteTiService;
+use App\Support\SoporteTi\SoporteTiBroadcastChannels;
 use App\Support\SoporteTi\SoporteTiQueue;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
@@ -18,9 +18,13 @@ class SoporteTiEstadoActualizado implements ShouldBroadcast
 
     public $payload;
 
+    /** @var SoporteTiSolicitud */
+    protected $solicitud;
+
     public function __construct(SoporteTiSolicitud $solicitud, SoporteTiSolicitudEstado $historial = null)
     {
         $solicitud->load('estadoActual', 'salaChat');
+        $this->solicitud = $solicitud;
         $estado = $solicitud->estadoActual;
         $service = app(SoporteTiService::class);
 
@@ -50,7 +54,7 @@ class SoporteTiEstadoActualizado implements ShouldBroadcast
 
     public function broadcastOn()
     {
-        return new PrivateChannel('soporte-ti.chat.' . $this->payload['chat_uuid']);
+        return SoporteTiBroadcastChannels::forSolicitudNotificaciones($this->solicitud, true);
     }
 
     public function broadcastAs()

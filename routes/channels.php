@@ -148,7 +148,17 @@ Broadcast::channel('soporte-ti.chat.{chatUuid}', function ($user, $chatUuid) {
         ->where('usuario_id', $uid)
         ->exists();
 });
-// Avisos globales Soporte TI para PM / Analista (p. ej. solicitud nueva)
+
+// Notificaciones Soporte TI por usuario (solicitante / asignados) — 1 canal, no N salas
+Broadcast::channel('soporte-ti.user.{userId}', function ($user, $userId) {
+    if (!$user) {
+        return false;
+    }
+
+    return (int) $user->ID_Usuario === (int) $userId;
+});
+
+// Avisos globales Soporte TI para PM / Analista (p. ej. solicitud nueva + mensajes)
 Broadcast::channel('soporte-ti.staff', function ($user) {
     if (!$user) {
         return false;
