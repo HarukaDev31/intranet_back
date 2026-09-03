@@ -82,31 +82,44 @@
 
         .data-row td {
             border-bottom: 1px solid #BFC5CE;
-            padding: 1px 2px;
+            padding: 1px 2px 2px 2px;
             vertical-align: middle;
             line-height: 1.1;
         }
 
-        .col-icon {
-            width: 22px;
-            text-align: center;
+        .col-head {
+            width: 150px;
+            padding: 1px 2px 2px 0;
             vertical-align: middle;
         }
 
-        .col-icon img {
+        .icon-label {
+            border-collapse: collapse;
+        }
+
+        .icon-label td {
+            border: 0;
+            padding: 0;
+            vertical-align: middle;
+            line-height: 1.1;
+        }
+
+        .icon-cell {
+            width: 20px;
+            text-align: center;
+            padding: 3px 4px 0 0;
+        }
+
+        .icon-cell img {
             width: 16px;
             height: 16px;
-            vertical-align: middle;
-            display: inline;
         }
 
         .col-label {
-            width: 125px;
             font-weight: bold;
             font-size: 9pt;
             white-space: nowrap;
-            vertical-align: middle;
-            line-height: 1.1;
+            padding: 0;
         }
 
         .col-value {
@@ -168,74 +181,110 @@
 
         <table width="100%" cellspacing="0" cellpadding="0">
             <tr class="data-row">
-                <td class="col-icon">
-                    <img src="{{icon_company}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
+                <td class="col-head" valign="middle">
+                    <table class="icon-label" cellspacing="0" cellpadding="0">
+                        <tr>
+                            <td class="icon-cell" valign="middle"><img src="{{icon_company}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt=""></td>
+                            <td class="col-label" valign="middle">COMPANY:</td>
+                        </tr>
+                    </table>
                 </td>
-                <td class="col-label">COMPANY:</td>
-                <td class="col-value">PRO MUNDO COMEX S.A.C</td>
+                <td class="col-value" valign="middle">PRO MUNDO COMEX S.A.C</td>
             </tr>
             <tr class="data-row">
-                <td class="col-icon">
-                    <img src="{{icon_contact}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
+                <td class="col-head" valign="middle">
+                    <table class="icon-label" cellspacing="0" cellpadding="0">
+                        <tr>
+                            <td class="icon-cell" valign="middle"><img src="{{icon_contact}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt=""></td>
+                            <td class="col-label" valign="middle">CONTACT:</td>
+                        </tr>
+                    </table>
                 </td>
-                <td class="col-label">CONTACT:</td>
-                <td class="col-value">{{cliente}}</td>
+                <td class="col-value" valign="middle">{{cliente}}</td>
             </tr>
             <tr class="data-row">
-                <td class="col-icon">
-                    <img src="{{icon_location}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
+                <td class="col-head" valign="middle">
+                    <table class="icon-label" cellspacing="0" cellpadding="0">
+                        <tr>
+                            <td class="icon-cell" valign="middle"><img src="{{icon_location}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt=""></td>
+                            <td class="col-label" valign="middle">TO:</td>
+                        </tr>
+                    </table>
                 </td>
-                <td class="col-label">TO:</td>
-                <td class="col-value">PERU</td>
+                <td class="col-value" valign="middle">PERU</td>
             </tr>
             <tr class="data-row">
-                <td class="col-icon">
-                    <img src="{{icon_box}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
+                <td class="col-head" valign="middle">
+                    <table class="icon-label" cellspacing="0" cellpadding="0">
+                        <tr>
+                            <td class="icon-cell" valign="middle"><img src="{{icon_box}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt=""></td>
+                            <td class="col-label" valign="middle">ITEM NRO:</td>
+                        </tr>
+                    </table>
                 </td>
-                <td class="col-label">ITEM NRO:</td>
-                <td class="col-value item-cn">这里写产品货号（如果很多款式在箱子里要写每一款的货号和数量。如果你们货没有货号随便给一个）</td>
+                <td class="col-value item-cn" valign="middle">这里写产品货号（如果很多款式在箱子里要写每一款的货号和数量。如果你们货没有货号随便给一个）</td>
             </tr>
             <tr class="data-row">
-                <td class="col-icon">
-                    <img src="{{icon_qty}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
+                <td class="col-head" valign="middle">
+                    <table class="icon-label" cellspacing="0" cellpadding="0">
+                        <tr>
+                            <td class="icon-cell" valign="middle"><img src="{{icon_qty}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt=""></td>
+                            <td class="col-label" valign="middle">QTY:</td>
+                        </tr>
+                    </table>
                 </td>
-                <td class="col-label">QTY:</td>
-                <td class="col-value item-cn">装箱数 PCS</td>
+                <td class="col-value item-cn" valign="middle">装箱数 PCS</td>
             </tr>
             <tr class="data-row">
-                <td class="col-icon">
-                    <img src="{{icon_weight}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
+                <td class="col-head" valign="middle">
+                    <table class="icon-label" cellspacing="0" cellpadding="0">
+                        <tr>
+                            <td class="icon-cell" valign="middle"><img src="{{icon_weight}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt=""></td>
+                            <td class="col-label" valign="middle">N.W:</td>
+                        </tr>
+                    </table>
                 </td>
-                <td class="col-label">N.W:</td>
-                <td class="col-value item-cn">净重 KGS</td>
+                <td class="col-value item-cn" valign="middle">净重 KGS</td>
             </tr>
             <tr class="data-row">
-                <td class="col-icon">
-                    <img src="{{icon_weight}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
+                <td class="col-head" valign="middle">
+                    <table class="icon-label" cellspacing="0" cellpadding="0">
+                        <tr>
+                            <td class="icon-cell" valign="middle"><img src="{{icon_weight}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt=""></td>
+                            <td class="col-label" valign="middle">G.W:</td>
+                        </tr>
+                    </table>
                 </td>
-                <td class="col-label">G.W:</td>
-                <td class="col-value item-cn">毛重 KGS</td>
+                <td class="col-value item-cn" valign="middle">毛重 KGS</td>
             </tr>
             <tr class="data-row">
-                <td class="col-icon">
-                    <img src="{{icon_measure}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
+                <td class="col-head" valign="middle">
+                    <table class="icon-label" cellspacing="0" cellpadding="0">
+                        <tr>
+                            <td class="icon-cell" valign="middle"><img src="{{icon_measure}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt=""></td>
+                            <td class="col-label" valign="middle">MEASURE:</td>
+                        </tr>
+                    </table>
                 </td>
-                <td class="col-label">MEASURE:</td>
-                <td class="col-value item-cn">箱子规格 CM</td>
+                <td class="col-value item-cn" valign="middle">箱子规格 CM</td>
             </tr>
             <tr class="data-row">
-                <td class="col-icon">
-                    <img src="{{icon_barcode}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt="">
+                <td class="col-head" valign="middle">
+                    <table class="icon-label" cellspacing="0" cellpadding="0">
+                        <tr>
+                            <td class="icon-cell" valign="middle"><img src="{{icon_barcode}}" width="{{icon_display_size}}" height="{{icon_display_size}}" alt=""></td>
+                            <td class="col-label" valign="middle">SUPPLIER CODE:</td>
+                        </tr>
+                    </table>
                 </td>
-                <td class="col-label">SUPPLIER CODE:</td>
-                <td class="col-value">{{supplier_code}}</td>
+                <td class="col-value" valign="middle">{{supplier_code}}</td>
             </tr>
         </table>
 
         <table class="footer-table" cellspacing="0" cellpadding="0">
             <tr>
-                <td>
-                    <img src="{{icon_footer_box}}" width="{{footer_icon_size}}" height="{{footer_icon_size}}" alt="">
+                <td valign="middle">
+                    <img src="{{icon_footer_box}}" width="{{footer_icon_size}}" height="{{footer_icon_size}}" alt="" style="vertical-align: middle; padding-top: 4px;">
                     <span class="footer-text"> HECHO EN CHINA</span>
                 </td>
             </tr>
