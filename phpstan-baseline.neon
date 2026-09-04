@@ -10625,3 +10625,15 @@ parameters:
 			identifier: notIdentical.alwaysTrue
 			count: 1
 			path: app/Traits/MailTrait.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\CargaConsolidada\\Contenedor\:\:\$carga\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/PublicSite/LandingConsolidadoDeparturesController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\CargaConsolidada\\Contenedor\:\:\$f_cierre\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/PublicSite/LandingConsolidadoDeparturesController.php
