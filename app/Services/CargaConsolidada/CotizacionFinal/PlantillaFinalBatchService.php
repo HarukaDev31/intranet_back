@@ -7,6 +7,8 @@ use App\Http\Controllers\CargaConsolidada\CotizacionFinal\CotizacionFinalControl
 use App\Jobs\GenerateMassiveExcelPayrollsJob;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\ConsolidadoPlantillaFinalBatch;
+use App\Services\CalculadoraImportacion\CalculadoraTarifaService;
+use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use App\Traits\UsesObjectStorage;
 use App\Support\PhpSpreadsheet\PhpSpreadsheetRuntime;
@@ -287,15 +289,12 @@ class PlantillaFinalBatchService
                 }
 
                 $calc = $calculadorasByCotizacion[(int) $item->id] ?? null;
-                $tarifaCalculadora = $calc !== null && is_numeric($calc->tarifa ?? null)
-                    ? (float) $calc->tarifa
-                    : null;
 
                 $cliente['cliente']['tarifa'] = $this->resolveTarifa(
                     $item,
                     $volumenAsignado,
                     $tipoCliente,
-                    $tarifaCalculadora
+                    $calc
                 );
                 $cliente['cliente']['calculadora_extras'] = $this->extrasFromCalculadoraRow($calc);
                 $cliente['cliente']['correo'] = $item->correo ?? '';
@@ -776,17 +775,23 @@ class PlantillaFinalBatchService
             return [];
         }
 
+        $cols = [
+            'id',
+            'id_cotizacion',
+            'tarifa',
+            'tarifa_total_extra_proveedor',
+            'tarifa_total_extra_item',
+            'tarifa_descuento',
+            'tipo_cliente',
+            'created_at',
+        ];
+        if (Schema::hasColumn('calculadora_importacion', 'calculadora_tarifa_consolidado_id')) {
+            $cols[] = 'calculadora_tarifa_consolidado_id';
+        }
         $rows = DB::table('calculadora_importacion')
             ->whereIn('id_cotizacion', $cotizacionIds)
             ->orderByDesc('id')
-            ->get([
-                'id',
-                'id_cotizacion',
-                'tarifa',
-                'tarifa_total_extra_proveedor',
-                'tarifa_total_extra_item',
-                'tarifa_descuento',
-            ]);
+            ->get($cols);
 
         $byCotizacion = [];
         foreach ($rows as $row) {
@@ -819,14 +824,35 @@ class PlantillaFinalBatchService
     }
 
     /**
-     * Prioridad: tarifa snapshot de calculadora → cc.tarifa → tabla legacy por tipo/CBM.
+     * Prioridad:
+     * 1. Re-buscar el rango CBM del volumen ACTUAL en la misma generación de tarifas
+     *    con que se armó la cotización inicial (usando created_at de la calculadora).
+     *    Esto garantiza que si el usuario modifica el CBM en la cotización final, se
+     *    aplique la tarifa correcta para el nuevo rango, sin salirse del período original.
+     * 2. Snapshot congelado de la calculadora (fallback si la DB no devuelve fila).
+     * 3. cc.tarifa del item.
+     * 4. Tabla legacy hardcoded.
      */
-    protected function resolveTarifa($item, $volumen, $tipoCliente, ?float $tarifaCalculadora = null): float
+    protected function resolveTarifa($item, float $volumen, string $tipoCliente, ?object $calcRow = null): float
     {
-        if ($tarifaCalculadora !== null && $tarifaCalculadora > 0) {
-            return $tarifaCalculadora;
+        if ($calcRow !== null && !empty($calcRow->created_at)) {
+            $at = Carbon::parse($calcRow->created_at);
+            $tipoCalc = trim((string) ($calcRow->tipo_cliente ?? $tipoCliente));
+            if ($tipoCalc === '') {
+                $tipoCalc = $tipoCliente;
+            }
+            $tarifaRow = (new CalculadoraTarifaService())->findByTipoYCbmAt($tipoCalc, $volumen, $at);
+            if ($tarifaRow !== null) {
+                return (float) $tarifaRow->value;
+            }
         }
 
+        // Fallback: snapshot congelado de la calculadora
+        if ($calcRow !== null && is_numeric($calcRow->tarifa ?? null) && (float) $calcRow->tarifa > 0) {
+            return (float) $calcRow->tarifa;
+        }
+
+        // Fallback: tarifa del item (contenedor_consolidado_cotizacion.tarifa)
         $tarifa = is_numeric($item->tarifa ?? null) ? (float) $item->tarifa : 0.0;
         if ($tarifa > 0) {
             return $tarifa;
