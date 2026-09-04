@@ -24,6 +24,8 @@ use App\Models\CargaConsolidada\GuiaRemision;
 use App\Models\UsuarioDatosFacturacion;
 use App\Helpers\ComprobanteFormResolverHelper;
 use App\Helpers\UserLookupHelper;
+use App\Exports\FacturaGuiaClientesFacturacionExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class FacturaGuiaController extends Controller
 {
@@ -1980,6 +1982,65 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 'error'         => $e->getMessage(),
             ]);
             return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Descarga en Excel los datos de facturación (RUC/DNI, razón social, tipo de comprobante)
+     * de todos los clientes de un contenedor.
+     * GET /carga-consolidada/contenedor/factura-guia/contabilidad/clientes/{idContenedor}/export
+     */
+    public function exportarClientesFacturacion($idContenedor)
+    {
+        try {
+            $cotizaciones = Cotizacion::select(
+                'id',
+                'nombre',
+                'telefono',
+                'correo',
+                'documento',
+                'id_contenedor'
+            )
+                ->where('id_contenedor', $idContenedor)
+                ->whereNotNull('estado_cliente')
+                ->whereNull('id_cliente_importacion')
+                ->where('estado_cotizador', 'CONFIRMADO')
+                ->orderBy('nombre', 'asc')
+                ->get();
+
+            $cotizacionIds = $cotizaciones->pluck('id')->all();
+            $formsByCotizacion = !empty($cotizacionIds)
+                ? ComprobanteForm::whereIn('id_cotizacion', $cotizacionIds)->get()->keyBy('id_cotizacion')
+                : collect();
+
+            $rows = $cotizaciones->map(function ($item) use ($formsByCotizacion) {
+                $resuelto = ComprobanteFormResolverHelper::resolveForListing($item, $formsByCotizacion->get($item->id));
+                $form = $resuelto['comprobante_form'];
+                $tipo = is_array($form) ? ($form['tipo_comprobante'] ?? null) : ($form->tipo_comprobante ?? null);
+                $ruc = is_array($form) ? ($form['ruc'] ?? null) : ($form->ruc ?? null);
+                $dni = is_array($form) ? ($form['dni_carnet'] ?? null) : ($form->dni_carnet ?? null);
+                $razonSocial = is_array($form) ? ($form['razon_social'] ?? null) : ($form->razon_social ?? null);
+                $nombreCompleto = is_array($form) ? ($form['nombre_completo'] ?? null) : ($form->nombre_completo ?? null);
+
+                return [
+                    'telefono' => $item->telefono,
+                    'tipo_comprobante' => $tipo,
+                    'documento' => $tipo === 'FACTURA' ? $ruc : $dni,
+                    'razon_social' => $tipo === 'FACTURA' ? $razonSocial : $nombreCompleto,
+                ];
+            });
+
+            $contenedor = Contenedor::find($idContenedor);
+            $carga = $contenedor ? $contenedor->carga : $idContenedor;
+            $filename = 'datos-facturacion-carga-' . $carga . '-' . date('Y-m-d-His') . '.xlsx';
+
+            return Excel::download(new FacturaGuiaClientesFacturacionExport($rows), $filename, \Maatwebsite\Excel\Excel::XLSX);
+        } catch (\Exception $e) {
+            Log::error('FacturaGuiaController@exportarClientesFacturacion', [
+                'id_contenedor' => $idContenedor,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json(['success' => false, 'message' => 'Error al exportar: ' . $e->getMessage()], 500);
         }
     }
 

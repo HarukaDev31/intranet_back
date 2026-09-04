@@ -227,6 +227,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
                 Route::get('/detalle/{idCotizacion}', [FacturaGuiaController::class, 'getContabilidadDetalle']);
                 Route::put('/nota/{idCotizacion}', [FacturaGuiaController::class, 'saveNotaContabilidad']);
                 Route::get('/clientes/{idContenedor}', [FacturaGuiaController::class, 'getClientesContenedor']);
+                Route::get('/clientes/{idContenedor}/export', [FacturaGuiaController::class, 'exportarClientesFacturacion']);
                 Route::post('/enviar-formulario/{idContenedor}', [FacturaGuiaController::class, 'enviarFormulario']);
                 // Envío individual por cotización (desde menú hamburguesa de la tabla)
                 Route::post('/send-comprobantes/{idCotizacion}', [FacturaGuiaController::class, 'sendComprobantesContabilidad']);
