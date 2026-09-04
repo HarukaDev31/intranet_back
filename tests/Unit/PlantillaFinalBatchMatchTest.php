@@ -30,9 +30,9 @@ class PlantillaFinalBatchMatchTest extends TestCase
                 return $this->volumenFromExcelCliente($cliente);
             }
 
-            public function tarifa($item, $volumen, $tipoCliente, ?float $tarifaCalculadora = null)
+            public function tarifa($item, $volumen, $tipoCliente, ?object $calcRow = null)
             {
-                return $this->resolveTarifa($item, $volumen, $tipoCliente, $tarifaCalculadora);
+                return $this->resolveTarifa($item, $volumen, $tipoCliente, $calcRow);
             }
         };
     }
@@ -92,9 +92,16 @@ class PlantillaFinalBatchMatchTest extends TestCase
         $svc = $this->service();
         $item = (object) ['tarifa' => 380.0];
 
-        $this->assertEquals(300.0, $svc->tarifa($item, 1.00, 'NUEVO', 300.0));
+        // calcRow con snapshot 300 (sin calculadora_tarifa_consolidado_id → no re-lookup DB)
+        $calcRow300 = (object) ['tarifa' => 300.0];
+        $this->assertEquals(300.0, $svc->tarifa($item, 1.00, 'NUEVO', $calcRow300));
+
+        // Sin calcRow → cae a item.tarifa
         $this->assertEquals(380.0, $svc->tarifa($item, 1.00, 'NUEVO', null));
-        $this->assertEquals(380.0, $svc->tarifa($item, 1.00, 'NUEVO', 0.0));
+
+        // calcRow con snapshot 0 → cae a item.tarifa
+        $calcRow0 = (object) ['tarifa' => 0.0];
+        $this->assertEquals(380.0, $svc->tarifa($item, 1.00, 'NUEVO', $calcRow0));
     }
 
     public function test_calculator_incluye_limites_exactos(): void

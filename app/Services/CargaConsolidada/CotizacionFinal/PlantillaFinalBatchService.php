@@ -835,7 +835,14 @@ class PlantillaFinalBatchService
      */
     protected function resolveTarifa($item, float $volumen, string $tipoCliente, ?object $calcRow = null): float
     {
-        if ($calcRow !== null && !empty($calcRow->created_at)) {
+        // Re-buscar solo cuando la calculadora tiene tarifa trazada en la DB
+        // (calculadora_tarifa_consolidado_id set). Esto evita consultas a la DB
+        // en contextos sin conexión y preserva snapshots manuales sin FK.
+        if (
+            $calcRow !== null
+            && !empty($calcRow->calculadora_tarifa_consolidado_id)
+            && !empty($calcRow->created_at)
+        ) {
             $at = Carbon::parse($calcRow->created_at);
             $tipoCalc = trim((string) ($calcRow->tipo_cliente ?? $tipoCliente));
             if ($tipoCalc === '') {
