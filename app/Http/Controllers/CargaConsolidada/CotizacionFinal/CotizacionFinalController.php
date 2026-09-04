@@ -4340,7 +4340,7 @@ class CotizacionFinalController extends Controller
             ->sum('importe');
         $aduaneros = (float) DB::table($table)
             ->where('id_cotizacion', $idCotizacion)
-            ->whereRaw("UPPER(TRIM(tipo_servicio)) = 'SANCIONES' OR UPPER(TRIM(tipo_servicio)) = 'BQ'")
+            ->whereRaw("UPPER(TRIM(tipo_servicio)) IN ('SANCIONES', 'BQ')")
             ->sum('importe');
 
         $rowMonta = $hasAntidumpingMain ? 43 : 42;
