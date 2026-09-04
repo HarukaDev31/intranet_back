@@ -74,7 +74,7 @@ class SoporteTiSolicitudController extends Controller
             'seccion_ruta' => 'nullable|string|max:255',
             'descripcion' => 'nullable|string',
             'imagenes' => 'nullable|array',
-            'imagenes.*' => 'file|mimes:jpg,jpeg,png,gif,webp,bmp|max:10240',
+            'imagenes.*' => 'file|mimes:jpg,jpeg,png,gif,webp,bmp,pdf,xls,xlsx|max:10240',
         ));
 
         $payload = $request->except('imagenes');
