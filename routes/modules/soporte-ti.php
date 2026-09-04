@@ -6,6 +6,7 @@ use App\Http\Controllers\SoporteTi\SoporteTiEstadoController;
 use App\Http\Controllers\SoporteTi\SoporteTiChatController;
 use App\Http\Controllers\SoporteTi\SoporteTiSlaHorasController;
 use App\Http\Controllers\SoporteTi\SoporteTiFaseHorasController;
+use App\Http\Controllers\SoporteTi\SoporteTiHorarioAtencionController;
 use App\Http\Controllers\SoporteTi\SoporteTiAreaController;
 
 /*
@@ -25,6 +26,8 @@ Route::group(['prefix' => 'soporte-ti', 'middleware' => 'jwt.auth'], function ()
     Route::put('/sla-horas', [SoporteTiSlaHorasController::class, 'update']);
     Route::get('/fase-horas-a', [SoporteTiFaseHorasController::class, 'index']);
     Route::put('/fase-horas-a', [SoporteTiFaseHorasController::class, 'update']);
+    Route::get('/horario-atencion', [SoporteTiHorarioAtencionController::class, 'index']);
+    Route::put('/horario-atencion', [SoporteTiHorarioAtencionController::class, 'update']);
     Route::get('/staff', [SoporteTiSolicitudController::class, 'listarStaff']);
     Route::get('/chats/{chatUuid}/mensajes', [SoporteTiChatController::class, 'mensajes']);
     Route::post('/chats/{chatUuid}/mensajes/leidos', [SoporteTiChatController::class, 'marcarLeidos']);

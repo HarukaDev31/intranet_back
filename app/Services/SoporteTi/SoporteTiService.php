@@ -31,10 +31,22 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use App\Services\SoporteTi\SoporteTiBusinessHoursHelper;
 use App\Traits\FileTrait;
 
 class SoporteTiService
 {
+    /** @var SoporteTiBusinessHoursHelper|null */
+    private $bhHelperInstance = null;
+
+    private function bhHelper(): SoporteTiBusinessHoursHelper
+    {
+        if ($this->bhHelperInstance === null) {
+            $this->bhHelperInstance = new SoporteTiBusinessHoursHelper();
+        }
+
+        return $this->bhHelperInstance;
+    }
     use FileTrait;
     const CHAT_PAGE_SIZE = 25;
 
@@ -953,6 +965,29 @@ class SoporteTiService
         return $result;
     }
 
+    public function listarHorarioAtencion(?Authenticatable $user = null)
+    {
+        $user = $user ?: Auth::user();
+        if (!$this->usuarioEsStaffSoporteTi($user)) {
+            throw new AuthorizationException('Solo staff puede consultar el horario de atención.');
+        }
+
+        return $this->bhHelper()->listarDias();
+    }
+
+    public function actualizarHorarioAtencion(array $dias, ?Authenticatable $user = null)
+    {
+        $user = $user ?: Auth::user();
+        if (!$this->usuarioEsStaffSoporteTi($user)) {
+            throw new AuthorizationException('Solo staff puede actualizar el horario de atención.');
+        }
+
+        $result = $this->bhHelper()->actualizarDias($dias);
+        $this->bhHelperInstance = null;
+
+        return $result;
+    }
+
     /**
      * @param SoporteTiSolicitud $solicitud
      * @param string $criticidad
@@ -972,11 +1007,12 @@ class SoporteTiService
             return;
         }
 
+        $bh = $this->bhHelper();
         $inicioEnProgreso = $this->obtenerInicioEnProgreso($solicitud);
         if ($inicioEnProgreso) {
-            $solicitud->fecha_fin_estimado = $inicioEnProgreso->copy()->addHours($horas)->toDateString();
+            $solicitud->fecha_fin_estimado = $bh->addHorasHabiles($inicioEnProgreso->copy(), $horas)->toDateString();
         } else {
-            $solicitud->fecha_fin_estimado = Carbon::now()->addHours($horas)->toDateString();
+            $solicitud->fecha_fin_estimado = $bh->addHorasHabiles(Carbon::now(), $horas)->toDateString();
         }
     }
 
@@ -1053,7 +1089,7 @@ class SoporteTiService
             return;
         }
         $inicio = Carbon::parse($solicitud->sla_reanudado_en);
-        $delta = max(0, Carbon::now()->getTimestamp() - $inicio->getTimestamp());
+        $delta = $this->bhHelper()->segundosHabilesEntre($inicio, Carbon::now());
         $solicitud->sla_segundos_acumulados = (int) $solicitud->sla_segundos_acumulados + (int) $delta;
         $solicitud->sla_reanudado_en = null;
     }
@@ -1092,7 +1128,7 @@ class SoporteTiService
             } else {
                 $fin = $now;
             }
-            $totalSeg += max(0, $fin->getTimestamp() - $inicio->getTimestamp());
+            $totalSeg += $this->bhHelper()->segundosHabilesEntre($inicio, $fin);
         }
 
         return $totalSeg;
@@ -1216,7 +1252,7 @@ class SoporteTiService
             && $solicitud->sla_reanudado_en
         ) {
             $inicio = Carbon::parse($solicitud->sla_reanudado_en);
-            $seg += max(0, Carbon::now()->getTimestamp() - $inicio->getTimestamp());
+            $seg += $this->bhHelper()->segundosHabilesEntre($inicio, Carbon::now());
         }
 
         return $seg;
@@ -1305,7 +1341,7 @@ class SoporteTiService
             return;
         }
 
-        $solicitud->fecha_fin_estimado = Carbon::now()->addHours($horas)->toDateString();
+        $solicitud->fecha_fin_estimado = $this->bhHelper()->addHorasHabiles(Carbon::now(), $horas)->toDateString();
     }
 
     /**
@@ -1423,7 +1459,7 @@ class SoporteTiService
                 $inicio = $this->obtenerInicioEnProgreso($solicitud);
                 $base = $inicio ?: Carbon::now();
 
-                return $this->formatearMarcaTiempo($base->copy()->addHours($horas));
+                return $this->formatearMarcaTiempo($this->bhHelper()->addHorasHabiles($base->copy(), $horas));
             } catch (\Exception $e) {
                 // sin SLA calculable
             }
@@ -1498,24 +1534,27 @@ class SoporteTiService
      */
     protected function calcularIsoFinContadorSla(SoporteTiSolicitud $solicitud, $totalSeg, $pausado, $restanteSeg)
     {
+        $bh = $this->bhHelper();
+
         if ($pausado) {
-            return Carbon::now()->addSeconds($restanteSeg)->toIso8601String();
+            return $bh->addSegundosHabiles(Carbon::now(), $restanteSeg)->toIso8601String();
         }
 
         if ($solicitud->sla_reanudado_en) {
             $acum = (int) $solicitud->sla_segundos_acumulados;
 
-            return Carbon::parse($solicitud->sla_reanudado_en)
-                ->addSeconds(max(0, $totalSeg - $acum))
-                ->toIso8601String();
+            return $bh->addSegundosHabiles(
+                Carbon::parse($solicitud->sla_reanudado_en),
+                max(0, $totalSeg - $acum)
+            )->toIso8601String();
         }
 
         $inicio = $this->obtenerInicioEnProgreso($solicitud);
         if ($inicio) {
-            return $inicio->copy()->addSeconds($totalSeg)->toIso8601String();
+            return $bh->addSegundosHabiles($inicio->copy(), $totalSeg)->toIso8601String();
         }
 
-        return Carbon::now()->addSeconds($restanteSeg)->toIso8601String();
+        return $bh->addSegundosHabiles(Carbon::now(), $restanteSeg)->toIso8601String();
     }
 
     /**
