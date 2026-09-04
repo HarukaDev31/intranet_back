@@ -21,7 +21,7 @@ class LandingConsolidadoDeparturesController extends Controller
         $limit = (int) $request->query('limit', 2);
         $limit = max(1, min($limit, 6));
 
-        $data = Cache::remember("landing_consolidado:next_departures:{$limit}", 3600, function () use ($limit) {
+        $data = Cache::remember("landing_consolidado:next_departures:v2:{$limit}", 3600, function () use ($limit) {
             return Contenedor::query()
                 ->where('estado_china', Contenedor::CONTEDOR_PENDIENTE)
                 ->where('empresa', '!=', 1)
@@ -35,7 +35,8 @@ class LandingConsolidadoDeparturesController extends Controller
                     'carga' => (int) $contenedor->carga,
                     'closeDate' => Carbon::parse($contenedor->f_cierre)->format('Y-m-d'),
                 ])
-                ->values();
+                ->values()
+                ->all();
         });
 
         return response()->json([
