@@ -2023,6 +2023,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 $nombreCompleto = is_array($form) ? ($form['nombre_completo'] ?? null) : ($form->nombre_completo ?? null);
 
                 return [
+                    'nombre' => $item->nombre,
                     'telefono' => $item->telefono,
                     'tipo_comprobante' => $tipo,
                     'documento' => $tipo === 'FACTURA' ? $ruc : $dni,

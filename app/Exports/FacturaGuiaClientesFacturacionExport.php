@@ -32,20 +32,18 @@ class FacturaGuiaClientesFacturacionExport implements FromArray, WithStyles, Wit
 
     public function array(): array
     {
-        $headers = ['N° Cliente', 'RUC / DNI', 'Razón Social', 'Número de celular', 'Tipo de comprobante'];
+        $headers = ['Cliente', 'RUC / DNI', 'Razón Social', 'Número de celular', 'Tipo de comprobante'];
         $rows = [$headers];
 
-        $i = 1;
         foreach ($this->data as $item) {
             $row = is_array($item) ? $item : (array) $item;
             $rows[] = [
-                'CL' . str_pad((string) $i, 4, '0', STR_PAD_LEFT),
+                $row['nombre'] ?? '',
                 $row['documento'] ?? '',
                 $row['razon_social'] ?? '',
                 $row['telefono'] ?? '',
                 $row['tipo_comprobante'] ?? '',
             ];
-            $i++;
         }
 
         $this->lastDataRow = count($rows) - 1;
@@ -56,7 +54,7 @@ class FacturaGuiaClientesFacturacionExport implements FromArray, WithStyles, Wit
     public function columnWidths(): array
     {
         return [
-            'A' => 12,
+            'A' => 32,
             'B' => 16,
             'C' => 36,
             'D' => 18,
@@ -111,7 +109,6 @@ class FacturaGuiaClientesFacturacionExport implements FromArray, WithStyles, Wit
                     ],
                 ]);
 
-                $sheet->getStyle('A2:A' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getStyle('B2:B' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getStyle('E2:E' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             },
