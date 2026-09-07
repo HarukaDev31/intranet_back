@@ -867,6 +867,9 @@ class ContenedorController extends Controller
                     }
                     $query->limit(1);
                     break;
+                case Usuario::ROL_RRHH:
+                    $query->where('tipo', 'COTIZADOR')->limit(2);
+                    break;
                 case Usuario::ROL_ADMINISTRACION:
                     $query->where('tipo', 'COTIZADOR')->where('id_order', '>', 1);
                     break;

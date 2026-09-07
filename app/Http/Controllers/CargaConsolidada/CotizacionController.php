@@ -531,7 +531,8 @@ class CotizacionController extends Controller
             Usuario::ROL_CONTABILIDAD => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado', 'total_diferencia_logistica'],
             Usuario::ROL_JEFE_IMPORTACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
             Usuario::ROL_COORDINADOR_GENERAL => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
-            Usuario::JEFE_MARKETING => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'], 
+            Usuario::JEFE_MARKETING => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
+            Usuario::ROL_RRHH => ['cbm_vendido', 'cbm_pendiente', 'cbm_embarcado', 'qty_items', 'cbm_total_peru', 'cbm_total_china', 'cbm_total_imo'],
         ];
         $userIdCheck = $user->ID_Usuario;
         if (array_key_exists($usergroup, $roleAllowedMap)) {
@@ -547,7 +548,7 @@ class CotizacionController extends Controller
         // Headers exclusivos para el tab de pagos (solo contabilidad) - solo en cotizacion-final
         $headersDataPagos = [];
 
-        if ($userIdCheck == "28791" || $userIdCheck == "28911") {
+        if ($userIdCheck == "28791" || $userIdCheck == "28911" || $usergroup === Usuario::ROL_RRHH) {
             // CBM Vendido por usuario (estado CONFIRMADO)
             //remove cbm_vendido 
             unset($headersData['cbm_vendido']);

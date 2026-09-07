@@ -2562,7 +2562,9 @@ class CotizacionFinalController extends Controller
     {
         try {
             // Obtener ID del usuario autenticado
-            $userId = auth()->user()->ID_Usuario ?? null;
+            $authUser = auth()->user();
+            $userId = $authUser->ID_Usuario ?? null;
+            $userGroup = $authUser ? trim((string) $authUser->getNombreGrupo()) : null;
 
             // Consulta principal con mÃºltiples subconsultas
             $result = DB::table($this->table_contenedor_cotizacion_proveedores . ' as cccp')
@@ -2663,8 +2665,8 @@ class CotizacionFinalController extends Controller
                 ->where('id', $idContenedor)
                 ->first();
 
-            // Si es el usuario 28791, obtener los CBM por usuario (vendido, pendiente, embarcado)
-            if ($userId == 28791) {
+            // Si es el usuario 28791 (Jefe de Ventas) o pertenece al rol RRHH, obtener los CBM por usuario (vendido, pendiente, embarcado)
+            if ($userId == 28791 || $userGroup === Usuario::ROL_RRHH) {
                 $dataHeaders = [
                     'cbm_total_peru' => [
                         "value" => $result->cbm_total_peru,
