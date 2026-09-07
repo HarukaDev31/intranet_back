@@ -21,6 +21,7 @@ use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
 use App\Jobs\SolicitarDocumentosWhatsAppJob;
+use App\Support\CargaConsolidada\DocumentStatusSync;
 
 class GeneralController extends Controller
 {
@@ -877,6 +878,20 @@ class GeneralController extends Controller
                         ->where('id', $item['id'])
                         ->update(['tipo_producto' => $item['tipo_producto']]);
                 }
+            }
+
+            // Automatización módulo Cliente/Seguimiento: al pedir documentos, Invoice/Packing/Excel Conf.
+            // (perfil Daniela) pasan de Pendiente a Solicitado, solo para el proveedor involucrado.
+            foreach ($proveedores as $prov) {
+                if (!isset($prov['id'])) {
+                    continue;
+                }
+                $proveedorModel = CotizacionProveedor::find($prov['id']);
+                if (!$proveedorModel) {
+                    continue;
+                }
+                DocumentStatusSync::markSolicitado($proveedorModel);
+                $proveedorModel->save();
             }
 
             $cargoRow = DB::table('carga_consolidada_contenedor')

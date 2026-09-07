@@ -117,6 +117,10 @@ class EmbarcadosController extends Controller
                     'invoice_status_final',
                     'packing_status_final',
                     'excel_conf_status_final',
+                    'arrive_date_china',
+                    'canal',
+                    'fecha_entrega',
+                    'observaciones_seguimiento',
                 ])
                 ->get()
                 ->groupBy('id_cotizacion');
@@ -146,6 +150,11 @@ class EmbarcadosController extends Controller
                             'invoice_status_final' => $p->invoice_status_final,
                             'packing_status_final' => $p->packing_status_final,
                             'excel_conf_status_final' => $p->excel_conf_status_final,
+                            // Inspección: solo lectura, alimentada desde módulo Cotización (Por Embarcar)
+                            'arrive_date_china' => $p->arrive_date_china,
+                            'canal' => $p->canal,
+                            'fecha_entrega' => $p->fecha_entrega,
+                            'observaciones_seguimiento' => $p->observaciones_seguimiento,
                         ];
                     })->values();
                 }

@@ -10503,7 +10503,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Models\\CargaConsolidada\\CotizacionProveedor\:\:\$excel_conf_status\.$#'
 			identifier: property.notFound
-			count: 2
+			count: 3
 			path: app/Support/CargaConsolidada/DocumentStatusSync.php
 
 		-
@@ -10515,7 +10515,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Models\\CargaConsolidada\\CotizacionProveedor\:\:\$invoice_status\.$#'
 			identifier: property.notFound
-			count: 2
+			count: 3
 			path: app/Support/CargaConsolidada/DocumentStatusSync.php
 
 		-
@@ -10527,7 +10527,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Models\\CargaConsolidada\\CotizacionProveedor\:\:\$packing_status\.$#'
 			identifier: property.notFound
-			count: 2
+			count: 3
 			path: app/Support/CargaConsolidada/DocumentStatusSync.php
 
 		-

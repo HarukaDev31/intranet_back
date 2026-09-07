@@ -47,7 +47,10 @@ class CotizacionProveedor extends Model
         'invoice_status_final',
         'packing_status_final',
         'excel_conf_status_final',
-        'excel_conf_form_cerrado'
+        'excel_conf_form_cerrado',
+        'canal',
+        'fecha_entrega',
+        'observaciones_seguimiento'
     ];
 
     // Permitir asignación masiva de los nuevos estados de documentos (casts definidos abajo)
@@ -61,7 +64,9 @@ class CotizacionProveedor extends Model
         'invoice_status_final' => 'string',
         'packing_status_final' => 'string',
         'excel_conf_status_final' => 'string',
-        'excel_conf_form_cerrado' => 'boolean'
+        'excel_conf_form_cerrado' => 'boolean',
+        'canal' => 'string',
+        'fecha_entrega' => 'date:Y-m-d'
     ];
 
     /**

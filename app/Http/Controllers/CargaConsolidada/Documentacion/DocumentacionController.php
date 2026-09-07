@@ -242,7 +242,7 @@ class DocumentacionController extends Controller
                 $this->processFileUpload($proveedor, 'factura_comercial', $request->file('file_comercial'), $data);
                 $data['invoice_status'] = 'Revisado';
                 if (strcasecmp((string) ($proveedor->invoice_status_final ?? ''), 'Revisado') !== 0) {
-                    $data['invoice_status_final'] = 'Recibido';
+                    $data['invoice_status_final'] = 'Entregado';
                 }
             } else {
                 unset($data['file_comercial']);
@@ -254,7 +254,7 @@ class DocumentacionController extends Controller
                 $data['excel_conf_status'] = 'Revisado';
                 $data['excel_conf_form_cerrado'] = true;
                 if (strcasecmp((string) ($proveedor->excel_conf_status_final ?? ''), 'Revisado') !== 0) {
-                    $data['excel_conf_status_final'] = 'Recibido';
+                    $data['excel_conf_status_final'] = 'Entregado';
                 }
             } else {
                 unset($data['excel_confirmacion']);
@@ -265,7 +265,7 @@ class DocumentacionController extends Controller
                 $this->processFileUpload($proveedor, 'packing_list', $request->file('packing_list'), $data);
                 $data['packing_status'] = 'Revisado';
                 if (strcasecmp((string) ($proveedor->packing_status_final ?? ''), 'Revisado') !== 0) {
-                    $data['packing_status_final'] = 'Recibido';
+                    $data['packing_status_final'] = 'Entregado';
                 }
             } else {
                 unset($data['packing_list']);
