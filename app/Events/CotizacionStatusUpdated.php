@@ -52,6 +52,7 @@ class CotizacionStatusUpdated implements ShouldBroadcast, ShouldQueue
             new PrivateChannel('Cotizador-notifications'),
             new PrivateChannel('Coordinacion-notifications'),
             new PrivateChannel('Administracion-notifications'),
+            new PrivateChannel('RRHH-notifications'),
         ];
     }
 

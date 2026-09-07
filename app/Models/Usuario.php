@@ -24,6 +24,7 @@ class Usuario extends Authenticatable implements JWTSubject
     const ROL_SOPORTE = 'Soporte';
     const ROL_PM = 'PM';
     const ROL_FINANZAS = 'Finanzas';
+    const ROL_RRHH = 'RRHH';
     protected $fillable = [
         'No_Usuario',
         'No_Password',
@@ -212,6 +213,22 @@ class Usuario extends Authenticatable implements JWTSubject
     public function usuarioEquivaleJefeImportacion()
     {
         return self::rolEquivaleJefeImportacion($this->getNombreGrupo());
+    }
+
+    /**
+     * Verifica si el usuario tiene los mismos accesos que el Jefe de Ventas
+     * (GINO, identificado por ID_JEFE_VENTAS) dentro del flujo de carga consolidada:
+     * es el propio GINO o pertenece al rol RRHH.
+     *
+     * @return bool
+     */
+    public function esJefeVentasOEquivalente()
+    {
+        if ($this->getIdUsuario() === self::ID_JEFE_VENTAS) {
+            return true;
+        }
+
+        return trim((string) $this->getNombreGrupo()) === self::ROL_RRHH;
     }
 
     public static function rolesConAccesoWhatsappInbox()

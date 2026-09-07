@@ -80,10 +80,10 @@ Broadcast::channel('whatsapp-copiloto.ventas', function ($user) {
         return false;
     }
     $grupo = $user->grupo->No_Grupo;
-    if ($grupo === Usuario::ROL_COTIZADOR || $grupo === Usuario::ROL_ADMINISTRACION || $grupo === Usuario::ROL_GERENCIA) {
+    if ($grupo === Usuario::ROL_COTIZADOR || $grupo === Usuario::ROL_ADMINISTRACION || $grupo === Usuario::ROL_GERENCIA || $grupo === Usuario::ROL_RRHH) {
         return true;
     }
-    return (int) $user->getIdUsuario() === 28791;
+    return (int) $user->getIdUsuario() === Usuario::ID_JEFE_VENTAS;
 });
 Broadcast::channel('Administracion-notifications', function ($user) {
     return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_ADMINISTRACION;
@@ -102,6 +102,9 @@ Broadcast::channel('Soporte-notifications', function ($user) {
 });
 Broadcast::channel('PM-notifications', function ($user) {
     return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_PM;
+});
+Broadcast::channel('RRHH-notifications', function ($user) {
+    return $user->grupo && $user->grupo->No_Grupo === Usuario::ROL_RRHH;
 });
 // Canal privado para todos los usuarios autenticados
 Broadcast::channel('User-notifications', function ($user) {

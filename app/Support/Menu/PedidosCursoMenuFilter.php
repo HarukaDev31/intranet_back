@@ -28,6 +28,10 @@ class PedidosCursoMenuFilter
             $noGrupo = (string) (DB::table('grupo')->where('ID_Grupo', $idGrupo)->value('No_Grupo') ?? '');
         }
 
+        if ($noGrupo === Usuario::ROL_RRHH) {
+            return $menus;
+        }
+
         if ($noGrupo !== Usuario::ROL_COTIZADOR) {
             return $menus;
         }

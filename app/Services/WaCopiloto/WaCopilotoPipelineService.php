@@ -786,7 +786,7 @@ class WaCopilotoPipelineService
 
         $grupo = $user->getNombreGrupo();
 
-        return $grupo === Usuario::ROL_GERENCIA || $grupo === Usuario::ROL_ADMINISTRACION;
+        return $grupo === Usuario::ROL_GERENCIA || $grupo === Usuario::ROL_ADMINISTRACION || $grupo === Usuario::ROL_RRHH;
     }
 
     /**
