@@ -306,16 +306,15 @@ class CotizacionController extends Controller
                     }
                     break;
 
-                case Usuario::ROL_DOCUMENTACION || Usuario::ROL_JEFE_IMPORTACION:
-                    $query->where('estado_cotizador', 'CONFIRMADO');
+                case Usuario::ROL_RRHH:
+                    // RRHH ve las mismas cotizaciones (incluidas Pendiente) que el Jefe de Ventas.
                     break;
 
-                case Usuario::ROL_COORDINACION || Usuario::ROL_CONTABILIDAD:
-                    $query->where('estado_cotizador', 'CONFIRMADO');
-                    break;
+                case Usuario::ROL_DOCUMENTACION:
+                case Usuario::ROL_JEFE_IMPORTACION:
+                case Usuario::ROL_COORDINACION:
+                case Usuario::ROL_CONTABILIDAD:
                 case Usuario::ROL_ALMACEN_CHINA:
-                    $query->where('estado_cotizador', 'CONFIRMADO');
-                    break;
                 case Usuario::JEFE_MARKETING:
                     $query->where('estado_cotizador', 'CONFIRMADO');
                     break;
