@@ -114,9 +114,11 @@ class DocumentStatusSync
     }
 
     /**
-     * Aplica cambio de estado Coord 2 (Daniela) y, si pasa a Revisado, sincroniza el
-     * campo final (Coord 3/José y resto). Para Excel Conf. el final pasa a Entregado;
-     * para Invoice/Packing el final pasa a Entregado también (equivalente al antiguo "Recibido").
+     * Aplica cambio de estado Coord 2 (Daniela) y sincroniza el campo final (Coord 3/José y resto).
+     *
+     * Invoice/Packing: el final se espeja siempre al valor de Daniela (salvo que José ya lo haya
+     * dejado en Revisado, que no se pisa desde Coord 2).
+     * Excel Conf.: el final solo se sincroniza (a Entregado) cuando Daniela pasa a Revisado.
      *
      * @param  CotizacionProveedor  $proveedor
      * @return bool true si excel_conf_status acaba de pasar a Revisado
@@ -133,15 +135,16 @@ class DocumentStatusSync
 
         $proveedor->{$coordField} = $newValue;
 
-        if ($becomesRevisado) {
-            $currentFinal = (string) ($proveedor->{$finalField} ?? 'Pendiente');
-            if (strcasecmp($currentFinal, 'Revisado') !== 0) {
-                $proveedor->{$finalField} = 'Entregado';
-            }
-        }
+        $currentFinal = (string) ($proveedor->{$finalField} ?? 'Pendiente');
+        $finalYaRevisado = strcasecmp($currentFinal, 'Revisado') === 0;
 
         if ($coordField === 'excel_conf_status') {
+            if ($becomesRevisado && !$finalYaRevisado) {
+                $proveedor->{$finalField} = 'Entregado';
+            }
             $proveedor->excel_conf_form_cerrado = $newValue === 'Revisado';
+        } elseif (!$finalYaRevisado) {
+            $proveedor->{$finalField} = $newValue;
         }
 
         return $coordField === 'excel_conf_status' && $becomesRevisado;
