@@ -2187,7 +2187,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $usuarioActual = JWTAuth::parseToken()->authenticate();
             $cotizacion = Cotizacion::find($idCotizacion);
             $proveedor = CotizacionProveedor::find($idProveedor);
-            $carga = Contenedor::where('id', $cotizacion->id_contenedor)->first();
+            $carga = Contenedor::where('id', $cotizacion->id_contenedor)->value('carga');
             $this->dispararEventoYNotificacionProveedorInspeccionado($cotizacion, $proveedor, $proveedor->code_supplier, $carga, $usuarioActual);
             $this->crearNotificacionesProveedorInspeccionado($cotizacion, $proveedor, $proveedor->code_supplier, $carga, $usuarioActual);
 
