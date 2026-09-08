@@ -22,6 +22,7 @@ use App\Models\SoporteTi\SoporteTiSolicitud;
 use App\Models\SoporteTi\SoporteTiSolicitudEstado;
 use App\Models\SoporteTi\SoporteTiSolicitudEvidencia;
 use App\Models\Usuario;
+use App\Support\SoporteTi\SoporteTiHtmlEvidenceSanitizer;
 use App\Support\SoporteTi\SoporteTiWhatsappGrupoMensajeBuilder;
 use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -30,6 +31,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use App\Services\SoporteTi\SoporteTiBusinessHoursHelper;
 use App\Traits\FileTrait;
@@ -3044,6 +3046,21 @@ class SoporteTiService
             if (!$file instanceof UploadedFile) {
                 continue;
             }
+
+            if (SoporteTiHtmlEvidenceSanitizer::esHtml($file)) {
+                $saneado = SoporteTiHtmlEvidenceSanitizer::sanear($file);
+                $dir = 'soporte-ti/pending-chat/' . $batch;
+                $rel = $dir . '/' . Str::uuid() . '_' . $saneado['nombre'];
+                Storage::disk('local')->put($rel, $saneado['contenido']);
+                $archivosPendientes[] = array(
+                    'local_path' => $rel,
+                    'nombre_original' => $saneado['nombre'],
+                    'tamano_bytes' => strlen($saneado['contenido']),
+                    'mime' => 'text/plain',
+                );
+                continue;
+            }
+
             $rel = $file->store('soporte-ti/pending-chat/' . $batch, 'local');
             $mime = $file->getClientMimeType();
             $archivosPendientes[] = array(
