@@ -6,6 +6,7 @@ use App\Traits\FileTrait;
 use App\Traits\UsesObjectStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\Usuario;
@@ -52,6 +53,8 @@ class EmbarcadosController extends Controller
             $perPage = (int) $request->input('itemsPerPage', 100);
             $search = trim((string) $request->input('search', ''));
 
+            $estadoChinaContenedor = Contenedor::where('id', $idContenedor)->value('estado_china');
+
             $baseQuery = DB::table('contenedor_consolidado_cotizacion as CC')
                 ->leftJoin('contenedor_consolidado_tipo_cliente as TC', 'TC.id', '=', 'CC.id_tipo_cliente')
                 ->select([
@@ -63,7 +66,6 @@ class EmbarcadosController extends Controller
                 ])
                 ->where('CC.id_contenedor', $idContenedor)
                 ->whereNull('CC.deleted_at')
-                ->whereNotNull('CC.estado_cliente')
                 ->whereNull('CC.id_cliente_importacion')
                 ->where('CC.estado_cotizador', 'CONFIRMADO')
                 ->whereExists(function ($query) {
@@ -71,6 +73,12 @@ class EmbarcadosController extends Controller
                     ->from('contenedor_consolidado_cotizacion_proveedores')
                     ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'CC.id');
             });
+
+            // Mientras el contenedor no haya completado la recepción en China, se listan
+            // todas las cotizaciones; al llegar a COMPLETADO se exige estado_cliente definido.
+            if ($estadoChinaContenedor === Contenedor::ESTADOS_CHINA['COMPLETADO']) {
+                $baseQuery->whereNotNull('CC.estado_cliente');
+            }
 
             if ($search !== '') {
                 $like = "%{$search}%";

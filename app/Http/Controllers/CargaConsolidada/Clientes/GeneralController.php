@@ -113,7 +113,6 @@ class GeneralController extends Controller
             ->leftJoin('usuario as U', 'U.ID_Usuario', '=', 'CC.id_usuario')
             ->where('CC.id_contenedor', $idContenedor)
             ->whereNull('CC.deleted_at')
-            ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO')
             ->whereExists(function ($query) {
@@ -121,6 +120,12 @@ class GeneralController extends Controller
                     ->from('contenedor_consolidado_cotizacion_proveedores')
                     ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'CC.id');
             });
+
+        // Mientras el contenedor no haya completado la recepción en China, se listan
+        // todas las cotizaciones; al llegar a COMPLETADO se exige estado_cliente definido.
+        if (Contenedor::where('id', $idContenedor)->value('estado_china') === Contenedor::ESTADOS_CHINA['COMPLETADO']) {
+            $query->whereNotNull('CC.estado_cliente');
+        }
         // Aplicar filtro de estado si se proporciona
         $page = $request->input('currentPage', 1);
         $perPage = $request->input('itemsPerPage', 10);
