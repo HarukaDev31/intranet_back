@@ -4,6 +4,7 @@ namespace App\Http\Controllers\CargaConsolidada\Clientes;
 
 use App\Http\Controllers\Controller;
 use App\Models\CargaConsolidada\Contenedor;
+use App\Models\CargaConsolidada\Cotizacion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -134,6 +135,13 @@ class VariacionController extends Controller
     public function showClientesDocumentacion($id)
     {
         try {
+            if (!Cotizacion::where('id', $id)->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada o sin estado válido'
+                ], 404);
+            }
+
             // Obtener la cotización principal
             $cotizacion = DB::table('contenedor_consolidado_cotizacion as main')
                 ->select([
@@ -302,9 +310,7 @@ class VariacionController extends Controller
         try {
             $idCotizacion = $request->id_cotizacion;
             $volSelected = $request->volumen;
-            $cotizacion = DB::table('contenedor_consolidado_cotizacion')
-                ->where('id', $idCotizacion)
-                ->whereNull('deleted_at')
+            $cotizacion = Cotizacion::where('id', $idCotizacion)
                 ->update(['vol_selected' => $volSelected]);
             if ($cotizacion) {
                 return response()->json([
