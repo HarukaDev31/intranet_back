@@ -7,6 +7,7 @@ use App\Models\Usuario;
 use App\Services\Firebase\FcmPushService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class NotificarPushSolicitudCreada implements ShouldQueue
@@ -38,7 +39,13 @@ class NotificarPushSolicitudCreada implements ShouldQueue
             ->map(fn ($id) => (int) $id)
             ->all();
 
+        Log::info('NotificarPushSolicitudCreada: procesando ticket creado.', [
+            'solicitud_id' => $solicitud['id'] ?? null,
+            'staff_ids' => $staffIds,
+        ]);
+
         if (empty($staffIds)) {
+            Log::info('NotificarPushSolicitudCreada: no se encontró staff (PM/Soporte) activo, no se envía push.');
             return;
         }
 
