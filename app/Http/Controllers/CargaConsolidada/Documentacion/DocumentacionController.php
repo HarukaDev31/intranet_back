@@ -1809,6 +1809,13 @@ class DocumentacionController extends Controller
     public function downloadDocumentacionZip($id)
     {
         try {
+            if (!Contenedor::where('id', $id)->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no encontrado'
+                ], 404);
+            }
+
             // Obtener carpetas y archivos de documentación
             $folders = DB::table('contenedor_consolidado_documentacion_folders as main')
                 ->join('contenedor_consolidado_documentacion_files as files', 'files.id_folder', '=', 'main.id')
