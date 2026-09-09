@@ -720,7 +720,13 @@ class AuthController extends Controller
             }
         }
 
-        auth()->logout();
+        try {
+            auth()->logout();
+        } catch (\Throwable $e) {
+            // Con JWT_BLACKLIST_ENABLED=false (default en este proyecto) no se puede invalidar
+            // el token server-side; el cliente igual debe descartarlo y el JWT expira por su TTL.
+            Log::warning('AuthController::logout — no se pudo invalidar el token: ' . $e->getMessage());
+        }
 
         return response()->json([
             'success' => true,
