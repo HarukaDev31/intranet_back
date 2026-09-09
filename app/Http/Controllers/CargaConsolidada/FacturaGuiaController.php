@@ -380,6 +380,10 @@ class FacturaGuiaController extends Controller
             if (!$idCotizacion || !$file || !$file->isValid()) {
                 return response()->json(['success' => false, 'message' => 'idCotizacion y file son requeridos'], 400);
             }
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['success' => false, 'message' => 'Cotización no encontrada'], 404);
+            }
             $originalName = $file->getClientOriginalName();
             $fileSize     = $file->getSize();
             $mimeType     = $file->getMimeType();
@@ -388,11 +392,8 @@ class FacturaGuiaController extends Controller
             $storedPath = $this->objectStorage()->storeUploadedFile($file, 'cargaconsolidada/guiaremision/' . $idCotizacion, $storedName);
 
             // legacy: mantener último archivo en la cotización (compatibilidad)
-            $cotizacion = Cotizacion::find($idCotizacion);
-            if ($cotizacion) {
-                $cotizacion->guia_remision_url = $storedName;
-                $cotizacion->save();
-            }
+            $cotizacion->guia_remision_url = $storedName;
+            $cotizacion->save();
 
             // nuevo: guardar item en tabla de guías
             $guia = GuiaRemision::create([
@@ -434,6 +435,9 @@ class FacturaGuiaController extends Controller
 
             if (!$idCotizacion || empty($files) || !is_array($files)) {
                 return response()->json(['success' => false, 'message' => 'idCotizacion y files[] son requeridos'], 400);
+            }
+            if (!Cotizacion::where('id', $idCotizacion)->exists()) {
+                return response()->json(['success' => false, 'message' => 'Cotización no encontrada'], 404);
             }
 
             $created = [];

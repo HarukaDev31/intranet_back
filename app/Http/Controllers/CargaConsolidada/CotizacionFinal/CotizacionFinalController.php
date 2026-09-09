@@ -1566,6 +1566,13 @@ class CotizacionFinalController extends Controller
                 'banco' => 'required|string|max:255'
             ]);
 
+            if (!Cotizacion::where('id', $request->idCotizacion)->where('id_contenedor', $request->idContenedor)->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada'
+                ], 404);
+            }
+
             // Autenticar usuario
             $user = JWTAuth::parseToken()->authenticate();
 
@@ -1694,13 +1701,19 @@ class CotizacionFinalController extends Controller
     {
         try {
             $idContenedor = $request->idContenedor;
+            $contenedor = Contenedor::find($idContenedor);
+            if (!$contenedor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no encontrado'
+                ], 404);
+            }
             $file = $request->file;
             $path = $this->storageStoreUpload(
                 $file,
                 'cargaconsolidada/cotizacionfinal/' . $idContenedor,
                 'factura_general' . time() . '.xlsx'
             );
-            $contenedor = Contenedor::find($idContenedor);
             $contenedor->factura_general_url = $path;
             $contenedor->save();
             return response()->json([
@@ -1973,6 +1986,13 @@ class CotizacionFinalController extends Controller
                 'file' => 'required|file|mimes:xlsx,xls',
                 'idContenedor' => 'required|integer',
             ]);
+
+            if (!Contenedor::where('id', $request->input('idContenedor'))->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no encontrado'
+                ], 404);
+            }
 
             $authUser = null;
             try {
