@@ -5,10 +5,18 @@ namespace App\Models\CargaConsolidada;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
 class ContenedorSeguimientoDriveSnapshot extends Model
 {
+    use SincronizaOrganizacionId;
+
     protected $table = 'contenedor_seguimiento_drive_snapshots';
+
+    protected static function organizacionRelacion(): string
+    {
+        return 'contenedor';
+    }
 
     const UPDATED_AT = null;
 

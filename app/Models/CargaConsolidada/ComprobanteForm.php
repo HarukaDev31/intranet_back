@@ -4,10 +4,18 @@ namespace App\Models\CargaConsolidada;
 
 use App\Models\Distrito;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
 class ComprobanteForm extends Model
 {
+    use SincronizaOrganizacionId;
+
     protected $table = 'consolidado_comprobante_forms';
+
+    protected static function organizacionRelacion(): string
+    {
+        return 'cotizacion';
+    }
 
     protected $fillable = [
         'id_contenedor',

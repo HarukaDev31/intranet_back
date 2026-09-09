@@ -4,11 +4,20 @@ namespace App\Models\CargaConsolidada;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
 class DocumentacionFile extends Model
 {
+    use SincronizaOrganizacionId;
+
     protected $table = 'contenedor_consolidado_documentacion_files';
-    
+
+    protected static function organizacionRelacion(): string
+    {
+        return 'contenedor';
+    }
+
+
     protected $fillable = [
         'id_folder',
         'id_contenedor',

@@ -10,11 +10,13 @@ use App\Models\CalculadoraImportacion;
 use App\Models\CargaConsolidada\Comprobante;
 use App\Models\CargaConsolidada\Detraccion;
 use App\Models\CargaConsolidada\ReasonDeleteCotizacion;
+use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
 class Cotizacion extends Model
 {
     use HasFactory;
     use SoftDeletes;
+    use SincronizaOrganizacionId;
 
     /**
      * La tabla asociada al modelo.
@@ -23,6 +25,11 @@ class Cotizacion extends Model
      */
     protected $table = 'contenedor_consolidado_cotizacion';
     public $timestamps = false;
+
+    protected static function organizacionRelacion(): string
+    {
+        return 'contenedor';
+    }
 
     /**
      * Los atributos que son asignables masivamente.

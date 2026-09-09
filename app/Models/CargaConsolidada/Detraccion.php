@@ -3,10 +3,18 @@
 namespace App\Models\CargaConsolidada;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
 class Detraccion extends Model
 {
+    use SincronizaOrganizacionId;
+
     protected $table = 'contenedor_consolidado_detracciones';
+
+    protected static function organizacionRelacion(): string
+    {
+        return 'cotizacion';
+    }
 
     protected $fillable = [
         'quotation_id',

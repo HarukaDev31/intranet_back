@@ -7,10 +7,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\BaseDatos\Clientes\Cliente;
+use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
 class ConsolidadoCotizacionAduanaTramite extends Model
 {
+    use SincronizaOrganizacionId;
+
     protected $table = 'consolidado_cotizacion_aduana_tramites';
+
+    protected static function organizacionRelacion(): string
+    {
+        return 'consolidado';
+    }
 
     protected $fillable = [
         'id_cotizacion',

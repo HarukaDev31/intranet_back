@@ -4,12 +4,19 @@ namespace App\Models\CargaConsolidada;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
 class CotizacionProveedorItems extends Model
 {
     use HasFactory;
+    use SincronizaOrganizacionId;
 
     protected $table = 'contenedor_consolidado_cotizacion_proveedores_items';
+
+    protected static function organizacionRelacion(): string
+    {
+        return 'contenedor';
+    }
 
     protected $fillable = [
         'id_contenedor',

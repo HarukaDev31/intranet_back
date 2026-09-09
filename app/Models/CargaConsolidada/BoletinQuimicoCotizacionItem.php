@@ -3,10 +3,18 @@
 namespace App\Models\CargaConsolidada;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
 class BoletinQuimicoCotizacionItem extends Model
 {
+    use SincronizaOrganizacionId;
+
     protected $table = 'boletin_quimico_cotizacion_item';
+
+    protected static function organizacionRelacion(): string
+    {
+        return 'contenedor';
+    }
 
     protected $fillable = [
         'id_contenedor',

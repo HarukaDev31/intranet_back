@@ -4,10 +4,18 @@ namespace App\Models\CargaConsolidada;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
 class ContenedorSeguimientoCorteCliente extends Model
 {
+    use SincronizaOrganizacionId;
+
     protected $table = 'contenedor_seguimiento_corte_clientes';
+
+    protected static function organizacionRelacion(): string
+    {
+        return 'proveedor';
+    }
 
     const UPDATED_AT = null;
 

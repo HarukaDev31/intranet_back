@@ -5,11 +5,20 @@ namespace App\Models\CargaConsolidada;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\CotizacionProveedorItems;
+use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
 class CotizacionProveedor extends Model
 {
+    use SincronizaOrganizacionId;
+
     protected $table = 'contenedor_consolidado_cotizacion_proveedores';
-    
+
+    protected static function organizacionRelacion(): string
+    {
+        return 'contenedor';
+    }
+
+
     protected $fillable = [
         'id_cotizacion',
         'id_contenedor',

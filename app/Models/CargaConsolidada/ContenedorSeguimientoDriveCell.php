@@ -5,10 +5,18 @@ namespace App\Models\CargaConsolidada;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
 class ContenedorSeguimientoDriveCell extends Model
 {
+    use SincronizaOrganizacionId;
+
     protected $table = 'contenedor_seguimiento_drive_cells';
+
+    protected static function organizacionRelacion(): string
+    {
+        return 'contenedor';
+    }
 
     protected $fillable = [
         'id_contenedor',
