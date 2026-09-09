@@ -4600,8 +4600,6 @@ class CotizacionFinalController extends Controller
                     : ['recargos' => 0.0, 'descuento' => 0.0];
             }
             Log::info('Extras Calc: ' . json_encode($extrasCalc));
-            $tipoCambio = $this->resolveTipoCambioCotizacionFinal($data, $calcRow);
-            $tipoCambioExcel = $this->tipoCambioExcelFactor($tipoCambio);
             $COSTOSFOBMULTIPLIER = 0.2399;
             $FLETEMULTIPLIER = 0.3601;
             $COSTOSDESTINOMULTIPLIER = 0.4000;
@@ -4871,7 +4869,7 @@ class CotizacionFinalController extends Controller
                 $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . $rowCostosDestinoDetalleCostoUnitario, "=ROUND((" . $InitialColumn . $rowCostosDestinoDetalleCostoTotal . ")/(" . $InitialColumn . $rowCostosDestinoDetalleCantidad . "),10)");
                 $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . $rowCostosDestinoDetalleCostoUnitario)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
 
-                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . $rowCostosDestinoDetalleCostoSoles, "=ROUND((" . $InitialColumn . $rowCostosDestinoDetalleCostoUnitario . ")*" . $tipoCambioExcel . ",10)");
+                $objPHPExcel->setActiveSheetIndex(2)->setCellValue($InitialColumn . $rowCostosDestinoDetalleCostoSoles, "=ROUND((" . $InitialColumn . $rowCostosDestinoDetalleCostoUnitario . ")*3.7,10)");
                 $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . $rowCostosDestinoDetalleCostoSoles)->getNumberFormat()->setFormatCode('"S/." #,##0.00_-');
 
                 $InitialColumn++;
@@ -5751,18 +5749,17 @@ class CotizacionFinalController extends Controller
         $sheet->setCellValue($totalColumn . '40', "=IF($CBMTotal<1, $tarifaCellValue*0.4, $tarifaCellValue*0.4*$CBMTotal)");
 
         // Configurar fórmulas complejas para cada producto
-        $this->setupComplexFormulasForProducts($sheet, $data['cliente']['productos'], $totalColumn, $data);
+        $this->setupComplexFormulasForProducts($sheet, $data['cliente']['productos'], $totalColumn);
     }
 
     /**
      * Configura fórmulas complejas para cada producto
      */
-    private function setupComplexFormulasForProducts($sheet, $productos, $totalColumn, array $data = [])
+    private function setupComplexFormulasForProducts($sheet, $productos, $totalColumn)
     {
         $InitialColumn = 'C';
         $FleteCell = $totalColumn . '14';
         $CobroCell = $totalColumn . '40';
-        $tipoCambioExcel = $this->tipoCambioExcelFactor($this->resolveTipoCambioCotizacionFinal($data));
 
         foreach ($productos as $index => $producto) {
             $column = $this->incrementColumn($InitialColumn, $index);
@@ -5804,7 +5801,7 @@ class CotizacionFinalController extends Controller
             $sheet->setCellValue($column . '45', $producto["cantidad"]);
             $sheet->setCellValue($column . '46', "=SUM(" . $column . "44/" . $column . "45)");
             $sheet->getStyle($column . '46')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
-            $sheet->setCellValue($column . '47', "=" . $column . "46*" . $tipoCambioExcel);
+            $sheet->setCellValue($column . '47', "=" . $column . "46*3.7");
             $sheet->getStyle($column . '47')->getNumberFormat()->setFormatCode('"S/." #,##0.00_-');
         }
     }

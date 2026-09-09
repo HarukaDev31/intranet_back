@@ -930,12 +930,6 @@ class SeguimientoConsolidadoDriveService
                 'file_name' => $fileName,
             ]);
 
-            $uploadStarted = microtime(true);
-            $this->logFlow('upload_drive_inicio', $flow, 'info', [
-                'mes_folder' => $mesFolder,
-                'file_name' => $fileName,
-            ]);
-
             $driveLink = $this->driveService->uploadForConsolidado(
                 $folder['mes'],
                 $tmpPath,

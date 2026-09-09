@@ -141,7 +141,7 @@ class CalculadoraImportacionService
             $cliente = $this->buscarOcrearCliente($data['clienteInfo']);
 
             // Determinar campos según tipo de documento
-            $tipoDocumento = $this->resolveTipoDocumento($data['clienteInfo'] ?? []);
+            $tipoDocumento = $data['clienteInfo']['tipoDocumento'] ?? 'DNI';
             $nombreCliente = $tipoDocumento === 'RUC' && empty(trim($data['clienteInfo']['nombre'] ?? ''))
                 ? ($data['clienteInfo']['empresa'] ?? $data['clienteInfo']['razonSocial'] ?? '')
                 : ($data['clienteInfo']['nombre'] ?? '');
@@ -164,9 +164,6 @@ class CalculadoraImportacionService
                 'dni_cliente' => $tipoDocumento === 'DNI' ? ($data['clienteInfo']['dni'] ?? null) : null,
                 'ruc_cliente' => $tipoDocumento === 'RUC' ? ($data['clienteInfo']['ruc'] ?? null) : null,
                 'razon_social' => $tipoDocumento === 'RUC' ? ($data['clienteInfo']['empresa'] ?? $data['clienteInfo']['razonSocial'] ?? null) : null,
-                'domicilio_fiscal' => $tipoDocumento === 'RUC' ? ($data['clienteInfo']['domicilioFiscal'] ?? $data['clienteInfo']['domicilio_fiscal'] ?? null) : null,
-                'coordinador_operativo_nombre' => $tipoDocumento === 'RUC' ? ($data['clienteInfo']['coordinadorOperativoNombre'] ?? $data['clienteInfo']['coordinador_operativo_nombre'] ?? null) : null,
-                'coordinador_operativo_dni' => $tipoDocumento === 'RUC' ? ($data['clienteInfo']['coordinadorOperativoDni'] ?? $data['clienteInfo']['coordinador_operativo_dni'] ?? null) : null,
                 'correo_cliente' => $data['clienteInfo']['correo'] ?: null,
                 'whatsapp_cliente' => is_array($data['clienteInfo']['whatsapp']) ? ($data['clienteInfo']['whatsapp']['value'] ?? null) : ($data['clienteInfo']['whatsapp'] ?? null),
                 'tipo_cliente' => $data['clienteInfo']['tipoCliente'],
@@ -318,7 +315,7 @@ class CalculadoraImportacionService
             $cliente = $this->buscarOcrearCliente($data['clienteInfo']);
 
             // Determinar campos según tipo de documento
-            $tipoDocumento = $this->resolveTipoDocumento($data['clienteInfo'] ?? []);
+            $tipoDocumento = $data['clienteInfo']['tipoDocumento'] ?? 'DNI';
             $nombreCliente = $tipoDocumento === 'RUC' && empty(trim($data['clienteInfo']['nombre'] ?? ''))
                 ? ($data['clienteInfo']['empresa'] ?? $data['clienteInfo']['razonSocial'] ?? '')
                 : ($data['clienteInfo']['nombre'] ?? '');
@@ -343,9 +340,6 @@ class CalculadoraImportacionService
                 'dni_cliente' => $tipoDocumento === 'DNI' ? ($data['clienteInfo']['dni'] ?? null) : null,
                 'ruc_cliente' => $tipoDocumento === 'RUC' ? ($data['clienteInfo']['ruc'] ?? null) : null,
                 'razon_social' => $tipoDocumento === 'RUC' ? ($data['clienteInfo']['empresa'] ?? $data['clienteInfo']['razonSocial'] ?? null) : null,
-                'domicilio_fiscal' => $tipoDocumento === 'RUC' ? ($data['clienteInfo']['domicilioFiscal'] ?? $data['clienteInfo']['domicilio_fiscal'] ?? null) : null,
-                'coordinador_operativo_nombre' => $tipoDocumento === 'RUC' ? ($data['clienteInfo']['coordinadorOperativoNombre'] ?? $data['clienteInfo']['coordinador_operativo_nombre'] ?? null) : null,
-                'coordinador_operativo_dni' => $tipoDocumento === 'RUC' ? ($data['clienteInfo']['coordinadorOperativoDni'] ?? $data['clienteInfo']['coordinador_operativo_dni'] ?? null) : null,
                 'correo_cliente' => $data['clienteInfo']['correo'] ?: null,
                 'whatsapp_cliente' => is_array($data['clienteInfo']['whatsapp']) ? ($data['clienteInfo']['whatsapp']['value'] ?? null) : ($data['clienteInfo']['whatsapp'] ?? null),
                 'tipo_cliente' => $data['clienteInfo']['tipoCliente'],
@@ -783,7 +777,7 @@ class CalculadoraImportacionService
      */
     private function buscarOcrearCliente(array $clienteInfo): ?Cliente
     {
-        $tipoDocumento = $this->resolveTipoDocumento($clienteInfo);
+        $tipoDocumento = $clienteInfo['tipoDocumento'] ?? 'DNI';
         $whatsapp = is_array($clienteInfo['whatsapp'] ?? null) ? ($clienteInfo['whatsapp']['value'] ?? $clienteInfo['whatsapp']) : ($clienteInfo['whatsapp'] ?? null);
 
         if ($tipoDocumento === 'RUC') {
@@ -1697,7 +1691,7 @@ class CalculadoraImportacionService
             }
 
             $sheetResumen->setCellValue('E11', $data['tarifa']['value']);
-            $tipoDocumento = $this->resolveTipoDocumento($data['clienteInfo'] ?? []);
+            $tipoDocumento = $data['clienteInfo']['tipoDocumento'] ?? 'DNI';
             $nombreMostrar = $tipoDocumento === 'RUC' ? ($data['clienteInfo']['empresa'] ?? $data['clienteInfo']['razonSocial'] ?? '') : $data['clienteInfo']['nombre'];
             $documentoMostrar = $tipoDocumento === 'RUC' ? ($data['clienteInfo']['ruc'] ?? '') : $data['clienteInfo']['dni'];
             $whatsappValue = is_array($data['clienteInfo']['whatsapp']) ? ($data['clienteInfo']['whatsapp']['value'] ?? '') : ($data['clienteInfo']['whatsapp'] ?? '');
@@ -1999,9 +1993,6 @@ class CalculadoraImportacionService
             'ruc' => $calculadora->ruc_cliente ?? '',
             'empresa' => $calculadora->razon_social ?? '',
             'razonSocial' => $calculadora->razon_social ?? '',
-            'domicilioFiscal' => $calculadora->domicilio_fiscal ?? '',
-            'coordinadorOperativoNombre' => $calculadora->coordinador_operativo_nombre ?? '',
-            'coordinadorOperativoDni' => $calculadora->coordinador_operativo_dni ?? '',
             'correo' => $calculadora->correo_cliente ?? '',
             'whatsapp' => is_array($calculadora->whatsapp_cliente ?? null)
                 ? $calculadora->whatsapp_cliente
