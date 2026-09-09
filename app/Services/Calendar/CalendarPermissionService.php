@@ -64,6 +64,29 @@ class CalendarPermissionService
         return $this->isJefeImportaciones($user) || $this->isGerencia($user);
     }
 
+    /**
+     * Jefe del grupo de calendario (o Gerencia). No basta ser jefe de otro grupo.
+     */
+    public function isJefeOfRoleGroup(Usuario $user, $roleGroupId = null): bool
+    {
+        if ($this->isGerencia($user)) {
+            return true;
+        }
+        if ($roleGroupId === null || $roleGroupId === '') {
+            return $this->isJefeImportaciones($user);
+        }
+
+        return CalendarRoleGroupMember::where('user_id', $user->getIdUsuario())
+            ->where('role_group_id', (int) $roleGroupId)
+            ->where('role_type', 'JEFE')
+            ->exists();
+    }
+
+    public function canChangeAnyChargeStatusForRoleGroup(Usuario $user, $roleGroupId = null): bool
+    {
+        return $this->isJefeOfRoleGroup($user, $roleGroupId);
+    }
+
     public function canChangeOwnChargeStatus(Usuario $user): bool
     {
         return $this->isJefeImportaciones($user) || $this->isCoordinacionOrDocumentacion($user) || $this->isGerencia($user);

@@ -206,7 +206,10 @@ class CalendarActivityController extends Controller
             return response()->json(['success' => false, 'message' => $msg], 400);
         }
         $name = $request->input('name');
-        $colorCode = $request->input('color_code');
+        // exists() es true aunque color_code venga null (quitar color). has() lo trata como ausente.
+        $colorCode = $request->exists('color_code')
+            ? ($request->input('color_code') ?: '')
+            : null;
         $extras = $request->only(['allow_saturday', 'allow_sunday', 'default_priority']);
         if (CalendarActivity::where('name', $name)->where('role_group_id', $roleGroupId)->where('id', '!=', $id)->exists()) {
             return response()->json(['success' => false, 'message' => 'Ya existe una actividad con ese nombre'], 400);
@@ -479,8 +482,12 @@ class CalendarActivityController extends Controller
         if (!$charge) {
             return response()->json(['success' => false, 'message' => 'Carga no encontrada'], 404);
         }
-        $canChangeAny = $this->permissionService->canChangeAnyChargeStatus($user);
-        $isOwn = $charge->user_id === $user->getIdUsuario();
+        $event = CalendarEvent::with('calendar')->find($charge->calendar_event_id);
+        $roleGroupId = $event
+            ? ($event->role_group_id ?: ($event->calendar ? $event->calendar->role_group_id : null))
+            : null;
+        $canChangeAny = $this->permissionService->canChangeAnyChargeStatusForRoleGroup($user, $roleGroupId);
+        $isOwn = (int) $charge->user_id === (int) $user->getIdUsuario();
         if (!$canChangeAny && !$isOwn) {
             return response()->json(['success' => false, 'message' => 'No puedes cambiar el estado de otro responsable'], 403);
         }
@@ -716,7 +723,7 @@ class CalendarActivityController extends Controller
                 } else {
                     // Sin grupo: fallback a roles legacy (Coordinación, Documentación, Jefe Importación)
                     $users = Usuario::whereHas('grupo', function ($q) {
-                        $q->whereIn('No_Grupo', [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_JEFE_IMPORTACION]);
+                        $q->whereIn('No_Grupo', array_merge([Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], Usuario::rolesEquivalentesJefeImportacion()));
                     })
                         ->where('Nu_Estado', 1)
                         ->orderBy('No_Nombres_Apellidos')

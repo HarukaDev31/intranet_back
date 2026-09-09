@@ -155,7 +155,8 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
                 $ok = $excelService->generarArchivoGeneralPorCotizacion(
                     $templatePath,
                     $fullPath,
-                    $proveedoresPayloads
+                    $proveedoresPayloads,
+                    $nombreCliente
                 );
 
                 if ($ok && is_file($fullPath)) {

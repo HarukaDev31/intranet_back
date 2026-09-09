@@ -67,9 +67,8 @@ class CalculadoraTarifaService
     }
 
     /**
-     * Con cotización: congela tarifa si CBM no cambia.
-     * Si CBM cambia: usa el rango del nuevo CBM en la misma generación
-     * (vigente en el momento de la tarifa anterior), no las tarifas nuevas.
+     * Con cotización: congela tarifa si CBM y tipo de cliente no cambian.
+     * Si cambia CBM o tipo: misma generación (con cotización) o vigentes (sin cotización).
      *
      * @return array{calculadora_tarifa_consolidado_id: int|null, tarifa: float, tarifa_type: string}
      */
@@ -80,14 +79,27 @@ class CalculadoraTarifaService
         float $newCbm
     ): array {
         $tipo = trim((string) ($data['clienteInfo']['tipoCliente'] ?? $calculadora->tipo_cliente ?? 'NUEVO'));
+        $tipoAnterior = trim((string) ($calculadora->tipo_cliente ?? 'NUEVO'));
+        $tipoChanged = strcasecmp($tipo, $tipoAnterior) !== 0;
         $hasCotizacion = ! empty($calculadora->id_cotizacion);
         $cbmChanged = $this->cbmChanged($oldCbm, $newCbm);
+        $tarifaInput = is_array($data['tarifa'] ?? null) ? $data['tarifa'] : [];
 
-        if ($hasCotizacion && ! $cbmChanged) {
+        // Si el cliente envía un id de tarifa del mismo tipo, respetarlo.
+        if (! empty($tarifaInput['id'])) {
+            $row = CalculadoraTarifasConsolidado::with(['tipoCliente' => fn ($q) => $q->withTrashed()])
+                ->find((int) $tarifaInput['id']);
+            if ($row && $this->tarifaRowMatchesTipo($row, $tipo)) {
+                return $this->snapshotFromRow($row);
+            }
+        }
+
+        // Congelar solo si hay cotización vinculada y no cambió ni CBM ni tipo.
+        if ($hasCotizacion && ! $cbmChanged && ! $tipoChanged) {
             return $this->snapshotFromCalculadora($calculadora);
         }
 
-        if ($cbmChanged) {
+        if ($cbmChanged || $tipoChanged) {
             $row = $hasCotizacion
                 ? $this->resolveTarifaForCbmChange($calculadora, $tipo, $newCbm)
                 : $this->findVigenteByTipoYCbm($tipo, $newCbm);
@@ -103,11 +115,9 @@ class CalculadoraTarifaService
             }
         }
 
-        if ($calculadora->calculadora_tarifa_consolidado_id) {
+        if ($calculadora->calculadora_tarifa_consolidado_id && ! $tipoChanged) {
             return $this->snapshotFromCalculadora($calculadora);
         }
-
-        $tarifaInput = is_array($data['tarifa'] ?? null) ? $data['tarifa'] : [];
 
         return [
             'calculadora_tarifa_consolidado_id' => null,
@@ -162,19 +172,23 @@ class CalculadoraTarifaService
     }
 
     /**
-     * Instantánea de referencia para congelar generación de tarifas (id snapshot o created_at).
+     * Instantánea de referencia para congelar generación de tarifas.
+     *
+     * Se prioriza created_at de la calculadora (momento en que se armó la cotización),
+     * no el created_at de la fila snapshot: si NUEVO y SOCIO se versionan con segundos/minutos
+     * de diferencia, usar el created_at de NUEVO dejaría fuera la SOCIO ya vigente al crear.
      */
     public function referenceInstantForCalculadora(CalculadoraImportacion $calculadora): ?Carbon
     {
+        if ($calculadora->created_at) {
+            return Carbon::parse($calculadora->created_at);
+        }
+
         if ($calculadora->calculadora_tarifa_consolidado_id) {
             $anterior = CalculadoraTarifasConsolidado::find($calculadora->calculadora_tarifa_consolidado_id);
             if ($anterior?->created_at) {
                 return Carbon::parse($anterior->created_at);
             }
-        }
-
-        if ($calculadora->created_at) {
-            return Carbon::parse($calculadora->created_at);
         }
 
         return null;
@@ -542,6 +556,16 @@ class CalculadoraTarifaService
         }
 
         return $tipo;
+    }
+
+    private function tarifaRowMatchesTipo(CalculadoraTarifasConsolidado $row, string $tipoCliente): bool
+    {
+        $tipo = $this->resolveTipoCliente($tipoCliente, true);
+        if (! $tipo) {
+            return false;
+        }
+
+        return (int) $row->calculadora_tipo_cliente_id === (int) $tipo->id;
     }
 
     private function tarifaQuery()

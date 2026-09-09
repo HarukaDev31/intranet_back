@@ -21,6 +21,7 @@ use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
 use App\Jobs\SolicitarDocumentosWhatsAppJob;
+use App\Support\CargaConsolidada\DocumentStatusSync;
 
 class GeneralController extends Controller
 {
@@ -112,7 +113,6 @@ class GeneralController extends Controller
             ->leftJoin('usuario as U', 'U.ID_Usuario', '=', 'CC.id_usuario')
             ->where('CC.id_contenedor', $idContenedor)
             ->whereNull('CC.deleted_at')
-            ->whereNotNull('CC.estado_cliente')
             ->whereNull('CC.id_cliente_importacion')
             ->where('CC.estado_cotizador', 'CONFIRMADO')
             ->whereExists(function ($query) {
@@ -120,6 +120,12 @@ class GeneralController extends Controller
                     ->from('contenedor_consolidado_cotizacion_proveedores')
                     ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'CC.id');
             });
+
+        // Mientras el contenedor no haya completado la recepción en China, se listan
+        // todas las cotizaciones; al llegar a COMPLETADO se exige estado_cliente definido.
+        if (Contenedor::where('id', $idContenedor)->value('estado_china') === Contenedor::ESTADOS_CHINA['COMPLETADO']) {
+            $query->whereNotNull('CC.estado_cliente');
+        }
         // Aplicar filtro de estado si se proporciona
         $page = $request->input('currentPage', 1);
         $perPage = $request->input('itemsPerPage', 10);
@@ -181,14 +187,14 @@ class GeneralController extends Controller
         // Estado permiso por tipo, por cotización (para roles Coordinación, Documentación, Jefe Importación, Cotizador)
         $estadoPermisoPorCotizacion = [];
         $effectiveRole = $user ? $user->getNombreGrupo() : null;
-        if ($user && $user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION && $request->filled('role')) {
+        if ($user && $user->usuarioEquivaleJefeImportacion() && $request->filled('role')) {
             $requestedRole = trim((string) $request->role);
             if (in_array($requestedRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
                 $effectiveRole = $requestedRole;
             }
         }
         $idTramitePorCotizacion = [];
-        if (in_array($effectiveRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_JEFE_IMPORTACION, Usuario::ROL_COTIZADOR], true) && !empty($ids)) {
+        if (in_array($effectiveRole, array_merge([Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_COTIZADOR], Usuario::rolesEquivalentesJefeImportacion()), true) && !empty($ids)) {
             $tramites = ConsolidadoCotizacionAduanaTramite::where('id_consolidado', (int) $idContenedor)
                 ->whereIn('id_cotizacion', $ids)
                 ->with(['tiposPermiso' => function ($q) { $q->withTrashed(); }])
@@ -223,13 +229,15 @@ class GeneralController extends Controller
         }
 
         // Obtener proveedores relacionados en una sola consulta y agrupar por id_cotizacion
-        $rolesConProveedores = [
-            Usuario::ROL_DOCUMENTACION,
-            Usuario::ROL_JEFE_IMPORTACION,
-            Usuario::ROL_COORDINACION,
-            Usuario::ROL_ADMINISTRACION,
-            Usuario::ROL_CONTABILIDAD,
-        ];
+        $rolesConProveedores = array_merge(
+            [
+                Usuario::ROL_DOCUMENTACION,
+                Usuario::ROL_COORDINACION,
+                Usuario::ROL_ADMINISTRACION,
+                Usuario::ROL_CONTABILIDAD,
+            ],
+            Usuario::rolesEquivalentesJefeImportacion()
+        );
         $proveedores = collect();
         if (!empty($ids) && $user && in_array($user->getNombreGrupo(), $rolesConProveedores, true)) {
             $proveedores = DB::table('contenedor_consolidado_cotizacion_proveedores')
@@ -282,13 +290,12 @@ class GeneralController extends Controller
             $itemArr['id_tramite'] = $idCotizacion !== null ? ($idTramitePorCotizacion[$idCotizacion] ?? null) : null;
 
             // Si el usuario es Documentacion, incluir proveedores completos (id, code_supplier, archivos y estados)
-            if ($user && in_array($user->getNombreGrupo(), [
+            if ($user && in_array($user->getNombreGrupo(), array_merge([
                 Usuario::ROL_DOCUMENTACION,
-                Usuario::ROL_JEFE_IMPORTACION,
                 Usuario::ROL_COORDINACION,
                 Usuario::ROL_ADMINISTRACION,
                 Usuario::ROL_CONTABILIDAD,
-            ], true) && $proveedores) {
+            ], Usuario::rolesEquivalentesJefeImportacion()), true) && $proveedores) {
                 // clave usada en groupBy es id_cotizacion
                 $cotKey = $cot->id_cotizacion ?? $cot->id ?? null;
                 if ($cotKey !== null && (is_array($proveedores) ? isset($proveedores[$cotKey]) : $proveedores->has($cotKey))) {
@@ -617,6 +624,7 @@ class GeneralController extends Controller
                     Usuario::ROL_FINANZAS => ['cbm_total_china', 'cbm_total', 'total_logistica', 'total_logistica_pagado', 'qty_items', 'total_fob', 'total_impuestos'],
                     Usuario::ROL_DOCUMENTACION => [null],
                     Usuario::ROL_JEFE_IMPORTACION => ['cbm_total_china', 'cbm_total', 'total_logistica', 'total_logistica_pagado', 'qty_items', 'total_fob', 'total_impuestos'],
+                    Usuario::ROL_COORDINADOR_GENERAL => ['cbm_total_china', 'cbm_total', 'total_logistica', 'total_logistica_pagado', 'qty_items', 'total_fob', 'total_impuestos'],
                 ];
                 $userIdCheck = $user->getNombreGrupo();
                 $headersData = [
@@ -875,6 +883,20 @@ class GeneralController extends Controller
                         ->where('id', $item['id'])
                         ->update(['tipo_producto' => $item['tipo_producto']]);
                 }
+            }
+
+            // Automatización módulo Cliente/Seguimiento: al pedir documentos, Invoice/Packing/Excel Conf.
+            // (perfil Daniela) pasan de Pendiente a Solicitado, solo para el proveedor involucrado.
+            foreach ($proveedores as $prov) {
+                if (!isset($prov['id'])) {
+                    continue;
+                }
+                $proveedorModel = CotizacionProveedor::find($prov['id']);
+                if (!$proveedorModel) {
+                    continue;
+                }
+                DocumentStatusSync::markSolicitado($proveedorModel);
+                $proveedorModel->save();
             }
 
             $cargoRow = DB::table('carga_consolidada_contenedor')

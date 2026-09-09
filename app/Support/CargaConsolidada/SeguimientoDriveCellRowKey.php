@@ -27,4 +27,9 @@ final class SeguimientoDriveCellRowKey
     {
         return 'yiwu:prov:' . $idProveedor;
     }
+
+    public static function recibirProveedor(int $idProveedor): string
+    {
+        return 'recibir:prov:' . $idProveedor;
+    }
 }

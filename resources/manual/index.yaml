@@ -1,0 +1,55 @@
+version: 1
+title: Manual de usuario — Intranet Probusiness
+description: Guías por rol con capturas y pasos en lenguaje de usuario.
+global:
+  - file: global/00-introduccion.md
+  - file: global/01-inicio-sesion.md
+roles:
+  - slug: comercial
+    id_grupo: 1203
+    nombre: comercial
+  - slug: administracion
+    id_grupo: 1207
+    nombre: Administración
+  - slug: asistente-comercial
+    id_grupo: 1209
+    nombre: Asistente Comercial
+  - slug: cotizador
+    id_grupo: 1210
+    nombre: Cotizador
+  - slug: almacen-china
+    id_grupo: 1213
+    nombre: Almacen China
+  - slug: coordinacion
+    id_grupo: 1214
+    nombre: Coordinación
+  - slug: contenedor-almacen
+    id_grupo: 1215
+    nombre: ContenedorAlmacen
+  - slug: documentacion
+    id_grupo: 1216
+    nombre: Documentacion
+  - slug: marketing
+    id_grupo: 1220
+    nombre: Marketing
+  - slug: jefe-importacion
+    id_grupo: 1221
+    nombre: Jefe Importacion
+  - slug: contabilidad
+    id_grupo: 1222
+    nombre: Contabilidad
+  - slug: jefe-marketing
+    id_grupo: 1223
+    nombre: Jefe Marketing
+  - slug: trafiquer
+    id_grupo: 1224
+    nombre: trafiquer
+  - slug: subgerencia
+    id_grupo: 1225
+    nombre: SUBGERENCIA
+  - slug: pm
+    id_grupo: 1227
+    nombre: PM
+  - slug: finanzas
+    id_grupo: 1228
+    nombre: Finanzas

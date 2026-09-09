@@ -3,6 +3,7 @@
 namespace App\Observers\CargaConsolidada;
 
 use App\Models\CargaConsolidada\CotizacionProveedor;
+use App\Services\CargaConsolidada\CargaConsolidadaCacheService;
 use App\Services\CargaConsolidada\ProveedorArriveDateHistoryService;
 use App\Services\CargaConsolidada\ProveedorEstadosProveedorHistoryService;
 use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveService;
@@ -15,12 +16,17 @@ class CotizacionProveedorObserver
     /** @var ProveedorEstadosProveedorHistoryService */
     private $estadosProveedorHistoryService;
 
+    /** @var CargaConsolidadaCacheService */
+    private $cache;
+
     public function __construct(
         ProveedorArriveDateHistoryService $arriveDateHistoryService,
-        ProveedorEstadosProveedorHistoryService $estadosProveedorHistoryService
+        ProveedorEstadosProveedorHistoryService $estadosProveedorHistoryService,
+        CargaConsolidadaCacheService $cache
     ) {
         $this->arriveDateHistoryService = $arriveDateHistoryService;
         $this->estadosProveedorHistoryService = $estadosProveedorHistoryService;
+        $this->cache = $cache;
     }
 
     /**
@@ -30,6 +36,7 @@ class CotizacionProveedorObserver
     {
         $this->arriveDateHistoryService->recordInitialDates($proveedor);
         $this->estadosProveedorHistoryService->recordInitialEstado($proveedor);
+        $this->cache->invalidateModule();
     }
 
     /**
@@ -39,6 +46,7 @@ class CotizacionProveedorObserver
     {
         $this->arriveDateHistoryService->recordFromProveedorChanges($proveedor);
         $this->estadosProveedorHistoryService->recordFromProveedorChanges($proveedor);
+        $this->cache->invalidateIfProveedorAffectsList($proveedor);
     }
 
     /**
@@ -47,5 +55,10 @@ class CotizacionProveedorObserver
     public function saved(CotizacionProveedor $proveedor)
     {
         app(SeguimientoConsolidadoDriveService::class)->queueSyncIfLinkedFromProveedor($proveedor);
+    }
+
+    public function deleted(CotizacionProveedor $proveedor)
+    {
+        $this->cache->invalidateModule();
     }
 }

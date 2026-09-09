@@ -31,7 +31,7 @@ use Illuminate\Support\Str;
 use Exception;
 use Dompdf\Dompdf;
 use Dompdf\Options;
-use App\Support\ContratoViewData;
+use App\Support\BrandLogoPaths;
 
 
 class CotizacionController extends Controller
@@ -306,16 +306,15 @@ class CotizacionController extends Controller
                     }
                     break;
 
-                case Usuario::ROL_DOCUMENTACION || Usuario::ROL_JEFE_IMPORTACION:
-                    $query->where('estado_cotizador', 'CONFIRMADO');
+                case Usuario::ROL_RRHH:
+                    // RRHH ve las mismas cotizaciones (incluidas Pendiente) que el Jefe de Ventas.
                     break;
 
-                case Usuario::ROL_COORDINACION || Usuario::ROL_CONTABILIDAD:
-                    $query->where('estado_cotizador', 'CONFIRMADO');
-                    break;
+                case Usuario::ROL_DOCUMENTACION:
+                case Usuario::ROL_JEFE_IMPORTACION:
+                case Usuario::ROL_COORDINACION:
+                case Usuario::ROL_CONTABILIDAD:
                 case Usuario::ROL_ALMACEN_CHINA:
-                    $query->where('estado_cotizador', 'CONFIRMADO');
-                    break;
                 case Usuario::JEFE_MARKETING:
                     $query->where('estado_cotizador', 'CONFIRMADO');
                     break;
@@ -333,14 +332,14 @@ class CotizacionController extends Controller
             // Estado permiso por tipo, por cotización (para roles Coordinación, Documentación, Jefe Importación, Cotizador)
             $estadoPermisoPorCotizacion = [];
             $effectiveRole = $rol;
-            if ($user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION && $request->filled('role')) {
+            if ($user->usuarioEquivaleJefeImportacion() && $request->filled('role')) {
                 $requestedRole = trim((string) $request->role);
                 if (in_array($requestedRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
                     $effectiveRole = $requestedRole;
                 }
             }
             $idTramitePorCotizacion = [];
-            if (in_array($effectiveRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_JEFE_IMPORTACION, Usuario::ROL_COTIZADOR], true)) {
+            if (in_array($effectiveRole, array_merge([Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_COTIZADOR], Usuario::rolesEquivalentesJefeImportacion()), true)) {
                 $cotizacionIds = $results->pluck('id')->filter()->values()->all();
                 if (!empty($cotizacionIds)) {
                     $tramites = ConsolidadoCotizacionAduanaTramite::where('id_consolidado', (int) $idContenedor)
@@ -557,7 +556,9 @@ class CotizacionController extends Controller
             Usuario::ROL_COORDINACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
             Usuario::ROL_CONTABILIDAD => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado', 'total_diferencia_logistica'],
             Usuario::ROL_JEFE_IMPORTACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
-            Usuario::JEFE_MARKETING => ['clientes_nuevo', 'clientes_antiguo'],
+            Usuario::ROL_COORDINADOR_GENERAL => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
+            Usuario::JEFE_MARKETING => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
+            Usuario::ROL_RRHH => ['cbm_vendido', 'cbm_pendiente', 'cbm_embarcado', 'qty_items', 'cbm_total_peru', 'cbm_total_china', 'cbm_total_imo'],
         ];
         $userIdCheck = $user->ID_Usuario;
         if (array_key_exists($usergroup, $roleAllowedMap)) {
@@ -573,7 +574,7 @@ class CotizacionController extends Controller
         // Headers exclusivos para el tab de pagos (solo contabilidad) - solo en cotizacion-final
         $headersDataPagos = [];
 
-        if ($userIdCheck == "28791" || $userIdCheck == "28911") {
+        if ($userIdCheck == "28791" || $userIdCheck == "28911" || $usergroup === Usuario::ROL_RRHH) {
             // CBM Vendido por usuario (estado CONFIRMADO)
             //remove cbm_vendido 
             unset($headersData['cbm_vendido']);
@@ -729,11 +730,10 @@ class CotizacionController extends Controller
      */
     private function excelSeguimientoDrivePayload($idContenedor, $user)
     {
-        if (!SeguimientoConsolidadoDriveService::userCanManageDriveSeguimiento($user)) {
-            return null;
-        }
+        $driveService = app(SeguimientoConsolidadoDriveService::class);
+        $driveService->ensureVinculadoIfEligible((int) $idContenedor);
 
-        $status = app(SeguimientoConsolidadoDriveService::class)->getStatus((int) $idContenedor);
+        $status = $driveService->getStatus((int) $idContenedor);
 
         return !empty($status['success']) ? ($status['data'] ?? null) : null;
     }
@@ -2897,7 +2897,19 @@ class CotizacionController extends Controller
                 */
 
                 try {
-                    $viewData = ContratoViewData::fromCotizacion($cotizacion);
+                    $contenedor = isset($cotizacion->contenedor) ? $cotizacion->contenedor : Contenedor::find($cotizacion->id_contenedor);
+                    $carga = $contenedor ? $contenedor->carga : '';
+
+                    $viewData = [
+                        'fecha' => date('d-m-Y'),
+                        'cliente_nombre' => $cotizacion->nombre,
+                        'cliente_documento' => $cotizacion->documento,
+                        'cliente_domicilio' => $cotizacion->direccion ?? null,
+                        'carga' => $carga,
+                        'logo_contrato_url' => BrandLogoPaths::contrato(),
+                        'cod_contract' => $cotizacion->cod_contract,
+                        'cod_contract_calculator' => optional($cotizacion->calculadoraImportacion)->cod_cotizacion,
+                    ];
 
                     $contractHtml = view('contracts.contrato', $viewData)->render();
 
@@ -2977,6 +2989,54 @@ class CotizacionController extends Controller
                 'status' => 'error',
                 'success' => false,
                 'message' => 'Error al actualizar el estado de la cotización'
+            ], 500);
+        }
+    }
+
+    /**
+     * Actualiza el origen de marketing de una cotización (perfil Jefe Marketing).
+     */
+    public function updateOrigenMarketing($id, Request $request)
+    {
+        try {
+            $allowed = [
+                'Facebook',
+                'Instagram',
+                'Tiktok',
+                'Landing CC',
+                'Landing CI',
+                'Pagina web CC',
+                'Pagina web CI',
+            ];
+
+            $origen = $request->input('origen_marketing');
+            if ($origen === '' || $origen === null) {
+                $origen = null;
+            } elseif (!in_array($origen, $allowed, true)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Origen de marketing inválido',
+                ], 422);
+            }
+
+            $cotizacion = Cotizacion::findOrFail($id);
+            $cotizacion->update([
+                'origen_marketing' => $origen,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Origen de marketing actualizado correctamente',
+                'data' => [
+                    'id' => $cotizacion->id,
+                    'origen_marketing' => $cotizacion->origen_marketing,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en updateOrigenMarketing: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar el origen de marketing',
             ], 500);
         }
     }
@@ -3619,9 +3679,30 @@ class CotizacionController extends Controller
                 ])
             ]);
 
-           
+            // Crear la notificación para RRHH (mismos accesos que Jefe de Ventas)
+            $notificacionRRHH = Notificacion::create([
+                'titulo' => 'Nueva Cotización Creada',
+                'mensaje' => "El usuario {$usuarioCreador->No_Nombres_Apellidos} ha creado una nueva cotización para {$cotizacion->nombre}",
+                'descripcion' => "Cliente: {$cotizacion->nombre} | Documento: {$cotizacion->documento} | Volumen: {$cotizacion->volumen} CBM | Contenedor: {$contenedor->carga}",
+                'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
+                'rol_destinatario' => Usuario::ROL_RRHH,
+                'tipo' => Notificacion::TIPO_INFO,
+                'icono' => 'mdi:file-document-plus',
+                'prioridad' => Notificacion::PRIORIDAD_MEDIA,
+                'referencia_tipo' => 'cotizacion',
+                'referencia_id' => $cotizacion->id,
+                'activa' => true,
+                'creado_por' => $usuarioCreador->ID_Usuario,
+                'configuracion_roles' => json_encode([
+                    Usuario::ROL_RRHH => [
+                        'titulo' => 'Nueva Cotización - Supervisión',
+                        'mensaje' => "Nueva cotización de {$cotizacion->nombre} creada por {$usuarioCreador->No_Nombres_Apellidos}",
+                        'descripcion' => "Cotización #{$cotizacion->id} para contenedor {$contenedor->carga} - Supervisión requerida"
+                    ]
+                ])
+            ]);
 
-            return [ $notificacionJefeVentas];
+            return [$notificacionJefeVentas, $notificacionRRHH];
         } catch (\Exception $e) {
             Log::error('Error al crear notificaciones para Coordinación y Jefe de Ventas: ' . $e->getMessage());
             // No lanzar excepción para no afectar el flujo principal de creación de cotización
@@ -3708,15 +3789,45 @@ class CotizacionController extends Controller
                 ])
             ]);
 
+            // Crear la notificación para RRHH (mismos accesos que Jefe de Ventas)
+            $notificacionRRHH = Notificacion::create([
+                'titulo' => 'Cotización Confirmada',
+                'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} confirmó la cotización del cliente {$cotizacion->nombre}",
+                'descripcion' => "Cotización #{$cotizacion->id} confirmada | Cliente: {$cotizacion->nombre} | Documento: {$cotizacion->documento} | Volumen: {$cotizacion->volumen} CBM | Contenedor: {$contenedor->carga}",
+                'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
+                'rol_destinatario' => Usuario::ROL_RRHH,
+                'navigate_to' => 'cargaconsolidada/abiertos/cotizaciones',
+                'navigate_params' => json_encode([
+                    'idContenedor' => $contenedor->id,
+                    'tab' => 'prospectos',
+                    'idCotizacion' => $cotizacion->id
+                ]),
+                'tipo' => Notificacion::TIPO_SUCCESS,
+                'icono' => 'mdi:check-circle',
+                'prioridad' => Notificacion::PRIORIDAD_ALTA,
+                'referencia_tipo' => 'cotizacion',
+                'referencia_id' => $cotizacion->id,
+                'activa' => true,
+                'creado_por' => $usuarioActual->ID_Usuario,
+                'configuracion_roles' => json_encode([
+                    Usuario::ROL_RRHH => [
+                        'titulo' => 'Cotización Confirmada - Supervisión',
+                        'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} confirmó la cotización de {$cotizacion->nombre} - Seguimiento requerido",
+                        'descripcion' => "Cotización #{$cotizacion->id} para contenedor {$contenedor->carga} confirmada por {$usuarioActual->No_Nombres_Apellidos}"
+                    ]
+                ])
+            ]);
+
             Log::info('Notificaciones de cotización confirmada creadas para Coordinación y Jefe de Ventas:', [
                 'notificacion_coordinacion_id' => $notificacion->id,
                 'notificacion_jefe_ventas_id' => $notificacionJefeVentas->id,
+                'notificacion_rrhh_id' => $notificacionRRHH->id,
                 'cotizacion_id' => $cotizacion->id,
                 'contenedor_id' => $contenedor->id,
                 'usuario_actual' => $usuarioActual->No_Nombres_Apellidos
             ]);
 
-            return [$notificacion, $notificacionJefeVentas];
+            return [$notificacion, $notificacionJefeVentas, $notificacionRRHH];
         } catch (\Exception $e) {
             Log::error('Error al crear notificaciones de cotización confirmada para Coordinación y Jefe de Ventas: ' . $e->getMessage());
             // No lanzar excepción para no afectar el flujo principal de actualización de estado

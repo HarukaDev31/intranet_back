@@ -1,0 +1,25 @@
+slug: ventas
+id_grupo: 1202
+nombre: Ventas
+descripcion: 'Manual del rol Ventas'
+menus:
+  -
+    id_menu: 1
+    titulo: Inicio
+    url: InicioController
+  -
+    id_menu: 4
+    titulo: 'Compras y Productos'
+    url: '#'
+  -
+    id_menu: 23
+    titulo: 'Compras y Productos → Reglas de Productos'
+    url: '#'
+  -
+    id_menu: 5
+    titulo: 'Ventas y Clientes'
+    url: '#'
+  -
+    id_menu: 40
+    titulo: 'Ventas y Clientes → Reglas de Clientes'
+    url: '#'

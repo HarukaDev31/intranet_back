@@ -34,6 +34,7 @@ Este proyecto está configurado para usar múltiples colas de trabajo para optim
 - **Intentos**: 2
 - **Timeout**: 30 segundos
 - **Jobs**: `SendNotificationJob`
+- **Eventos WS**: `PlantillaFinalBatchFinished`, `FacturaComercialBatchFinished`
 
 ### 5. **Cola `importaciones_facturacion`**
 - **Propósito**: Importación masiva de datos de facturación (Excel)
@@ -49,6 +50,15 @@ Este proyecto está configurado para usar múltiples colas de trabajo para optim
 - **Memoria worker**: 512 MB (producción)
 - **Jobs**: `GenerateMassiveExcelPayrollsJob`
 - **Evento WS**: `PlantillaFinalBatchFinished` (cola `notificaciones`)
+
+### 7. **Cola `carga_consolidada`**
+- **Propósito**: Excel de carga consolidada (seguimiento Drive, factura general)
+- **Supervisor**: `supervisor-carga-consolidada`
+- **Procesos**: 1 (local y producción)
+- **Intentos**: 2
+- **Timeout**: 900 segundos (15 min)
+- **Jobs**: `VincularSeguimientoConsolidadoExcelJob`, `SyncSeguimientoConsolidadoExcelJob`, `ProcesarCorteSeguimientoDatosProveedorJob`, `GenerateFacturaComercialJob`
+- **Evento WS**: `FacturaComercialBatchFinished` (cola `notificaciones`, no `default`)
 
 ## Cómo Usar las Colas
 

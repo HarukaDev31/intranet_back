@@ -63,16 +63,28 @@ class CalendarEventService
             $startKey = $startDate ?: 'null';
             $endKey = $endDate ?: 'null';
             $cacheKey = "calendar:events:list:role_group:{$roleKey}:start:{$startKey}:end:{$endKey}:v:{$version}";
-            $cached = Cache::get($cacheKey);
-            if ($cached !== null) {
-                Log::info('calendar.getEventsForUser CACHE_HIT', [
-                    'role_group_id' => $roleGroupId,
-                    'user_id' => $userId,
-                    'start_date' => $startDate,
-                    'end_date' => $endDate,
-                    'duration_ms' => (microtime(true) - $startedAt) * 1000,
+            $cached = null;
+            try {
+                $cached = Cache::get($cacheKey);
+            } catch (\Throwable $e) {
+                Log::warning('calendar.getEventsForUser CACHE_READ_FAILED', [
+                    'cache_key' => $cacheKey,
+                    'error' => $e->getMessage(),
                 ]);
-                return $cached;
+                Cache::forget($cacheKey);
+            }
+            if ($cached !== null) {
+                $cachedEvents = $this->normalizeCachedEventsList($cached, $cacheKey);
+                if ($cachedEvents !== null) {
+                    Log::info('calendar.getEventsForUser CACHE_HIT', [
+                        'role_group_id' => $roleGroupId,
+                        'user_id' => $userId,
+                        'start_date' => $startDate,
+                        'end_date' => $endDate,
+                        'duration_ms' => (microtime(true) - $startedAt) * 1000,
+                    ]);
+                    return $cachedEvents;
+                }
             }
         }
 
@@ -221,7 +233,7 @@ class CalendarEventService
             /** @var \Illuminate\Support\Collection $map */
             $map = $colorConfigsByCalendar->get($event->calendar_id, collect())->keyBy('user_id');
             return $this->formatEventForResponseWithColorMap($event, $map);
-        });
+        })->values()->all();
 
         if ($useCache && $cacheKey !== null) {
             // TTL corto para minimizar riesgo de datos viejos si la invalidación falla
@@ -656,6 +668,11 @@ class CalendarEventService
                     'mensaje' => "Actividad \"{$eventName}\" {$accion}",
                     'descripcion' => "Evento ID: {$eventId}{$contenedorTexto}",
                 ],
+                Usuario::ROL_COORDINADOR_GENERAL => [
+                    'titulo' => "Calendario - Actividad {$accion}",
+                    'mensaje' => "Actividad \"{$eventName}\" {$accion}",
+                    'descripcion' => "Evento ID: {$eventId}{$contenedorTexto}",
+                ],
             ],
         ]);
         } catch (\Throwable $e) {
@@ -703,17 +720,13 @@ class CalendarEventService
     }
 
     /**
-     * Actualizar estado de la actividad (evento): aplica el mismo estado a todos los charges.
-     * Cualquier participante puede cambiar el estado; todos ven el mismo.
+     * Actualizar estado de la actividad: aplica el mismo estado a todos los responsables.
+     * Solo lo debe llamar un jefe del grupo (el controlador valida el permiso).
      */
     public function updateEventStatus(int $eventId, int $userId, string $newStatus): ?CalendarEvent
     {
         $event = CalendarEvent::with('charges')->find($eventId);
         if (!$event) {
-            return null;
-        }
-        $isParticipant = $event->charges->contains('user_id', $userId);
-        if (!$isParticipant) {
             return null;
         }
         $charges = CalendarEventCharge::where('calendar_event_id', $eventId)->get();
@@ -1078,6 +1091,26 @@ class CalendarEventService
             $userIds[] = $uid;
         }
         return array_values(array_unique($userIds));
+    }
+
+    /**
+     * Normaliza el valor leído de caché a array plano.
+     * Entradas legacy guardaban Collection serializada y pueden fallar al deserializar.
+     */
+    private function normalizeCachedEventsList($cached, string $cacheKey): ?array
+    {
+        if (is_array($cached)) {
+            return $cached;
+        }
+
+        if ($cached instanceof Collection) {
+            return $cached->values()->all();
+        }
+
+        Cache::forget($cacheKey);
+        Log::warning('calendar.getEventsForUser CACHE_INVALID', ['cache_key' => $cacheKey]);
+
+        return null;
     }
 
     /**

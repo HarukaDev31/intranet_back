@@ -4,8 +4,10 @@ namespace App\Providers;
 
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
+use App\Models\CargaConsolidada\Contenedor;
 use App\Observers\CargaConsolidada\CotizacionObserver;
 use App\Observers\CargaConsolidada\CotizacionProveedorObserver;
+use App\Observers\CargaConsolidada\ContenedorObserver;
 use App\Support\Database\WslLocalDatabaseConnection;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
@@ -39,6 +41,7 @@ class AppServiceProvider extends ServiceProvider
         WslLocalDatabaseConnection::applyForQueueWorkers();
 
         // Registrar observer para sincronizar estados entre Cotizacion y CalculadoraImportacion
+        Contenedor::observe(ContenedorObserver::class);
         Cotizacion::observe(CotizacionObserver::class);
         CotizacionProveedor::observe(CotizacionProveedorObserver::class);
 

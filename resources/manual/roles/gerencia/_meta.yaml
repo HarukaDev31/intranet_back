@@ -1,0 +1,193 @@
+slug: gerencia
+id_grupo: 3
+nombre: GERENCIA
+descripcion: GERENCIA
+menus:
+  -
+    id_menu: 277
+    titulo: 'Panel Acceso'
+    url: /panel-acceso
+  -
+    id_menu: 278
+    titulo: 'Panel Acceso → Cargos'
+    url: panel-acceso/cargos
+  -
+    id_menu: 288
+    titulo: 'Panel Acceso → Externos'
+    url: panel-acceso
+  -
+    id_menu: 279
+    titulo: 'Panel Acceso → Menus'
+    url: panel-acceso/menus
+  -
+    id_menu: 280
+    titulo: 'Panel Acceso → Usuarios'
+    url: panel-acceso/usuarios
+  -
+    id_menu: 281
+    titulo: 'Panel Acceso → Permisos Menu'
+    url: panel-acceso/permisos
+  -
+    id_menu: 1
+    titulo: Inicio
+    url: InicioController
+  -
+    id_menu: 175
+    titulo: 'Agente de Compra'
+    url: '#'
+  -
+    id_menu: 178
+    titulo: 'Agente de Compra → Cotización Garantizada'
+    url: AgenteCompra/PedidosGarantizados/listar
+  -
+    id_menu: 180
+    titulo: 'Agente de Compra → Orden de Compra'
+    url: AgenteCompra/PedidosPagados/listar
+  -
+    id_menu: 181
+    titulo: 'Agente de Compra → Historial de Pagos'
+    url: AgenteCompra/HistorialPagos/listar
+  -
+    id_menu: 169
+    titulo: 'Importación Grupal'
+    url: '#'
+  -
+    id_menu: 170
+    titulo: 'Importación Grupal → Importación Grupal'
+    url: ImportacionGrupal/CampanaGrupal/listar
+  -
+    id_menu: 172
+    titulo: 'Importación Grupal → Pedidos Grupal'
+    url: ImportacionGrupal/PedidosGrupal/listar
+  -
+    id_menu: 173
+    titulo: 'Importación Grupal → Métodos de Pago'
+    url: ImportacionGrupal/MetodoPagoGrupal/listar
+  -
+    id_menu: 174
+    titulo: 'Importación Grupal → Métodos de Entrega'
+    url: ImportacionGrupal/MetodoEntregaGrupal/listar
+  -
+    id_menu: 179
+    titulo: 'Importación Grupal → Categoria'
+    url: ImportacionGrupal/CategoriasGrupal/listar
+  -
+    id_menu: 177
+    titulo: 'Importación Grupal → Banners'
+    url: ImportacionGrupal/BannersGrupal/listar
+  -
+    id_menu: 4
+    titulo: 'Compras y Productos'
+    url: '#'
+  -
+    id_menu: 23
+    titulo: 'Compras y Productos → Reglas de Productos'
+    url: '#'
+  -
+    id_menu: 182
+    titulo: Curso
+    url: Curso/PedidosCurso/listar
+  -
+    id_menu: 183
+    titulo: 'Curso → Pedidos de Curso'
+    url: curso
+  -
+    id_menu: 5
+    titulo: 'Ventas y Clientes'
+    url: '#'
+  -
+    id_menu: 40
+    titulo: 'Ventas y Clientes → Reglas de Clientes'
+    url: '#'
+  -
+    id_menu: 184
+    titulo: 'Carga Consolidada'
+    url: '#'
+  -
+    id_menu: 200
+    titulo: 'Carga Consolidada → Cron Consolidado'
+    url: CargaConsolidada/ContenedorConsolidado/listarCrons
+  -
+    id_menu: 8
+    titulo: 'Usuarios y Opciones'
+    url: '#'
+  -
+    id_menu: 57
+    titulo: 'Usuarios y Opciones → Cargo'
+    url: PanelAcceso/PerfilUsuarioController/listarPerfilUsuarios
+  -
+    id_menu: 58
+    titulo: 'Usuarios y Opciones → Usuario'
+    url: PanelAcceso/UsuarioController/listarUsuarios
+  -
+    id_menu: 59
+    titulo: 'Usuarios y Opciones → Opciones del Menú'
+    url: PanelAcceso/PermisoUsuarioController/listarPermisosUsuarios
+  -
+    id_menu: 203
+    titulo: Órdenes
+    url: '#'
+  -
+    id_menu: 205
+    titulo: 'Órdenes → Confirmados'
+    url: OrdersController/listarConfirmados
+  -
+    id_menu: 2
+    titulo: Configuración
+    url: '#'
+  -
+    id_menu: 9
+    titulo: 'Configuración → Empresa'
+    url: Configuracion/EmpresaController/listarEmpresas
+  -
+    id_menu: 11
+    titulo: 'Configuración → Organización'
+    url: Configuracion/OrganizacionController/listarOrganizaciones
+  -
+    id_menu: 10
+    titulo: 'Configuración → Logo, Impresión y Sistema'
+    url: Configuracion/SistemaController/listarConfiguraciones
+  -
+    id_menu: 17
+    titulo: 'Configuración → Grupos de Impuesto'
+    url: Configuracion/ImpuestoController/listarImpuestos
+  -
+    id_menu: 18
+    titulo: 'Configuración → Montos de Impuesto '
+    url: Configuracion/ValorImpuestoController/listarValoresImpuestos
+  -
+    id_menu: 12
+    titulo: 'Configuración → Moneda'
+    url: Configuracion/MonedaController/listarMonedas
+  -
+    id_menu: 85
+    titulo: 'Configuración → Medio Pago'
+    url: Configuracion/MedioPagoController/listar
+  -
+    id_menu: 86
+    titulo: 'Configuración → Tipo Medio Pago'
+    url: Configuracion/TipoMedioPagoController/listar
+  -
+    id_menu: 87
+    titulo: 'Configuración → Tipo Operacion Caja'
+    url: Configuracion/TipoOperacionCajaController/listar
+  -
+    id_menu: 13
+    titulo: 'Configuración → País'
+    url: Configuracion/PaisController/listarPaises
+  -
+    id_menu: 14
+    titulo: 'Configuración → Departamento'
+    url: Configuracion/DepartamentoController/listarDepartamentos
+  -
+    id_menu: 15
+    titulo: 'Configuración → Provincia'
+    url: Configuracion/ProvinciaController/listarProvincias
+  -
+    id_menu: 16
+    titulo: 'Configuración → Distrito'
+    url: Configuracion/DistritoController/listarDistritos
+  -
+    id_menu: 189
+    titulo: 'Configuración → Tarifas Cotizaciones Carga Consolidada'
+    url: Configuracion/TarifasCotizacionesCCController/listar

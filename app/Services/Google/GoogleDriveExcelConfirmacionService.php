@@ -433,10 +433,10 @@ class GoogleDriveExcelConfirmacionService
 
     private function buildNameInParentQuery(string $name, string $parentId, ?string $mimeType): string
     {
-        // Drive query: escapar \ ' y # dentro del valor entre comillas.
+        // Drive query: solo escapar \ y ' dentro del literal entre comillas (# es válido literal).
         $escapedName = str_replace(
-            ['\\', "'", '#'],
-            ['\\\\', "\\'", '\\#'],
+            ['\\', "'"],
+            ['\\\\', "\\'"],
             $name
         );
         $query = sprintf("name='%s' and '%s' in parents and trashed=false", $escapedName, $parentId);

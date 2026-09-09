@@ -8,7 +8,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Traits\UsesObjectStorage;
-use App\Support\ContratoViewData;
+use App\Support\BrandLogoPaths;
 
 class AutoSignContracts extends Command
 {
@@ -338,19 +338,30 @@ class AutoSignContracts extends Command
         $pdfFilename = $cotizacion->uuid . '_autosigned_contract.pdf';
         $relativePath = 'contratos/' . $pdfFilename;
 
-        // Cargar imagen de auto-aceptación
-        $autoSignImagePath = public_path('storage/auto_accept_sign.png');
+        // Obtener información del contenedor
+        $contenedor = Contenedor::find($cotizacion->id_contenedor);
+        $carga = $contenedor ? $contenedor->carga : 'N/A';
 
-        if (!file_exists($autoSignImagePath)) {
-            throw new \Exception("No se encontró la imagen de auto-aceptación en: {$autoSignImagePath}");
+        // Cargar imagen de auto-aceptación (S3 → local → CDN)
+        $autoSignImagePath = BrandLogoPaths::autoAcceptSign();
+
+        if ($autoSignImagePath === null || !is_file($autoSignImagePath)) {
+            throw new \Exception('No se encontró la imagen de auto-aceptación (auto_accept_sign.png) en S3/CDN/local');
         }
 
-        // Convertir imagen a base64
-        $imageData = base64_encode(file_get_contents($autoSignImagePath));
-        $signatureBase64 = 'data:image/png;base64,' . $imageData;
+        $signatureBase64 = BrandLogoPaths::toDataUri($autoSignImagePath);
+        if ($signatureBase64 === null) {
+            throw new \Exception('No se pudo leer la imagen de auto-aceptación: ' . $autoSignImagePath);
+        }
 
         // Datos para la vista del contrato firmado
-        $viewData = ContratoViewData::fromCotizacion($cotizacion, [
+        $viewData = [
+            'fecha' => date('d-m-Y'),
+            'cliente_nombre' => $cotizacion->nombre,
+            'cliente_documento' => $cotizacion->documento,
+            'cliente_domicilio' => $cotizacion->direccion ?? null,
+            'carga' => $carga,
+            'logo_contrato_url' => BrandLogoPaths::contrato(),
             'signature_base64' => $signatureBase64,
         ]);
 

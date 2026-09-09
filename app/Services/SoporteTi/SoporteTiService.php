@@ -22,6 +22,7 @@ use App\Models\SoporteTi\SoporteTiSolicitud;
 use App\Models\SoporteTi\SoporteTiSolicitudEstado;
 use App\Models\SoporteTi\SoporteTiSolicitudEvidencia;
 use App\Models\Usuario;
+use App\Support\SoporteTi\SoporteTiHtmlEvidenceSanitizer;
 use App\Support\SoporteTi\SoporteTiWhatsappGrupoMensajeBuilder;
 use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -30,11 +31,24 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use App\Services\SoporteTi\SoporteTiBusinessHoursHelper;
 use App\Traits\FileTrait;
 
 class SoporteTiService
 {
+    /** @var SoporteTiBusinessHoursHelper|null */
+    private $bhHelperInstance = null;
+
+    private function bhHelper(): SoporteTiBusinessHoursHelper
+    {
+        if ($this->bhHelperInstance === null) {
+            $this->bhHelperInstance = new SoporteTiBusinessHoursHelper();
+        }
+
+        return $this->bhHelperInstance;
+    }
     use FileTrait;
     const CHAT_PAGE_SIZE = 25;
 
@@ -94,7 +108,11 @@ class SoporteTiService
         }
         $user->loadMissing('grupo');
         $nombre = $user->grupo ? strtolower(trim((string) $user->grupo->No_Grupo)) : '';
-        return $nombre === strtolower(Usuario::ROL_PM) || $nombre === strtolower(Usuario::ROL_SOPORTE);
+        return in_array($nombre, array(
+            strtolower(Usuario::ROL_PM),
+            strtolower(Usuario::ROL_SOPORTE),
+            strtolower(Usuario::ROL_COORDINADOR_GENERAL),
+        ), true);
     }
 
     /**
@@ -214,36 +232,13 @@ class SoporteTiService
         $viewerId = $this->authUserId($authUser) ?: 0;
         $isStaff = $this->usuarioEsStaffSoporteTi($authUser);
 
-        return $this->cache->rememberListado($viewerId, $isStaff, $filters, function () use ($filters, $authUser) {
-            $query = SoporteTiSolicitud::with(array('estadoActual', 'salaChat', 'maqueta', 'evidencias'))
-                ->orderBy('prioridad', 'asc')
-                ->orderBy('created_at', 'desc');
+        return $this->cache->rememberListado($viewerId, $isStaff, $filters, function () use ($filters, $authUser, $isStaff) {
+            $query = SoporteTiSolicitud::with(array('estadoActual', 'salaChat', 'maqueta', 'evidencias', 'solicitanteUsuario.grupo'));
 
-            if ($authUser && !$this->usuarioEsStaffSoporteTi($authUser)) {
-                $uid = (int) $authUser->getKey();
-                $query->where(function ($q) use ($uid) {
-                    $q->where('solicitante_user_id', $uid)
-                        ->orWhere('pm_user_id', $uid)
-                        ->orWhere('analista_user_id', $uid)
-                        ->orWhereHas('salaChat.miembros', function ($mq) use ($uid) {
-                            $mq->where('usuario_id', $uid);
-                        });
-                });
-            }
+            $this->aplicarFiltrosListadoSolicitudes($query, $filters, $authUser);
 
-            if (!empty($filters['q'])) {
-                $q = $filters['q'];
-                $query->where(function ($sub) use ($q) {
-                    $sub->where('codigo', 'like', '%' . $q . '%')
-                        ->orWhere('titulo', 'like', '%' . $q . '%')
-                        ->orWhere('solicitante', 'like', '%' . $q . '%')
-                        ->orWhere('pm', 'like', '%' . $q . '%')
-                        ->orWhere('analista', 'like', '%' . $q . '%');
-                });
-            }
-
-            if (!empty($filters['tipo_solicitud']) && $filters['tipo_solicitud'] !== 'todos') {
-                $query->where('tipo_solicitud', $filters['tipo_solicitud']);
+            if (!empty($filters['creador_user_id']) && (int) $filters['creador_user_id'] > 0 && $isStaff) {
+                $query->where('solicitante_user_id', (int) $filters['creador_user_id']);
             }
 
             if (!empty($filters['estado_codigo']) && $filters['estado_codigo'] !== 'todos') {
@@ -275,6 +270,201 @@ class SoporteTiService
                 'resumen' => $resumen,
             );
         });
+    }
+
+    /**
+     * Creadores distintos de soporte_ti_solicitudes (filtro staff).
+     *
+     * @return array<int, array{id:int,nombre:string}>
+     */
+    public function listarCreadoresFiltro(array $filters = array(), ?Authenticatable $authUser = null)
+    {
+        $authUser = $authUser ?: Auth::user();
+        if (!$this->usuarioEsStaffSoporteTi($authUser)) {
+            throw new AuthorizationException('Solo staff puede listar creadores.');
+        }
+
+        unset($filters['creador_user_id']);
+
+        $query = SoporteTiSolicitud::query();
+        $this->aplicarFiltrosListadoSolicitudes($query, $filters, $authUser);
+
+        return $this->distinctCreadoresDesdeQuery($query);
+    }
+
+    /**
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @param array $filters
+     * @param Authenticatable|null $authUser
+     * @return void
+     */
+    protected function aplicarFiltrosListadoSolicitudes($query, array $filters, ?Authenticatable $authUser)
+    {
+        if ($authUser && !$this->usuarioEsStaffSoporteTi($authUser)) {
+            $uid = (int) $authUser->getKey();
+            $query->where(function ($q) use ($uid) {
+                $q->where('solicitante_user_id', $uid)
+                    ->orWhere('pm_user_id', $uid)
+                    ->orWhere('analista_user_id', $uid)
+                    ->orWhereHas('salaChat.miembros', function ($mq) use ($uid) {
+                        $mq->where('usuario_id', $uid);
+                    });
+            });
+        }
+
+        if (!empty($filters['q'])) {
+            $q = $filters['q'];
+            $query->where(function ($sub) use ($q) {
+                $sub->where('codigo', 'like', '%' . $q . '%')
+                    ->orWhere('titulo', 'like', '%' . $q . '%')
+                    ->orWhere('solicitante', 'like', '%' . $q . '%')
+                    ->orWhere('pm', 'like', '%' . $q . '%')
+                    ->orWhere('analista', 'like', '%' . $q . '%');
+            });
+        }
+
+        if (!empty($filters['tipo_solicitud']) && $filters['tipo_solicitud'] !== 'todos') {
+            $query->where('tipo_solicitud', $filters['tipo_solicitud']);
+        }
+
+        $estados = $this->normalizeFiltroLista($filters['estado_codigo'] ?? null, array('todos'));
+        if (!empty($estados)) {
+            $query->whereHas('estadoActual', function ($eq) use ($estados) {
+                $eq->whereIn('codigo', $estados);
+            });
+        }
+
+        $prioridades = $this->normalizeFiltroListaEnteros($filters['prioridad'] ?? null);
+        if (!empty($prioridades)) {
+            $query->whereIn('prioridad', $prioridades);
+        }
+
+        $areas = $this->normalizeFiltroLista($filters['area'] ?? null, array('todos'));
+        if (!empty($areas)) {
+            $query->whereIn('area', $areas);
+        }
+
+        if (!empty($filters['solo_mias']) && $authUser && $this->usuarioEsStaffSoporteTi($authUser)) {
+            $uid = (int) $authUser->getKey();
+            $query->where(function ($q) use ($uid) {
+                $q->where('pm_user_id', $uid)->orWhere('analista_user_id', $uid);
+            });
+        }
+
+        $this->aplicarOrdenListadoSolicitudes($query, $filters);
+    }
+
+    /**
+     * @param mixed $value
+     * @param array<int, string> $ignoreValues
+     * @return array<int, string>
+     */
+    protected function normalizeFiltroLista($value, array $ignoreValues = array())
+    {
+        $items = array();
+        if (is_array($value)) {
+            $items = $value;
+        } elseif (is_string($value) && $value !== '') {
+            $items = strpos($value, ',') !== false ? explode(',', $value) : array($value);
+        }
+
+        $out = array();
+        foreach ($items as $item) {
+            $s = trim((string) $item);
+            if ($s === '' || in_array($s, $ignoreValues, true)) {
+                continue;
+            }
+            $out[] = $s;
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    /**
+     * @param mixed $value
+     * @return array<int, int>
+     */
+    protected function normalizeFiltroListaEnteros($value)
+    {
+        $out = array();
+        foreach ($this->normalizeFiltroLista($value) as $item) {
+            $n = (int) $item;
+            if ($n > 0) {
+                $out[] = $n;
+            }
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    /**
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @param array $filters
+     * @return void
+     */
+    protected function aplicarOrdenListadoSolicitudes($query, array $filters)
+    {
+        $sortBy = isset($filters['sort_by']) ? trim((string) $filters['sort_by']) : '';
+        $sortDir = strtolower((string) (isset($filters['sort_dir']) ? $filters['sort_dir'] : 'asc'));
+        if ($sortDir !== 'desc') {
+            $sortDir = 'asc';
+        }
+
+        $allowed = array(
+            'codigo' => 'codigo',
+            'titulo' => 'titulo',
+            'area' => 'area',
+            'prioridad' => 'prioridad',
+            'tipo' => 'tipo_solicitud',
+            'tipo_solicitud' => 'tipo_solicitud',
+            'created_at' => 'created_at',
+            'fecha_registro' => 'created_at',
+            'solicitante' => 'solicitante',
+            'creador' => 'solicitante',
+        );
+
+        if ($sortBy !== '' && isset($allowed[$sortBy])) {
+            $query->reorder($allowed[$sortBy], $sortDir);
+            if ($allowed[$sortBy] !== 'created_at') {
+                $query->orderBy('created_at', 'desc');
+            }
+            return;
+        }
+
+        $query->reorder('prioridad', 'asc')->orderBy('created_at', 'desc');
+    }
+
+    /**
+     * Opciones de creador para filtro staff (respeta el resto de filtros activos).
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @return array<int, array{id:int,nombre:string}>
+     */
+    protected function distinctCreadoresDesdeQuery($query)
+    {
+        $table = (new SoporteTiSolicitud())->getTable();
+
+        return $query->setEagerLoads(array())
+            ->whereNotNull($table . '.solicitante_user_id')
+            ->reorder()
+            ->selectRaw(
+                $table . '.solicitante_user_id as id, MAX(' . $table . '.solicitante) as nombre'
+            )
+            ->groupBy($table . '.solicitante_user_id')
+            ->orderBy('nombre')
+            ->toBase()
+            ->get()
+            ->map(static function (\stdClass $row): array {
+                $id = (int) ($row->id ?? 0);
+                $nombre = trim((string) ($row->nombre ?? ''));
+
+                return array(
+                    'id' => $id,
+                    'nombre' => $nombre !== '' ? $nombre : ('Usuario #' . $id),
+                );
+            })
+            ->values()
+            ->all();
     }
 
     /**
@@ -795,6 +985,29 @@ class SoporteTiService
         return $result;
     }
 
+    public function listarHorarioAtencion(?Authenticatable $user = null)
+    {
+        $user = $user ?: Auth::user();
+        if (!$this->usuarioEsStaffSoporteTi($user)) {
+            throw new AuthorizationException('Solo staff puede consultar el horario de atención.');
+        }
+
+        return $this->bhHelper()->listarDias();
+    }
+
+    public function actualizarHorarioAtencion(array $dias, ?Authenticatable $user = null)
+    {
+        $user = $user ?: Auth::user();
+        if (!$this->usuarioEsStaffSoporteTi($user)) {
+            throw new AuthorizationException('Solo staff puede actualizar el horario de atención.');
+        }
+
+        $result = $this->bhHelper()->actualizarDias($dias);
+        $this->bhHelperInstance = null;
+
+        return $result;
+    }
+
     /**
      * @param SoporteTiSolicitud $solicitud
      * @param string $criticidad
@@ -814,11 +1027,12 @@ class SoporteTiService
             return;
         }
 
+        $bh = $this->bhHelper();
         $inicioEnProgreso = $this->obtenerInicioEnProgreso($solicitud);
         if ($inicioEnProgreso) {
-            $solicitud->fecha_fin_estimado = $inicioEnProgreso->copy()->addHours($horas)->toDateString();
+            $solicitud->fecha_fin_estimado = $bh->addHorasHabiles($inicioEnProgreso->copy(), $horas)->toDateString();
         } else {
-            $solicitud->fecha_fin_estimado = Carbon::now()->addHours($horas)->toDateString();
+            $solicitud->fecha_fin_estimado = $bh->addHorasHabiles(Carbon::now(), $horas)->toDateString();
         }
     }
 
@@ -895,7 +1109,7 @@ class SoporteTiService
             return;
         }
         $inicio = Carbon::parse($solicitud->sla_reanudado_en);
-        $delta = max(0, Carbon::now()->getTimestamp() - $inicio->getTimestamp());
+        $delta = $this->bhHelper()->segundosHabilesEntre($inicio, Carbon::now());
         $solicitud->sla_segundos_acumulados = (int) $solicitud->sla_segundos_acumulados + (int) $delta;
         $solicitud->sla_reanudado_en = null;
     }
@@ -934,7 +1148,7 @@ class SoporteTiService
             } else {
                 $fin = $now;
             }
-            $totalSeg += max(0, $fin->getTimestamp() - $inicio->getTimestamp());
+            $totalSeg += $this->bhHelper()->segundosHabilesEntre($inicio, $fin);
         }
 
         return $totalSeg;
@@ -1058,7 +1272,7 @@ class SoporteTiService
             && $solicitud->sla_reanudado_en
         ) {
             $inicio = Carbon::parse($solicitud->sla_reanudado_en);
-            $seg += max(0, Carbon::now()->getTimestamp() - $inicio->getTimestamp());
+            $seg += $this->bhHelper()->segundosHabilesEntre($inicio, Carbon::now());
         }
 
         return $seg;
@@ -1147,7 +1361,7 @@ class SoporteTiService
             return;
         }
 
-        $solicitud->fecha_fin_estimado = Carbon::now()->addHours($horas)->toDateString();
+        $solicitud->fecha_fin_estimado = $this->bhHelper()->addHorasHabiles(Carbon::now(), $horas)->toDateString();
     }
 
     /**
@@ -1265,7 +1479,7 @@ class SoporteTiService
                 $inicio = $this->obtenerInicioEnProgreso($solicitud);
                 $base = $inicio ?: Carbon::now();
 
-                return $this->formatearMarcaTiempo($base->copy()->addHours($horas));
+                return $this->formatearMarcaTiempo($this->bhHelper()->addHorasHabiles($base->copy(), $horas));
             } catch (\Exception $e) {
                 // sin SLA calculable
             }
@@ -1340,24 +1554,27 @@ class SoporteTiService
      */
     protected function calcularIsoFinContadorSla(SoporteTiSolicitud $solicitud, $totalSeg, $pausado, $restanteSeg)
     {
+        $bh = $this->bhHelper();
+
         if ($pausado) {
-            return Carbon::now()->addSeconds($restanteSeg)->toIso8601String();
+            return $bh->addSegundosHabiles(Carbon::now(), $restanteSeg)->toIso8601String();
         }
 
         if ($solicitud->sla_reanudado_en) {
             $acum = (int) $solicitud->sla_segundos_acumulados;
 
-            return Carbon::parse($solicitud->sla_reanudado_en)
-                ->addSeconds(max(0, $totalSeg - $acum))
-                ->toIso8601String();
+            return $bh->addSegundosHabiles(
+                Carbon::parse($solicitud->sla_reanudado_en),
+                max(0, $totalSeg - $acum)
+            )->toIso8601String();
         }
 
         $inicio = $this->obtenerInicioEnProgreso($solicitud);
         if ($inicio) {
-            return $inicio->copy()->addSeconds($totalSeg)->toIso8601String();
+            return $bh->addSegundosHabiles($inicio->copy(), $totalSeg)->toIso8601String();
         }
 
-        return Carbon::now()->addSeconds($restanteSeg)->toIso8601String();
+        return $bh->addSegundosHabiles(Carbon::now(), $restanteSeg)->toIso8601String();
     }
 
     /**
@@ -2675,6 +2892,20 @@ class SoporteTiService
     }
 
     /**
+     * @param Usuario|null $user
+     */
+    protected function rolGrupoUsuario($user)
+    {
+        if (!$user instanceof Usuario || !$user->grupo) {
+            return null;
+        }
+
+        $rol = trim((string) $user->grupo->No_Grupo);
+
+        return $rol !== '' ? $rol : null;
+    }
+
+    /**
      * @param string|null $rolDemo PM|Solicitante|Analista
      * @return array
      */
@@ -2833,6 +3064,21 @@ class SoporteTiService
             if (!$file instanceof UploadedFile) {
                 continue;
             }
+
+            if (SoporteTiHtmlEvidenceSanitizer::esHtml($file)) {
+                $saneado = SoporteTiHtmlEvidenceSanitizer::sanear($file);
+                $dir = 'soporte-ti/pending-chat/' . $batch;
+                $rel = $dir . '/' . Str::uuid() . '_' . $saneado['nombre'];
+                Storage::disk('local')->put($rel, $saneado['contenido']);
+                $archivosPendientes[] = array(
+                    'local_path' => $rel,
+                    'nombre_original' => $saneado['nombre'],
+                    'tamano_bytes' => strlen($saneado['contenido']),
+                    'mime' => 'text/plain',
+                );
+                continue;
+            }
+
             $rel = $file->store('soporte-ti/pending-chat/' . $batch, 'local');
             $mime = $file->getClientMimeType();
             $archivosPendientes[] = array(
@@ -2940,6 +3186,7 @@ class SoporteTiService
             'area' => $s->area,
             'solicitante' => $s->solicitante,
             'solicitante_user_id' => $s->solicitante_user_id !== null ? (int) $s->solicitante_user_id : null,
+            'solicitante_rol' => $this->rolGrupoUsuario($s->solicitanteUsuario),
             'pm' => $s->pm,
             'pm_user_id' => $s->pm_user_id !== null ? (int) $s->pm_user_id : null,
             'analista' => $s->analista,

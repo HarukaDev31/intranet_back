@@ -5,13 +5,14 @@ namespace App\Support\CargaConsolidada;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 
 /**
- * Coord 2 → invoice/packing/excel_conf_status.
- * Resto (VB final) → *_status_final.
- * Cuando Coord 2 pasa a Revisado, el final pasa a Recibido (si aún no está Revisado).
+ * Coord 2 (Daniela) → invoice/packing/excel_conf_status.
+ * Coord 3 (José) y resto (VB final) → *_status_final.
+ * Cuando Coord 2 pasa a Revisado, el final pasa a Recibido/Entregado (si aún no está Revisado).
  */
 class DocumentStatusSync
 {
     const COORD2_EMAIL = 'coordinacion2@probusiness.pe';
+    const COORD3_EMAIL = 'coordinacion3@probusiness.pe';
 
     /** @var array<string, string> */
     public const COORD_TO_FINAL = [
@@ -21,12 +22,28 @@ class DocumentStatusSync
     ];
 
     /** @var string[] */
-    public const ALLOWED = ['Pendiente', 'Recibido', 'Observado', 'Revisado'];
+    public const ALLOWED = ['Pendiente', 'Solicitado', 'Entregado', 'Observado', 'Revisado'];
 
     /**
      * @param  mixed  $user
      */
     public static function isCoord2User($user)
+    {
+        return self::matchesEmailPrefix($user, self::COORD2_EMAIL);
+    }
+
+    /**
+     * @param  mixed  $user
+     */
+    public static function isCoord3User($user)
+    {
+        return self::matchesEmailPrefix($user, self::COORD3_EMAIL);
+    }
+
+    /**
+     * @param  mixed  $user
+     */
+    private static function matchesEmailPrefix($user, string $targetEmail)
     {
         if ($user === null) {
             return false;
@@ -41,12 +58,14 @@ class DocumentStatusSync
             is_array($user) ? ($user['email'] ?? null) : null,
         ];
 
+        $prefix = strtolower(substr($targetEmail, 0, strpos($targetEmail, '@') + 1));
+
         foreach ($candidates as $candidate) {
             $email = strtolower(trim((string) $candidate));
             if ($email === '') {
                 continue;
             }
-            if ($email === self::COORD2_EMAIL || strpos($email, 'coordinacion2@') === 0) {
+            if ($email === $targetEmail || strpos($email, $prefix) === 0) {
                 return true;
             }
         }
@@ -68,7 +87,7 @@ class DocumentStatusSync
 
         $currentFinal = (string) ($proveedor->{$finalField} ?? 'Pendiente');
         if (strcasecmp($currentFinal, 'Revisado') !== 0) {
-            $proveedor->{$finalField} = 'Recibido';
+            $proveedor->{$finalField} = 'Entregado';
         }
     }
 
@@ -95,7 +114,11 @@ class DocumentStatusSync
     }
 
     /**
-     * Aplica cambio de estado Coord 2 y, si pasa a Revisado, sincroniza el final a Recibido.
+     * Aplica cambio de estado Coord 2 (Daniela) y sincroniza el campo final (Coord 3/José y resto).
+     *
+     * Invoice/Packing: el final se espeja siempre al valor de Daniela (salvo que José ya lo haya
+     * dejado en Revisado, que no se pisa desde Coord 2).
+     * Excel Conf.: el final solo se sincroniza (a Entregado) cuando Daniela pasa a Revisado.
      *
      * @param  CotizacionProveedor  $proveedor
      * @return bool true si excel_conf_status acaba de pasar a Revisado
@@ -112,18 +135,36 @@ class DocumentStatusSync
 
         $proveedor->{$coordField} = $newValue;
 
-        if ($becomesRevisado) {
-            $currentFinal = (string) ($proveedor->{$finalField} ?? 'Pendiente');
-            if (strcasecmp($currentFinal, 'Revisado') !== 0) {
-                $proveedor->{$finalField} = 'Recibido';
-            }
-        }
+        $currentFinal = (string) ($proveedor->{$finalField} ?? 'Pendiente');
+        $finalYaRevisado = strcasecmp($currentFinal, 'Revisado') === 0;
 
         if ($coordField === 'excel_conf_status') {
+            if ($becomesRevisado && !$finalYaRevisado) {
+                $proveedor->{$finalField} = 'Entregado';
+            }
             $proveedor->excel_conf_form_cerrado = $newValue === 'Revisado';
+        } elseif (!$finalYaRevisado) {
+            $proveedor->{$finalField} = $newValue;
         }
 
         return $coordField === 'excel_conf_status' && $becomesRevisado;
+    }
+
+    /**
+     * Marca Invoice/Packing/Excel Conf. (perfil Daniela) como "Solicitado" para un
+     * proveedor puntual, usado cuando se dispara la solicitud de "Pedir Documentos".
+     * No toca los campos _final (Coord 3/José).
+     *
+     * @param  CotizacionProveedor  $proveedor
+     */
+    public static function markSolicitado(CotizacionProveedor $proveedor)
+    {
+        foreach (array_keys(self::COORD_TO_FINAL) as $coordField) {
+            $current = (string) ($proveedor->{$coordField} ?? 'Pendiente');
+            if (strcasecmp($current, 'Pendiente') === 0) {
+                $proveedor->{$coordField} = 'Solicitado';
+            }
+        }
     }
 
     /**

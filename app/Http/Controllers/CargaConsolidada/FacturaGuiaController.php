@@ -24,6 +24,8 @@ use App\Models\CargaConsolidada\GuiaRemision;
 use App\Models\UsuarioDatosFacturacion;
 use App\Helpers\ComprobanteFormResolverHelper;
 use App\Helpers\UserLookupHelper;
+use App\Exports\FacturaGuiaClientesFacturacionExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class FacturaGuiaController extends Controller
 {
@@ -128,15 +130,16 @@ class FacturaGuiaController extends Controller
         $razonSocial = $datosFacturacion['razon_social'] ?? '-';
         $domicilio = $datosFacturacion['domicilio_fiscal'] ?? '-';
         $destino = $datosFacturacion['destino'] ?? '-';
-
+        $dni = $datosFacturacion['dni'] ?? '-';
+        $nombreCompleto = $datosFacturacion['nombre_completo'] ?? '-';
         return "Hola {$cotizacion->nombre} 🙋🏻‍♀️,\n\n" .
             "Somos del área contable de Pro Business.\n" .
             "Tu carga del consolidado #{$carga} ya está rumbo a Perú 🚢.\n\n" .
             "✅ Para enviarte tu comprobante al momento de la entrega, confirma tus datos:\n\n" .
             "Datos de facturación:\n" .
             "- Tipo de comprobante: {$tipoComprobante}\n" .
-            "- RUC: {$ruc}\n" .
-            "- Razón social: {$razonSocial}\n" .
+            ($tipoComprobante === 'FACTURA' ? "- RUC: {$ruc}\n" : "- DNI: {$dni}\n") .
+            ($tipoComprobante === 'FACTURA' ? "- Razón social: {$razonSocial}\n" : "- Nombre completo: {$nombreCompleto}\n") .
             "- Domicilio fiscal: {$domicilio}\n\n" .
             "Datos logísticos:\n" .
             "- Entrega: {$destino}\n\n" .
@@ -1745,27 +1748,26 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 return response()->json(['success' => false, 'message' => 'Cotización no encontrada'], 404);
             }
 
-            // Cargar comprobantes con su constancia de pago anidada; file_path siempre como URL absoluta firmada
+            // Cargar comprobantes con constancia; URLs públicas CDN (mismo criterio que panel cotización/contrato)
             $comprobantes = Comprobante::where('quotation_id', $idCotizacion)
                 ->orderBy('created_at', 'desc')
                 ->get()
                 ->map(function ($item) {
-                    $signedComprobanteUrl = !empty($item->file_path)
-                        ? $this->absoluteSignedFileUrl('carga-consolidada.contabilidad.comprobante.file', ['id' => $item->id], now()->addMinutes(30))
+                    $comprobanteCdnUrl = !empty($item->file_path)
+                        ? ($this->cdnStorageUrl($item->file_path) ?: $this->generateImageUrl($item->file_path))
                         : null;
-                    $item->file_url  = $signedComprobanteUrl;
-                    $item->file_path = $signedComprobanteUrl;
+                    $item->file_url  = $comprobanteCdnUrl;
+                    $item->file_path = $comprobanteCdnUrl;
 
-                    // Constancia de pago vinculada (solo si tiene detraccion)
                     $item->constancia = null;
                     if ($item->tiene_detraccion) {
                         $constancia = Detraccion::where('comprobante_id', $item->id)->first();
                         if ($constancia) {
-                            $signedConstanciaUrl = !empty($constancia->file_path)
-                                ? $this->absoluteSignedFileUrl('carga-consolidada.contabilidad.constancia.file', ['id' => $constancia->id], now()->addMinutes(30))
+                            $constanciaCdnUrl = !empty($constancia->file_path)
+                                ? ($this->cdnStorageUrl($constancia->file_path) ?: $this->generateImageUrl($constancia->file_path))
                                 : null;
-                            $constancia->file_url  = $signedConstanciaUrl;
-                            $constancia->file_path = $signedConstanciaUrl;
+                            $constancia->file_url  = $constanciaCdnUrl;
+                            $constancia->file_path = $constanciaCdnUrl;
                             $item->constancia = $constancia;
                         }
                     }
@@ -1786,13 +1788,14 @@ Cualquier duda nos escribe.  ¡Gracias! */
                     'id' => $g->id,
                     'file_name' => $g->file_name ?? 'Guía',
                     'file_url' => !empty($g->file_path)
-                        ? $this->absoluteSignedFileUrl('carga-consolidada.guia-remision.file', ['id' => $g->id], now()->addMinutes(30))
+                        ? ($this->cdnStorageUrl($g->file_path) ?: $this->generateImageUrl($g->file_path))
                         : null,
                 ];
             })->values()->all();
 
             $legacyGuiaUrl = $cotizacion->guia_remision_url
-                ? $this->generateImageUrl('cargaconsolidada/guiaremision/' . $idCotizacion . '/' . $cotizacion->guia_remision_url)
+                ? ($this->cdnStorageUrl('cargaconsolidada/guiaremision/' . $idCotizacion . '/' . $cotizacion->guia_remision_url)
+                    ?: $this->generateImageUrl('cargaconsolidada/guiaremision/' . $idCotizacion . '/' . $cotizacion->guia_remision_url))
                 : null;
             if (empty($guiasRemision) && $legacyGuiaUrl) {
                 $guiasRemision = [['id' => 0, 'file_name' => $cotizacion->guia_remision_url, 'file_url' => $legacyGuiaUrl]];
@@ -1802,9 +1805,15 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 'tiene_cotizacion_inicial' => !empty($cotizacion->cotizacion_file_url),
                 'tiene_cotizacion_final'   => !empty($cotizacion->cotizacion_final_url),
                 'tiene_contrato'           => !empty($cotizacion->cotizacion_contrato_url),
-                'cotizacion_inicial_url'   => !empty($cotizacion->cotizacion_file_url) ? $this->generateImageUrl($cotizacion->cotizacion_file_url) : null,
-                'cotizacion_final_url'     => !empty($cotizacion->cotizacion_final_url) ? $this->generateImageUrl($cotizacion->cotizacion_final_url) : null,
-                'contrato_url'             => !empty($cotizacion->cotizacion_contrato_url) ? $this->generateImageUrl($cotizacion->cotizacion_contrato_url) : null,
+                'cotizacion_inicial_url'   => !empty($cotizacion->cotizacion_file_url)
+                    ? ($this->cdnStorageUrl($cotizacion->cotizacion_file_url) ?: $this->generateImageUrl($cotizacion->cotizacion_file_url))
+                    : null,
+                'cotizacion_final_url'     => !empty($cotizacion->cotizacion_final_url)
+                    ? ($this->cdnStorageUrl($cotizacion->cotizacion_final_url) ?: $this->generateImageUrl($cotizacion->cotizacion_final_url))
+                    : null,
+                'contrato_url'             => !empty($cotizacion->cotizacion_contrato_url)
+                    ? ($this->cdnStorageUrl($cotizacion->cotizacion_contrato_url) ?: $this->generateImageUrl($cotizacion->cotizacion_contrato_url))
+                    : null,
                 'guia_remision_url'        => $legacyGuiaUrl,
                 'guia_remision_file_name'  => $cotizacion->guia_remision_url,
                 'guias_remision'           => $guiasRemision,
@@ -1973,6 +1982,66 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 'error'         => $e->getMessage(),
             ]);
             return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Descarga en Excel los datos de facturación (RUC/DNI, razón social, tipo de comprobante)
+     * de todos los clientes de un contenedor.
+     * GET /carga-consolidada/contenedor/factura-guia/contabilidad/clientes/{idContenedor}/export
+     */
+    public function exportarClientesFacturacion($idContenedor)
+    {
+        try {
+            $cotizaciones = Cotizacion::select(
+                'id',
+                'nombre',
+                'telefono',
+                'correo',
+                'documento',
+                'id_contenedor'
+            )
+                ->where('id_contenedor', $idContenedor)
+                ->whereNotNull('estado_cliente')
+                ->whereNull('id_cliente_importacion')
+                ->where('estado_cotizador', 'CONFIRMADO')
+                ->orderBy('nombre', 'asc')
+                ->get();
+
+            $cotizacionIds = $cotizaciones->pluck('id')->all();
+            $formsByCotizacion = !empty($cotizacionIds)
+                ? ComprobanteForm::whereIn('id_cotizacion', $cotizacionIds)->get()->keyBy('id_cotizacion')
+                : collect();
+
+            $rows = $cotizaciones->map(function ($item) use ($formsByCotizacion) {
+                $resuelto = ComprobanteFormResolverHelper::resolveForListing($item, $formsByCotizacion->get($item->id));
+                $form = $resuelto['comprobante_form'];
+                $tipo = is_array($form) ? ($form['tipo_comprobante'] ?? null) : ($form->tipo_comprobante ?? null);
+                $ruc = is_array($form) ? ($form['ruc'] ?? null) : ($form->ruc ?? null);
+                $dni = is_array($form) ? ($form['dni_carnet'] ?? null) : ($form->dni_carnet ?? null);
+                $razonSocial = is_array($form) ? ($form['razon_social'] ?? null) : ($form->razon_social ?? null);
+                $nombreCompleto = is_array($form) ? ($form['nombre_completo'] ?? null) : ($form->nombre_completo ?? null);
+
+                return [
+                    'nombre' => $item->nombre,
+                    'telefono' => $item->telefono,
+                    'tipo_comprobante' => $tipo,
+                    'documento' => $tipo === 'FACTURA' ? $ruc : $dni,
+                    'razon_social' => $tipo === 'FACTURA' ? $razonSocial : $nombreCompleto,
+                ];
+            });
+
+            $contenedor = Contenedor::find($idContenedor);
+            $carga = $contenedor ? $contenedor->carga : $idContenedor;
+            $filename = 'datos-facturacion-carga-' . $carga . '-' . date('Y-m-d-His') . '.xlsx';
+
+            return Excel::download(new FacturaGuiaClientesFacturacionExport($rows), $filename, \Maatwebsite\Excel\Excel::XLSX);
+        } catch (\Exception $e) {
+            Log::error('FacturaGuiaController@exportarClientesFacturacion', [
+                'id_contenedor' => $idContenedor,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json(['success' => false, 'message' => 'Error al exportar: ' . $e->getMessage()], 500);
         }
     }
 

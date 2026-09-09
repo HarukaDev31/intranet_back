@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use App\Models\BaseDatos\ProductoImportadoExcel;
 use App\Support\CargaConsolidada\DocumentStatusSync;
+use App\Support\PhpSpreadsheet\PhpSpreadsheetRuntime;
 use App\Models\Distrito;
 use Carbon\Carbon;
 use Tymon\JWTAuth\Facades\JWTAuth;
@@ -26,6 +27,7 @@ use Maatwebsite\Excel\Facades\Excel;
 use App\Http\Controllers\BaseDatos\ProductosController;
 use App\Models\ImportProducto;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Reader\IReader;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
@@ -240,7 +242,7 @@ class DocumentacionController extends Controller
                 $this->processFileUpload($proveedor, 'factura_comercial', $request->file('file_comercial'), $data);
                 $data['invoice_status'] = 'Revisado';
                 if (strcasecmp((string) ($proveedor->invoice_status_final ?? ''), 'Revisado') !== 0) {
-                    $data['invoice_status_final'] = 'Recibido';
+                    $data['invoice_status_final'] = 'Entregado';
                 }
             } else {
                 unset($data['file_comercial']);
@@ -252,7 +254,7 @@ class DocumentacionController extends Controller
                 $data['excel_conf_status'] = 'Revisado';
                 $data['excel_conf_form_cerrado'] = true;
                 if (strcasecmp((string) ($proveedor->excel_conf_status_final ?? ''), 'Revisado') !== 0) {
-                    $data['excel_conf_status_final'] = 'Recibido';
+                    $data['excel_conf_status_final'] = 'Entregado';
                 }
             } else {
                 unset($data['excel_confirmacion']);
@@ -263,7 +265,7 @@ class DocumentacionController extends Controller
                 $this->processFileUpload($proveedor, 'packing_list', $request->file('packing_list'), $data);
                 $data['packing_status'] = 'Revisado';
                 if (strcasecmp((string) ($proveedor->packing_status_final ?? ''), 'Revisado') !== 0) {
-                    $data['packing_status_final'] = 'Recibido';
+                    $data['packing_status_final'] = 'Entregado';
                 }
             } else {
                 unset($data['packing_list']);
@@ -294,6 +296,11 @@ class DocumentacionController extends Controller
     private function processFileUpload($proveedor, $fieldName, $file, &$data)
     {
         try {
+            $maxFileSize = 30 * 1024 * 1024; // 30MB
+            if ($file->getSize() > $maxFileSize) {
+                throw new \Exception('El archivo excede el tamaño máximo permitido (30MB)');
+            }
+
             // Eliminar archivo anterior si existe
             if ($proveedor->$fieldName && $this->objectStorage()->exists($proveedor->$fieldName)) {
                 $this->objectStorage()->delete($proveedor->$fieldName);
@@ -582,99 +589,154 @@ class DocumentacionController extends Controller
     }
 
     /**
-     * Descarga la factura comercial procesada
+     * Descarga síncrona (compatibilidad). El flujo principal es el job en segundo plano.
      */
     public function downloadFacturaComercial($idContenedor)
     {
         try {
-            // Buscar archivos de documentación
-            $facturaComercial = $this->getDocumentacionFile($idContenedor, 'Factura Comercial');
-            if (!$facturaComercial) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'No se encontró la factura comercial'
-                ], 404);
-            }
-
-            $packingList = $this->getDocumentacionFile($idContenedor, 'Packing List');
-            if (!$packingList) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'No se encontró el packing list'
-                ], 404);
-            }
-
-            $listaPartidas = $this->getDocumentacionFile($idContenedor, 'Lista de Partidas');
-            if (!$listaPartidas) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'No se encontró la lista de partidas'
-                ], 404);
-            }
-
-            // Validar extensiones de archivo
-            if (!$this->isExcelFile($facturaComercial->file_url)) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'La Factura Comercial no es un archivo de excel'
-                ], 400);
-            }
-
-            if (!$this->isExcelFile($packingList->file_url)) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'El Packing List no es un archivo de excel'
-                ], 400);
-            }
-
-            if (!$this->isExcelFile($listaPartidas->file_url)) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'La Lista de Partidas no es un archivo de excel'
-                ], 400);
-            }
-
-            // Cargar archivos Excel
-            $facturaPath = $this->getLocalPath($facturaComercial->file_url);
-            $packingPath = $this->getLocalPath($packingList->file_url);
-            $listaPath = $this->getLocalPath($listaPartidas->file_url);
-
-            $objPHPExcel = IOFactory::load($facturaPath);
-            $objPHPExcelPacking = IOFactory::load($packingPath);
-            $objPHPExcelListaPartidas = IOFactory::load($listaPath);
-
-            // Obtener datos del sistema
-            $dataSystem = $this->getSystemData($idContenedor);
-            Log::info('Datos del sistema: ' . json_encode($dataSystem));
-            // Procesar Excel
-            $processedExcel = $this->processExcelFiles(
-                $objPHPExcel,
-                $objPHPExcelPacking,
-                $objPHPExcelListaPartidas,
-                $dataSystem
-            );
-
-            // Generar archivo de salida
-            $writer = new Xlsx($processedExcel);
-            $outputPath = storage_path('app/public/temp/factura_procesada_' . $idContenedor . '.xlsx');
-
-            // Crear directorio si no existe
-            if (!file_exists(dirname($outputPath))) {
-                mkdir(dirname($outputPath), 0755, true);
-            }
-
-            $writer->save($outputPath);
-
+            $outputPath = $this->generateFacturaComercialToPath($idContenedor);
 
             return response()->download($outputPath, 'factura_procesada_' . $idContenedor . '.xlsx')
                 ->deleteFileAfterSend();
-        } catch (\Exception $e) {
-            Log::error('Error en downloadFacturaComercial: ' . $e->getMessage());
+        } catch (\InvalidArgumentException $e) {
+            $status = stripos($e->getMessage(), 'no se encontró') !== false ? 404 : 400;
+
             return response()->json([
                 'status' => 'error',
-                'message' => 'Error al procesar archivos: ' . $e->getMessage()
+                'message' => $e->getMessage(),
+            ], $status);
+        } catch (\Exception $e) {
+            Log::error('Error en downloadFacturaComercial: ' . $e->getMessage(), [
+                'id_contenedor' => $idContenedor,
+                'memory_peak' => memory_get_peak_usage(true),
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error al procesar archivos: ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Valida que existan Factura Comercial, Packing List y Lista de Partidas en Excel.
+     *
+     * @return array{factura: string, packing: string, lista: string}
+     */
+    public function assertFacturaComercialSources($idContenedor): array
+    {
+        $facturaComercial = $this->getDocumentacionFile($idContenedor, 'Factura Comercial');
+        if (!$facturaComercial) {
+            throw new \InvalidArgumentException('No se encontró la factura comercial');
+        }
+
+        $packingList = $this->getDocumentacionFile($idContenedor, 'Packing List');
+        if (!$packingList) {
+            throw new \InvalidArgumentException('No se encontró el packing list');
+        }
+
+        $listaPartidas = $this->getDocumentacionFile($idContenedor, 'Lista de Partidas');
+        if (!$listaPartidas) {
+            throw new \InvalidArgumentException('No se encontró la lista de partidas');
+        }
+
+        if (!$this->isExcelFile($facturaComercial->file_url)) {
+            throw new \InvalidArgumentException('La Factura Comercial no es un archivo de excel');
+        }
+
+        if (!$this->isExcelFile($packingList->file_url)) {
+            throw new \InvalidArgumentException('El Packing List no es un archivo de excel');
+        }
+
+        if (!$this->isExcelFile($listaPartidas->file_url)) {
+            throw new \InvalidArgumentException('La Lista de Partidas no es un archivo de excel');
+        }
+
+        return [
+            'factura' => $this->getLocalPath($facturaComercial->file_url),
+            'packing' => $this->getLocalPath($packingList->file_url),
+            'lista' => $this->getLocalPath($listaPartidas->file_url),
+        ];
+    }
+
+    /**
+     * Genera el Excel procesado y devuelve la ruta temporal local.
+     */
+    public function generateFacturaComercialToPath($idContenedor): string
+    {
+        $originalMemoryLimit = ini_get('memory_limit');
+        $originalMaxExecutionTime = ini_get('max_execution_time');
+        $paths = $this->assertFacturaComercialSources($idContenedor);
+
+        try {
+            ini_set('memory_limit', (string) env('EXCEL_MEMORY_LIMIT', '2048M'));
+            ini_set('max_execution_time', '300');
+
+            return PhpSpreadsheetRuntime::run(function () use ($idContenedor, $paths) {
+                $packingExcel = $this->loadSpreadsheet($paths['packing'], true, false);
+                $itemToClientMap = $this->createItemToClientMap($packingExcel);
+                $packingExcel->disconnectWorksheets();
+                unset($packingExcel);
+
+                $listaPartidasExcel = $this->loadSpreadsheet($paths['lista'], false, true);
+                $customsIndex = $this->buildCustomsIndex($listaPartidasExcel);
+                $listaPartidasExcel->disconnectWorksheets();
+                unset($listaPartidasExcel);
+
+                $objPHPExcel = $this->loadSpreadsheet($paths['factura'], false, true);
+
+                $dataSystem = $this->getSystemData($idContenedor);
+                Log::info('generateFacturaComercialToPath: datos del sistema', [
+                    'id_contenedor' => $idContenedor,
+                    'clientes' => is_countable($dataSystem) ? count($dataSystem) : 0,
+                ]);
+
+                $processedExcel = $this->processExcelFiles(
+                    $objPHPExcel,
+                    $itemToClientMap,
+                    $customsIndex,
+                    $dataSystem
+                );
+
+                $writer = new Xlsx($processedExcel);
+                $outputPath = storage_path('app/public/temp/factura_procesada_' . $idContenedor . '_' . uniqid('', true) . '.xlsx');
+
+                if (!file_exists(dirname($outputPath))) {
+                    mkdir(dirname($outputPath), 0755, true);
+                }
+
+                $writer->save($outputPath);
+
+                $processedExcel->disconnectWorksheets();
+                unset($processedExcel, $writer);
+
+                return $outputPath;
+            });
+        } finally {
+            if ($originalMemoryLimit !== false && $originalMemoryLimit !== null) {
+                ini_set('memory_limit', $originalMemoryLimit);
+            }
+            if ($originalMaxExecutionTime !== false && $originalMaxExecutionTime !== null) {
+                ini_set('max_execution_time', $originalMaxExecutionTime);
+            }
+        }
+    }
+
+    /**
+     * Carga un spreadsheet. readEmptyCells=false ahorra memoria pero altera fórmulas,
+     * merges y el Excel de salida; solo usarlo en archivos auxiliares de solo datos.
+     */
+    private function loadSpreadsheet(string $path, bool $readDataOnly = false, bool $readEmptyCells = true): Spreadsheet
+    {
+        $reader = IOFactory::createReaderForFile($path);
+        if ($reader instanceof IReader) {
+            $reader->setReadDataOnly($readDataOnly);
+            if (method_exists($reader, 'setReadEmptyCells')) {
+                $reader->setReadEmptyCells($readEmptyCells);
+            }
+        }
+
+        return $reader->load($path);
     }
 
     /**
@@ -716,22 +778,14 @@ class DocumentacionController extends Controller
     }
 
     /**
-     * Procesa los archivos Excel
+     * Procesa la factura comercial con el mapeo de packing y el índice aduanero ya extraídos.
      */
-    private function processExcelFiles($facturaExcel, $packingExcel, $listaPartidasExcel, $dataSystem)
+    private function processExcelFiles($facturaExcel, array $itemToClientMap, array $customsIndex, $dataSystem)
     {
         try {
-            // Crear mapeo de items a clientes desde packing list
-            $itemToClientMap = $this->createItemToClientMap($packingExcel);
-
-            // Procesar primera hoja
             $sheet0 = $facturaExcel->getSheet(0);
-            $lastClientInfo = $this->processFirstSheet($sheet0, $itemToClientMap, $dataSystem, $listaPartidasExcel);
-
-            // Procesar hojas adicionales
-            $this->processAdditionalSheets($facturaExcel, $itemToClientMap, $dataSystem, $listaPartidasExcel, $lastClientInfo);
-
-            // Aplicar estilos finales
+            $lastClientInfo = $this->processFirstSheet($sheet0, $itemToClientMap, $dataSystem, $customsIndex);
+            $this->processAdditionalSheets($facturaExcel, $itemToClientMap, $dataSystem, $customsIndex, $lastClientInfo);
             $this->applyFinalStyles($sheet0);
 
             return $facturaExcel;
@@ -775,7 +829,6 @@ class DocumentacionController extends Controller
 
                         // Si ya existe este itemId, crear una variación única
                         while (isset($itemToClientMap[$cleanItemId])) {
-                            Log::info('ItemId duplicado encontrado: ' . $originalKey . ' (cliente existente: ' . $itemToClientMap[$originalKey] . ', nuevo cliente: ' . $cleanClient . ')');
                             $cleanItemId = $originalKey . '_' . $counter;
                             $counter++;
                         }
@@ -796,21 +849,17 @@ class DocumentacionController extends Controller
                             }
                             $itemToClientMap[$originalKey . '_ALL'][] = $cleanClient;
                         }
-
-                        Log::info('Mapeado: ' . $cleanItemId . ' -> ' . $cleanClient);
                     }
                 }
 
                 // Luego verificar si debemos parar (después de procesar la fila actual)
-                if (stripos(trim($itemId), "TOTAL") !== false || stripos(trim($client), "TOTAL") !== false) {
-                    Log::info('Encontrado TOTAL en hoja ' . $sheetIndex . ', fila ' . $row);
+                if (stripos(trim((string) $itemId), "TOTAL") !== false || stripos(trim((string) $client), "TOTAL") !== false) {
                     break;
                 }
             }
         }
 
-        Log::info('Mapeo completo creado con ' . count($itemToClientMap) . ' elementos');
-        Log::info('Contenido del mapeo: ' . json_encode($itemToClientMap, JSON_UNESCAPED_UNICODE));
+        Log::info('Mapeo packing list creado', ['elementos' => count($itemToClientMap)]);
         return $itemToClientMap;
     }
 
@@ -820,30 +869,22 @@ class DocumentacionController extends Controller
     private function findClientForItem($itemToClientMap, $itemN)
     {
         if (empty($itemN)) {
-            Log::warning('ItemN está vacío, retornando cadena vacía');
             return '';
         }
 
         $cleanItemN = trim($itemN);
-        Log::info('🔍 BUSCANDO CLIENTE PARA ITEM: "' . $cleanItemN . '"');
-        Log::info('📋 Total items en mapeo: ' . count($itemToClientMap));
 
         // Estrategia 1: Búsqueda exacta
         if (isset($itemToClientMap[$cleanItemN])) {
-            Log::info('✅ Cliente encontrado (exacto): ' . $cleanItemN . ' -> ' . $itemToClientMap[$cleanItemN]);
             return $itemToClientMap[$cleanItemN];
-        } else {
-            Log::info('❌ No encontrado en búsqueda exacta para: "' . $cleanItemN . '"');
         }
 
         // Estrategia 2: Búsqueda sin considerar mayúsculas/minúsculas
         if (isset($itemToClientMap[strtoupper($cleanItemN)])) {
-            Log::info('Cliente encontrado (mayúsculas): ' . $cleanItemN . ' -> ' . $itemToClientMap[strtoupper($cleanItemN)]);
             return $itemToClientMap[strtoupper($cleanItemN)];
         }
 
         if (isset($itemToClientMap[strtolower($cleanItemN)])) {
-            Log::info('Cliente encontrado (minúsculas): ' . $cleanItemN . ' -> ' . $itemToClientMap[strtolower($cleanItemN)]);
             return $itemToClientMap[strtolower($cleanItemN)];
         }
 
@@ -853,7 +894,6 @@ class DocumentacionController extends Controller
                 // Solo buscar coincidencias parciales si ambos son números y tienen longitud similar
                 if (is_numeric($mappedItemId) && abs(strlen($cleanItemN) - strlen($mappedItemId)) <= 1) {
                     if (stripos($mappedItemId, $cleanItemN) !== false || stripos($cleanItemN, $mappedItemId) !== false) {
-                        Log::info('Cliente encontrado (parcial numérico): ' . $cleanItemN . ' -> ' . $client . ' (mapeado: ' . $mappedItemId . ')');
                         return $client;
                     }
                 }
@@ -865,38 +905,17 @@ class DocumentacionController extends Controller
         foreach ($itemToClientMap as $mappedItemId => $client) {
             $normalizedMapped = preg_replace('/[^a-zA-Z0-9]/', '', $mappedItemId);
             if (strcasecmp($normalizedItemN, $normalizedMapped) === 0 && strlen($normalizedItemN) > 0) {
-                Log::info('Cliente encontrado (normalizado): ' . $cleanItemN . ' -> ' . $client . ' (mapeado: ' . $mappedItemId . ')');
                 return $client;
             }
         }
 
-        Log::warning('❌ Cliente no encontrado para itemId: ' . $cleanItemN);
-
-        // Mostrar items similares para debug
-        $numericKeys = array_filter(array_keys($itemToClientMap), 'is_numeric');
-        sort($numericKeys, SORT_NUMERIC);
-        $nearbyItems = [];
-        $targetNum = is_numeric($cleanItemN) ? intval($cleanItemN) : 0;
-
-        foreach ($numericKeys as $key) {
-            $keyNum = intval($key);
-            if (abs($keyNum - $targetNum) <= 3) { // Mostrar items ±3 del target
-                $nearbyItems[] = $key . ' -> ' . $itemToClientMap[$key];
-            }
-        }
-
-        if (!empty($nearbyItems)) {
-            Log::warning('🔍 Items cercanos disponibles: ' . implode(', ', $nearbyItems));
-        }
-
-        // Si no hay cliente, devolver cadena vacía en lugar de texto
         return '';
     }
 
     /**
      * Procesa la primera hoja
      */
-    private function processFirstSheet($sheet, $itemToClientMap, $dataSystem, $listaPartidasExcel)
+    private function processFirstSheet($sheet, $itemToClientMap, $dataSystem, array $customsIndex)
     {
         // Insertar columnas nuevas
         $sheet->insertNewColumnBefore('C', 2);
@@ -918,7 +937,7 @@ class DocumentacionController extends Controller
         $this->applyHeaderStyles($sheet);
 
         // Procesar filas de datos y obtener información del último cliente
-        $lastClientInfo = $this->processDataRows($sheet, $itemToClientMap, $dataSystem, $listaPartidasExcel, 26);
+        $lastClientInfo = $this->processDataRows($sheet, $itemToClientMap, $dataSystem, $customsIndex, 26);
 
         return $lastClientInfo;
     }
@@ -944,7 +963,7 @@ class DocumentacionController extends Controller
     /**
      * Procesa filas de datos
      */
-    private function processDataRows($sheet, $itemToClientMap, $dataSystem, $listaPartidasExcel, $startRow)
+    private function processDataRows($sheet, $itemToClientMap, $dataSystem, array $customsIndex, $startRow)
     {
         $highestRow = $sheet->getHighestRow();
         $currentClient = "";
@@ -956,7 +975,7 @@ class DocumentacionController extends Controller
             $itemN = $sheet->getCell('B' . $row)->getValue();
 
             // Procesar datos válidos si no contiene TOTAL
-            if (stripos(trim($itemN), "TOTAL") === false) {
+            if (stripos(trim((string) $itemN), "TOTAL") === false) {
                 // Obtener cliente - búsqueda mejorada
                 $client = $this->findClientForItem($itemToClientMap, $itemN);
 
@@ -964,12 +983,10 @@ class DocumentacionController extends Controller
                 if (!empty($client)) {
                     // Procesar cliente y merge
                     $this->processClientMerge($sheet, $row, $client, $currentClient, $clientStartRow, $clientEndRow, $pendingMerge);
-                } else {
-                    Log::info('Item ' . $itemN . ' no tiene cliente asociado, se dejará vacío');
                 }
 
                 // Buscar información aduanera
-                $this->processCustomsInfo($sheet, $row, $itemN, $listaPartidasExcel);
+                $this->processCustomsInfo($sheet, $row, $itemN, $customsIndex);
 
                 // Buscar datos del sistema
                 $this->processSystemData($sheet, $row, $client, $dataSystem);
@@ -979,7 +996,7 @@ class DocumentacionController extends Controller
             }
 
             // Verificar si contiene TOTAL después de procesar
-            if (stripos(trim($itemN), "TOTAL") !== false) {
+            if (stripos(trim((string) $itemN), "TOTAL") !== false) {
                 $this->processTotalRow($sheet, $row);
                 break;
             }
@@ -1033,40 +1050,92 @@ class DocumentacionController extends Controller
     }
 
     /**
-     * Procesa información aduanera
+     * Indexa aduanas de Lista de Partidas una sola vez (item -> valores).
+     *
+     * @return array<string, array{adValorem: mixed, isc: mixed, antiDumping: mixed}>
      */
-    private function processCustomsInfo($sheet, $row, $itemN, $listaPartidasExcel)
+    private function buildCustomsIndex($listaPartidasExcel): array
     {
+        $index = [];
         $sheetListaPartidas = $listaPartidasExcel->getSheet(0);
         $mergedCells = $sheetListaPartidas->getMergeCells();
 
         foreach ($mergedCells as $range) {
             [$startCell, $endCell] = explode(':', $range);
-            if (preg_match('/^B\d+$/', $startCell)) {
-                $value = $sheetListaPartidas->getCell($startCell)->getValue();
-                if (trim($value) == $itemN) {
-                    preg_match('/\d+/', $startCell, $startMatches);
-                    preg_match('/\d+/', $endCell, $endMatches);
-                    $startRow = (int)$startMatches[0];
-                    $endRow = (int)$endMatches[0];
+            if (!preg_match('/^B\d+$/', $startCell)) {
+                continue;
+            }
 
-                    for ($r = $startRow; $r <= $endRow; $r++) {
-                        $adValorem = $sheetListaPartidas->getCell('G' . $r)->getCalculatedValue();
-                        if (trim($adValorem) == "FTA") {
-                            $adValorem = $sheetListaPartidas->getCell('H' . $r)->getCalculatedValue();
-                        }
+            $value = trim((string) $sheetListaPartidas->getCell($startCell)->getValue());
+            if ($value === '' || isset($index[$value])) {
+                continue;
+            }
 
-                        $isc = $sheetListaPartidas->getCell('I' . $r)->getValue();
-                        $antiDumping = $sheetListaPartidas->getCell('J' . $r)->getValue();
-                        $sheet->setCellValue('R' . $row, $adValorem);
-                        $sheet->setCellValue('S' . $row, $isc == 0 ? "-" : $isc);
-                        $sheet->setCellValue('T' . $row, $antiDumping == 0 ? "-" : $antiDumping);
-                        break;
-                    }
-                    break;
+            preg_match('/\d+/', $startCell, $startMatches);
+            preg_match('/\d+/', $endCell, $endMatches);
+            $startRow = (int) $startMatches[0];
+            $endRow = (int) $endMatches[0];
+
+            for ($r = $startRow; $r <= $endRow; $r++) {
+                $adValorem = $sheetListaPartidas->getCell('G' . $r)->getCalculatedValue();
+                if (trim((string) $adValorem) === 'FTA') {
+                    $adValorem = $sheetListaPartidas->getCell('H' . $r)->getCalculatedValue();
                 }
+
+                $index[$value] = [
+                    'adValorem' => $adValorem,
+                    'isc' => $sheetListaPartidas->getCell('I' . $r)->getValue(),
+                    'antiDumping' => $sheetListaPartidas->getCell('J' . $r)->getValue(),
+                ];
+                break;
             }
         }
+
+        Log::info('Índice aduanero creado', ['items' => count($index)]);
+
+        return $index;
+    }
+
+    /**
+     * Procesa información aduanera
+     */
+    private function processCustomsInfo($sheet, $row, $itemN, array $customsIndex)
+    {
+        $customs = $this->findCustomsForItem($customsIndex, $itemN);
+        if ($customs === null) {
+            return;
+        }
+
+        $isc = $customs['isc'];
+        $antiDumping = $customs['antiDumping'];
+
+        $sheet->setCellValue('R' . $row, $customs['adValorem']);
+        $sheet->setCellValue('S' . $row, $isc == 0 ? '-' : $isc);
+        $sheet->setCellValue('T' . $row, $antiDumping == 0 ? '-' : $antiDumping);
+    }
+
+    /**
+     * Busca aduana del ítem. Mantiene la igualdad suelta (==) del código original:
+     * "01" == 1 y "5.0" == 5 coinciden, el índice estricto no.
+     */
+    private function findCustomsForItem(array $customsIndex, $itemN): ?array
+    {
+        $key = trim((string) $itemN);
+        if ($key === '') {
+            return null;
+        }
+
+        if (isset($customsIndex[$key])) {
+            return $customsIndex[$key];
+        }
+
+        foreach ($customsIndex as $indexedItem => $customs) {
+            if ($indexedItem == $itemN || $indexedItem == $key) {
+                return $customs;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -1298,21 +1367,21 @@ class DocumentacionController extends Controller
     /**
      * Procesa hojas adicionales
      */
-    private function processAdditionalSheets($facturaExcel, $itemToClientMap, $dataSystem, $listaPartidasExcel, $lastClientInfo)
+    private function processAdditionalSheets($facturaExcel, $itemToClientMap, $dataSystem, array $customsIndex, $lastClientInfo)
     {
         $sheetCount = $facturaExcel->getSheetCount();
         if ($sheetCount <= 1) return;
 
         $sheet0 = $facturaExcel->getSheet(0);
         $highestFirstSheetRow = $this->getHighestRowFirstSheet($facturaExcel);
-        Log::info('Fila más alta de la primera hoja: ' . $highestFirstSheetRow);
-        Log::info('Total de hojas en factura comercial: ' . $sheetCount);
-        Log::info('Elementos en itemToClientMap antes de procesar hojas adicionales: ' . count($itemToClientMap));
+        Log::info('Procesando hojas adicionales de factura', [
+            'hojas' => $sheetCount,
+            'fila_insercion' => $highestFirstSheetRow,
+        ]);
 
         for ($i = 1; $i < $sheetCount; $i++) {
             $sheet = $facturaExcel->getSheet($i);
-            Log::info('Procesando hoja adicional ' . $i . ' - Nombre: ' . $sheet->getTitle());
-            $lastClientInfo = $this->processAdditionalSheet($sheet, $sheet0, $itemToClientMap, $dataSystem, $listaPartidasExcel, $highestFirstSheetRow, $lastClientInfo);
+            $lastClientInfo = $this->processAdditionalSheet($sheet, $sheet0, $itemToClientMap, $dataSystem, $customsIndex, $highestFirstSheetRow, $lastClientInfo);
         }
     }
 
@@ -1327,16 +1396,15 @@ class DocumentacionController extends Controller
 
         for ($row = 26; $row <= $highestRow; $row++) {
             $itemN = $sheet0->getCell('B' . $row)->getValue();
-            Log::info('Item N: ' . $itemN);
 
             // Si encontramos TOTAL, la posición de inserción debe ser DESPUÉS del último elemento válido
-            if (stripos(trim($itemN), "TOTAL") !== false) {
+            if (stripos(trim((string) $itemN), "TOTAL") !== false) {
                 // Retornar la fila de TOTAL para insertar ANTES de ella
                 return $row;
             }
 
             // Si no es TOTAL y tiene contenido, actualizar última fila válida
-            if (!empty(trim($itemN))) {
+            if (!empty(trim((string) $itemN))) {
                 $lastValidRow = $row + 1; // +1 para insertar después
             }
         }
@@ -1347,7 +1415,7 @@ class DocumentacionController extends Controller
     /**
      * Procesa hoja adicional
      */
-    private function processAdditionalSheet($sheet, $sheet0, $itemToClientMap, $dataSystem, $listaPartidasExcel, &$highestFirstSheetRow, $lastClientInfo)
+    private function processAdditionalSheet($sheet, $sheet0, $itemToClientMap, $dataSystem, array $customsIndex, &$highestFirstSheetRow, $lastClientInfo)
     {
         $highestRow = $sheet->getHighestRow();
         $startIndex = 26;
@@ -1359,26 +1427,11 @@ class DocumentacionController extends Controller
         $clientEndRow = $lastClientInfo['lastClientEndRow'] ?? 0;
         $pendingMerge = [];
 
-        Log::info('🔗 Iniciando hoja adicional con último cliente: "' . $currentClient . '" en fila ' . $clientStartRow);
-
-        Log::info('=== INICIANDO PROCESAMIENTO DE HOJA ADICIONAL ===');
-        Log::info('Hoja: ' . $sheet->getTitle() . ', Filas: ' . $highestRow);
-
-        // Primero, mostrar todos los itemIds que encuentra en esta hoja
-        $itemsEncontrados = [];
-        for ($row = $startIndex; $row <= $highestRow; $row++) {
-            $itemN = $sheet->getCell('B' . $row)->getValue();
-            if (!empty($itemN) && stripos(trim($itemN), "TOTAL") === false) {
-                $itemsEncontrados[] = trim($itemN);
-            }
-        }
-        Log::info('ItemIds encontrados en hoja adicional: ' . implode(', ', $itemsEncontrados));
-
         for ($row = $startIndex; $row <= $highestRow; $row++) {
             $itemN = $sheet->getCell('B' . $row)->getValue();
 
             // Procesar datos válidos si no contiene TOTAL
-            if (stripos(trim($itemN), "TOTAL") === false) {
+            if (stripos(trim((string) $itemN), "TOTAL") === false) {
                 // Insertar nueva fila
                 $sheet0->insertNewRowBefore($highestFirstSheetRow, 1);
 
@@ -1386,9 +1439,7 @@ class DocumentacionController extends Controller
                 $this->copyProductData($sheet, $sheet0, $row, $highestFirstSheetRow);
 
                 // Procesar cliente y datos del sistema - búsqueda mejorada
-                Log::info('Procesando hoja adicional - Item: ' . $itemN . ' en fila: ' . $row . ' de hoja: ' . $sheet->getTitle());
                 $client = $this->findClientForItem($itemToClientMap, $itemN);
-                Log::info('Cliente encontrado para ' . $itemN . ': ' . $client);
 
                 // Solo escribir cliente y procesar merge si hay un cliente válido
                 if (!empty($client)) {
@@ -1397,14 +1448,12 @@ class DocumentacionController extends Controller
 
                     // Procesar merge de cliente (similar a processClientMerge pero adaptado)
                     $this->processAdditionalClientMerge($sheet0, $highestFirstSheetRow, $client, $currentClient, $clientStartRow, $clientEndRow, $pendingMerge);
-                } else {
-                    Log::info('Item ' . $itemN . ' no tiene cliente asociado en hoja adicional, se dejará vacío');
                 }
 
                 $this->processSystemData($sheet0, $highestFirstSheetRow, $client, $dataSystem);
 
                 // Procesar información aduanera
-                $this->processCustomsInfo($sheet0, $highestFirstSheetRow, $itemN, $listaPartidasExcel);
+                $this->processCustomsInfo($sheet0, $highestFirstSheetRow, $itemN, $customsIndex);
 
                 // Aplicar estilos
                 $this->applyAdditionalRowStyles($sheet0, $highestFirstSheetRow);
@@ -1413,7 +1462,7 @@ class DocumentacionController extends Controller
             }
 
             // Verificar si contiene TOTAL después de procesar
-            if (stripos(trim($itemN), "TOTAL") !== false) {
+            if (stripos(trim((string) $itemN), "TOTAL") !== false) {
                 break;
             }
         }
@@ -2260,7 +2309,7 @@ class DocumentacionController extends Controller
             // Validar request
             $request->validate([
                 'name' => 'required|string',
-                'file' => 'required|file',
+                'file' => 'required|file|max:30720', // 30MB
                 'id_cotizacion' => 'required|integer',
                 'id_proveedor' => 'required|integer'
             ]);
@@ -2283,7 +2332,7 @@ class DocumentacionController extends Controller
             $file = $request->file('file');
 
             // Validar extensión del archivo
-            $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'];
+            $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'zip', 'rar'];
             $fileExtension = strtolower($file->getClientOriginalExtension());
 
             if (!in_array($fileExtension, $allowedExtensions)) {
@@ -2293,12 +2342,12 @@ class DocumentacionController extends Controller
                 ], 400);
             }
 
-            // Validar tamaño del archivo (1MB)
-            $maxFileSize = 1000000;
+            // Validar tamaño del archivo (30MB)
+            $maxFileSize = 30 * 1024 * 1024;
             if ($file->getSize() > $maxFileSize) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'El archivo excede el tamaño máximo permitido (1MB)'
+                    'message' => 'El archivo excede el tamaño máximo permitido (30MB)'
                 ], 400);
             }
 

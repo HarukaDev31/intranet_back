@@ -60,6 +60,7 @@ class CotizacionChinaReceived implements ShouldBroadcast, ShouldQueue
         return [
             new PrivateChannel('Coordinacion-notifications'),
             new PrivateChannel('Cotizador-notifications'),
+            new PrivateChannel('RRHH-notifications'),
         ];
     }
 

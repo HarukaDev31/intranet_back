@@ -67,6 +67,117 @@ Reglas:
 - Incluir `v1` para poder “romper” cache con un bump de versión.
 - Incluir parámetros relevantes (id, filtros, fechas).
 - TTL corto por defecto; aumentar con evidencia.
+- **Nunca guardar modelos Eloquent ni Collections en caché** (ver sección obligatoria abajo).
+
+### ⚠️ OBLIGATORIO: no cachear modelos Eloquent (evitar `__PHP_Incomplete_Class`)
+
+En este proyecto **Redis serializa con PHP `serialize()`**. Si guardas un `Model`, `Collection` o `Paginator` dentro del payload:
+
+- Al leer la caché puede aparecer `{ __PHP_Incomplete_Class_Name: "App\\Models\\..." }` en JSON.
+- Métodos como `relationLoaded()`, `setRelation()` o acceso a relaciones **fallan** en runtime.
+- Caso real: `CalculadoraImportacionController::show()` rompía en `ordenarProveedoresPorId()` al servir desde caché.
+
+**Regla:** todo lo que entre/salga de caché debe ser **array escalar** (arrays, strings, ints, floats, bool, null).
+
+#### Usar el normalizador del repo
+
+Clase: `App\Support\Cache\CachePayloadNormalizer`
+
+```php
+use App\Support\Cache\CachePayloadNormalizer;
+
+// Al escribir en caché (dentro del resolver del *CacheService):
+$payload = CachePayloadNormalizer::resolveArray($resolver);
+
+// Al leer caché existente: rechazar payloads viejos con objetos PHP
+$cached = Cache::get($key);
+if (is_array($cached) && ! CachePayloadNormalizer::containsUnsafeCachedValue($cached)) {
+    return $cached;
+}
+$payload = CachePayloadNormalizer::resolveArray($resolver);
+Cache::put($key, $payload, $ttl);
+```
+
+`resolveArray()` convierte recursivamente:
+- `Model` / `Arrayable` → `toArray()`
+- `Collection` → array
+- `AbstractPaginator` → array con `items` + metadatos de paginación
+
+`containsUnsafeCachedValue()` detecta:
+- `__PHP_Incomplete_Class`
+- instancias de `Model`, `Collection`, `Paginator`
+- cualquier objeto que no sea `stdClass`
+
+#### Patrón en servicios `*CacheService` de este repo
+
+Referencia: `CalculadoraImportacionCacheService`, `ClienteCacheService`, `CargaConsolidadaCacheService` (HTTP cache guarda **string JSON**, no modelos).
+
+```php
+private function remember(string $key, $ttl, callable $resolver): array
+{
+    $cached = Cache::get($key);
+    if (is_array($cached) && ! CachePayloadNormalizer::containsUnsafeCachedValue($cached)) {
+        return $cached;
+    }
+
+    $payload = CachePayloadNormalizer::resolveArray($resolver);
+    Cache::put($key, $payload, $ttl);
+
+    return $payload;
+}
+```
+
+Con tags:
+
+```php
+$tags = Cache::tags([self::TAG]);
+$cached = $tags->get($key);
+if (is_array($cached) && ! CachePayloadNormalizer::containsUnsafeCachedValue($cached)) {
+    return $cached;
+}
+$payload = CachePayloadNormalizer::resolveArray($resolver);
+$tags->put($key, $payload, $ttl);
+```
+
+#### Qué NO hacer
+
+```php
+// ❌ MAL: modelos dentro del array cacheado
+return [
+    'success' => true,
+    'data' => $calculadora,              // Model
+    'items' => $query->paginate(10),     // Paginator con Models
+];
+
+// ❌ MAL: confiar en que is_array() basta
+return is_array($value) ? $value : (array) $value; // sigue conteniendo objetos anidados
+
+// ❌ MAL: post-procesar modelos después de leer caché
+$this->ordenarProveedoresPorId($payload['data']['calculadora']); // falla si vino deserializado mal
+```
+
+```php
+// ✅ BIEN: normalizar antes de persistir; ordenar/transformar ANTES de cachear
+$this->ordenarProveedoresPorId($calculadora);
+return CachePayloadNormalizer::normalizePayloadArray([
+    'success' => true,
+    'data' => ['calculadora' => $calculadora, 'totales' => $totales],
+]);
+```
+
+#### Invalidación al cambiar forma del payload
+
+1. **Bump de versión** en la key (`calcimp:v2:...`, `clientes:v3:...`) — obligatorio si cambias estructura.
+2. Opcional: `Cache::tags([...])->flush()` o epoch global (como `CargaConsolidadaCacheService`).
+3. Tras deploy con fix de serialización: la primera lectura regenera; `php artisan cache:clear` solo si hace falta limpiar todo.
+
+#### Checklist antes de mergear cache nuevo
+
+- [ ] El resolver devuelve solo arrays/escalares (usar `CachePayloadNormalizer::resolveArray`).
+- [ ] El `*CacheService` valida lecturas con `containsUnsafeCachedValue`.
+- [ ] No hay lógica post-cache que asuma `Model` (ej. `relationLoaded`, `setRelation`).
+- [ ] Key versionada (`vN`) si el payload cambió.
+- [ ] Invalidación en writes/observers del módulo.
 
 ### 2) Cache por usuario / permisos
 
@@ -145,8 +256,7 @@ Evitar cachear:
 2. **Prefijo**: revisar `CACHE_PREFIX` (puede colisionar con otros entornos).
 3. **Tags**: si falla `Cache::tags()`, probablemente el store no lo soporta o no es Redis.
 4. **TTL**: revisar si el TTL se setea correctamente (uso de `now()->addMinutes()`).
-5. **Serialización**: objetos no serializables → cachear arrays/DTOs.
-
+5. **Serialización**: objetos no serializables → cachear arrays/DTOs. Si ves `__PHP_Incomplete_Class`, el payload tiene modelos PHP serializados: usar `CachePayloadNormalizer` y bump de versión de key (ver sección obligatoria arriba).
 ## Convenciones de naming de keys (recomendado)
 
 - Formato: `<feature>:v<ver>:<scope>:<id>:<hash-opcional>`
@@ -160,10 +270,9 @@ Cuando te pidan “cachear con Redis” en este proyecto, responde y ejecuta as�
 
 1. Identifica el punto caro (query/endpoint) y sus parámetros.
 2. Define key(s) y TTL (con versión).
-3. Implementa `Cache::remember` (y `Cache::lock` si aplica).
+3. Implementa `*CacheService` con `CachePayloadNormalizer::resolveArray` al escribir y `containsUnsafeCachedValue` al leer.
 4. Añade invalidación en los flows de escritura.
-5. Verifica con logs/tiempos que hay hit rate.
-
+5. Verifica con logs/tiempos que hay hit rate y que la respuesta JSON no contiene `__PHP_Incomplete_Class`.
 ## Recursos internos (opcional)
 
 Si necesitas ampliar con material específico del repo (nombres de tablas/flows), crea un `reference.md` en esta misma skill y enlázalo desde aquí.

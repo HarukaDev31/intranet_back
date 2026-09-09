@@ -6,6 +6,7 @@ use App\Traits\FileTrait;
 use App\Traits\UsesObjectStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\Usuario;
@@ -52,6 +53,8 @@ class EmbarcadosController extends Controller
             $perPage = (int) $request->input('itemsPerPage', 100);
             $search = trim((string) $request->input('search', ''));
 
+            $estadoChinaContenedor = Contenedor::where('id', $idContenedor)->value('estado_china');
+
             $baseQuery = DB::table('contenedor_consolidado_cotizacion as CC')
                 ->leftJoin('contenedor_consolidado_tipo_cliente as TC', 'TC.id', '=', 'CC.id_tipo_cliente')
                 ->select([
@@ -63,7 +66,6 @@ class EmbarcadosController extends Controller
                 ])
                 ->where('CC.id_contenedor', $idContenedor)
                 ->whereNull('CC.deleted_at')
-                ->whereNotNull('CC.estado_cliente')
                 ->whereNull('CC.id_cliente_importacion')
                 ->where('CC.estado_cotizador', 'CONFIRMADO')
                 ->whereExists(function ($query) {
@@ -71,6 +73,12 @@ class EmbarcadosController extends Controller
                     ->from('contenedor_consolidado_cotizacion_proveedores')
                     ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'CC.id');
             });
+
+            // Mientras el contenedor no haya completado la recepción en China, se listan
+            // todas las cotizaciones; al llegar a COMPLETADO se exige estado_cliente definido.
+            if ($estadoChinaContenedor === Contenedor::ESTADOS_CHINA['COMPLETADO']) {
+                $baseQuery->whereNotNull('CC.estado_cliente');
+            }
 
             if ($search !== '') {
                 $like = "%{$search}%";
@@ -117,6 +125,10 @@ class EmbarcadosController extends Controller
                     'invoice_status_final',
                     'packing_status_final',
                     'excel_conf_status_final',
+                    'arrive_date_china',
+                    'canal',
+                    'fecha_entrega',
+                    'observaciones_seguimiento',
                 ])
                 ->get()
                 ->groupBy('id_cotizacion');
@@ -146,6 +158,11 @@ class EmbarcadosController extends Controller
                             'invoice_status_final' => $p->invoice_status_final,
                             'packing_status_final' => $p->packing_status_final,
                             'excel_conf_status_final' => $p->excel_conf_status_final,
+                            // Inspección: solo lectura, alimentada desde módulo Cotización (Por Embarcar)
+                            'arrive_date_china' => $p->arrive_date_china,
+                            'canal' => $p->canal,
+                            'fecha_entrega' => $p->fecha_entrega,
+                            'observaciones_seguimiento' => $p->observaciones_seguimiento,
                         ];
                     })->values();
                 }
@@ -337,7 +354,7 @@ class EmbarcadosController extends Controller
             }
 
             $validator = \Validator::make($request->all(), [
-                'file' => 'required|file|mimes:pdf,xls,xlsx,doc,docx|max:10240'
+                'file' => 'required|file|mimes:pdf,xls,xlsx,doc,docx|max:30720'
             ]);
 
             if ($validator->fails()) {
@@ -399,7 +416,7 @@ class EmbarcadosController extends Controller
             }
 
             $validator = \Validator::make($request->all(), [
-                'file' => 'required|file|mimes:pdf,xls,xlsx|max:10240'
+                'file' => 'required|file|mimes:pdf,xls,xlsx|max:30720'
             ]);
 
             if ($validator->fails()) {
@@ -461,7 +478,7 @@ class EmbarcadosController extends Controller
             }
 
             $validator = \Validator::make($request->all(), [
-                'file' => 'required|file|mimes:xlsx,xls|max:10240'
+                'file' => 'required|file|mimes:xlsx,xls|max:30720'
             ]);
 
             if ($validator->fails()) {

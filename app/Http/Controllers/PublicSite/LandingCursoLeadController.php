@@ -28,6 +28,7 @@ class LandingCursoLeadController extends Controller
         Log::info('LandingCursoLeadController: request recibida', [
             'ip' => $request->ip(),
             'codigo_campana' => $request->input('codigo_campana'),
+            'form_source' => $request->input('form_source'),
         ]);
 
         $validator = Validator::make($request->all(), [
@@ -36,6 +37,7 @@ class LandingCursoLeadController extends Controller
             'email' => ['required', 'email', 'max:255'],
             'experiencia_importando' => ['required', 'string', 'in:si,no,poca'],
             'codigo_campana' => ['nullable', 'string', 'max:64'],
+            'form_source' => ['nullable', 'string', 'max:64', 'in:landing_curso_v2,probusiness_pe'],
         ]);
 
         if ($validator->fails()) {

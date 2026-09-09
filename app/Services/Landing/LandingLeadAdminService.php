@@ -42,6 +42,8 @@ class LandingLeadAdminService
                 'whatsapp',
                 'email',
                 'experiencia_importando',
+                'codigo_campana',
+                'form_source',
                 'ip_address',
                 'created_at',
             ])

@@ -31,8 +31,9 @@ use Dompdf\Options;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Traits\FileTrait;
 use App\Traits\UsesObjectStorage;
-use App\Jobs\SendReminderPagoWhatsAppJob;
+use App\Services\CargaConsolidada\CotizacionFinal\ReminderPagoWhatsappService;
 use App\Services\CargaConsolidada\CotizacionFinal\PlantillaFinalBatchService;
+use App\Services\CargaConsolidada\CotizacionFinal\TarifaTipoClienteCalculator;
 use App\Support\PhpSpreadsheet\PhpSpreadsheetRuntime;
 
 class CotizacionFinalController extends Controller
@@ -389,12 +390,9 @@ class CotizacionFinalController extends Controller
                 $recargosDescuentosFinal = (float)($row->recargos_descuentos_final ?? 0);
                 $serviciosExtraFinal = (float)($row->servicios_extra_final ?? 0);
                 $totalPag = (float)($row->total_pagos ?? 0);
-                $importeTotal = $totalLi + $serviciosExtraFinal;
-                if($recargos > 0 ){
-                    $importeTotal += $recargos ;
-                }else{
-                    $importeTotal += $recargosDescuentosFinal;
-                }
+                $importeTotal = $totalLi + $serviciosExtraFinal+$recargos;
+                $descuento = (float)($row->descuento ?? 0);
+                $importeTotal = $importeTotal - $descuento;
 
                 $transformedData->push([
                     'index' => $index,
@@ -1154,6 +1152,17 @@ class CotizacionFinalController extends Controller
     public function updateEstadoCotizacionFinal(Request $request)
     {
         try {
+            $user = JWTAuth::parseToken()->authenticate();
+            if ($user) {
+                $rol = trim((string) $user->getNombreGrupo());
+                if (in_array($rol, [Usuario::JEFE_MARKETING, Usuario::ROL_FINANZAS], true)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No autorizado para modificar el estado de cotización final',
+                    ], 403);
+                }
+            }
+
             $cotizacion = Cotizacion::find($request->idCotizacion);
             if (!$cotizacion) {
                 return response()->json([
@@ -1269,24 +1278,46 @@ class CotizacionFinalController extends Controller
     }
 
     /**
+     * Vista previa del recordatorio de pago: mensaje y Excel de cotización final (CDN).
+     */
+    public function previewReminderPago($idCotizacion)
+    {
+        try {
+            $result = app(ReminderPagoWhatsappService::class)->preview((int) $idCotizacion);
+            if (empty($result['success'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $result['message'] ?? 'No se pudo armar la vista previa',
+                ], 404);
+            }
+
+            return response()->json($result);
+        } catch (\Exception $e) {
+            Log::error('Error en previewReminderPago: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['message' => 'Error al armar la vista previa: ' . $e->getMessage(), 'success' => false], 500);
+        }
+    }
+
+    /**
      * Enviar recordatorio de pago por WhatsApp al cliente para una cotización final.
      * Body (opcional): { "sleep": <segundos de espera entre llamadas> }
      */
     public function sendReminderPago(Request $request, $idCotizacion)
     {
         try {
-            $exists = DB::table($this->table_contenedor_cotizacion)
-                ->where('id', (int) $idCotizacion)
-                ->exists();
-            if (!$exists) {
-                return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
+            $preview = app(ReminderPagoWhatsappService::class)->preview((int) $idCotizacion);
+            if (empty($preview['success'])) {
+                return response()->json([
+                    'message' => $preview['message'] ?? 'Cotización no encontrada',
+                    'success' => false,
+                ], 404);
             }
 
             $sleep = $request->input('sleep', 0);
-            SendReminderPagoWhatsAppJob::dispatch((int) $idCotizacion, (int) $sleep);
+            app(ReminderPagoWhatsappService::class)->enqueue((int) $idCotizacion, (int) $sleep);
 
             return response()->json([
-                'message' => 'Recordatorio encolado correctamente',
+                'message' => 'El recordatorio se está enviando al cliente',
                 'success' => true,
             ]);
         } catch (\Exception $e) {
@@ -2026,7 +2057,8 @@ class CotizacionFinalController extends Controller
             // Función para obtener el valor real de una celda (considerando combinadas)
             $getCellValue = function ($col, $row) use ($worksheet, $mergedCells) {
                 $cellAddress = $col . $row;
-                $cellValue = trim($worksheet->getCell($cellAddress)->getValue());
+                $rawValue = $worksheet->getCell($cellAddress)->getValue();
+                $cellValue = trim((string) ($rawValue ?? ''));
 
                 // Si la celda estÃ¡ vacÃ­a, buscar en celdas combinadas
                 if (empty($cellValue)) {
@@ -2048,7 +2080,8 @@ class CotizacionFinalController extends Controller
 
                                 // Verificar si la celda actual estÃ¡ dentro del rango
                                 if ($col >= $startCol && $col <= $endCol && $row >= $startRow && $row <= $endRow) {
-                                    $cellValue = trim($worksheet->getCell($startCell)->getValue());
+                                    $mergedRaw = $worksheet->getCell($startCell)->getValue();
+                                    $cellValue = trim((string) ($mergedRaw ?? ''));
                                     break;
                                 }
                             }
@@ -2102,11 +2135,17 @@ class CotizacionFinalController extends Controller
                 }
 
                 // Obtener datos bÃ¡sicos del cliente
+                $rawVolumenCliente = $getCellValue('V', $row);
+                $volumenExcel = (is_numeric($rawVolumenCliente) && (float) $rawVolumenCliente > 0)
+                    ? (float) $rawVolumenCliente
+                    : 0.0;
+
                 $client = [
                     'nombre' => $clientName,
                     'tipo' => $getCellValue('B', $row),
                     'dni' => $getCellValue('C', $row),
                     'telefono' => $getCellValue('D', $row),
+                    'volumen_excel' => $volumenExcel,
                     'productos' => [],
                 ];
 
@@ -2154,6 +2193,10 @@ class CotizacionFinalController extends Controller
                             'peso' => $peso ?: 0,
                             'cbm' => $cbm ?: '',
                         ];
+
+                        if ($client['volumen_excel'] <= 0 && is_numeric($cbm) && (float) $cbm > 0) {
+                            $client['volumen_excel'] = (float) $cbm;
+                        }
 
                         $client['productos'][] = $productoData;
                     }
@@ -2245,47 +2288,7 @@ class CotizacionFinalController extends Controller
      */
     private function calculateTarifaByTipoCliente($tipoCliente, $volumen, $tarifaBase)
     {
-        $tipoCliente = trim(strtoupper($tipoCliente));
-        $volumen = is_numeric($volumen) ? round((float)$volumen, 2) : 0;
-
-        switch ($tipoCliente) {
-            case "NUEVO":
-                if ($volumen < 0.59 && $volumen > 0) {
-                    return 280;
-                } elseif ($volumen < 1.00 && $volumen > 0.59) {
-                    return 375;
-                } elseif ($volumen < 2.00 && $volumen > 1.00) {
-                    return 375;
-                } elseif ($volumen < 3.00 && $volumen > 2.00) {
-                    return 350;
-                } elseif ($volumen <= 4.10 && $volumen > 3.00) {
-                    return 325;
-                } elseif ($volumen > 4.10) {
-                    return 300;
-                }
-                break;
-
-            case "ANTIGUO":
-                if ($volumen < 0.59 && $volumen > 0) {
-                    return 260;
-                } elseif ($volumen < 1.00 && $volumen > 0.59) {
-                    return 350;
-                } elseif ($volumen <= 2.09 && $volumen > 1.00) {
-                    return 350;
-                } elseif ($volumen <= 3.09 && $volumen > 2.09) {
-                    return 325;
-                } elseif ($volumen <= 4.10 && $volumen > 3.09) {
-                    return 300;
-                } elseif ($volumen > 4.10) {
-                    return 280;
-                }
-                break;
-
-            case "SOCIO":
-                return 250; // Tarifa fija para socios
-        }
-
-        return $tarifaBase; // Retornar tarifa base si no coincide con ningÃºn caso
+        return TarifaTipoClienteCalculator::calculate($tipoCliente, $volumen, $tarifaBase);
     }
 
     /**
@@ -2559,7 +2562,9 @@ class CotizacionFinalController extends Controller
     {
         try {
             // Obtener ID del usuario autenticado
-            $userId = auth()->user()->ID_Usuario ?? null;
+            $authUser = auth()->user();
+            $userId = $authUser->ID_Usuario ?? null;
+            $userGroup = $authUser ? trim((string) $authUser->getNombreGrupo()) : null;
 
             // Consulta principal con mÃºltiples subconsultas
             $result = DB::table($this->table_contenedor_cotizacion_proveedores . ' as cccp')
@@ -2660,8 +2665,8 @@ class CotizacionFinalController extends Controller
                 ->where('id', $idContenedor)
                 ->first();
 
-            // Si es el usuario 28791, obtener los CBM por usuario (vendido, pendiente, embarcado)
-            if ($userId == 28791) {
+            // Si es el usuario 28791 (Jefe de Ventas) o pertenece al rol RRHH, obtener los CBM por usuario (vendido, pendiente, embarcado)
+            if ($userId == 28791 || $userGroup === Usuario::ROL_RRHH) {
                 $dataHeaders = [
                     'cbm_total_peru' => [
                         "value" => $result->cbm_total_peru,
@@ -2978,10 +2983,29 @@ class CotizacionFinalController extends Controller
             ], 500);
         }
     }
-    /** Solo trim + espacios internos; sin cambiar mayÃºsculas/minÃºsculas. */
+    /** Solo trim + espacios internos; sin cambiar mayúsculas/minúsculas. */
     private function trimMainSheetColumnBLabel(string $value): string
     {
         return trim(preg_replace('/\s+/u', ' ', (string) $value));
+    }
+
+    private function mainSheetColumnBLabelEquals(string $label, string $expected): bool
+    {
+        return $this->trimMainSheetColumnBLabel($label) === $this->trimMainSheetColumnBLabel($expected);
+    }
+
+    /** Igual (normalizado) o contiene en cualquier dirección. */
+    private function mainSheetColumnBLabelEqualsOrContains(string $label, string $expected): bool
+    {
+        $label = $this->trimMainSheetColumnBLabel($label);
+        $expected = $this->trimMainSheetColumnBLabel($expected);
+        if ($label === '' || $expected === '') {
+            return false;
+        }
+
+        return $label === $expected
+            || str_contains($label, $expected)
+            || str_contains($expected, $label);
     }
 
     private function getMainSheetColumnBLabel($sheet, int $row): string
@@ -3020,7 +3044,7 @@ class CotizacionFinalController extends Controller
 
         $maxRow = max(80, (int) $sheet->getHighestDataRow('B'));
         for ($row = 1; $row <= $maxRow; $row++) {
-            if ($this->getMainSheetColumnBLabel($sheet, $row) === $expected) {
+            if ($this->mainSheetColumnBLabelEquals($this->getMainSheetColumnBLabel($sheet, $row), $expected)) {
                 return $row;
             }
         }
@@ -3029,7 +3053,7 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Primera fila (arriba â†’ abajo) cuya columna B contiene el texto (case-sensitive, trim).
+     * Primera fila (arriba → abajo) cuya columna B contiene el texto (case-sensitive, trim).
      */
     private function findMainSheetRowByColumnBLabelContains(
         $sheet,
@@ -3053,6 +3077,37 @@ class CotizacionFinalController extends Controller
             }
 
             return $row;
+        }
+
+        return null;
+    }
+
+    /**
+     * Primera fila cuya columna B coincide exactamente o contiene el texto (normalizado).
+     */
+    private function findMainSheetRowByColumnBLabelEqualsOrContains(
+        $sheet,
+        string $expectedLabel,
+        string $mustNotContain = ''
+    ): ?int {
+        $expected = $this->trimMainSheetColumnBLabel($expectedLabel);
+        $exclude = $this->trimMainSheetColumnBLabel($mustNotContain);
+        if ($expected === '') {
+            return null;
+        }
+
+        $maxRow = max(80, (int) $sheet->getHighestDataRow('B'));
+        for ($row = 1; $row <= $maxRow; $row++) {
+            $label = $this->getMainSheetColumnBLabel($sheet, $row);
+            if ($label === '') {
+                continue;
+            }
+            if ($exclude !== '' && str_contains($label, $exclude)) {
+                continue;
+            }
+            if ($this->mainSheetColumnBLabelEqualsOrContains($label, $expected)) {
+                return $row;
+            }
         }
 
         return null;
@@ -3127,7 +3182,9 @@ class CotizacionFinalController extends Controller
         $sheet = $spreadsheet->getSheet(0);
 
         $rowImpuestos = $this->findMainSheetRowByColumnBLabelExact($sheet, 'IMPUESTOS');
-        $rowServicio = $this->findMainSheetRowByColumnBLabelExact($sheet, 'SERVICIO DE IMPORTACIÃ“N');
+        $rowServicio = $this->findMainSheetRowByColumnBLabelExact($sheet, 'SERVICIO DE IMPORTACIÓN');
+        $rowRecargosOperativos = $this->findMainSheetRowByColumnBLabelEqualsOrContains($sheet, 'RECARGOS OPERATIVOS');
+        $rowDescuento = $this->findMainSheetRowByColumnBLabelEqualsOrContains($sheet, 'DESCUENTO APLICABLE');
         if ($rowServicio === null) {
             $rowServicio = $this->findMainSheetRowByColumnBLabelContains(
                 $sheet,
@@ -3148,6 +3205,12 @@ class CotizacionFinalController extends Controller
         $fob = $this->getMainSheetFobFinalAmount($sheet);
         $logisticaServicioImportacion = $this->getMainSheetRowAmount($sheet, $rowServicio);
         $serviciosExtraLogistica = $this->sumMainSheetLogisticaServiciosExtraFromColumnB($sheet);
+        $recargos = $rowRecargosOperativos !== null
+            ? $this->getMainSheetRowAmount($sheet, $rowRecargosOperativos)
+            : 0.0;
+        $descuento = $rowDescuento !== null
+            ? $this->getMainSheetRowAmount($sheet, $rowDescuento)
+            : 0.0;
         $logistica = round($logisticaServicioImportacion, 2);
         $impuestos = $this->getMainSheetRowAmount($sheet, $rowImpuestos);
 
@@ -3159,8 +3222,8 @@ class CotizacionFinalController extends Controller
         $tarifa = 0.0;
         if ($volumen > 0 && $logisticaServicioImportacion > 0) {
             $tarifa = $volumen < 1
-                ? $logisticaServicioImportacion
-                : round($logisticaServicioImportacion / $volumen, 2);
+                ? $logisticaServicioImportacion - $recargos + $descuento
+                : round(($logisticaServicioImportacion - $recargos + $descuento) / $volumen, 2);
         }
 
         $peso = $this->parsePesoFromMainSheetCell($sheet, 'J9');
@@ -3171,7 +3234,17 @@ class CotizacionFinalController extends Controller
         if ($logistica <= 0 && $impuestos <= 0 && $fob <= 0) {
             return null;
         }
-
+        $logistica = $logistica- $recargos + $descuento;
+        Log::info('EXtraccion de datos de la cotizacion final', [
+            'recargos'=>$recargos,
+            'descuento'=>$descuento,
+            'logistica_final'=>$logistica,
+            'impuestos_final'=>$impuestos,
+            'fob_final'=>$fob,
+            'tarifa_final'=>$tarifa,
+            'volumen_final'=>$volumen,
+            'peso_final'=>$peso,
+        ]);
         return [
             'layout' => 'column_b_labels',
             'row_map' => [
@@ -3184,6 +3257,8 @@ class CotizacionFinalController extends Controller
             'monto_final' => $logistica,
             'impuestos_final' => $impuestos,
             'logistica_final' => $logistica,
+            'recargos'=>$recargos,
+            'descuento'=>$descuento,
             'fob_final' => $fob,
             'tarifa_final' => $tarifa,
             'volumen_final' => $volumen,
@@ -3386,44 +3461,7 @@ class CotizacionFinalController extends Controller
                 'tarifa_total_extra_proveedor',
                 'tarifa_total_extra_item',
                 'tarifa_descuento',
-                'tc',
             ]);
-    }
-
-    /**
-     * TC USD→PEN de la calculadora ligada a la cotización. Fallback 3.75 (igual que calculadora).
-     */
-    private function resolveTipoCambioCotizacionFinal(array $data, $calcRow = null): float
-    {
-        $fromPayload = $data['cliente']['tipo_cambio'] ?? $data['tipo_cambio'] ?? null;
-        if (is_numeric($fromPayload) && (float) $fromPayload > 0) {
-            return (float) $fromPayload;
-        }
-
-        if ($calcRow && is_numeric($calcRow->tc ?? null) && (float) $calcRow->tc > 0) {
-            return (float) $calcRow->tc;
-        }
-
-        $idCotizacion = isset($data['id']) ? (int) $data['id'] : 0;
-        if ($idCotizacion > 0 && !$calcRow) {
-            $row = $this->getCalculadoraImportacionRowByCotizacion($idCotizacion);
-            if ($row && is_numeric($row->tc ?? null) && (float) $row->tc > 0) {
-                return (float) $row->tc;
-            }
-        }
-
-        return 3.75;
-    }
-
-    /**
-     * Factor numérico para fórmulas Excel (punto decimal).
-     */
-    private function tipoCambioExcelFactor(float $tipoCambio): string
-    {
-        $s = number_format($tipoCambio, 8, '.', '');
-        $s = rtrim(rtrim($s, '0'), '.');
-
-        return $s === '' ? '3.75' : $s;
     }
 
     /**
@@ -4304,7 +4342,7 @@ class CotizacionFinalController extends Controller
             ->sum('importe');
         $aduaneros = (float) DB::table($table)
             ->where('id_cotizacion', $idCotizacion)
-            ->whereRaw("UPPER(TRIM(tipo_servicio)) = 'SANCIONES' OR UPPER(TRIM(tipo_servicio)) = 'BQ'")
+            ->whereRaw("UPPER(TRIM(tipo_servicio)) IN ('SANCIONES', 'BQ')")
             ->sum('importe');
 
         $rowMonta = $hasAntidumpingMain ? 43 : 42;
@@ -4538,7 +4576,6 @@ class CotizacionFinalController extends Controller
             $sheet1 = $objPHPExcel->getSheet(0);
             $idCotizacionBoleta = isset($data['id']) ? (int) $data['id'] : 0;
             $deliveryServiciosExtras = $this->getDeliveryServiciosExtrasByCotizacion($idCotizacionBoleta);
-            $calcRow = null;
 
             if (isset($data['cliente']['calculadora_extras']) && is_array($data['cliente']['calculadora_extras'])) {
                 $extrasCalc = [
@@ -4689,67 +4726,7 @@ class CotizacionFinalController extends Controller
             $cbmTotalProductos = round($cbmTotalProductos, 2);
             // Si ya viene tarifa (p. ej. snapshot de calculadora), no pisar con tabla hardcodeada.
             if ($tarifaValue <= 0) {
-                if (trim(strtoupper($tipoCliente)) == "NUEVO") {
-                    switch ($cbmTotalProductos) {
-                        case $cbmTotalProductos < 0.59 && $cbmTotalProductos > 0:
-                            $tarifaValue = 280;
-                            break;
-                        case $cbmTotalProductos < 1.00 && $cbmTotalProductos > 0.59:
-                            $tarifaValue = 375;
-                            break;
-                        case $cbmTotalProductos < 2.00 && $cbmTotalProductos > 1.00:
-                            $tarifaValue = 375;
-                            break;
-                        case $cbmTotalProductos < 3.00 && $cbmTotalProductos > 2.00:
-                            $tarifaValue = 350;
-                            break;
-                        case $cbmTotalProductos <= 4.10 && $cbmTotalProductos > 3.00:
-                            $tarifaValue = 325;
-                            break;
-                        case $cbmTotalProductos > 4.10:
-                            $tarifaValue = 300;
-                    }
-                } else if (trim(strtoupper($tipoCliente)) == "ANTIGUO") {
-                    switch ($cbmTotalProductos) {
-                        case $cbmTotalProductos < 0.59 && $cbmTotalProductos > 0:
-                            $tarifaValue = 260;
-                            break;
-                        case $cbmTotalProductos < 1.00 && $cbmTotalProductos > 0.59:
-                            $tarifaValue = 350;
-                            break;
-                        case $cbmTotalProductos <= 2.09 && $cbmTotalProductos > 1.00:
-                            $tarifaValue = 350;
-                            break;
-                        case $cbmTotalProductos <= 3.09 && $cbmTotalProductos > 2.09:
-                            $tarifaValue = 325;
-                            break;
-                        case $cbmTotalProductos <= 4.10 && $cbmTotalProductos > 3.09:
-                            $tarifaValue = 300;
-                            break;
-                        case $cbmTotalProductos > 4.10:
-                            $tarifaValue = 280;
-                    }
-                } else if (trim(strtoupper($tipoCliente)) == "SOCIO") {
-                    switch ($cbmTotalProductos) {
-                        case $cbmTotalProductos < 0.60:
-                            $tarifaValue = 250;
-                            break;
-                        case $cbmTotalProductos < 1.00:
-                            $tarifaValue = 250;
-                            break;
-                        case $cbmTotalProductos < 2.00:
-                            $tarifaValue = 250;
-                            break;
-                        case $cbmTotalProductos < 3.00:
-                            $tarifaValue = 250;
-                            break;
-                        case $cbmTotalProductos < 4.00:
-                            $tarifaValue = 250;
-                            break;
-                        case $cbmTotalProductos >= 4.10:
-                            $tarifaValue = 250;
-                    }
-                }
+                $tarifaValue = TarifaTipoClienteCalculator::calculate($tipoCliente, $cbmTotalProductos, 0);
             }
 
             $objPHPExcel->setActiveSheetIndex(2)->setCellValue($tarifaCellValue, $tarifaValue);

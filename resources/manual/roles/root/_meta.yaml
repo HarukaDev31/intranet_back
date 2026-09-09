@@ -1,0 +1,5 @@
+slug: root
+id_grupo: 1
+nombre: root
+descripcion: 'Super usuario'
+menus: {  }

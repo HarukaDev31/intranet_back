@@ -1,0 +1,29 @@
+slug: catalogochina
+id_grupo: 1217
+nombre: CatalogoChina
+descripcion: 'Manual del rol CatalogoChina'
+menus:
+  -
+    id_menu: 1
+    titulo: Inicio
+    url: InicioController
+  -
+    id_menu: 184
+    titulo: 'Carga Consolidada'
+    url: '#'
+  -
+    id_menu: 192
+    titulo: 'Carga Consolidada → Carga Consolidada'
+    url: cargaconsolidada/abiertos
+  -
+    id_menu: 193
+    titulo: 'Carga Consolidada → Completados'
+    url: cargaconsolidada/completados
+  -
+    id_menu: 194
+    titulo: Catalogo
+    url: '#'
+  -
+    id_menu: 195
+    titulo: 'Catalogo → Productos'
+    url: CatalogoController/listar

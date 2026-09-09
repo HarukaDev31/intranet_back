@@ -197,6 +197,22 @@ class SeguimientoConsolidadoDriveService
     }
 
     /**
+     * Si el consolidado es elegible y aún no tiene Excel en Drive, encola la vinculación.
+     *
+     * @param int $idContenedor
+     */
+    public function ensureVinculadoIfEligible($idContenedor)
+    {
+        $idContenedor = (int) $idContenedor;
+        $contenedor = Contenedor::find($idContenedor);
+        if (!$contenedor || !SeguimientoConsolidadoVincularEligibility::puedeVincular($contenedor)) {
+            return;
+        }
+
+        $this->queueVincular($idContenedor);
+    }
+
+    /**
      * Encola vinculación inicial para consolidados elegibles sin Excel en Drive (cron).
      *
      * @return array{encolados: int, total: int, ids: int[]}
@@ -478,7 +494,22 @@ class SeguimientoConsolidadoDriveService
             ->select(['excel_seguimiento_drive_link', 'excel_seguimiento_link_status', 'f_inicio'])
             ->first();
 
-        if (!$row || empty($row->excel_seguimiento_drive_link)) {
+        if (!$row) {
+            return;
+        }
+
+        if (empty($row->excel_seguimiento_drive_link)) {
+            $contenedor = Contenedor::find($idContenedor);
+            if ($contenedor && SeguimientoConsolidadoVincularEligibility::puedeVincular($contenedor)) {
+                $this->log('info', 'Sync: consolidado sin Drive, se encola vinculación inicial', [
+                    'flow' => 'seguimiento_drive',
+                    'step' => 'queue_vincular_desde_sync',
+                    'id_contenedor' => $idContenedor,
+                    'estado_china' => $contenedor->estado_china,
+                ]);
+                $this->queueVincular($idContenedor);
+            }
+
             return;
         }
 
@@ -684,6 +715,11 @@ class SeguimientoConsolidadoDriveService
             ->whereNotNull('excel_seguimiento_drive_link')
             ->whereNotNull('f_inicio')
             ->where('estado_finanzas', 'PENDIENTE')
+            ->where(function ($q) {
+                $q->whereNull('estado_china')
+                    ->orWhere('estado_china', '')
+                    ->orWhere('estado_china', '!=', 'COMPLETADO');
+            })
             ->select('id');
 
         if ($idContenedor !== null) {
@@ -824,13 +860,16 @@ class SeguimientoConsolidadoDriveService
 
         $tmpPath = null;
         try {
-            $fileName = $isInitialLink
-                ? $this->excelService->buildFileName((string) $contenedor->carga)
-                : (
-                    !empty($contenedor->excel_seguimiento_file_name)
-                        ? $contenedor->excel_seguimiento_file_name
-                        : $this->excelService->buildFileName((string) $contenedor->carga)
-                );
+            $fileName = $this->excelService->buildFileName(
+                (string) $contenedor->carga,
+                (string) ($contenedor->parte ?? ''),
+                (int) $contenedor->id
+            );
+            if (!$isInitialLink && !empty($contenedor->excel_seguimiento_file_name)
+                && SeguimientoConsolidadoVincularEligibility::tieneExcelDrivePropio($contenedor)
+            ) {
+                $fileName = $contenedor->excel_seguimiento_file_name;
+            }
 
             $this->logFlow('generar_excel_inicio', $flow, 'info', [
                 'carga' => $contenedor->carga,
@@ -882,7 +921,14 @@ class SeguimientoConsolidadoDriveService
                 'duration_ms' => (int) round((microtime(true) - $manualStarted) * 1000),
             ]));
 
-            $mesFolder = $this->resolveMesDriveFolder($contenedor);
+            $folder = $this->resolveDriveFolderSegments($contenedor);
+
+            $uploadStarted = microtime(true);
+            $this->logFlow('upload_drive_inicio', $flow, 'info', [
+                'year_folder' => $folder['year'],
+                'mes_folder' => $folder['mes'],
+                'file_name' => $fileName,
+            ]);
 
             $uploadStarted = microtime(true);
             $this->logFlow('upload_drive_inicio', $flow, 'info', [
@@ -891,10 +937,11 @@ class SeguimientoConsolidadoDriveService
             ]);
 
             $driveLink = $this->driveService->uploadForConsolidado(
-                $mesFolder,
+                $folder['mes'],
                 $tmpPath,
                 $fileName,
-                $contenedor->excel_seguimiento_drive_file_id ?? null
+                $this->resolveExistingDriveFileId($contenedor),
+                $folder['year']
             );
 
             if (!$driveLink) {
@@ -912,7 +959,8 @@ class SeguimientoConsolidadoDriveService
             $fileId = $this->extractFileIdFromDriveUrl($driveLink);
 
             $this->logFlow('upload_drive_ok', $flow, 'info', [
-                'mes_folder' => $mesFolder,
+                'year_folder' => $folder['year'],
+                'mes_folder' => $folder['mes'],
                 'file_name' => $fileName,
                 'file_id' => $fileId,
                 'drive_link' => $driveLink,
@@ -983,24 +1031,88 @@ class SeguimientoConsolidadoDriveService
     }
 
     /**
-     * Carpeta en Drive según el campo mes del consolidado (p. ej. «Enero»).
+     * file_id solo si este consolidado no comparte Excel con otro.
+     *
+     * @param Contenedor $contenedor
+     * @return string|null
+     */
+    private function resolveExistingDriveFileId(Contenedor $contenedor)
+    {
+        if (!SeguimientoConsolidadoVincularEligibility::tieneExcelDrivePropio($contenedor)) {
+            return null;
+        }
+
+        $fileId = trim((string) ($contenedor->excel_seguimiento_drive_file_id ?? ''));
+
+        return $fileId !== '' ? $fileId : null;
+    }
+
+    /**
+     * Carpetas Drive: {año}/{Mes} (p. ej. 2026/Agosto).
+     *
+     * @param Contenedor $contenedor
+     * @return array{year: string, mes: string}
+     */
+    private function resolveDriveFolderSegments(Contenedor $contenedor)
+    {
+        $anio = SeguimientoConsolidadoVincularEligibility::resolveAnioContenedor($contenedor);
+        if ($anio <= 0) {
+            $anio = (int) Carbon::now('America/Lima')->format('Y');
+        }
+
+        return [
+            'year' => (string) $anio,
+            'mes' => $this->resolveMesDriveFolder($contenedor),
+        ];
+    }
+
+    /**
+     * Nombre de mes en Drive (Setiembre unificado; acepta número 1–12).
      *
      * @param Contenedor $contenedor
      * @return string
      */
     private function resolveMesDriveFolder(Contenedor $contenedor)
     {
+        $mesesNum = [
+            1 => 'Enero',
+            2 => 'Febrero',
+            3 => 'Marzo',
+            4 => 'Abril',
+            5 => 'Mayo',
+            6 => 'Junio',
+            7 => 'Julio',
+            8 => 'Agosto',
+            9 => 'Setiembre',
+            10 => 'Octubre',
+            11 => 'Noviembre',
+            12 => 'Diciembre',
+        ];
+
         $mes = trim((string) $contenedor->mes);
-        if ($mes === '') {
-            return 'Sin-mes';
+        if ($mes !== '') {
+            $upper = strtoupper($mes);
+            if ($upper === 'SEPTIEMBRE') {
+                return 'Setiembre';
+            }
+            if (isset(Contenedor::MESES[$upper])) {
+                $label = Contenedor::MESES[$upper];
+
+                return $label === 'Septiembre' ? 'Setiembre' : $label;
+            }
+            if (is_numeric($mes) && isset($mesesNum[(int) $mes])) {
+                return $mesesNum[(int) $mes];
+            }
         }
 
-        $upper = strtoupper($mes);
-        if (isset(Contenedor::MESES[$upper])) {
-            return Contenedor::MESES[$upper];
+        if (!empty($contenedor->f_inicio)) {
+            $n = (int) Carbon::parse($contenedor->f_inicio)->format('n');
+            if (isset($mesesNum[$n])) {
+                return $mesesNum[$n];
+            }
         }
 
-        return $mes;
+        return 'Sin-mes';
     }
 
     /**

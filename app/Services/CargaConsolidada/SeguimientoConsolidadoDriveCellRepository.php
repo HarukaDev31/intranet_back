@@ -86,6 +86,17 @@ class SeguimientoConsolidadoDriveCellRepository
             ->where('column_key', (string) $payload['column_key'])
             ->first();
 
+        // No borrar celdas manuales con vacío salvo clear explícito (regeneración sin match en pull).
+        if (
+            $newValue === null
+            && $existing
+            && (bool) ($existing->is_manual ?? false)
+            && $this->normalizeValue($existing->cell_value) !== null
+            && !($payload['allow_clear'] ?? false)
+        ) {
+            return ['changed' => false, 'cell_id' => (int) $existing->id];
+        }
+
         $oldValue = $existing ? $this->normalizeValue($existing->cell_value) : null;
         $changed = $oldValue !== $newValue;
 
@@ -165,6 +176,66 @@ class SeguimientoConsolidadoDriveCellRepository
                 'status' => $status,
                 'error' => $error,
             ]);
+    }
+
+    /**
+     * Restaura notas manuales desde historial (útil si se perdieron al regenerar el Excel).
+     *
+     * @return array{restored:int, candidates:int}
+     */
+    public function restoreManualNotesFromHistory(int $idContenedor, string $sheetName, string $columnKey): array
+    {
+        if (!Schema::hasTable('contenedor_seguimiento_drive_cell_history')) {
+            return ['restored' => 0, 'candidates' => 0];
+        }
+
+        $historyRows = DB::table('contenedor_seguimiento_drive_cell_history')
+            ->where('id_contenedor', $idContenedor)
+            ->where('sheet_name', $sheetName)
+            ->where('column_key', $columnKey)
+            ->orderByDesc('id')
+            ->get(['row_key', 'old_value', 'new_value']);
+
+        $valuesByRowKey = [];
+        foreach ($historyRows as $row) {
+            $rowKey = (string) $row->row_key;
+            if (isset($valuesByRowKey[$rowKey])) {
+                continue;
+            }
+
+            $newValue = $this->normalizeValue($row->new_value);
+            if ($newValue !== null) {
+                $valuesByRowKey[$rowKey] = $newValue;
+                continue;
+            }
+
+            $oldValue = $this->normalizeValue($row->old_value);
+            if ($oldValue !== null) {
+                $valuesByRowKey[$rowKey] = $oldValue;
+            }
+        }
+
+        $restored = 0;
+        foreach ($valuesByRowKey as $rowKey => $value) {
+            $result = $this->upsertCell([
+                'id_contenedor' => $idContenedor,
+                'sheet_name' => $sheetName,
+                'row_key' => $rowKey,
+                'column_key' => $columnKey,
+                'cell_value' => $value,
+                'is_manual' => true,
+                'change_source' => 'history_restore',
+            ]);
+
+            if ($result['changed']) {
+                $restored++;
+            }
+        }
+
+        return [
+            'restored' => $restored,
+            'candidates' => count($valuesByRowKey),
+        ];
     }
 
     private function normalizeValue($value): ?string

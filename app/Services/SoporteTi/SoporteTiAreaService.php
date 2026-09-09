@@ -368,6 +368,7 @@ class SoporteTiAreaService
         $permitidos = array(
             strtolower(Usuario::ROL_SOPORTE),
             strtolower(Usuario::ROL_PM),
+            strtolower(Usuario::ROL_COORDINADOR_GENERAL),
             strtolower(Usuario::ROL_ADMINISTRACION),
             'gerencia',
             'admin',

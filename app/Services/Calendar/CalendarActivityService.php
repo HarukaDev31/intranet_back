@@ -50,8 +50,9 @@ class CalendarActivityService
             return null;
         }
         $data = ['name' => $name];
+        // null = no tocar color; string vacío = quitar color (sin color).
         if ($colorCode !== null) {
-            $data['color_code'] = $colorCode ?: null;
+            $data['color_code'] = $colorCode !== '' ? $colorCode : null;
         }
         if (array_key_exists('allow_saturday', $extras)) {
             $data['allow_saturday'] = (bool) $extras['allow_saturday'];

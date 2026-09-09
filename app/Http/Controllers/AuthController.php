@@ -12,6 +12,7 @@ use Illuminate\Support\Str;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Tymon\JWTAuth\Exceptions\JWTException;
 use App\Models\Usuario;
+use App\Models\UsuarioDevice;
 use App\Models\Empresa;
 use App\Models\Organizacion;
 use App\Models\Almacen;
@@ -26,6 +27,7 @@ use App\Models\User;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Traits\FileTrait;
 use App\Traits\UsesObjectStorage;
+use App\Support\Menu\PedidosCursoMenuFilter;
 
 class AuthController extends Controller
 {
@@ -115,7 +117,11 @@ class AuthController extends Controller
                 if ($usuario) {
                     try {
                         $token = JWTAuth::fromUser($usuario);
-                        // Cargar relaciones del usuario    
+
+                        // Si el login viene de un dispositivo móvil con token FCM, registrarlo/actualizarlo
+                        $this->registrarDeviceFcm((int) $usuario->ID_Usuario, $data);
+
+                        // Cargar relaciones del usuario
                         $usuario->load(['grupo', 'empresa', 'organizacion']);
 
                         // Obtener menús del usuario
@@ -494,6 +500,7 @@ class AuthController extends Controller
                     $phoneExists = DB::table('usuario')
                         ->where('Nu_Celular', $phone)
                         ->where('ID_Usuario', '!=', $idUsuario)
+                        ->whereNull('ID_Entidad')
                         ->exists();
                     if ($phoneExists) {
                         return response()->json([
@@ -695,14 +702,69 @@ class AuthController extends Controller
      *
      * @return \Illuminate\Http\JsonResponse
      */
-    public function logout()
+    public function logout(Request $request)
     {
-        auth()->logout();
+        $fcmToken = $request->input('fcm_token');
+        $deviceId = $request->input('device_id');
+        if ($fcmToken || $deviceId) {
+            try {
+                $query = UsuarioDevice::query();
+                if ($fcmToken) {
+                    $query->where('fcm_token', $fcmToken);
+                } else {
+                    $query->where('device_id', $deviceId);
+                }
+                $query->delete();
+            } catch (\Throwable $e) {
+                Log::warning('AuthController::logout — no se pudo eliminar device FCM: ' . $e->getMessage());
+            }
+        }
+
+        try {
+            auth()->logout();
+        } catch (\Throwable $e) {
+            // Con JWT_BLACKLIST_ENABLED=false (default en este proyecto) no se puede invalidar
+            // el token server-side; el cliente igual debe descartarlo y el JWT expira por su TTL.
+            Log::warning('AuthController::logout — no se pudo invalidar el token: ' . $e->getMessage());
+        }
 
         return response()->json([
             'success' => true,
             'message' => 'Sesión cerrada exitosamente'
         ]);
+    }
+
+    /**
+     * Registra o actualiza el token FCM de un dispositivo móvil autenticado en el login.
+     * No lanza excepciones: un fallo aquí nunca debe impedir el login.
+     *
+     * @param int $idUsuario
+     * @param array $data
+     * @return void
+     */
+    private function registrarDeviceFcm(int $idUsuario, array $data)
+    {
+        $platform = $data['platform'] ?? null;
+        $fcmToken = $data['fcm_token'] ?? null;
+
+        if (!in_array($platform, ['android', 'ios'], true) || empty($fcmToken)) {
+            return;
+        }
+
+        try {
+            UsuarioDevice::updateOrCreate(
+                ['fcm_token' => $fcmToken],
+                [
+                    'id_usuario' => $idUsuario,
+                    'platform' => $platform,
+                    'device_id' => $data['device_id'] ?? null,
+                    'app_version' => $data['app_version'] ?? null,
+                    'last_used_at' => now(),
+                ]
+            );
+        } catch (\Throwable $e) {
+            Log::warning('AuthController::registrarDeviceFcm — ' . $e->getMessage());
+        }
     }
 
     /**
@@ -1250,6 +1312,13 @@ class AuthController extends Controller
                     }
                 }
             }
+
+            // Pedidos de Curso en rol Cotizador: solo jefe de ventas.
+            $arrMenuPadre = PedidosCursoMenuFilter::apply(
+                $arrMenuPadre,
+                (int) $idUsuario,
+                (int) ($idGrupo ?? 0)
+            );
 
             return $arrMenuPadre;
         } catch (\Exception $e) {

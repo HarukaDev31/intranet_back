@@ -117,6 +117,7 @@ class Contenedor extends Model
         'JULIO' => 'Julio',
         'AGOSTO' => 'Agosto',
         'SETIEMBRE' => 'Setiembre',
+        'SEPTIEMBRE' => 'Septiembre',
         'OCTUBRE' => 'Octubre',
         'NOVIEMBRE' => 'Noviembre',
         'DICIEMBRE' => 'Diciembre'

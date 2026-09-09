@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\PanelAcceso;
 
 use App\Http\Controllers\Controller;
+use App\Support\GrupoMenuAccesoCloner;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -235,12 +236,19 @@ class UsuarioAdminController extends Controller
 
             $idUsuario = DB::table('usuario')->insertGetId($dataUsuario);
 
-            DB::table('grupo_usuario')->insert([
+            $grupoUsuarioId = DB::table('grupo_usuario')->insertGetId([
                 'ID_Usuario'      => $idUsuario,
                 'ID_Grupo'        => $request->id_grupo,
                 'ID_Empresa'      => $request->id_empresa,
                 'ID_Organizacion' => $request->id_org,
             ]);
+
+            $this->ensureMenuCoordinadorGeneralClonado(
+                (int) $grupoUsuarioId,
+                (int) $request->id_grupo,
+                (int) $request->id_empresa,
+                (int) $request->id_org
+            );
 
             DB::commit();
 
@@ -354,6 +362,16 @@ class UsuarioAdminController extends Controller
                 'ID_Organizacion' => $request->id_org,
             ]);
 
+            $grupoUsuario = DB::table('grupo_usuario')->where('ID_Usuario', $id)->first();
+            if ($grupoUsuario) {
+                $this->ensureMenuCoordinadorGeneralClonado(
+                    (int) $grupoUsuario->ID_Grupo_Usuario,
+                    (int) $request->id_grupo,
+                    (int) $request->id_empresa,
+                    (int) $request->id_org
+                );
+            }
+
             DB::commit();
 
             return response()->json(['success' => true, 'message' => 'Usuario actualizado exitosamente']);
@@ -409,5 +427,30 @@ class UsuarioAdminController extends Controller
         if (!$celular) return null;
         $clean = preg_replace('/[\s\-]/', '', $celular);
         return (strlen($clean) >= 9) ? $clean : null;
+    }
+
+    private function ensureMenuCoordinadorGeneralClonado(int $grupoUsuarioId, int $grupoId, int $empresaId, int $orgId): void
+    {
+        $nombreGrupo = DB::table('grupo')->where('ID_Grupo', $grupoId)->value('No_Grupo');
+        if ($nombreGrupo !== Usuario::ROL_COORDINADOR_GENERAL) {
+            return;
+        }
+
+        $tieneMenu = DB::table('menu_acceso')->where('ID_Grupo_Usuario', $grupoUsuarioId)->exists();
+        if ($tieneMenu) {
+            return;
+        }
+
+        $jefeGrupoId = DB::table('grupo')
+            ->where('No_Grupo', Usuario::ROL_JEFE_IMPORTACION)
+            ->where('ID_Empresa', $empresaId)
+            ->where('ID_Organizacion', $orgId)
+            ->value('ID_Grupo');
+
+        if (!$jefeGrupoId) {
+            return;
+        }
+
+        GrupoMenuAccesoCloner::copyMenusToGrupoUsuario((int) $jefeGrupoId, $grupoUsuarioId, $empresaId, $orgId);
     }
 }

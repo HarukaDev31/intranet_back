@@ -3,6 +3,7 @@
 namespace App\Services\CalculadoraImportacion;
 
 use App\Models\CalculadoraImportacion;
+use App\Support\Cache\CachePayloadNormalizer;
 use Illuminate\Cache\TaggableStore;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
@@ -20,7 +21,7 @@ class CalculadoraImportacionCacheService
 
     public function rememberTarifasForCalculadora(int $calculadoraId, callable $resolver): array
     {
-        $key = $this->key("tarifas:calc:{$calculadoraId}");
+        $key = $this->key('tarifas:' . $this->tarifasEpoch() . ":calc:{$calculadoraId}");
         return $this->remember($key, now()->addMinutes(30), $resolver);
     }
 
@@ -46,9 +47,7 @@ class CalculadoraImportacionCacheService
     public function rememberClientesByWhatsapp(?string $whatsapp, callable $resolver): array
     {
         if (empty($whatsapp)) {
-            // Si no hay whatsapp, no cachear (evitar TypeError y keys vacías).
-            $value = $resolver();
-            return is_array($value) ? $value : (array) $value;
+            return CachePayloadNormalizer::resolveArray($resolver);
         }
         $normalized = preg_replace('/[^0-9]/', '', $whatsapp);
         if (Str::startsWith($normalized, '51') && strlen($normalized) === 11) {
@@ -60,10 +59,10 @@ class CalculadoraImportacionCacheService
 
     public function invalidateAfterWrite(?CalculadoraImportacion $calculadora = null, array $context = []): void
     {
-        // Invalidaciones puntuales
         if ($calculadora) {
             Cache::forget($this->key("show:{$calculadora->id}"));
             Cache::forget($this->key("tarifas:calc:{$calculadora->id}"));
+            Cache::forget($this->key('tarifas:' . $this->tarifasEpoch() . ":calc:{$calculadora->id}"));
             if (!empty($calculadora->dni_cliente)) {
                 Cache::forget($this->key('por-cliente:' . trim($calculadora->dni_cliente)));
             }
@@ -79,17 +78,30 @@ class CalculadoraImportacionCacheService
             $this->invalidateWhatsapp((string) $context['whatsapp']);
         }
 
-        // El listado depende de múltiples filtros → invalidar por tag (si aplica)
         $this->flushTag();
         $this->bumpCacheEpoch();
-
-        // Tarifas pueden cambiar raramente; se invalidan si el store soporta tags en write-flows.
-        // No las flush aquí por defecto.
     }
 
     public function flushTarifas(): void
     {
         Cache::forget($this->key('tarifas'));
+        // Invalida también tarifas?calculadora_id=* (keys con epoch).
+        $this->bumpTarifasEpoch();
+    }
+
+    private function tarifasEpoch(): string
+    {
+        $epoch = Cache::get($this->key('tarifas-epoch'));
+        if (! is_string($epoch) || $epoch === '') {
+            $epoch = '0';
+        }
+
+        return $epoch;
+    }
+
+    private function bumpTarifasEpoch(): void
+    {
+        Cache::forever($this->key('tarifas-epoch'), (string) microtime(true));
     }
 
     private function invalidateWhatsapp(string $whatsapp): void
@@ -108,21 +120,33 @@ class CalculadoraImportacionCacheService
 
     private function remember(string $key, $ttl, callable $resolver): array
     {
-        return Cache::remember($key, $ttl, function () use ($resolver) {
-            $value = $resolver();
-            return is_array($value) ? $value : (array) $value;
-        });
+        $cached = Cache::get($key);
+        if (is_array($cached) && ! CachePayloadNormalizer::containsUnsafeCachedValue($cached)) {
+            return $cached;
+        }
+
+        $payload = CachePayloadNormalizer::resolveArray($resolver);
+        Cache::put($key, $payload, $ttl);
+
+        return $payload;
     }
 
     private function rememberTagged(string $key, $ttl, callable $resolver): array
     {
         $store = Cache::getStore();
         if ($store instanceof TaggableStore) {
-            return Cache::tags([self::TAG])->remember($key, $ttl, function () use ($resolver) {
-                $value = $resolver();
-                return is_array($value) ? $value : (array) $value;
-            });
+            $tags = Cache::tags([self::TAG]);
+            $cached = $tags->get($key);
+            if (is_array($cached) && ! CachePayloadNormalizer::containsUnsafeCachedValue($cached)) {
+                return $cached;
+            }
+
+            $payload = CachePayloadNormalizer::resolveArray($resolver);
+            $tags->put($key, $payload, $ttl);
+
+            return $payload;
         }
+
         return $this->remember($key, $ttl, $resolver);
     }
 
@@ -159,4 +183,3 @@ class CalculadoraImportacionCacheService
         Cache::forever($this->key('epoch'), (string) microtime(true));
     }
 }
-

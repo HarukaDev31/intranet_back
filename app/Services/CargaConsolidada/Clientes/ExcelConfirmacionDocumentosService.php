@@ -37,13 +37,22 @@ class ExcelConfirmacionDocumentosService
 
     /**
      * Genera y guarda un Excel de confirmación para un proveedor a partir de la plantilla OOXML.
+     * Prefill al cliente: Nombre del cliente (E5), Rubro (F) y Código de Proveedor (J).
+     * Nombre comercial y datos de producto solo desde características/confirmación (no initial_*).
      * Post-procesa el zip para tamaño/recorte del logo igual que la plantilla.
+     *
+     * @param  array<string, mixed>  $proveedorPayload
      */
-    public function generarArchivoPorProveedor(string $templatePath, string $outputFullPath, array $proveedorPayload): bool
-    {
+    public function generarArchivoPorProveedor(
+        string $templatePath,
+        string $outputFullPath,
+        array $proveedorPayload,
+        string $nombreCliente = ''
+    ): bool {
         $cotizacionProveedor = CotizacionProveedor::where('id', $proveedorPayload['id'] ?? null)->first();
         $codeSupplier = $cotizacionProveedor ? (string) ($cotizacionProveedor->code_supplier ?? '') : '';
         $items = $proveedorPayload['items'] ?? [];
+        $nombreCliente = trim($nombreCliente);
 
         if (!file_exists($templatePath)) {
             Log::error('Plantilla de Excel de confirmación no encontrada: ' . $templatePath);
@@ -53,6 +62,11 @@ class ExcelConfirmacionDocumentosService
 
         $spreadsheet = IOFactory::load($templatePath);
         $sheet = $spreadsheet->getActiveSheet();
+
+        // E5 alimenta el rotulado (columna A vía fórmula UPPER($E$5) de la plantilla).
+        if ($nombreCliente !== '') {
+            $sheet->setCellValueExplicit('E5', $nombreCliente, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+        }
 
         $labelsMap = $this->labelsPorTipoProducto();
         $baseStartRow = 14;
@@ -135,13 +149,11 @@ class ExcelConfirmacionDocumentosService
             $caracteristicas = $this->mergeUnidadesEnCaracteristicas(
                 is_array($item['caracteristicas'] ?? null) ? $item['caracteristicas'] : []
             );
-            $qty = $item['qty'] ?? $item['initial_qty'] ?? null;
-            $precio = $item['precio_unitario'] ?? $item['initial_price'] ?? null;
+            // Solo confirmación/características (no initial_*): Excel al cliente queda vacío salvo rubro/código.
+            $qty = $item['qty'] ?? null;
+            $precio = $item['precio_unitario'] ?? null;
 
             $nombreComercial = $this->resolveCaracteristicaValue($caracteristicas, self::CAMPO_NOMBRE_COMERCIAL);
-            if ($nombreComercial === '') {
-                $nombreComercial = (string) ($item['initial_name'] ?? '');
-            }
 
             $sheet->setCellValueExplicit('B' . $startRow, (string) ($idx + 1), \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
             $sheet->duplicateStyle($sheet->getStyle('B14'), 'B' . $startRow . ':B' . $endRow);
@@ -219,7 +231,8 @@ class ExcelConfirmacionDocumentosService
     public function generarArchivoGeneralPorCotizacion(
         string $templatePath,
         string $outputFullPath,
-        array $proveedoresPayloads
+        array $proveedoresPayloads,
+        string $nombreCliente = ''
     ): bool {
         if ($proveedoresPayloads === []) {
             return false;
@@ -234,7 +247,7 @@ class ExcelConfirmacionDocumentosService
 
         try {
             $firstPath = $tempDir . DIRECTORY_SEPARATOR . uniqid('excel_conf_general_', true) . '_0.xlsx';
-            if (!$this->generarArchivoPorProveedor($templatePath, $firstPath, $proveedoresPayloads[0])) {
+            if (!$this->generarArchivoPorProveedor($templatePath, $firstPath, $proveedoresPayloads[0], $nombreCliente)) {
                 return false;
             }
             $tempFiles[] = $firstPath;
@@ -249,7 +262,7 @@ class ExcelConfirmacionDocumentosService
 
             for ($i = 1; $i < count($proveedoresPayloads); $i++) {
                 $partPath = $tempDir . DIRECTORY_SEPARATOR . uniqid('excel_conf_general_', true) . "_{$i}.xlsx";
-                if (!$this->generarArchivoPorProveedor($templatePath, $partPath, $proveedoresPayloads[$i])) {
+                if (!$this->generarArchivoPorProveedor($templatePath, $partPath, $proveedoresPayloads[$i], $nombreCliente)) {
                     Log::warning('Excel confirmación general: no se pudo generar hoja de proveedor', [
                         'index' => $i,
                         'proveedor_id' => $proveedoresPayloads[$i]['id'] ?? null,

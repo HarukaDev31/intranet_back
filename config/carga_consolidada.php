@@ -26,4 +26,21 @@ return [
      */
     'seguimiento_sync_debounce_minutes' => (int) env('SEGUIMIENTO_SYNC_DEBOUNCE_MINUTES', 10),
 
+    /*
+    | Rutas GET excluidas del cache HTTP (fragmentos de path).
+    */
+    'cache_skip_path_contains' => [
+        'download',
+        'export',
+        'preview',
+        '/file',
+        'zip',
+        'pdf',
+        'excel',
+        'template',
+        'upload',
+        'serve',
+        'check-temp',
+    ],
+
 ];

@@ -1,0 +1,20 @@
+<?php
+
+namespace Tymon\JWTAuth\Facades;
+
+/**
+ * @method static string|false attempt(array<mixed> $credentials)
+ * @method static mixed authenticate()
+ * @method static string fromUser(mixed $user)
+ * @method static string fromSubject(mixed $subject)
+ * @method static bool invalidate(bool $forceForever = false)
+ * @method static mixed parseToken()
+ * @method static string refresh(bool $forceForever = false, bool $resetClaims = false)
+ * @method static mixed user()
+ * @method static mixed getToken()
+ * @method static mixed setToken(mixed $token)
+ * @method static mixed manager()
+ */
+class JWTAuth extends \Illuminate\Support\Facades\Facade
+{
+}

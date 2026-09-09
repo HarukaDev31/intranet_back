@@ -19,7 +19,8 @@ use App\Traits\UsesObjectStorage;
 use App\Traits\WhatsappTrait;
 use App\Models\ContenedorCotizacionProveedor;
 use App\Jobs\SendInspectionMediaJob;
-use App\Jobs\ForceSendCobrandoJob;
+use App\Services\CargaConsolidada\CargaConsolidadaCacheService;
+use App\Services\CargaConsolidada\ReminderInicialWhatsappService;
 use App\Jobs\ForceSendRotuladoJob;
 use App\Jobs\SendRecordatorioDatosProveedorJob;
 use App\Models\ContenedorCotizacion;
@@ -35,7 +36,7 @@ use Illuminate\Support\Str;
 use App\Traits\UserGroupsTrait;
 use App\Traits\FileTrait;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
-use App\Support\ContratoViewData;
+use App\Support\BrandLogoPaths;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\EmbarqueExport;
 use App\Jobs\SendRotuladoJob;
@@ -212,7 +213,9 @@ class CotizacionProveedorController extends Controller
 
                 case Usuario::ROL_COORDINACION:
                 case Usuario::ROL_CONTABILIDAD:
+                case Usuario::ROL_COORDINADOR_GENERAL:
                 case Usuario::ROL_JEFE_IMPORTACION:
+                case Usuario::JEFE_MARKETING:
                     $query->where('main.estado_cotizador', 'CONFIRMADO');
                     break;
                 case Usuario::ROL_ALMACEN_CHINA:
@@ -644,6 +647,10 @@ class CotizacionProveedorController extends Controller
             $proveedor->estados_proveedor = $request->estado;
             $proveedor->save();
 
+            if ($request->estado === $this->STATUS_RECIVED) {
+                $this->promoteContenedorToRecibiendoIfPendiente($proveedor->id_contenedor);
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Estado actualizado correctamente',
@@ -746,6 +753,10 @@ class CotizacionProveedorController extends Controller
                     ->where('id_cotizacion', $idCotizacion)
                     ->where('id', $idProveedor)
                     ->update(['estados_proveedor' => $estado]);
+
+                if ($estado === $this->STATUS_RECIVED) {
+                    $this->promoteContenedorToRecibiendoIfPendiente($idContenedor);
+                }
             }
             // Manejo de otros estados
             else {
@@ -796,6 +807,9 @@ class CotizacionProveedorController extends Controller
             DB::table($this->table_contenedor_cotizacion)
                 ->where('id', $idCotizacion)
                 ->update(['estado_cliente' => $estadoCliente]);
+
+            // DB::table no dispara CotizacionProveedorObserver: invalidar cache HTTP ya.
+            app(CargaConsolidadaCacheService::class)->invalidateModule();
 
             // Llamada al manejador de actualización de cotización
             $data = $this->handlerUpdateCotizacionProveedor($estado, $idProveedor, $idCotizacion);
@@ -1444,91 +1458,137 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 isset($data['qty_box_china']) && isset($data['cbm_total_china'])
                 && $user->getNombreGrupo() == Usuario::ROL_ALMACEN_CHINA
             ) {
+                $arriveDateProvided = isset($data['arrive_date_china'])
+                    && $data['arrive_date_china'] !== null
+                    && $data['arrive_date_china'] !== '';
 
-                if (!isset($data['arrive_date_china']) || $data['arrive_date_china'] == null) {
-                    $data['arrive_date_china'] = \Carbon\Carbon::now()->format('Y-m-d');
-                } else {
+                if ($arriveDateProvided) {
                     $data['arrive_date_china'] = \Carbon\Carbon::parse($data['arrive_date_china'])->format('Y-m-d');
                 }
+
                 $estadoProveedorOrder = $this->providerOrderStatus[$estadoProveedor] ?? 0;
                 $estadoProvedorToUpdate = $this->providerOrderStatus[$this->STATUS_RECIVED] ?? 0;
                 if ($estadoProveedorOrder < $estadoProvedorToUpdate) {
-                    if (!is_numeric($data['qty_box_china']) || !is_numeric($data['cbm_total_china']) || $data['qty_box_china'] <= 0 || $data['cbm_total_china'] <= 0) {
+                    if (
+                        !is_numeric($data['qty_box_china'])
+                        || !is_numeric($data['cbm_total_china'])
+                        || (float) $data['qty_box_china'] < 0
+                        || (float) $data['cbm_total_china'] < 0
+                    ) {
                         return response()->json([
                             'success' => false,
-                            'message' => 'La cantidad de cajas y volumen total de china deben ser números y mayores que 0',
+                            'message' => 'La cantidad de cajas y volumen total de china deben ser números válidos',
                         ], 422);
                     }
 
-                    $proveedor->qty_box_china = $data['qty_box_china'];
-                    $proveedor->cbm_total_china = $data['cbm_total_china'];
-                    $proveedor->estados_proveedor = $this->STATUS_RECIVED;
+                    $qtyBoxChina = (float) $data['qty_box_china'];
+                    $cbmTotalChina = (float) $data['cbm_total_china'];
+
+                    if (isset($data['peso_china']) && is_numeric($data['peso_china']) && (float) $data['peso_china'] < 0) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'El peso de china debe ser un número válido',
+                        ], 422);
+                    }
+                    if (isset($data['qty_pallet_china']) && is_numeric($data['qty_pallet_china']) && (float) $data['qty_pallet_china'] < 0) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'La cantidad de pallets de china debe ser un número válido',
+                        ], 422);
+                    }
+
+                    $proveedor->qty_box_china = $qtyBoxChina;
+                    $proveedor->cbm_total_china = $cbmTotalChina;
                     if (isset($data['peso_china']) && is_numeric($data['peso_china'])) {
                         $proveedor->peso_china = $data['peso_china'];
                     }
                     if (isset($data['qty_pallet_china']) && is_numeric($data['qty_pallet_china'])) {
                         $proveedor->qty_pallet_china = $data['qty_pallet_china'];
                     }
-                    Log::info('proveedor->arrive_date_china: ' . $proveedor->arrive_date_china);
-                    ///validate if proveedor has arrive_date_china and is valid date if not update
-                    if (
-                        !isset($proveedor->arrive_date_china) || $proveedor->arrive_date_china == null
 
-                    ) {
-                        //amd if is valid date
-                        if (\DateTime::createFromFormat('Y-m-d', $data['arrive_date_china']) !== false) {
-                            $proveedor->arrive_date_china = $data['arrive_date_china'];
-                            try {
-                                $carga = Contenedor::where('id', $idContenedor)->first()->carga;
-                                $cotizacion = Cotizacion::find($idCotizacion);
-                                $supplierCode = $proveedor->code_supplier;
-                                $user = JWTAuth::parseToken()->authenticate();
-                                //china contacto al proveedor con codigo de proveedor "codigo"del cliente "nombre" del contenedor "carga" y fecha de llegada "fecha" 
-                                $message = "China contacto al proveedor con codigo de proveedor " . $supplierCode . " del cliente " . $cotizacion->nombre . " del contenedor " . $carga . " y fecha de llegada " . $data['arrive_date_china'];
-                                CotizacionChinaContacted::dispatch($cotizacion, $proveedor, $supplierCode, $data['arrive_date_china'], $message);
-                                $usuarioActual = JWTAuth::parseToken()->authenticate();
-                                //if qty box china is greater than 0 and cbm total china is greater than 0, dispatch event received else contacted
-                                if ($data['qty_box_china'] > 0 && $data['cbm_total_china'] > 0) {
-                                    $this->crearNotificacionesProveedorRecibido($cotizacion, $proveedor, $supplierCode, $data['qty_box_china'], $data['cbm_total_china'], $carga, $usuarioActual);
-                                    $this->dispararEventoYNotificacionProveedorRecibido($cotizacion, $proveedor, $supplierCode, $data['qty_box_china'], $data['cbm_total_china'], $carga, $usuarioActual);
-                                } else {
-                                    CotizacionChinaContacted::dispatch($cotizacion, $proveedor, $supplierCode, $data['arrive_date_china'], $message);
-                                    $this->crearNotificacionesProveedorContactado($cotizacion, $proveedor, $supplierCode, $carga, $data['arrive_date_china'], $user);
-                                }
-                                // Crear notificaciones en la base de datos para Coordinación y Cotizador
-                            } catch (\Exception $e) {
-                                Log::error('Error al disparar evento CotizacionChinaContacted: ' . $e->getMessage());
-                            }
-                        } else {
+                    if ($arriveDateProvided) {
+                        if (\DateTime::createFromFormat('Y-m-d', $data['arrive_date_china']) === false) {
                             return response()->json([
                                 'success' => false,
                                 'message' => 'La fecha de llegada de china no es válida',
                             ], 422);
                         }
-                    } else {
-                        $usuarioActual = JWTAuth::parseToken()->authenticate();
+                        $proveedor->arrive_date_china = $data['arrive_date_china'];
+                    }
+
+                    $hasRecibidoMetrics = $qtyBoxChina > 0
+                        || $cbmTotalChina > 0
+                        || (isset($data['peso_china']) && is_numeric($data['peso_china']) && (float) $data['peso_china'] > 0)
+                        || (isset($data['qty_pallet_china']) && is_numeric($data['qty_pallet_china']) && (float) $data['qty_pallet_china'] > 0);
+
+                    $proveedor->estados_proveedor = $hasRecibidoMetrics
+                        ? $this->STATUS_RECIVED
+                        : $this->STATUS_CONTACTED;
+
+                    Log::info('proveedor->arrive_date_china: ' . $proveedor->arrive_date_china);
+
+                    try {
+                        $carga = Contenedor::where('id', $idContenedor)->first()->carga;
                         $cotizacion = Cotizacion::find($idCotizacion);
                         $supplierCode = $proveedor->code_supplier;
-                        $carga = Contenedor::where('id', $idContenedor)->first()->carga;
-                        $this->dispararEventoYNotificacionProveedorRecibido($cotizacion, $proveedor, $supplierCode, $data['qty_box_china'], $data['cbm_total_china'], $carga, $usuarioActual);
-                        $this->crearNotificacionesProveedorRecibido($cotizacion, $proveedor, $supplierCode, $data['qty_box_china'], $data['cbm_total_china'], $carga, $usuarioActual);
+                        $usuarioActual = JWTAuth::parseToken()->authenticate();
+
+                        if ($hasRecibidoMetrics) {
+                            $this->crearNotificacionesProveedorRecibido(
+                                $cotizacion,
+                                $proveedor,
+                                $supplierCode,
+                                $qtyBoxChina,
+                                $cbmTotalChina,
+                                $carga,
+                                $usuarioActual
+                            );
+                            $this->dispararEventoYNotificacionProveedorRecibido(
+                                $cotizacion,
+                                $proveedor,
+                                $supplierCode,
+                                $qtyBoxChina,
+                                $cbmTotalChina,
+                                $carga,
+                                $usuarioActual
+                            );
+                        } elseif ($arriveDateProvided && $proveedor->arrive_date_china) {
+                            $message = 'China contacto al proveedor con codigo de proveedor ' . $supplierCode
+                                . ' del cliente ' . $cotizacion->nombre
+                                . ' del contenedor ' . $carga
+                                . ' y fecha de llegada ' . $proveedor->arrive_date_china;
+                            CotizacionChinaContacted::dispatch(
+                                $cotizacion,
+                                $proveedor,
+                                $supplierCode,
+                                $proveedor->arrive_date_china,
+                                $message
+                            );
+                            $this->crearNotificacionesProveedorContactado(
+                                $cotizacion,
+                                $proveedor,
+                                $supplierCode,
+                                $carga,
+                                $proveedor->arrive_date_china,
+                                $usuarioActual
+                            );
+                        }
+                    } catch (\Exception $e) {
+                        Log::error('Error al disparar evento CotizacionChinaContacted: ' . $e->getMessage());
                     }
+
                     $proveedor->save();
-
-
 
                     $usuariosAlmacen = $this->getUsersByGrupo(Usuario::ROL_COORDINACION);
                     $ids = array_column($usuariosAlmacen, 'ID_Usuario');
-                    $message = "Se ha actualizado el proveedor con codigo de proveedor " . $supplierCode . " a estado RECIBIDO";
+                    $message = $hasRecibidoMetrics
+                        ? 'Se ha actualizado el proveedor con codigo de proveedor ' . $supplierCode . ' a estado RECIBIDO'
+                        : 'Se ha actualizado el proveedor con codigo de proveedor ' . $supplierCode . ' a estado CONTACTADO';
                 } else {
                     $message = "Se ha actualizado la cantidad de cajas y volumen total de china del proveedor con codigo de proveedor " . $supplierCode . " a " . $data['qty_box_china'] . " cajas y " . $data['cbm_total_china'] . " m3";
                 }
-                $contenedorEstado = Cotizacion::where('id_contenedor', $idContenedor)->first()->estado_china;
-                if ($contenedorEstado == "PENDIENTE") {
-                    $cotizacion = Cotizacion::find($idContenedor);
-                    $cotizacion->estado_china = "RECIBIENDO";
-                    $cotizacion->estado = "RECIBIENDO";
-                    $cotizacion->save();
+                if (isset($hasRecibidoMetrics) && $hasRecibidoMetrics) {
+                    $this->promoteContenedorToRecibiendoIfPendiente($idContenedor);
                 }
             }
             // Estados documentos: Coord 2 vs VB final (*_final) — según usuario autenticado
@@ -1608,26 +1668,6 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             //just if current roles is almacen china
             if ($user->getNombreGrupo() == Usuario::ROL_ALMACEN_CHINA) {
                 $this->sendAlertDifferenceCbmMessage($idCotizacion);
-            }
-            //Validate if provveedor has status R but not have qty box china and cbm total china OR ARE 0
-            if ($proveedor->estados_proveedor == $this->STATUS_RECIVED && (!$proveedor->qty_box_china || $proveedor->qty_box_china == 0) && (!$proveedor->cbm_total_china || $proveedor->cbm_total_china == 0)) {
-                //if have arrive date china, change status to C else if have datos_proveedor change to NC
-                if ($proveedor->arrive_date_china) {
-                    $proveedor->estados_proveedor = $this->STATUS_CONTACTED;
-                    $proveedor->save();
-                    try {
-                        $carga = Contenedor::where('id', $idContenedor)->first()->carga;
-                        $message = "China contacto al proveedor con codigo de proveedor " . $supplierCode . " del cliente " . $cotizacion->nombre . " del contenedor " . $carga . " y fecha de llegada " . $data['arrive_date_china'];
-                        CotizacionChinaContacted::dispatch($cotizacion, $proveedor, $supplierCode, $data['arrive_date_china'], $message);
-                    } catch (\Exception $e) {
-                        Log::error('Error al disparar evento CotizacionChinaContacted: ' . $e->getMessage());
-                    }
-                    Log::info('proveedor status changed to C: ' . $proveedor->estados_proveedor);
-                } else if ($proveedor->datos_proveedor) {
-                    $proveedor->estados_proveedor = $this->STATUS_NOT_CONTACTED;
-                    $proveedor->save();
-                    Log::info('proveedor status changed to NC: ' . $proveedor->estados_proveedor);
-                }
             }
             return response()->json([
                 'success' => true,
@@ -2119,7 +2159,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $qtyBoxChina = (int) ($proveedor->qty_box_china ?? $proveedor->qty_box ?? 0);
             $qtyPalletChina = (int) ($proveedor->qty_pallet_china ?? 0);
 
-            // Preparar mensaje inicial de inspección (se enviará solo una vez; incluir link a vista inspección)
+            // Preparar mensaje inicial de inspección (solo pb_inspeccion_llegada_v1; 1 vez por proveedor)
             $baseUrl = rtrim((string) config('app.url_clientes'), '/');
             $cotizacionUuid = Cotizacion::where('id', $idCotizacion)->value('uuid');
             $inspeccionViewUrl = $baseUrl . '/inspeccion/' . ($cotizacionUuid ?? '') . '?id_proveedor=' . $idProveedor;
@@ -2133,7 +2173,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $proveedorsWithFilesSended = AlmacenInspection::where('id_cotizacion', $idCotizacion)
                 ->where('send_status', 'SENDED')
                 ->count();
-            // Enviar archivos de inspección (el mensaje se envía una sola vez dentro de esta función)
+            // Solo llegada (sin imagen/video WA); llegada máximo 1 vez por proveedor
             $sentFiles = $this->sendInspectionFiles(
                 $inspectionFiles,
                 $inspectionMessage,
@@ -2142,12 +2182,13 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 (string) $cotizacion->nombre,
                 $qtyBoxChina,
                 $qtyPalletChina,
-                $inspeccionViewUrl
+                $inspeccionViewUrl,
+                (int) $idProveedor
             );
             $usuarioActual = JWTAuth::parseToken()->authenticate();
             $cotizacion = Cotizacion::find($idCotizacion);
             $proveedor = CotizacionProveedor::find($idProveedor);
-            $carga = Contenedor::where('id', $cotizacion->id_contenedor)->first();
+            $carga = Contenedor::where('id', $cotizacion->id_contenedor)->value('carga');
             $this->dispararEventoYNotificacionProveedorInspeccionado($cotizacion, $proveedor, $proveedor->code_supplier, $carga, $usuarioActual);
             $this->crearNotificacionesProveedorInspeccionado($cotizacion, $proveedor, $proveedor->code_supplier, $carga, $usuarioActual);
 
@@ -2272,7 +2313,8 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
     }
 
     /**
-     * Enviar archivos de inspección
+     * Al inspeccionar: solo plantilla pb_inspeccion_llegada_v1 (1 vez/proveedor).
+     * No envía pb_inspeccion_imagen_v1 ni pb_inspeccion_video_v1; el cliente ve media en el link.
      */
     private function sendInspectionFiles(
         $inspectionFiles,
@@ -2282,15 +2324,23 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
         ?string $nombreCliente = null,
         ?int $qtyBoxChina = null,
         ?int $qtyPalletChina = null,
-        ?string $linkInspeccion = null
+        ?string $linkInspeccion = null,
+        ?int $idProveedor = null
     ) {
-        $sentFiles = ['images' => 0, 'videos' => 0];
+        $sentFiles = ['images' => 0, 'videos' => 0, 'llegada_enviada' => false];
 
-        // Contar total de archivos a enviar
         $totalFiles = count($inspectionFiles['images']) + count($inspectionFiles['videos']);
+        if ($totalFiles === 0) {
+            return $sentFiles;
+        }
 
-        // Solo enviar mensaje si hay archivos para enviar
-        if ($totalFiles > 0) {
+        $alreadySentLlegada = $idProveedor
+            ? AlmacenInspection::where('id_proveedor', $idProveedor)
+                ->where('send_status', 'SENDED')
+                ->exists()
+            : false;
+
+        if (!$alreadySentLlegada) {
             $metaLlegada = CoordinacionWhatsappPayload::inspeccionLlegada(
                 (string) $telefono,
                 (string) ($nombreCliente ?? ''),
@@ -2301,89 +2351,25 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 $message
             );
             $this->sendMessage($message, $telefono, 0, 'consolidado', $metaLlegada);
+            $sentFiles['llegada_enviada'] = true;
+        } else {
+            Log::info('Inspección: se omite pb_inspeccion_llegada_v1 (ya enviado para el proveedor)', [
+                'id_proveedor' => $idProveedor,
+            ]);
         }
 
-        // Enviar imágenes sin mensaje adicional
+        // Marcar pendientes como SENDED sin WhatsApp de imagen/video
         foreach ($inspectionFiles['images'] as $image) {
-            if ($this->sendSingleInspectionFile($image, $message, $telefono, $codeSupplier)) {
-                $sentFiles['images']++;
-            }
+            $image->update(['send_status' => 'SENDED']);
+            $sentFiles['images']++;
         }
-
-        // Enviar videos sin mensaje adicional
         foreach ($inspectionFiles['videos'] as $video) {
-            if ($this->sendSingleInspectionFile($video, $message, $telefono, $codeSupplier)) {
-                $sentFiles['videos']++;
-            }
+            $video->update(['send_status' => 'SENDED']);
+            $sentFiles['videos']++;
         }
 
         return $sentFiles;
     }
-
-    /**
-     * Enviar un archivo individual de inspección usando URLs públicas
-     * Similar a cómo lo hace SendInspectionMediaJob
-     */
-    private function sendSingleInspectionFile($file, $message, $telefono, $codeSupplier = null)
-    {
-        // Validar que el archivo tenga una ruta
-        if (empty($file->file_path)) {
-            Log::error('Archivo de inspección no tiene ruta: ' . $file->id);
-            return false;
-        }
-
-        // Generar nombre del archivo con el código del proveedor (como en SendInspectionMediaJob)
-        $extension = pathinfo($file->file_path, PATHINFO_EXTENSION);
-        $fileName = $codeSupplier ? $codeSupplier . '.' . $extension : basename($file->file_path);
-
-        Log::info('Enviando archivo de inspección con URL pública', [
-            'file_id' => $file->id,
-            'file_path' => $file->file_path,
-            'code_supplier' => $codeSupplier,
-            'file_name' => $fileName
-        ]);
-
-        // Mensaje con código del proveedor (como en SendInspectionMediaJob)
-        $messageToSend = $codeSupplier ?? '';
-        $caption = '📦 Inspección — proveedor ' . ($codeSupplier ?? '') . ' 📦';
-        $isVideo = is_string($file->file_type) && strpos($file->file_type, 'video/') === 0;
-        $meta = $isVideo
-            ? CoordinacionWhatsappPayload::inspeccionVideo((string) $telefono, (string) $codeSupplier, (string) $file->file_path, $caption)
-            : CoordinacionWhatsappPayload::inspeccionImagen((string) $telefono, (string) $codeSupplier, (string) $file->file_path, $caption);
-
-        // Usar sendMediaInspectionToController para enviar con URL pública
-        $response = $this->sendMediaInspectionToController(
-            $file->file_path,
-            $file->file_type,
-            $messageToSend,
-            $telefono,
-            0,
-            $file->id,
-            $fileName,
-            $meta
-        );
-
-        // Verificar que la respuesta sea exitosa antes de actualizar el estado
-        if ($response && isset($response['status']) && $response['status'] === true) {
-            $file->update(['send_status' => 'SENDED']);
-            Log::info('Archivo de inspección enviado exitosamente con URL pública', [
-                'file_id' => $file->id,
-                'file_path' => $file->file_path,
-                'code_supplier' => $codeSupplier
-            ]);
-            return true;
-        } else {
-            Log::warning('Error al enviar archivo de inspección', [
-                'file_id' => $file->id,
-                'file_path' => $file->file_path,
-                'code_supplier' => $codeSupplier,
-                'response' => $response
-            ]);
-        }
-
-        return false;
-    }
-
 
     private function shouldSendReservationMessage($idCotizacion)
     {
@@ -2731,7 +2717,20 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
             foreach ($files as $file) {
                 if ($file->isValid()) {
-                    $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                    if (!$this->isValidInspectionUpload($file)) {
+                        Log::warning('Tipo de archivo de inspección no permitido', [
+                            'nombre' => $file->getClientOriginalName(),
+                            'mime' => $file->getMimeType(),
+                            'ext' => $file->getClientOriginalExtension(),
+                        ]);
+                        continue;
+                    }
+
+                    $extension = strtolower((string) $file->getClientOriginalExtension());
+                    if ($extension === '') {
+                        $extension = $this->inspectionExtensionFromMime((string) $file->getMimeType()) ?: 'bin';
+                    }
+                    $filename = time() . '_' . uniqid() . '.' . $extension;
                     $path = $this->storageStoreUpload($file, self::INSPECTION_PATH, $filename);
 
                     Log::info('Archivo de inspección guardado:', [
@@ -2743,10 +2742,10 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
                     $inspeccion = new AlmacenInspection();
                     $inspeccion->file_name = $file->getClientOriginalName();
-                    $inspeccion->file_type = $file->getMimeType();
+                    $inspeccion->file_type = $this->normalizeInspectionMime($file);
                     $inspeccion->file_size = $file->getSize();
                     $inspeccion->last_modified = now();
-                    $inspeccion->file_ext = $file->getClientOriginalExtension();
+                    $inspeccion->file_ext = $extension;
                     $inspeccion->send_status = 'PENDING';
                     $inspeccion->id_proveedor = $idProveedor;
                     $inspeccion->file_path = $path;
@@ -2767,7 +2766,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             if (empty($archivosGuardados)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No se pudo guardar ningún archivo de inspección'
+                    'message' => 'No se pudo guardar ningún archivo de inspección. Formatos permitidos: JPG, PNG, GIF, HEIC, HEIF, DNG y videos.'
                 ], 400);
             }
             Log::info('Inspección guardada correctamente', ['idProveedor' => $idProveedor, 'idCotizacion' => $idCotizacion]);
@@ -2984,6 +2983,28 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 ->update($updateData);
         }
     }
+
+    /**
+     * Si el contenedor está PENDIENTE, pasa a RECIBIENDO al primer proveedor en R.
+     */
+    private function promoteContenedorToRecibiendoIfPendiente($idContenedor)
+    {
+        if (!$idContenedor) {
+            return;
+        }
+
+        $contenedor = Contenedor::find($idContenedor);
+        if (!$contenedor) {
+            return;
+        }
+
+        if ($contenedor->estado_china === Contenedor::CONTEDOR_PENDIENTE) {
+            $contenedor->estado_china = 'RECIBIENDO';
+            $contenedor->estado = 'RECIBIENDO';
+            $contenedor->save();
+        }
+    }
+
     public function refreshRotuladoStatus($id)
     {
         try {
@@ -3207,6 +3228,156 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
     }
 
     /**
+     * Extensiones de inspección (mismas que el FileUploader del intranet).
+     *
+     * @return array
+     */
+    private function allowedInspectionExtensions()
+    {
+        return [
+            'jpg', 'jpeg', 'png', 'gif', 'heic', 'heif', 'dng',
+            'mp4', 'mov', 'avi', 'mkv', 'webm', 'wmv', 'flv', 'vob',
+            'm4v', '3gp', '3g2', 'mj2', 'm2ts', 'm2t', 'm2v', 'm4p', 'm4b', 'm4r',
+        ];
+    }
+
+    /**
+     * MIME de fotos iPhone / DNG (finfo a veces reporta octet-stream).
+     *
+     * @return array
+     */
+    private function allowedInspectionMimes()
+    {
+        return [
+            'image/jpeg',
+            'image/jpg',
+            'image/png',
+            'image/gif',
+            'image/heic',
+            'image/heif',
+            'image/heic-sequence',
+            'image/heif-sequence',
+            'image/dng',
+            'image/x-adobe-dng',
+            'image/x-dng',
+            'video/mp4',
+            'video/quicktime',
+            'video/x-msvideo',
+            'video/x-matroska',
+            'video/webm',
+            'video/x-ms-wmv',
+            'video/x-flv',
+            'video/3gpp',
+            'video/3gpp2',
+        ];
+    }
+
+    /**
+     * @param  \Illuminate\Http\UploadedFile  $file
+     * @return bool
+     */
+    private function isValidInspectionUpload($file)
+    {
+        $ext = strtolower((string) $file->getClientOriginalExtension());
+        if ($ext !== '' && in_array($ext, $this->allowedInspectionExtensions(), true)) {
+            return true;
+        }
+
+        $mime = strtolower((string) $file->getMimeType());
+        if ($mime !== '' && in_array($mime, $this->allowedInspectionMimes(), true)) {
+            return true;
+        }
+
+        if ($this->looksLikeHeic($file) || $this->looksLikeDng($file)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  \Illuminate\Http\UploadedFile  $file
+     * @return string
+     */
+    private function normalizeInspectionMime($file)
+    {
+        $ext = strtolower((string) $file->getClientOriginalExtension());
+        $mime = strtolower((string) $file->getMimeType());
+
+        if (in_array($ext, ['heic', 'heif'], true) || $this->looksLikeHeic($file)) {
+            return $ext === 'heif' ? 'image/heif' : 'image/heic';
+        }
+        if ($ext === 'dng' || $this->looksLikeDng($file)) {
+            return 'image/x-adobe-dng';
+        }
+        if ($mime !== '' && $mime !== 'application/octet-stream') {
+            return $mime;
+        }
+
+        return $mime ?: 'application/octet-stream';
+    }
+
+    /**
+     * @param  string  $mime
+     * @return string|null
+     */
+    private function inspectionExtensionFromMime($mime)
+    {
+        $mime = strtolower(strtok($mime, ';'));
+        $map = [
+            'image/heic' => 'heic',
+            'image/heif' => 'heif',
+            'image/dng' => 'dng',
+            'image/x-adobe-dng' => 'dng',
+            'image/x-dng' => 'dng',
+            'image/jpeg' => 'jpg',
+            'image/jpg' => 'jpg',
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+        ];
+
+        return isset($map[$mime]) ? $map[$mime] : null;
+    }
+
+    /**
+     * @param  \Illuminate\Http\UploadedFile  $file
+     * @return bool
+     */
+    private function looksLikeHeic($file)
+    {
+        $path = $file->getRealPath();
+        if (!$path || !is_readable($path)) {
+            return false;
+        }
+        $header = @file_get_contents($path, false, null, 0, 16);
+        if ($header === false || strlen($header) < 12) {
+            return false;
+        }
+        $brand = substr($header, 8, 4);
+
+        return substr($header, 4, 4) === 'ftyp'
+            && in_array($brand, ['heic', 'heix', 'heif', 'mif1', 'msf1'], true);
+    }
+
+    /**
+     * @param  \Illuminate\Http\UploadedFile  $file
+     * @return bool
+     */
+    private function looksLikeDng($file)
+    {
+        $path = $file->getRealPath();
+        if (!$path || !is_readable($path)) {
+            return false;
+        }
+        $header = @file_get_contents($path, false, null, 0, 4);
+        if ($header === false) {
+            return false;
+        }
+
+        return $header === "II*\x00" || $header === "MM\x00*";
+    }
+
+    /**
      * Obtiene la extensión de archivo basada en la URL y content-type
      * 
      * @param string $url URL del archivo
@@ -3228,6 +3399,10 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 'image/png' => 'png',
                 'image/gif' => 'gif',
                 'image/webp' => 'webp',
+                'image/heic' => 'heic',
+                'image/heif' => 'heif',
+                'image/dng' => 'dng',
+                'image/x-adobe-dng' => 'dng',
                 'video/mp4' => 'mp4',
                 'video/avi' => 'avi',
                 'video/mov' => 'mov',
@@ -3299,7 +3474,32 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
     }
 
     /**
-     * Forzar envío de mensaje de cobranza a múltiples proveedores
+     * Vista previa del recordatorio de inicial: mensaje y Excel de cotización inicial (CDN).
+     */
+    public function previewCobrando($idCotizacion)
+    {
+        try {
+            $result = app(ReminderInicialWhatsappService::class)->preview((int) $idCotizacion);
+            if (empty($result['success'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $result['message'] ?? 'No se pudo armar la vista previa',
+                ], 404);
+            }
+
+            return response()->json($result);
+        } catch (\Exception $e) {
+            Log::error('Error en previewCobrando: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al armar la vista previa: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Forzar envío de mensaje de cobranza (recordatorio de inicial).
+     * Encola y responde de inmediato; el WhatsApp se envía en segundo plano.
      */
     public function forceSendCobrando(Request $request)
     {
@@ -3312,9 +3512,16 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 ], 401);
             }
 
-            $idCotizacion = $request->idCotizacion;
-            $idContainer = $request->idContainer;
+            $idCotizacion = (int) $request->idCotizacion;
+            $idContainer = (int) $request->idContainer;
 
+            $preview = app(ReminderInicialWhatsappService::class)->preview($idCotizacion);
+            if (empty($preview['success'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $preview['message'] ?? 'Cotización no encontrada',
+                ], 404);
+            }
 
             Log::info("Iniciando proceso de envío de cobranza", [
                 'id_cotizacion' => $idCotizacion,
@@ -3322,11 +3529,8 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 'user_id' => $user->ID_Usuario
             ]);
 
-            // Obtener dominio del frontend
             $domain = WhatsappTrait::getCurrentRequestDomain();
-
-            // Despachar el job para procesar en segundo plano
-            ForceSendCobrandoJob::dispatch($idCotizacion, $idContainer, $domain)->onQueue('importaciones');
+            app(ReminderInicialWhatsappService::class)->enqueue($idCotizacion, $idContainer, $domain);
 
             Log::info("Job ForceSendCobrandoJob despachado", [
                 'id_cotizacion' => $idCotizacion,
@@ -3336,7 +3540,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
             return response()->json([
                 'success' => true,
-                'message' => "Proceso de cobranza iniciado. El mensaje se enviará en segundo plano.",
+                'message' => 'El recordatorio se está enviando al cliente',
                 'data' => [
                     'id_cotizacion' => $idCotizacion,
                     'id_container' => $idContainer
@@ -3398,6 +3602,10 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 'user_id' => $user->ID_Usuario
             ]);
             DB::commit();
+
+            app(SeguimientoConsolidadoDriveService::class)->queueSyncIfLinked((int) $idContainer);
+            app(SeguimientoConsolidadoDriveService::class)->queueSyncIfLinked((int) $idContainerDestino);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Cotización movida correctamente',
@@ -3775,7 +3983,13 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 $signatureBase64 = 'data:' . $mimeType . ';base64,' . $imageData;
 
                 // Datos para la vista del contrato firmado
-                $viewData = ContratoViewData::fromCotizacion($cotizacion, [
+                $viewData = [
+                    'fecha' => date('d-m-Y'),
+                    'cliente_nombre' => $cotizacion->nombre,
+                    'cliente_documento' => $cotizacion->documento,
+                    'cliente_domicilio' => $cotizacion->direccion ?? null,
+                    'carga' => $carga,
+                    'logo_contrato_url' => BrandLogoPaths::contrato(),
                     'signature_base64' => $signatureBase64,
                 ]);
 
@@ -3971,6 +4185,34 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                     ]
                 ])
             ]);
+            //notificar tambien a RRHH (mismos accesos que jefe de ventas)
+            $notificacionRRHH = Notificacion::create([
+                'titulo' => 'Proveedor Contactado en China',
+                'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} contactó al proveedor con código {$supplierCode} del cliente {$cotizacion->nombre}",
+                'descripcion' => "Cliente: {$cotizacion->nombre} | Código Proveedor: {$supplierCode} | Contenedor: #{$carga} | Fecha de llegada: {$arriveDate}",
+                'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
+                'rol_destinatario' => Usuario::ROL_RRHH,
+                'navigate_to' => 'cargaconsolidada/abiertos/cotizaciones',
+                'navigate_params' => json_encode([
+                    'idContenedor' => $cotizacion->id_contenedor,
+                    'tab' => 'prospectos',
+                    'idCotizacion' => $cotizacion->id
+                ]),
+                'tipo' => Notificacion::TIPO_INFO,
+                'icono' => 'mdi:phone-outgoing',
+                'prioridad' => Notificacion::PRIORIDAD_MEDIA,
+                'referencia_tipo' => 'proveedor',
+                'referencia_id' => $proveedor->id,
+                'activa' => true,
+                'creado_por' => $usuarioActual->ID_Usuario,
+                'configuracion_roles' => json_encode([
+                    Usuario::ROL_RRHH => [
+                        'titulo' => 'Proveedor Contactado - China',
+                        'mensaje' => "Proveedor {$supplierCode} contactado del cliente {$cotizacion->nombre}",
+                        'descripcion' => "Fecha de llegada: {$arriveDate} | Contenedor: #{$carga}"
+                    ]
+                ])
+            ]);
 
             Log::info('Notificaciones de proveedor contactado en China creadas para Coordinación y Cotizador:', [
                 'notificacion_coordinacion_id' => $notificacionCoordinacion->id,
@@ -4000,7 +4242,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 'activa' => $verificacionCoordinacion ? $verificacionCoordinacion->activa : null
             ]);
 
-            return [$notificacionCoordinacion, $notificacionCotizador];
+            return [$notificacionCoordinacion, $notificacionCotizador, $notificacionRRHH];
         } catch (\Exception $e) {
             Log::error('Error al crear notificaciones de proveedor contactado en China', [
                 'message' => $e->getMessage(),

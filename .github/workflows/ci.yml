@@ -66,6 +66,12 @@ jobs:
           php artisan key:generate
           php artisan config:clear
 
+      - name: PHP syntax check (php -l)
+        run: composer lint:php-syntax
+
+      - name: PHPStan static analysis
+        run: composer phpstan
+
       - name: Smoke check (about + routes)
         env:
           REDIS_HOST: 127.0.0.1

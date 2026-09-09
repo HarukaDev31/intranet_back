@@ -26,6 +26,9 @@ class SeguimientoConsolidadoExcelService
 {
     private const LOG_PREFIX = '[SeguimientoDrive]';
 
+    /** Primera fila de datos en las tablas paralelas de la hoja Seguimiento. */
+    public const SEGUIMIENTO_DATA_START_ROW = 5;
+
     // Layout hoja Seguimiento (1-indexed): YIWU B–L | RECIBIR N–T | CONTACTAR V–AB | URGENCIA AD–AK
     private const COL_YIWU = 2;
     private const COL_RECIBIR = 14;
@@ -126,7 +129,11 @@ class SeguimientoConsolidadoExcelService
         $spreadsheet = $this->buildSpreadsheet($idContenedor, $request);
         $contenedor = Contenedor::find($idContenedor);
         $carga = $contenedor ? (string) $contenedor->carga : (string) $idContenedor;
-        $fileName = $this->buildFileName($carga);
+        $fileName = $this->buildFileName(
+            $carga,
+            $contenedor ? (string) ($contenedor->parte ?? '') : '',
+            (int) $idContenedor
+        );
         $tmp = sys_get_temp_dir() . DIRECTORY_SEPARATOR . uniqid('seg_consolidado_') . '_' . $fileName;
 
         $saveStartedAt = microtime(true);
@@ -148,12 +155,21 @@ class SeguimientoConsolidadoExcelService
      * @param string $carga
      * @return string
      */
-    public function buildFileName($carga)
+    public function buildFileName($carga, $parte = '', $idContenedor = 0)
     {
         $now = Carbon::now('America/Lima');
+        $label = preg_replace('/\s+/', '', (string) $carga);
+        $parte = strtoupper(trim((string) $parte));
+        if ($parte !== '') {
+            $label .= $parte;
+        }
 
-        return 'cotizaciones_#'
-            . $carga
+        $name = 'cotizaciones_#' . $label;
+        if ((int) $idContenedor > 0) {
+            $name .= '_' . (int) $idContenedor;
+        }
+
+        return $name
             . '_'
             . $now->format('Y-m-d')
             . '_'
@@ -178,6 +194,7 @@ class SeguimientoConsolidadoExcelService
         $this->applyManualYiwuNotes($idContenedor, $groups);
         $this->applyManualContactarNotes($idContenedor, $groups);
         $this->applyManualUrgenciaNotes($idContenedor, $groups);
+        $this->persistUrgenciaManualNotes($idContenedor, $groups['urgencia'] ?? [], 'excel_generate');
         $this->rowSyncService->applyUltimaActualizacion($idContenedor, $groups);
 
         $this->log('info', 'Hoja Seguimiento: datos clasificados', [
@@ -193,7 +210,7 @@ class SeguimientoConsolidadoExcelService
         $configRow = 1;
         $titleRow = 3;
         $headerRow = 4;
-        $dataStartRow = 5;
+        $dataStartRow = self::SEGUIMIENTO_DATA_START_ROW;
 
         $this->writeConfigSection(
             $sheet,
@@ -1490,6 +1507,58 @@ class SeguimientoConsolidadoExcelService
         }
 
         $this->applyManualYiwuNotesToItems($idContenedor, $groups['yiwu']);
+    }
+
+    /**
+     * Filas URGENCIA en el mismo orden que se escriben en la hoja Seguimiento (con notas manuales aplicadas).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function buildUrgenciaItems(int $idContenedor): array
+    {
+        $contenedor = Contenedor::find($idContenedor);
+        $carga = $contenedor ? (string) $contenedor->carga : '';
+        $rows = $this->fetchProveedoresSeguimiento($idContenedor, $carga);
+        $this->enrichFechasDatosProveedor($idContenedor, $rows);
+        $this->enrichFechasArriveProveedor($rows, (int) $idContenedor);
+
+        $cotizacionesConPago = $this->loadCotizacionesConPagoAsociado($idContenedor);
+        $groups = $this->classifyRows($rows, $cotizacionesConPago);
+        $this->applyManualUrgenciaNotes($idContenedor, $groups);
+
+        return $groups['urgencia'] ?? [];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $items
+     */
+    public function persistUrgenciaManualNotes(int $idContenedor, array $items, string $source = 'excel_generate'): void
+    {
+        if ($items === [] || !Schema::hasTable('contenedor_seguimiento_drive_cells')) {
+            return;
+        }
+
+        $repository = app(SeguimientoConsolidadoDriveCellRepository::class);
+
+        foreach ($items as $item) {
+            $idProveedor = (int) ($item['id_proveedor'] ?? 0);
+            $note = trim((string) ($item['notas'] ?? ''));
+            if ($idProveedor <= 0 || $note === '') {
+                continue;
+            }
+
+            $repository->upsertCell([
+                'id_contenedor' => $idContenedor,
+                'sheet_name' => 'Seguimiento',
+                'row_key' => SeguimientoDriveCellRowKey::urgenciaProveedor($idProveedor),
+                'column_key' => 'urgencia_notas',
+                'id_cotizacion' => isset($item['id_cotizacion']) ? (int) $item['id_cotizacion'] : null,
+                'id_proveedor' => $idProveedor,
+                'cell_value' => $note,
+                'is_manual' => true,
+                'change_source' => $source,
+            ]);
+        }
     }
 
     /**

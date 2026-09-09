@@ -251,44 +251,147 @@ class BoletinQuimicoController extends Controller
     }
 
     /**
+     * Registros BQ existentes de una cotización (para editar desde cargos extra).
+     * GET api/carga-consolidada/boletin-quimico/cotizacion/{idCotizacion}/registros
+     */
+    public function getRegistrosByCotizacion($idCotizacion)
+    {
+        try {
+            $rows = BoletinQuimicoCotizacionItem::query()
+                ->with(['cotizacionProveedorItem:id,final_name,initial_name'])
+                ->where('id_cotizacion', (int) $idCotizacion)
+                ->orderBy('id')
+                ->get()
+                ->map(function ($row) {
+                    $prov = $row->cotizacionProveedorItem;
+                    $name = $prov ? ($prov->final_name ?: $prov->initial_name) : '—';
+
+                    return [
+                        'id' => $row->id,
+                        'id_cotizacion' => (int) $row->id_cotizacion,
+                        'id_cotizacion_proveedor_item' => $row->id_cotizacion_proveedor_item,
+                        'item_nombre' => $name ?: ('Item #' . $row->id),
+                        'monto_boletin' => (float) $row->monto_boletin,
+                        'has_pagos' => $row->pagos()->exists(),
+                    ];
+                });
+
+            return response()->json(['success' => true, 'data' => $rows]);
+        } catch (\Exception $e) {
+            Log::error('BoletinQuimicoController getRegistrosByCotizacion: ' . $e->getMessage());
+
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Crear registros de boletín químico (uno por cada cliente+item seleccionado con monto).
      * POST api/carga-consolidada/boletin-quimico
-     * body: { id_contenedor, items: [{ id_cotizacion, id_cotizacion_proveedor_item, monto_boletin }] }
+     * body: { id_contenedor, items: [{ id_cotizacion, id_cotizacion_proveedor_item, monto_boletin }],
+     *       replace_cotizacion_items?, sync_cargos_extra_bq? }
      */
     public function store(Request $request)
     {
         $request->validate([
             'id_contenedor' => 'required|integer|exists:carga_consolidada_contenedor,id',
-            'items' => 'required|array',
+            'items' => 'required|array|min:1',
             'items.*.id_cotizacion' => 'required|integer|exists:contenedor_consolidado_cotizacion,id',
             'items.*.id_cotizacion_proveedor_item' => 'nullable|integer|exists:contenedor_consolidado_cotizacion_proveedores_items,id',
             'items.*.monto_boletin' => 'required|numeric|min:0',
+            'replace_cotizacion_items' => 'sometimes|boolean',
+            'sync_cargos_extra_bq' => 'sometimes|boolean',
         ]);
 
         try {
             $idContenedor = (int) $request->id_contenedor;
-            $created = [];
-            foreach ($request->items as $item) {
-                $exists = BoletinQuimicoCotizacionItem::where('id_cotizacion', $item['id_cotizacion'])
-                    ->where('id_cotizacion_proveedor_item', $item['id_cotizacion_proveedor_item'] ?? null)
-                    ->exists();
-                if ($exists) {
+            $items = $request->input('items', []);
+            $saved = [];
+
+            if ($request->boolean('replace_cotizacion_items')) {
+                $byCotizacion = collect($items)->groupBy('id_cotizacion');
+                foreach ($byCotizacion as $idCotizacion => $group) {
+                    $keepIds = $group->pluck('id_cotizacion_proveedor_item')->filter()->map(fn ($v) => (int) $v)->values()->all();
+                    $existing = BoletinQuimicoCotizacionItem::where('id_cotizacion', (int) $idCotizacion)->get();
+                    foreach ($existing as $row) {
+                        $provId = (int) ($row->id_cotizacion_proveedor_item ?? 0);
+                        if ($provId > 0 && in_array($provId, $keepIds, true)) {
+                            continue;
+                        }
+                        if ($row->pagos()->exists()) {
+                            continue;
+                        }
+                        $row->delete();
+                    }
+                }
+            }
+
+            foreach ($items as $item) {
+                $idCotizacion = (int) $item['id_cotizacion'];
+                $idProvItem = isset($item['id_cotizacion_proveedor_item']) ? (int) $item['id_cotizacion_proveedor_item'] : null;
+                $monto = (float) $item['monto_boletin'];
+
+                $existing = BoletinQuimicoCotizacionItem::where('id_cotizacion', $idCotizacion)
+                    ->where('id_cotizacion_proveedor_item', $idProvItem)
+                    ->first();
+
+                if ($existing) {
+                    $existing->update(['monto_boletin' => $monto]);
+                    $saved[] = $existing->fresh();
                     continue;
                 }
-                $row = BoletinQuimicoCotizacionItem::create([
+
+                $saved[] = BoletinQuimicoCotizacionItem::create([
                     'id_contenedor' => $idContenedor,
-                    'id_cotizacion' => $item['id_cotizacion'],
-                    'id_cotizacion_proveedor_item' => $item['id_cotizacion_proveedor_item'] ?? null,
-                    'monto_boletin' => $item['monto_boletin'],
+                    'id_cotizacion' => $idCotizacion,
+                    'id_cotizacion_proveedor_item' => $idProvItem,
+                    'monto_boletin' => $monto,
                     'estado' => BoletinQuimicoCotizacionItem::ESTADO_PENDIENTE,
                 ]);
-                $created[] = $row;
             }
-            return response()->json(['success' => true, 'message' => count($created) . ' registro(s) creado(s)', 'data' => $created]);
+
+            if ($request->boolean('sync_cargos_extra_bq')) {
+                $sums = collect($items)->groupBy('id_cotizacion')->map(function ($group) {
+                    return (float) $group->sum('monto_boletin');
+                });
+                foreach ($sums as $idCotizacion => $total) {
+                    $this->syncBqDeliveryServicioLine((int) $idCotizacion, $total);
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => count($saved) . ' registro(s) guardado(s)',
+                'data' => $saved,
+            ]);
         } catch (\Exception $e) {
             Log::error('BoletinQuimicoController store: ' . $e->getMessage());
+
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Crea o actualiza la línea BQ en cargos extra con la suma de montos del boletín.
+     */
+    private function syncBqDeliveryServicioLine(int $idCotizacion, float $importe): void
+    {
+        $table = 'contenedor_consolidado_cotizacion_delivery_servicio';
+        $row = DB::table($table)
+            ->where('id_cotizacion', $idCotizacion)
+            ->whereRaw("UPPER(TRIM(tipo_servicio)) = 'BQ'")
+            ->first();
+
+        if ($row) {
+            DB::table($table)->where('id', $row->id)->update(['importe' => $importe]);
+
+            return;
+        }
+
+        DB::table($table)->insert([
+            'id_cotizacion' => $idCotizacion,
+            'tipo_servicio' => 'BQ',
+            'importe' => $importe,
+        ]);
     }
 
     /**

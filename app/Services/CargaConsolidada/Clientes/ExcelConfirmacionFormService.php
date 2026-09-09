@@ -510,7 +510,7 @@ class ExcelConfirmacionFormService
         if ($cerrado) {
             $proveedor->excel_conf_status = 'Revisado';
         } elseif (strcasecmp((string) $proveedor->excel_conf_status, 'Revisado') === 0) {
-            $proveedor->excel_conf_status = 'Recibido';
+            $proveedor->excel_conf_status = 'Entregado';
         }
 
         if (!$proveedor->save()) {
@@ -752,7 +752,7 @@ class ExcelConfirmacionFormService
             return;
         }
 
-        $proveedor->excel_conf_status = 'Recibido';
+        $proveedor->excel_conf_status = 'Entregado';
         $proveedor->excel_conf_form_cerrado = false;
         $proveedor->save();
     }
@@ -799,7 +799,7 @@ class ExcelConfirmacionFormService
         }
 
         CotizacionProveedor::where('id', $proveedorId)->update([
-            'excel_conf_status' => $allComplete ? 'Recibido' : 'Pendiente',
+            'excel_conf_status' => $allComplete ? 'Entregado' : 'Pendiente',
             'excel_conf_form_cerrado' => false,
         ]);
     }
@@ -822,8 +822,8 @@ class ExcelConfirmacionFormService
 
         foreach ($labels as $label) {
             $normalized = strtolower(rtrim(trim((string) $label), ':'));
-            // Marca y Modelo son opcionales (en front se llenan con S/M al confirmar guardar)
-            if ($normalized === 'marca' || $normalized === 'modelo') {
+            // Solo «Incluye» es opcional; el resto de características son obligatorias
+            if ($normalized === 'incluye') {
                 continue;
             }
 

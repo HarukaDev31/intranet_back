@@ -3,26 +3,23 @@
 namespace App\Jobs;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\AlmacenInspection;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
-use App\Traits\UsesObjectStorage;
 use App\Traits\WhatsappTrait;
 use App\Traits\DatabaseConnectionTrait;
 use Carbon\Carbon;
 
 class SendInspectionMediaJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, UsesObjectStorage, WhatsappTrait, DatabaseConnectionTrait;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WhatsappTrait, DatabaseConnectionTrait;
 
     protected $idProveedor;
     protected $idCotizacion;
@@ -182,7 +179,7 @@ class SendInspectionMediaJob implements ShouldQueue
                 $sendStatus = false;
             }
 
-            // Enviar mensaje principal (fotos/videos se envían después por separado): incluir link a vista inspección
+            // Solo pb_inspeccion_llegada_v1 (máx. 1 vez/proveedor). Sin imagen/video WA.
             $qtyBoxChina = (int) ($proveedor->qty_box_china ?? $proveedor->qty_box ?? 0);
             $qtyPalletChina = (int) ($proveedor->qty_pallet_china ?? 0);
             $baseUrl = rtrim((string) config('app.url_clientes'), '/');
@@ -195,97 +192,52 @@ class SendInspectionMediaJob implements ShouldQueue
                 $inspeccionLink
             );
 
-            $metaLlegada = CoordinacionWhatsappPayload::inspeccionLlegada(
-                $telefono,
-                (string) $cliente,
-                (string) $proveedor->code_supplier,
-                $qtyBoxChina,
-                $qtyPalletChina,
-                $inspeccionLink,
-                $message
-            );
-            $this->sendMessage($message, $telefono, 0, 'consolidado', $metaLlegada);
-            Log::info("Mensaje principal enviado", ['telefono' => $telefono]);
+            $alreadySentLlegada = AlmacenInspection::where('id_proveedor', $this->idProveedor)
+                ->where('send_status', 'SENDED')
+                ->exists();
 
+            $llegadaEnviada = false;
+            if (!$alreadySentLlegada) {
+                $metaLlegada = CoordinacionWhatsappPayload::inspeccionLlegada(
+                    $telefono,
+                    (string) $cliente,
+                    (string) $proveedor->code_supplier,
+                    $qtyBoxChina,
+                    $qtyPalletChina,
+                    $inspeccionLink,
+                    $message
+                );
+                $this->sendMessage($message, $telefono, 0, 'consolidado', $metaLlegada);
+                $llegadaEnviada = true;
+                Log::info('Mensaje pb_inspeccion_llegada_v1 enviado', ['telefono' => $telefono]);
+            } else {
+                Log::info('Inspección job: se omite pb_inspeccion_llegada_v1 (ya enviado)', [
+                    'id_proveedor' => $this->idProveedor,
+                ]);
+            }
 
-            // Obtener código del proveedor para el mensaje
-            $codeSupplier = $proveedor->code_supplier;
-
-            // Procesar y enviar imágenes
-            $imagenesEnviadas = 0;
+            // Marcar media como SENDED sin enviar plantillas imagen/video
+            $imagenesMarcadas = 0;
             foreach ($imagesUrls as $image) {
-                // Generar URL pública del archivo
-                $publicUrl = $this->generatePublicUrl($image->file_path);
-                
-                if ($publicUrl) {
-                    $caption = '📦 Inspección — proveedor ' . $codeSupplier . ' 📦';
-                    $meta = CoordinacionWhatsappPayload::inspeccionImagen(
-                        $telefono,
-                        (string) $codeSupplier,
-                        (string) $image->file_path,
-                        $caption
-                    );
-                    $this->sendMediaInspectionToController(
-                        $image->file_path,
-                        $image->file_type,
-                        $codeSupplier,
-                        $telefono,
-                        0,
-                        $image->id,
-                        null,
-                        $meta
-                    );
-                    $imagenesEnviadas++;
-                    Log::info('Imagen enviada con URL', [
-                        'file_path' => $image->file_path,
-                        'url' => $publicUrl,
-                        'code_supplier' => $codeSupplier
-                    ]);
-                } else {
-                    Log::error('No se pudo generar URL pública para imagen: ' . $image->file_path);
+                if (($image->send_status ?? '') !== 'SENDED') {
+                    AlmacenInspection::where('id', $image->id)->update(['send_status' => 'SENDED']);
+                    $imagenesMarcadas++;
                 }
             }
-
-            // Procesar y enviar videos
-            $videosEnviados = 0;
+            $videosMarcados = 0;
             foreach ($videosUrls as $video) {
-                // Generar URL pública del archivo
-                $publicUrl = $this->generatePublicUrl($video->file_path);
-                
-                if ($publicUrl) {
-                    $caption = '📦 Inspección — proveedor ' . $codeSupplier . ' 📦';
-                    $meta = CoordinacionWhatsappPayload::inspeccionVideo(
-                        $telefono,
-                        (string) $codeSupplier,
-                        (string) $video->file_path,
-                        $caption
-                    );
-                    $this->sendMediaInspectionToController(
-                        $video->file_path,
-                        $video->file_type,
-                        $codeSupplier,
-                        $telefono,
-                        0,
-                        $video->id,
-                        null,
-                        $meta
-                    );
-                    $videosEnviados++;
-                    Log::info('Video enviado con URL', [
-                        'file_path' => $video->file_path,
-                        'url' => $publicUrl,
-                        'code_supplier' => $codeSupplier
-                    ]);
-                } else {
-                    Log::error('No se pudo generar URL pública para video: ' . $video->file_path);
+                if (($video->send_status ?? '') !== 'SENDED') {
+                    AlmacenInspection::where('id', $video->id)->update(['send_status' => 'SENDED']);
+                    $videosMarcados++;
                 }
             }
 
-            Log::info("Job de inspección completado exitosamente", [
+            Log::info('Job de inspección completado exitosamente', [
                 'id_proveedor' => $this->idProveedor,
-                'imagenes_enviadas' => $imagenesEnviadas,
-                'videos_enviados' => $videosEnviados,
-                'mensaje_principal_enviado' => $sendStatus
+                'llegada_enviada' => $llegadaEnviada,
+                'imagenes_marcadas' => $imagenesMarcadas,
+                'videos_marcados' => $videosMarcados,
+                'mensaje_principal_enviado' => $sendStatus,
             ]);
         } catch (\Exception $e) {
             Log::error('Error en SendInspectionMediaJob: ' . $e->getMessage(), [
@@ -316,50 +268,5 @@ class SendInspectionMediaJob implements ShouldQueue
 
         // Aquí podrías enviar una notificación al administrador o revertir cambios
         // Por ejemplo, cambiar el estado del proveedor de vuelta si es necesario
-    }
-
-    /**
-     * Genera una URL pública para un archivo almacenado
-     * 
-     * @param string $filePath Ruta del archivo (puede ser relativa o absoluta)
-     * @return string|null URL pública del archivo o null si falla
-     */
-    private function generatePublicUrl($filePath)
-    {
-        try {
-            // Si ya es una URL completa, devolverla tal como está
-            if (filter_var($filePath, FILTER_VALIDATE_URL)) {
-                return $filePath;
-            }
-
-            // Limpiar la ruta
-            $ruta = ltrim($filePath, '/');
-
-            // Si la ruta empieza con 'public/', removerlo
-            if (strpos($ruta, 'public/') === 0) {
-                $ruta = substr($ruta, 7);
-            }
-
-            // Construir URL manualmente
-            $baseUrl = config('app.url');
-            $baseUrl = rtrim($baseUrl, '/');
-            $ruta = ltrim($ruta, '/');
-
-            // Generar URL completa
-            $publicUrl = $baseUrl . '/storage/' . $ruta;
-
-            Log::info("URL pública generada", [
-                'file_path' => $filePath,
-                'public_url' => $publicUrl
-            ]);
-
-            return $publicUrl;
-        } catch (\Exception $e) {
-            Log::error("Error al generar URL pública: " . $e->getMessage(), [
-                'file_path' => $filePath,
-                'trace' => $e->getTraceAsString()
-            ]);
-            return null;
-        }
     }
 }

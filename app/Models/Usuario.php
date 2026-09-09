@@ -17,11 +17,14 @@ class Usuario extends Authenticatable implements JWTSubject
     const ROL_DOCUMENTACION = 'Documentacion';
     const ROL_CATALOGO_CHINA = 'CatalogoChina';
     const ROL_JEFE_IMPORTACION = 'Jefe Importacion';
+    const ROL_COORDINADOR_GENERAL = 'Coordinador General';
     const ROL_CONTABILIDAD = 'Contabilidad';
     const ROL_GERENCIA = 'GERENCIA';
     const JEFE_MARKETING = 'Jefe Marketing';
     const ROL_SOPORTE = 'Soporte';
     const ROL_PM = 'PM';
+    const ROL_FINANZAS = 'Finanzas';
+    const ROL_RRHH = 'RRHH';
     protected $fillable = [
         'No_Usuario',
         'No_Password',
@@ -185,14 +188,59 @@ class Usuario extends Authenticatable implements JWTSubject
      *
      * @return string[]
      */
-    public static function rolesConAccesoWhatsappInbox()
+    /**
+     * Roles con los mismos permisos operativos que Jefe de Importaciones en carga consolidada.
+     *
+     * @return string[]
+     */
+    public static function rolesEquivalentesJefeImportacion()
     {
         return [
-            self::ROL_COORDINACION,
-            self::ROL_CONTABILIDAD,
-            self::ROL_ADMINISTRACION,
             self::ROL_JEFE_IMPORTACION,
+            self::ROL_COORDINADOR_GENERAL,
         ];
+    }
+
+    public static function rolEquivaleJefeImportacion($rol)
+    {
+        if ($rol === null || $rol === '') {
+            return false;
+        }
+
+        return in_array(trim((string) $rol), self::rolesEquivalentesJefeImportacion(), true);
+    }
+
+    public function usuarioEquivaleJefeImportacion()
+    {
+        return self::rolEquivaleJefeImportacion($this->getNombreGrupo());
+    }
+
+    /**
+     * Verifica si el usuario tiene los mismos accesos que el Jefe de Ventas
+     * (GINO, identificado por ID_JEFE_VENTAS) dentro del flujo de carga consolidada:
+     * es el propio GINO o pertenece al rol RRHH.
+     *
+     * @return bool
+     */
+    public function esJefeVentasOEquivalente()
+    {
+        if ($this->getIdUsuario() === self::ID_JEFE_VENTAS) {
+            return true;
+        }
+
+        return trim((string) $this->getNombreGrupo()) === self::ROL_RRHH;
+    }
+
+    public static function rolesConAccesoWhatsappInbox()
+    {
+        return array_values(array_unique(array_merge(
+            [
+                self::ROL_COORDINACION,
+                self::ROL_CONTABILIDAD,
+                self::ROL_ADMINISTRACION,
+            ],
+            self::rolesEquivalentesJefeImportacion()
+        )));
     }
 
     /**

@@ -40,6 +40,7 @@ class EnsureCopilotoWaAccess
         $allowed = $grupo === Usuario::ROL_COTIZADOR
             || $grupo === Usuario::ROL_ADMINISTRACION
             || $grupo === Usuario::ROL_GERENCIA
+            || $grupo === Usuario::ROL_RRHH
             || $userId === self::JEFE_VENTAS_ID;
 
         if (!$allowed) {

@@ -1,0 +1,17 @@
+slug: soporte
+id_grupo: 1226
+nombre: Soporte
+descripcion: 'Manual del rol Soporte'
+menus:
+  -
+    id_menu: 307
+    titulo: Soporte
+    url: soporte-ti
+  -
+    id_menu: 308
+    titulo: 'Soporte → Soporte'
+    url: soporte-ti
+  -
+    id_menu: 1
+    titulo: Inicio
+    url: InicioController

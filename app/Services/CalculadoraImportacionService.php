@@ -748,20 +748,6 @@ class CalculadoraImportacionService
     }
 
     /**
-     * Normaliza DNI/RUC desde clienteInfo (camel o snake).
-     *
-     * @param  array  $clienteInfo
-     * @return string  'DNI'|'RUC'
-     */
-    private function resolveTipoDocumento(array $clienteInfo): string
-    {
-        $raw = $clienteInfo['tipoDocumento'] ?? $clienteInfo['tipo_documento'] ?? 'DNI';
-        $tipo = strtoupper(trim((string) $raw));
-
-        return $tipo === 'RUC' ? 'RUC' : 'DNI';
-    }
-
-    /**
      * Normaliza origen_marketing (nullable; mismos valores que carga consolidada).
      *
      * @param  mixed  $value

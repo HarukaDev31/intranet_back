@@ -15,6 +15,7 @@ use App\Jobs\ProcessPackingListUploadJob;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use App\Models\CalculadoraImportacion;
@@ -26,6 +27,7 @@ use App\Traits\GoogleSheetsHelper;
 use Carbon\Carbon;
 use App\Models\CargaConsolidada\Pago;
 use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
+use App\Services\CargaConsolidada\CargaConsolidadaCacheService;
 
 class ContenedorController extends Controller
 {
@@ -39,6 +41,7 @@ class ContenedorController extends Controller
     private $defaultDocumentacion = [];
     private $defaultJefeImportacion = [];
     private $defaultJefeMarketing = [];
+    private $defaultFinanzas = [];
     public function __construct()
     {
         $host = rtrim(config('app.url') ?? env('APP_URL'), '/');
@@ -84,6 +87,13 @@ class ContenedorController extends Controller
         $this->defaultJefeMarketing = array(
             ["name" => "COTIZACION", "iconURL" => $host . '/assets/icons/cotizacion.png'],
             ["name" => "CLIENTES", "iconURL" => $host . '/assets/icons/clientes.png'],
+            ["name" => "COTIZACION FINAL", "iconURL" => $host . '/assets/icons/cotizacion_final.png'],
+            ["name" => "ENTREGA", "iconURL" => $host . '/assets/icons/entrega.png'],
+        );
+        $this->defaultFinanzas = array(
+            ["name" => "CLIENTES", "iconURL" => $host . '/assets/icons/clientes.png'],
+            ["name" => "COTIZACION FINAL", "iconURL" => $host . '/assets/icons/cotizacion_final.png'],
+            
         );
     }
 
@@ -117,217 +127,272 @@ class ContenedorController extends Controller
     public function index(Request $request)
     {
         try {
-
-            $query = Contenedor::with(['pais', 'tcYuan']);
             $user = JWTAuth::parseToken()->authenticate();
-            // Aceptar completado como booleano; si viene por query puede ser string "true"/"false"
-            $completado = filter_var($request->completado, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
-            if ($completado === null) {
-                $completado = false;
-            }
-            // Si el token es Jefe Importación y la petición envía "role", usar ese rol para filtrar (vista coordinación vs documentación)
             $effectiveRole = $user->getNombreGrupo();
-            if ($user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION && $request->filled('role')) {
+            if ($user->usuarioEquivaleJefeImportacion() && $request->filled('role')) {
                 $requestedRole = trim((string) $request->role);
                 if (in_array($requestedRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
                     $effectiveRole = $requestedRole;
                 }
             }
-            if ($effectiveRole == Usuario::ROL_DOCUMENTACION || $effectiveRole == Usuario::ROL_JEFE_IMPORTACION ) {
-                if ($completado) {
-                    $query->where('estado_documentacion', '=', Contenedor::CONTEDOR_CERRADO);
-                } else {
-                    $query->where('estado_documentacion', '!=', Contenedor::CONTEDOR_CERRADO);
-                }
-            } 
-            
-            else {
-                if ($completado) {
-                    $query->where('estado_china', '=', Contenedor::CONTEDOR_CERRADO);
-                } else {
-                    $query->where('estado_china', '!=', Contenedor::CONTEDOR_CERRADO);
-                }
-            }
-            //where empresa is 1 x
-            $query->where('empresa', '!=', 1);
-            //filtrar por los que f_cierre no este vacio
 
-            //filtrar por buscador
-            if ($request->has('search') && !empty($request->search)) {
-                $search = $request->search;
-                $query->where(function ($q) use ($search) {
-                    $q->where('carga', 'LIKE', "%$search%")
-                        ->orWhere('mes', 'LIKE', "%$search%");
-                });
-            }
-
-            //order by int(carga) desc; subconsolidados: C → B → A (letra DESC)
-            $query->orderBy(DB::raw('YEAR(f_inicio)'), 'DESC');
-            $query->orderByRaw('CAST(carga AS UNSIGNED) DESC');
-            $query->orderByRaw("CASE WHEN parte IS NULL OR parte = '' THEN 0 ELSE 1 END ASC");
-            $query->orderByRaw('parte DESC');
-            $data = $query->paginate(100);
-
-            // Optimización: obtener todos los ids de la página y hacer agregaciones en lote.
-            $pageIds = collect($data->items())->pluck('id')->all();
-            $cbmVendidos = [];
-            $cbmEmbarcados = [];
-            if ($pageIds) {
-                // Vendidos (usa lógica proporcionada: china = suma confirmados de proveedores, peru = subconsulta volumen confirmados)
-                $vendRows = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
-                    ->join('contenedor_consolidado_cotizacion as cc', 'cccp.id_cotizacion', '=', 'cc.id')
-                    ->whereIn('cccp.id_contenedor', $pageIds)
-                    ->whereNull('cc.deleted_at')
-                    ->select([
-                        'cccp.id_contenedor',
-                        DB::raw('COALESCE(SUM(IF(cc.estado_cotizador = "CONFIRMADO", cccp.cbm_total_china, 0)),0) as cbm_total_china'),
-                        DB::raw('(
-                            SELECT COALESCE(SUM(volumen), 0)
-                            FROM contenedor_consolidado_cotizacion
-                            WHERE id_contenedor = cccp.id_contenedor
-                            AND estado_cotizador = "CONFIRMADO"
-                            AND deleted_at IS NULL
-                        ) as cbm_total_peru')
-                    ])
-                    ->groupBy('cccp.id_contenedor')
-                    ->get();
-                foreach ($vendRows as $r) {
-                    $cbmVendidos[$r->id_contenedor] = [
-                        'peru' => (float)$r->cbm_total_peru,
-                        'china' => (float)$r->cbm_total_china,
-                    ];
-                }
-                // Embarcados (estado proveedor EMBARCADO) - solo tenemos cbm_total_china, Peru se debe derivar igual que vendidos pero restringido a EMBARCADO.
-                $embRows = DB::table('contenedor_consolidado_cotizacion_proveedores as p')
-                    ->join('contenedor_consolidado_cotizacion as cc', 'p.id_cotizacion', '=', 'cc.id')
-                    ->whereIn('p.id_contenedor', $pageIds)
-                    ->whereNull('cc.deleted_at')
-                    ->select([
-                        'p.id_contenedor',
-                        // China: sólo confirmados
-                        DB::raw('SUM(IF(cc.estado_cotizador = "CONFIRMADO", p.cbm_total_china, 0)) as sum_china'),
-                        // Perú: confirmados y embarcados (LOADED)
-                        DB::raw('(SELECT COALESCE(SUM(cc2.volumen), 0)
-                                    FROM contenedor_consolidado_cotizacion cc2
-                                    WHERE cc2.id IN (
-                                        SELECT DISTINCT p2.id_cotizacion
-                                        FROM contenedor_consolidado_cotizacion_proveedores p2
-                                        WHERE p2.id_contenedor = p.id_contenedor
-                                    )
-                                    AND cc2.estado_cotizador = "CONFIRMADO"
-                                    AND cc2.deleted_at IS NULL) as sum_peru')
-                    ])
-                    ->whereNull('cc.id_cliente_importacion')
-                    ->groupBy('p.id_contenedor')
-                    ->get();
-                foreach ($embRows as $r) {
-                    $cbmEmbarcados[$r->id_contenedor] = [
-                        'peru' => (float)$r->sum_peru,
-                        'china' => (float)$r->sum_china,
-                    ];
-                }
-            }
-
-            // Estado permiso por tipo_permiso (vista Coordinación / Documentación)
-            $estadoPermisoPorContenedor = [];
-            if ($pageIds && in_array($effectiveRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
-                $tramites = ConsolidadoCotizacionAduanaTramite::whereIn('id_consolidado', $pageIds)
-                    ->with(['tiposPermiso' => function ($q) { $q->withTrashed(); }])
-                    ->get();
-                foreach ($tramites as $tramite) {
-                    $idConsolidado = $tramite->id_consolidado;
-                    foreach ($tramite->tiposPermiso as $tipo) {
-                        $pivot = $tipo->pivot;
-                        $estado = $pivot->estado ?? 'PENDIENTE';
-                        if (!isset($estadoPermisoPorContenedor[$idConsolidado][$tipo->id])) {
-                            $estadoPermisoPorContenedor[$idConsolidado][$tipo->id] = [
-                                'id_tipo_permiso' => $tipo->id,
-                                'nombre_permiso' => $tipo->nombre ?? 'Permiso',
-                                'estado' => $estado,
-                            ];
-                        } else {
-                            // Si ya existe, preferir estado "menos completo" (PENDIENTE > EN_TRAMITE > COMPLETADO)
-                            $orden = ['PENDIENTE' => 0, 'SD' => 1, 'EN_TRAMITE' => 2, 'PAGADO' => 3, 'RECHAZADO' => 4, 'COMPLETADO' => 5];
-                            $actual = $estadoPermisoPorContenedor[$idConsolidado][$tipo->id]['estado'];
-                            if (($orden[$estado] ?? 99) < ($orden[$actual] ?? 99)) {
-                                $estadoPermisoPorContenedor[$idConsolidado][$tipo->id]['estado'] = $estado;
-                            }
-                        }
-                    }
-                }
-                // Convertir a listas indexadas por contenedor
-                foreach ($estadoPermisoPorContenedor as $id => $porTipo) {
-                    $estadoPermisoPorContenedor[$id] = array_values($porTipo);
-                }
-            }
-
-            $items = collect($data->items())->map(function ($c) use ($cbmVendidos, $cbmEmbarcados, $estadoPermisoPorContenedor, $effectiveRole) {
-                $cbm_total_peru = 0;
-                $cbm_total_china = 0;
-                if ($c->estado_china === Contenedor::CONTEDOR_CERRADO) {
-                    $vals = $cbmEmbarcados[$c->id] ?? ['peru' => 0, 'china' => 0];
-                    $cbm_total_peru = $vals['peru'];
-                    $cbm_total_china = $vals['china'];
-                } else {
-                    $vals = $cbmVendidos[$c->id] ?? ['peru' => 0, 'china' => 0];
-                    $cbm_total_peru = $vals['peru'];
-                    $cbm_total_china = $vals['china'];
-                }
-                return [
-                    'id' => $c->id,
-                    'carga' => $c->formatCargaLabel(),
-                    'parte' => $c->parte,
-                    'id_contenedor_origen' => $c->id_contenedor_origen,
-                    'mes' => $c->mes,
-                    'anio' => date('Y', strtotime($c->f_inicio)),
-                    'f_cierre' => $c->f_cierre,
-                    'f_puerto' => $c->f_puerto,
-                    'f_entrega' => $c->f_entrega,
-                    'fecha_arribo' => $c->fecha_arribo,
-                    'fecha_declaracion' => $c->fecha_declaracion,
-                    'fecha_levante' => $c->fecha_levante,
-                    'fecha_zarpe' => $c->fecha_zarpe,
-                    'empresa' => $c->empresa,
-                    'estado_documentacion' => $c->estado_documentacion,
-                    'estado_china' => $c->estado_china,
-                    'pais' => $c->pais,
-                    'tipo_contenedor' => $c->tipo_contenedor,
-                    'canal_control' => $c->canal_control,
-                    'naviera' => $c->naviera,
-                    'ajuste_valor' => $c->ajuste_valor,
-                    'multa' => $c->multa,
-                    'valor_fob' => $c->valor_fob,
-                    'valor_flete' => $c->valor_flete,
-                    'costo_destino' => $c->costo_destino,
-                    'limite_cbm_imo' => $c->limite_cbm_imo,
-                    'tc_yuan' => $c->tcYuan ? (float) $c->tcYuan->tc_yuan : null,
-                    //colocar decimales
-                    'cbm_total_peru' => number_format($cbm_total_peru, 2),
-                    'cbm_total_china' => number_format($cbm_total_china, 2),
-                ] + (in_array($effectiveRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)
-                    ? ['estado_permiso_por_tipo' => $estadoPermisoPorContenedor[$c->id] ?? []]
-                    : []);
-            });
-
-            return response()->json([
-                'success' => true,
-                'data' => $items,
-                'pagination' => [
-                    'current_page' => $data->currentPage(),
-                    'last_page' => $data->lastPage(),
-                    'per_page' => $data->perPage(),
-                    'total' => $data->total(),
-                    'from' => $data->firstItem(),
-                    'to' => $data->lastItem(),
-                ]
-
-            ]);
+            return response()->json($this->buildContenedorIndexPayload($request, $effectiveRole));
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener contenedores: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildContenedorIndexPayload(Request $request, string $effectiveRole): array
+    {
+        $query = Contenedor::with(['pais', 'tcYuan']);
+        $completado = filter_var($request->completado, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($completado === null) {
+            $completado = false;
+        }
+        if ($effectiveRole == Usuario::ROL_DOCUMENTACION || Usuario::rolEquivaleJefeImportacion($effectiveRole)) {
+            if ($completado) {
+                $query->where('estado_documentacion', '=', Contenedor::CONTEDOR_CERRADO);
+            } else {
+                $query->where('estado_documentacion', '!=', Contenedor::CONTEDOR_CERRADO);
+            }
+        } else {
+            if ($completado) {
+                $query->where('estado_china', '=', Contenedor::CONTEDOR_CERRADO);
+            } else {
+                $query->where('estado_china', '!=', Contenedor::CONTEDOR_CERRADO);
+            }
+        }
+        $query->where('empresa', '!=', 1);
+
+        if ($request->has('search') && !empty($request->search)) {
+            $search = trim((string) $request->search);
+            $query->where(function ($q) use ($search) {
+                $q->where('carga', 'LIKE', "%$search%")
+                    ->orWhere('mes', 'LIKE', "%$search%");
+            });
+        }
+
+        if ($request->filled('estado_finanzas') && strtolower((string) $request->estado_finanzas) !== 'todos') {
+            $query->where('estado_finanzas', $request->estado_finanzas);
+        }
+
+        $yearsQuery = clone $query;
+        $yearsQuery->getQuery()->orders = null;
+        $aniosDisponibles = $yearsQuery
+            ->without(['pais', 'tcYuan'])
+            ->whereNotNull('f_inicio')
+            ->selectRaw('YEAR(f_inicio) as anio')
+            ->groupBy('anio')
+            ->orderBy('anio', 'desc')
+            ->pluck('anio')
+            ->map(function ($year) {
+                return (int) $year;
+            })
+            ->filter(function ($year) {
+                return $year > 0;
+            })
+            ->values()
+            ->all();
+
+        $anio = $request->input('anio', $request->input('year'));
+        if ($anio !== null && $anio !== '' && strtolower((string) $anio) !== 'todos') {
+            $anioInt = (int) $anio;
+            if ($anioInt >= 2000 && $anioInt <= 2100) {
+                $query->whereYear('f_inicio', $anioInt);
+            }
+        }
+
+        $query->orderBy(DB::raw('YEAR(f_inicio)'), 'DESC');
+        $query->orderByRaw('CAST(carga AS UNSIGNED) DESC');
+        $query->orderByRaw("CASE WHEN parte IS NULL OR parte = '' THEN 0 ELSE 1 END ASC");
+        $query->orderByRaw('parte DESC');
+
+        $allowedPerPage = [5, 10, 20, 100];
+        $perPage = (int) $request->input('limit', $request->input('per_page', 20));
+        if (!in_array($perPage, $allowedPerPage, true)) {
+            $perPage = 20;
+        }
+        $page = max(1, (int) $request->input('page', 1));
+        $data = $query->paginate($perPage, ['*'], 'page', $page);
+
+        $pageIds = collect($data->items())->pluck('id')->all();
+        ['vendidos' => $cbmVendidos, 'embarcados' => $cbmEmbarcados] = $this->loadCbmTotalsForContenedores($pageIds);
+
+        $estadoPermisoPorContenedor = [];
+        if ($pageIds && in_array($effectiveRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
+            $tramites = ConsolidadoCotizacionAduanaTramite::whereIn('id_consolidado', $pageIds)
+                ->with(['tiposPermiso' => function ($q) { $q->withTrashed(); }])
+                ->get();
+            foreach ($tramites as $tramite) {
+                $idConsolidado = $tramite->id_consolidado;
+                foreach ($tramite->tiposPermiso as $tipo) {
+                    $pivot = $tipo->pivot;
+                    $estado = $pivot->estado ?? 'PENDIENTE';
+                    if (!isset($estadoPermisoPorContenedor[$idConsolidado][$tipo->id])) {
+                        $estadoPermisoPorContenedor[$idConsolidado][$tipo->id] = [
+                            'id_tipo_permiso' => $tipo->id,
+                            'nombre_permiso' => $tipo->nombre ?? 'Permiso',
+                            'estado' => $estado,
+                        ];
+                    } else {
+                        $orden = ['PENDIENTE' => 0, 'SD' => 1, 'EN_TRAMITE' => 2, 'PAGADO' => 3, 'RECHAZADO' => 4, 'COMPLETADO' => 5];
+                        $actual = $estadoPermisoPorContenedor[$idConsolidado][$tipo->id]['estado'];
+                        if (($orden[$estado] ?? 99) < ($orden[$actual] ?? 99)) {
+                            $estadoPermisoPorContenedor[$idConsolidado][$tipo->id]['estado'] = $estado;
+                        }
+                    }
+                }
+            }
+            foreach ($estadoPermisoPorContenedor as $id => $porTipo) {
+                $estadoPermisoPorContenedor[$id] = array_values($porTipo);
+            }
+        }
+
+        $items = collect($data->items())->map(function ($c) use ($cbmVendidos, $cbmEmbarcados, $estadoPermisoPorContenedor, $effectiveRole) {
+            $cbm_total_peru = 0;
+            $cbm_total_china = 0;
+            if ($c->estado_china === Contenedor::CONTEDOR_CERRADO) {
+                $vals = $cbmEmbarcados[$c->id] ?? ['peru' => 0, 'china' => 0];
+                $cbm_total_peru = $vals['peru'];
+                $cbm_total_china = $vals['china'];
+            } else {
+                $vals = $cbmVendidos[$c->id] ?? ['peru' => 0, 'china' => 0];
+                $cbm_total_peru = $vals['peru'];
+                $cbm_total_china = $vals['china'];
+            }
+            return [
+                'id' => $c->id,
+                'carga' => $c->formatCargaLabel(),
+                'parte' => $c->parte,
+                'id_contenedor_origen' => $c->id_contenedor_origen,
+                'mes' => $c->mes,
+                'anio' => date('Y', strtotime($c->f_inicio)),
+                'f_cierre' => $c->f_cierre,
+                'f_puerto' => $c->f_puerto,
+                'f_entrega' => $c->f_entrega,
+                'fecha_arribo' => $c->fecha_arribo,
+                'fecha_declaracion' => $c->fecha_declaracion,
+                'fecha_levante' => $c->fecha_levante,
+                'fecha_zarpe' => $c->fecha_zarpe,
+                'empresa' => $c->empresa,
+                'estado_documentacion' => $c->estado_documentacion,
+                'estado_china' => $c->estado_china,
+                'estado_finanzas' => $c->estado_finanzas,
+                'pais' => $c->pais,
+                'tipo_contenedor' => $c->tipo_contenedor,
+                'canal_control' => $c->canal_control,
+                'naviera' => $c->naviera,
+                'ajuste_valor' => $c->ajuste_valor,
+                'multa' => $c->multa,
+                'valor_fob' => $c->valor_fob,
+                'valor_flete' => $c->valor_flete,
+                'costo_destino' => $c->costo_destino,
+                'limite_cbm_imo' => $c->limite_cbm_imo,
+                'tc_yuan' => $c->tcYuan ? (float) $c->tcYuan->tc_yuan : null,
+                'cbm_total_peru' => number_format($cbm_total_peru, 2),
+                'cbm_total_china' => number_format($cbm_total_china, 2),
+            ] + (in_array($effectiveRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)
+                ? ['estado_permiso_por_tipo' => $estadoPermisoPorContenedor[$c->id] ?? []]
+                : []);
+        });
+
+        return [
+            'success' => true,
+            'data' => $items,
+            'pagination' => [
+                'current_page' => $data->currentPage(),
+                'last_page' => $data->lastPage(),
+                'per_page' => $data->perPage(),
+                'total' => $data->total(),
+                'from' => $data->firstItem(),
+                'to' => $data->lastItem(),
+            ],
+            'filters' => [
+                'anios' => $aniosDisponibles,
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<int, int>  $pageIds
+     * @return array{vendidos: array<int, array{peru: float, china: float}>, embarcados: array<int, array{peru: float, china: float}>}
+     */
+    private function loadCbmTotalsForContenedores(array $pageIds): array
+    {
+        $empty = ['vendidos' => [], 'embarcados' => []];
+        if ($pageIds === []) {
+            return $empty;
+        }
+
+        $cbmPeruByContenedor = DB::table('contenedor_consolidado_cotizacion')
+            ->whereIn('id_contenedor', $pageIds)
+            ->where('estado_cotizador', 'CONFIRMADO')
+            ->whereNull('deleted_at')
+            ->groupBy('id_contenedor')
+            ->selectRaw('id_contenedor, COALESCE(SUM(volumen), 0) as cbm_total_peru')
+            ->pluck('cbm_total_peru', 'id_contenedor');
+
+        $cbmChinaVendidos = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
+            ->join('contenedor_consolidado_cotizacion as cc', 'cccp.id_cotizacion', '=', 'cc.id')
+            ->whereIn('cccp.id_contenedor', $pageIds)
+            ->whereNull('cc.deleted_at')
+            ->where('cc.estado_cotizador', 'CONFIRMADO')
+            ->groupBy('cccp.id_contenedor')
+            ->selectRaw('cccp.id_contenedor, COALESCE(SUM(cccp.cbm_total_china), 0) as cbm_total_china')
+            ->pluck('cbm_total_china', 'id_contenedor');
+
+        $cbmVendidos = [];
+        foreach ($pageIds as $id) {
+            $cbmVendidos[$id] = [
+                'peru' => (float) ($cbmPeruByContenedor[$id] ?? 0),
+                'china' => (float) ($cbmChinaVendidos[$id] ?? 0),
+            ];
+        }
+
+        $cbmChinaEmbarcados = DB::table('contenedor_consolidado_cotizacion_proveedores as p')
+            ->join('contenedor_consolidado_cotizacion as cc', 'p.id_cotizacion', '=', 'cc.id')
+            ->whereIn('p.id_contenedor', $pageIds)
+            ->whereNull('cc.deleted_at')
+            ->whereNull('cc.id_cliente_importacion')
+            ->where('cc.estado_cotizador', 'CONFIRMADO')
+            ->groupBy('p.id_contenedor')
+            ->selectRaw('p.id_contenedor, COALESCE(SUM(p.cbm_total_china), 0) as sum_china')
+            ->pluck('sum_china', 'id_contenedor');
+
+        $proveedoresPorContenedor = DB::table('contenedor_consolidado_cotizacion_proveedores')
+            ->whereIn('id_contenedor', $pageIds)
+            ->select('id_contenedor', 'id_cotizacion')
+            ->distinct();
+
+        $cbmPeruEmbarcados = DB::query()
+            ->fromSub($proveedoresPorContenedor, 'p')
+            ->join('contenedor_consolidado_cotizacion as cc', 'cc.id', '=', 'p.id_cotizacion')
+            ->where('cc.estado_cotizador', 'CONFIRMADO')
+            ->whereNull('cc.deleted_at')
+            ->groupBy('p.id_contenedor')
+            ->selectRaw('p.id_contenedor, COALESCE(SUM(cc.volumen), 0) as sum_peru')
+            ->pluck('sum_peru', 'id_contenedor');
+
+        $cbmEmbarcados = [];
+        foreach ($pageIds as $id) {
+            $cbmEmbarcados[$id] = [
+                'peru' => (float) ($cbmPeruEmbarcados[$id] ?? 0),
+                'china' => (float) ($cbmChinaEmbarcados[$id] ?? 0),
+            ];
+        }
+
+        return ['vendidos' => $cbmVendidos, 'embarcados' => $cbmEmbarcados];
+    }
+
+    private function invalidateContenedorListCache(): void
+    {
+        app(CargaConsolidadaCacheService::class)->invalidateModule();
     }
 
     /**
@@ -386,6 +451,8 @@ class ContenedorController extends Controller
                     );
                 }
 
+            $this->invalidateContenedorListCache();
+
             return response()->json([
                 "status"         => true,
                 'id'             => $contenedor->id,
@@ -404,7 +471,9 @@ class ContenedorController extends Controller
             $this->getCotizacionSteps($idContenedor),
             $this->getDocumentacionSteps($idContenedor),
             $this->getJefeImportacionSteps($idContenedor),
-            $this->getJefeMarketingSteps($idContenedor)
+            $this->getJefeMarketingSteps($idContenedor),
+            $this->getFinanzasSteps($idContenedor)
+
         );
     }
     public function getCotizacionSteps($idContenedor)
@@ -481,13 +550,31 @@ class ContenedorController extends Controller
 
         return $stepsJefeMarketing;
     }
-
-    public function insertSteps($stepsCotizador, $stepsDocumentacion, $stepsJefeImportacion, $stepsJefeMarketing)
+    public function getFinanzasSteps($idContenedor)
+    {
+        $stepsFinanzas = [];
+        $idContenedor = intval($idContenedor);
+        $index = 1;
+        foreach ($this->defaultFinanzas as $step) {
+            $stepsFinanzas[] = [
+                'id_pedido' => $idContenedor,
+                'id_order' => $index,
+                'tipo' => 'FINANZAS',
+                'name' => $step['name'],
+                'iconURL' => $step['iconURL'],
+                'status' => 'PENDING',
+            ];
+            $index++;
+        }
+        return $stepsFinanzas;
+    }
+    public function insertSteps($stepsCotizador, $stepsDocumentacion, $stepsJefeImportacion, $stepsJefeMarketing, $stepsFinanzas)
     {
         ContenedorPasos::insert($stepsCotizador);
         ContenedorPasos::insert($stepsDocumentacion);
         ContenedorPasos::insert($stepsJefeImportacion);
         ContenedorPasos::insert($stepsJefeMarketing);
+        ContenedorPasos::insert($stepsFinanzas);
     }
     
     /**
@@ -512,13 +599,13 @@ class ContenedorController extends Controller
         $data['tc_yuan'] = $contenedor->tcYuan ? (float) $contenedor->tcYuan->tc_yuan : null;
         $user = JWTAuth::parseToken()->authenticate();
         $effectiveRole = $user->getNombreGrupo();
-        if ($user->getNombreGrupo() == Usuario::ROL_JEFE_IMPORTACION && $request->filled('role')) {
+        if ($user->usuarioEquivaleJefeImportacion() && $request->filled('role')) {
             $requestedRole = trim((string) $request->role);
             if (in_array($requestedRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
                 $effectiveRole = $requestedRole;
             }
         }
-        $rolesConEstadoPermiso = [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_JEFE_IMPORTACION, Usuario::ROL_COTIZADOR];
+        $rolesConEstadoPermiso = array_merge([Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_COTIZADOR], Usuario::rolesEquivalentesJefeImportacion());
         if (in_array($effectiveRole, $rolesConEstadoPermiso, true)) {
             $tramites = ConsolidadoCotizacionAduanaTramite::where('id_consolidado', (int) $id)
                 ->with(['tiposPermiso' => function ($q) { $q->withTrashed(); }])
@@ -576,6 +663,14 @@ class ContenedorController extends Controller
                     'success' => false,
                     'message' => 'Contenedor no encontrado',
                 ], 404);
+            }
+
+            $estadoChina = strtoupper(trim((string) ($contenedor->estado_china ?? '')));
+            if ($estadoChina !== Contenedor::CONTEDOR_PENDIENTE) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Solo se puede eliminar un consolidado en estado PENDIENTE.',
+                ], 422);
             }
 
             DB::transaction(function () use ($contenedor) {
@@ -676,6 +771,12 @@ class ContenedorController extends Controller
                     $nuevo = $origen->replicate();
                     $nuevo->parte = $partes[$i];
                     $nuevo->id_contenedor_origen = $origen->id;
+                    $nuevo->excel_seguimiento_drive_file_id = null;
+                    $nuevo->excel_seguimiento_drive_link = null;
+                    $nuevo->excel_seguimiento_vinculado_at = null;
+                    $nuevo->excel_seguimiento_file_name = null;
+                    $nuevo->excel_seguimiento_link_status = null;
+                    $nuevo->excel_seguimiento_link_error = null;
                     $nuevo->save();
                     $this->generateSteps($nuevo->id);
 
@@ -739,7 +840,7 @@ class ContenedorController extends Controller
             $role = $user->getNombreGrupo();
             // Si el token es Jefe Importación y la petición envía "role" (query), usar ese rol para decidir qué pasos devolver
             // El role puede venir separado por coma (ej. "Coordinación,Documentacion"), se toma el primer rol válido
-            if ($role == Usuario::ROL_JEFE_IMPORTACION && $request->filled('role')) {
+            if (Usuario::rolEquivaleJefeImportacion($role) && $request->filled('role')) {
                 $rolesPermitidos = [
                     Usuario::ROL_COTIZADOR,
                     Usuario::ROL_COORDINACION,
@@ -756,7 +857,6 @@ class ContenedorController extends Controller
                 }
             }
             $query = ContenedorPasos::where('id_pedido', $idContenedor)->orderBy('id_order', 'asc');
-            Log::info('role', [$role]);
             switch ($role) {
                 case Usuario::ROL_COTIZADOR:
                     // Aseguramos que sólo consultamos pasos del cotizador
@@ -767,12 +867,16 @@ class ContenedorController extends Controller
                     }
                     $query->limit(1);
                     break;
+                case Usuario::ROL_RRHH:
+                    $query->where('tipo', 'COTIZADOR')->limit(2);
+                    break;
                 case Usuario::ROL_ADMINISTRACION:
                     $query->where('tipo', 'COTIZADOR')->where('id_order', '>', 1);
                     break;
                 case Usuario::ROL_DOCUMENTACION:
                     $query->where('tipo', 'DOCUMENTACION');
                     break;
+                case Usuario::ROL_COORDINADOR_GENERAL:
                 case Usuario::ROL_JEFE_IMPORTACION:
                     //if not exists tipe Jefe Importacion, get documentacion steps
                         $query->where('tipo', 'DOCUMENTACION');
@@ -784,12 +888,14 @@ class ContenedorController extends Controller
                 case Usuario::JEFE_MARKETING:
                     $query->where('tipo', 'JEFE MARKETING');
                     break;
+                case Usuario::ROL_FINANZAS:
+                    $query->where('tipo', 'FINANZAS');
+                    break;
                 default:
                     $query->where('tipo', 'COTIZADOR');
                     break;
             }
             $data = $query->select('id', 'name', 'status', 'iconURL')->get();
-            //FOR EACH DATA, IF ICONURL IS NOT NULL, REPLACE THE ICONURL WITH THE URL OF THE ICON
             foreach ($data as $item) {
                 $item->iconURL = $this->generateImageUrl($item->iconURL);
             }
@@ -971,19 +1077,19 @@ class ContenedorController extends Controller
     public function getTcYuanGlobal()
     {
         try {
-            if (Schema::hasTable('tc_yuan_global_historial')) {
+            $payload = Cache::remember('ccons:tc_yuan_global:v1', now()->addMinutes(5), function () {
                 $row = DB::table('tc_yuan_global_historial')->orderByDesc('id')->first();
                 if ($row && $row->tc_yuan !== null) {
-                    return response()->json(['success' => true, 'tc_yuan' => (float) $row->tc_yuan]);
+                    return ['success' => true, 'tc_yuan' => (float) $row->tc_yuan];
                 }
-            }
-            // Fallback a sistema_config por compatibilidad
-            if (Schema::hasTable('sistema_config')) {
+
                 $row = DB::table('sistema_config')->where('key', 'tc_yuan_global')->first();
                 $value = $row && $row->value !== null && $row->value !== '' ? (float) $row->value : null;
-                return response()->json(['success' => true, 'tc_yuan' => $value]);
-            }
-            return response()->json(['success' => true, 'tc_yuan' => null]);
+
+                return ['success' => true, 'tc_yuan' => $value];
+            });
+
+            return response()->json($payload);
         } catch (\Exception $e) {
             Log::error('Error al obtener TC Yuan global: ' . $e->getMessage());
             return response()->json(['success' => true, 'tc_yuan' => null]);
@@ -1018,6 +1124,7 @@ class ContenedorController extends Controller
                 'created_at' => $now,
                 'updated_at' => null,
             ]);
+            Cache::forget('ccons:tc_yuan_global:v1');
             return response()->json(['success' => true, 'tc_yuan' => $v !== null ? (float) $v : null]);
         } catch (\Exception $e) {
             Log::error('Error al guardar TC Yuan global: ' . $e->getMessage());
@@ -1097,6 +1204,7 @@ Le estaré informando cualquier avance 🫡.";
             $telefono = $telefono ? $telefono . '@c.us' : '';
             // TEMPORALMENTE DESHABILITADO: Número de ventas bloqueado
             // $this->sendMessageVentas($message, $telefono, 3);
+            $this->invalidateContenedorListCache();
             return response()->json(['message' => 'Cotización movida a consolidado correctamente', 'success' => true]);
         } catch (\Exception $e) {
             Log::error('Error al mover cotización a consolidado: ' . $e->getMessage());
@@ -1246,6 +1354,7 @@ Le estaré informando cualquier avance 🫡.";
             }
             $contenedor->estado_documentacion = $estado;
             $contenedor->save();
+            $this->invalidateContenedorListCache();
             if ($contenedor) {
                 return [
                     'success' => true,
@@ -1260,6 +1369,79 @@ Le estaré informando cualquier avance 🫡.";
             ];
         }
     }
+
+    /**
+     * @OA\Post(
+     *     path="/carga-consolidada/contenedor/estado-finanzas",
+     *     tags={"Contenedor"},
+     *     summary="Actualizar estado de finanzas",
+     *     description="Actualiza el estado_finanzas de un contenedor (PENDIENTE|COMPLETADO). Rol Finanzas.",
+     *     operationId="updateEstadoFinanzas",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="id", type="integer"),
+     *             @OA\Property(property="estado_finanzas", type="string", enum={"PENDIENTE","COMPLETADO"})
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Estado actualizado exitosamente"),
+     *     @OA\Response(response=403, description="Sin permiso"),
+     *     @OA\Response(response=404, description="Contenedor no encontrado"),
+     *     @OA\Response(response=422, description="Estado inválido")
+     * )
+     */
+    public function updateEstadoFinanzas(Request $request)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user || $user->getNombreGrupo() !== Usuario::ROL_FINANZAS) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No autorizado para actualizar el estado de finanzas',
+                ], 403);
+            }
+
+            $id = (int) $request->input('id');
+            $estado = strtoupper(trim((string) $request->input('estado_finanzas', '')));
+            $allowed = array_keys(Contenedor::ESTADOS_FINANZAS);
+
+            if (!in_array($estado, $allowed, true)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Estado de finanzas inválido. Use PENDIENTE o COMPLETADO.',
+                ], 422);
+            }
+
+            $contenedor = Contenedor::find($id);
+            if (!$contenedor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no encontrado',
+                ], 404);
+            }
+
+            $contenedor->estado_finanzas = $estado;
+            $contenedor->save();
+            $this->invalidateContenedorListCache();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Estado de finanzas actualizado correctamente',
+                'data' => [
+                    'id' => $contenedor->id,
+                    'estado_finanzas' => $contenedor->estado_finanzas,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en updateEstadoFinanzas: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar el estado de finanzas: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
     /**
      * @OA\Put(
      *     path="/carga-consolidada/contenedor/{idcontenedor}/fecha-documentacion-max",
@@ -1297,6 +1479,7 @@ Le estaré informando cualquier avance 🫡.";
 
             $contenedor->fecha_documentacion_max = $request->input('fecha_documentacion_max');
             $contenedor->save();
+            $this->invalidateContenedorListCache();
 
             return response()->json([
                 'success' => true,
@@ -1446,6 +1629,7 @@ Le estaré informando cualquier avance 🫡.";
             // Solo actualizar si hay datos para actualizar
             if (!empty($updateData)) {
                 $contenedor->update($updateData);
+                $this->invalidateContenedorListCache();
                 Log::info('Contenedor actualizado:', [
                     'id' => $idcontenedor,
                     'update_data' => $updateData
@@ -1581,7 +1765,7 @@ Le estaré informando cualquier avance 🫡.";
                     ]
                 ])
             ]);
-            //creat tambien para un cotizador 
+            //creat tambien para un cotizador
             $notificacionCotizador = Notificacion::create([
                 'titulo' => 'Cotización Movida a Consolidado',
                 'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} movió la cotización de {$cotizacion->nombre} al contenedor {$contenedorDestino->carga}",
@@ -1609,9 +1793,37 @@ Le estaré informando cualquier avance 🫡.";
                     ]
                 ])
             ]);
-           
 
-            return [$notificacionCoordinacion, $notificacionJefeVentas, $notificacionCotizador];
+            // Crear la notificación para RRHH (mismos accesos que Jefe de Ventas)
+            $notificacionRRHH = Notificacion::create([
+                'titulo' => 'Cotización Movida a Consolidado',
+                'mensaje' => "El usuario {$usuarioActual->No_Nombres_Apellidos} movió la cotización de {$cotizacion->nombre} al contenedor {$contenedorDestino->carga}",
+                'descripcion' => "Cotización #{$cotizacion->id} | Cliente: {$cotizacion->nombre} | Documento: {$cotizacion->documento} | Volumen: {$cotizacion->volumen} CBM | Contenedor destino: {$contenedorDestino->carga}",
+                'modulo' => Notificacion::MODULO_CARGA_CONSOLIDADA,
+                'rol_destinatario' => Usuario::ROL_RRHH,
+                'navigate_to' => 'cargaconsolidada/abiertos/cotizaciones',
+                'navigate_params' => json_encode([
+                    'idContenedor' => $idContenedorDestino,
+                    'tab' => 'prospectos',
+                    'idCotizacion' => $cotizacion->id
+                ]),
+                'tipo' => Notificacion::TIPO_INFO,
+                'icono' => 'mdi:swap-horizontal',
+                'prioridad' => Notificacion::PRIORIDAD_MEDIA,
+                'referencia_tipo' => 'cotizacion',
+                'referencia_id' => $cotizacion->id,
+                'activa' => true,
+                'creado_por' => $usuarioActual->ID_Usuario,
+                'configuracion_roles' => json_encode([
+                    Usuario::ROL_RRHH => [
+                        'titulo' => 'Cotización Movida - Supervisión',
+                        'mensaje' => "Cotización de {$cotizacion->nombre} movida al contenedor {$contenedorDestino->carga} por {$usuarioActual->No_Nombres_Apellidos}",
+                        'descripcion' => "Cotización #{$cotizacion->id} movida - Supervisión requerida"
+                    ]
+                ])
+            ]);
+
+            return [$notificacionCoordinacion, $notificacionJefeVentas, $notificacionCotizador, $notificacionRRHH];
         } catch (\Exception $e) {
             Log::error('Error al crear notificaciones de movimiento a consolidado para Coordinación y Jefe de Ventas: ' . $e->getMessage());
             // No lanzar excepción para no afectar el flujo principal de movimiento

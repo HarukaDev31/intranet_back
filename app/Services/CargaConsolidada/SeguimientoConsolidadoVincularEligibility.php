@@ -12,6 +12,8 @@ use Illuminate\Support\Collection;
  *
  * Regla: consolidados #11-2026 en adelante (2026 ≥11; años posteriores desde #1).
  * Requiere f_inicio (excluye importados en otro flujo).
+ * Aplica con estado_china PENDIENTE o RECIBIENDO (no se exige RECIBIENDO).
+ * Se detiene el sync cuando estado_finanzas deja de ser PENDIENTE.
  */
 class SeguimientoConsolidadoVincularEligibility
 {
@@ -115,7 +117,11 @@ class SeguimientoConsolidadoVincularEligibility
             return false;
         }
 
-        if (!empty($contenedor->excel_seguimiento_drive_link)) {
+        if (!self::estaEstadoChinaHabilitadoParaSeguimiento($contenedor)) {
+            return false;
+        }
+
+        if (self::tieneExcelDrivePropio($contenedor)) {
             return false;
         }
 
@@ -124,6 +130,31 @@ class SeguimientoConsolidadoVincularEligibility
         }
 
         return self::cumpleUmbralCarga($contenedor);
+    }
+
+    /**
+     * True si este consolidado tiene un Excel en Drive que no comparte con otro (p. ej. clone al partir).
+     *
+     * @param Contenedor $contenedor
+     * @return bool
+     */
+    public static function tieneExcelDrivePropio(Contenedor $contenedor)
+    {
+        $fileId = trim((string) ($contenedor->excel_seguimiento_drive_file_id ?? ''));
+        $link = trim((string) ($contenedor->excel_seguimiento_drive_link ?? ''));
+
+        if ($fileId === '' && $link === '') {
+            return false;
+        }
+
+        if ($fileId === '') {
+            return true;
+        }
+
+        return !Contenedor::query()
+            ->where('id', '!=', $contenedor->id)
+            ->where('excel_seguimiento_drive_file_id', $fileId)
+            ->exists();
     }
 
     /**
@@ -138,7 +169,25 @@ class SeguimientoConsolidadoVincularEligibility
     }
 
     /**
-     * Vincular, regenerar y sync automático (requiere f_inicio + umbral + estado_finanzas PENDIENTE).
+     * China operativa para Excel Drive: PENDIENTE (nuevo consolidado) o RECIBIENDO.
+     * Vacío se trata como PENDIENTE. COMPLETADO ya no crea ni sincroniza.
+     *
+     * @param Contenedor $contenedor
+     * @return bool
+     */
+    public static function estaEstadoChinaHabilitadoParaSeguimiento(Contenedor $contenedor)
+    {
+        $estado = strtoupper(trim((string) ($contenedor->estado_china ?? '')));
+
+        if ($estado === '') {
+            return true;
+        }
+
+        return $estado !== Contenedor::CONTEDOR_CERRADO;
+    }
+
+    /**
+     * Vincular, regenerar y sync automático (f_inicio + umbral + finanzas PENDIENTE + china no COMPLETADO).
      *
      * @param Contenedor $contenedor
      * @return bool
@@ -147,7 +196,8 @@ class SeguimientoConsolidadoVincularEligibility
     {
         return self::tieneFInicio($contenedor)
             && self::cumpleUmbralCarga($contenedor)
-            && self::estaEstadoFinanzasPendiente($contenedor);
+            && self::estaEstadoFinanzasPendiente($contenedor)
+            && self::estaEstadoChinaHabilitadoParaSeguimiento($contenedor);
     }
 
     /**
@@ -161,8 +211,21 @@ class SeguimientoConsolidadoVincularEligibility
             ->whereNotNull('f_inicio')
             ->where('estado_finanzas', Contenedor::CONTEDOR_PENDIENTE)
             ->where(function ($q) {
+                $q->whereNull('estado_china')
+                    ->orWhere('estado_china', '')
+                    ->orWhere('estado_china', '!=', Contenedor::CONTEDOR_CERRADO);
+            })
+            ->where(function ($q) {
                 $q->whereNull('excel_seguimiento_drive_link')
-                    ->orWhere('excel_seguimiento_drive_link', '');
+                    ->orWhere('excel_seguimiento_drive_link', '')
+                    ->orWhereIn('excel_seguimiento_drive_file_id', function ($sub) {
+                        $sub->select('excel_seguimiento_drive_file_id')
+                            ->from('carga_consolidada_contenedor')
+                            ->whereNotNull('excel_seguimiento_drive_file_id')
+                            ->where('excel_seguimiento_drive_file_id', '!=', '')
+                            ->groupBy('excel_seguimiento_drive_file_id')
+                            ->havingRaw('COUNT(*) > 1');
+                    });
             })
             ->where(function ($q) {
                 $q->whereNull('excel_seguimiento_link_status')
@@ -194,6 +257,13 @@ class SeguimientoConsolidadoVincularEligibility
             return sprintf(
                 'Estado finanzas "%s" (solo se sincroniza en PENDIENTE)',
                 (string) ($contenedor->estado_finanzas ?? '')
+            );
+        }
+
+        if (!self::estaEstadoChinaHabilitadoParaSeguimiento($contenedor)) {
+            return sprintf(
+                'Estado China "%s" (PENDIENTE y RECIBIENDO sí aplican; COMPLETADO no)',
+                (string) ($contenedor->estado_china ?? '')
             );
         }
 

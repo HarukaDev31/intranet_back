@@ -5,9 +5,13 @@ namespace App\Services\CargaConsolidada\CotizacionFinal;
 use App\Events\PlantillaFinalBatchFinished;
 use App\Http\Controllers\CargaConsolidada\CotizacionFinal\CotizacionFinalController;
 use App\Jobs\GenerateMassiveExcelPayrollsJob;
+use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\ConsolidadoPlantillaFinalBatch;
+use App\Services\CalculadoraImportacion\CalculadoraTarifaService;
+use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use App\Traits\UsesObjectStorage;
+use App\Support\PhpSpreadsheet\PhpSpreadsheetRuntime;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -76,7 +80,9 @@ class PlantillaFinalBatchService
         ]);
 
         try {
-            $stats = $this->runMassiveGeneration($batch);
+            $stats = PhpSpreadsheetRuntime::run(function () use ($batch) {
+                return $this->runMassiveGeneration($batch);
+            });
             $batch->update([
                 'clientes_completados' => (int) $stats['completados'],
                 'clientes_error' => (int) $stats['errores'],
@@ -85,6 +91,11 @@ class PlantillaFinalBatchService
                 'estado' => 'COMPLETED',
                 'mensaje_error' => null,
             ]);
+
+            if ((int) $stats['completados'] > 0) {
+                Contenedor::where('id', (int) $batch->id_contenedor)
+                    ->update(['estado_finanzas' => Contenedor::CONTEDOR_CERRADO]);
+            }
 
             event(new PlantillaFinalBatchFinished(
                 $batch->fresh(),
@@ -175,17 +186,20 @@ class PlantillaFinalBatchService
     protected function countClientsInExcel($file)
     {
         try {
-            $spreadsheet = IOFactory::load($file->getRealPath());
-            $worksheet = $spreadsheet->getActiveSheet();
-            $highestRow = (int) $worksheet->getHighestRow();
-            $count = 0;
-            for ($row = 2; $row <= $highestRow; $row++) {
-                $name = trim((string) $worksheet->getCell('A' . $row)->getValue());
-                if ($name !== '') {
-                    $count++;
+            return PhpSpreadsheetRuntime::run(function () use ($file) {
+                $spreadsheet = IOFactory::load($file->getRealPath());
+                $worksheet = $spreadsheet->getActiveSheet();
+                $highestRow = (int) $worksheet->getHighestRow();
+                $count = 0;
+                for ($row = 2; $row <= $highestRow; $row++) {
+                    $name = trim((string) $worksheet->getCell('A' . $row)->getValue());
+                    if ($name !== '') {
+                        $count++;
+                    }
                 }
-            }
-            return $count;
+
+                return $count;
+            });
         } catch (\Exception $e) {
             Log::warning('No se pudo contar clientes del excel: ' . $e->getMessage());
             return 0;
@@ -233,11 +247,12 @@ class PlantillaFinalBatchService
         $data = $controller->getMassiveExcelData($uploaded);
 
         $result = DB::table('contenedor_consolidado_cotizacion as cc')
-            ->join('contenedor_consolidado_tipo_cliente as tc', 'cc.id_tipo_cliente', '=', 'tc.id')
+            ->leftJoin('contenedor_consolidado_tipo_cliente as tc', 'cc.id_tipo_cliente', '=', 'tc.id')
             ->select([
                 'cc.id',
                 'cc.tarifa',
                 'cc.nombre',
+                'cc.documento',
                 'tc.id as id_tipo_cliente',
                 'tc.name as tipoCliente',
                 'cc.correo',
@@ -246,16 +261,11 @@ class PlantillaFinalBatchService
                 'cc.volumen_china',
                 'cc.volumen_doc',
             ])
-            ->where('id_contenedor', $idContainer)
-            ->where('estado_cotizador', 'CONFIRMADO')
-            ->whereNotNull('estado_cliente')
+            ->where('cc.id_contenedor', $idContainer)
+            ->where('cc.estado_cotizador', 'CONFIRMADO')
+            ->whereNotNull('cc.estado_cliente')
             ->whereNull('cc.deleted_at')
-            ->whereNull('id_cliente_importacion')
-            ->whereExists(function ($query) {
-                $query->select(DB::raw(1))
-                    ->from('contenedor_consolidado_cotizacion_proveedores')
-                    ->whereRaw('contenedor_consolidado_cotizacion_proveedores.id_cotizacion = cc.id');
-            })
+            ->whereNull('cc.id_cliente_importacion')
             ->get();
 
         $calculadorasByCotizacion = $this->loadCalculadorasByCotizacionIds(
@@ -263,50 +273,43 @@ class PlantillaFinalBatchService
         );
 
         foreach ($data as &$cliente) {
-            $nombreCliente = $cliente['cliente']['nombre'];
-            $item = $this->resolveCotizacionMatchForCliente($nombreCliente, $result);
+            $nombreCliente = $cliente['cliente']['nombre'] ?? '';
+            $dniCliente = $cliente['cliente']['dni'] ?? '';
+            $item = $this->resolveCotizacionMatchForCliente($nombreCliente, $result, $dniCliente);
 
             if ($item) {
-                $volumenAsignado = 0;
-                if ($item->vol_selected == 'volumen' && is_numeric($item->volumen)) {
-                    $volumenAsignado = (float) $item->volumen;
-                } elseif ($item->vol_selected == 'volumen_china' && is_numeric($item->volumen_china)) {
-                    $volumenAsignado = (float) $item->volumen_china;
-                } elseif ($item->vol_selected == 'volumen_doc' && is_numeric($item->volumen_doc)) {
-                    $volumenAsignado = (float) $item->volumen_doc;
-                } elseif (is_numeric($item->volumen) && $item->volumen > 0) {
-                    $volumenAsignado = (float) $item->volumen;
-                } elseif (is_numeric($item->volumen_china) && $item->volumen_china > 0) {
-                    $volumenAsignado = (float) $item->volumen_china;
-                } elseif (is_numeric($item->volumen_doc) && $item->volumen_doc > 0) {
-                    $volumenAsignado = (float) $item->volumen_doc;
+                $volumenAsignado = $this->resolveVolumenAsignado($item);
+                if ($volumenAsignado <= 0) {
+                    $volumenAsignado = $this->volumenFromExcelCliente($cliente['cliente'] ?? []);
                 }
 
                 $tipoCliente = trim((string) ($item->tipoCliente ?? ''));
+                if ($tipoCliente === '') {
+                    $tipoCliente = trim((string) ($cliente['cliente']['tipo'] ?? ''));
+                }
+
                 $calc = $calculadorasByCotizacion[(int) $item->id] ?? null;
-                $tarifaCalculadora = $calc !== null && is_numeric($calc->tarifa ?? null)
-                    ? (float) $calc->tarifa
-                    : null;
 
                 $cliente['cliente']['tarifa'] = $this->resolveTarifa(
                     $item,
                     $volumenAsignado,
                     $tipoCliente,
-                    $tarifaCalculadora
+                    $calc
                 );
                 $cliente['cliente']['calculadora_extras'] = $this->extrasFromCalculadoraRow($calc);
-                $cliente['cliente']['tipo_cambio'] = ($calc !== null && is_numeric($calc->tc ?? null) && (float) $calc->tc > 0)
-                    ? (float) $calc->tc
-                    : 3.75;
                 $cliente['cliente']['correo'] = $item->correo ?? '';
-                $cliente['cliente']['tipo_cliente'] = $item->tipoCliente ?? '';
+                $cliente['cliente']['tipo_cliente'] = $tipoCliente;
                 $cliente['cliente']['id_tipo_cliente'] = $item->id_tipo_cliente ?? 0;
                 $cliente['cliente']['volumen'] = $volumenAsignado;
                 $cliente['id'] = $item->id;
             } else {
+                Log::warning('PlantillaFinalBatchService: sin coincidencia de cotización', [
+                    'nombre_excel' => $nombreCliente,
+                    'dni_excel' => $dniCliente,
+                    'nombres_bd' => $result->pluck('nombre')->values()->all(),
+                ]);
                 $cliente['cliente']['tarifa'] = 0;
                 $cliente['cliente']['calculadora_extras'] = ['recargos' => 0.0, 'descuento' => 0.0];
-                $cliente['cliente']['tipo_cambio'] = 3.75;
                 $cliente['cliente']['correo'] = '';
                 $cliente['cliente']['tipo_cliente'] = '';
                 $cliente['cliente']['id_tipo_cliente'] = 0;
@@ -330,14 +333,6 @@ class PlantillaFinalBatchService
         foreach ($data as $value) {
             $nombre = $this->clienteNombreFromValue($value);
 
-            if (!isset($value['cliente']['tarifa']) || $value['cliente']['tarifa'] == 0) {
-                $errorCount++;
-                $detalle['fallidos'][] = [
-                    'nombre' => $nombre,
-                    'motivo' => 'Sin tarifa válida',
-                ];
-                continue;
-            }
             if (!isset($value['id']) || $value['id'] == 0) {
                 $errorCount++;
                 $detalle['fallidos'][] = [
@@ -346,11 +341,19 @@ class PlantillaFinalBatchService
                 ];
                 continue;
             }
-            if (!isset($value['cliente']['volumen']) || $value['cliente']['volumen'] == 0) {
+            if (!isset($value['cliente']['volumen']) || (float) $value['cliente']['volumen'] <= 0) {
                 $errorCount++;
                 $detalle['fallidos'][] = [
                     'nombre' => $nombre,
                     'motivo' => 'Sin volumen válido',
+                ];
+                continue;
+            }
+            if (!isset($value['cliente']['tarifa']) || (float) $value['cliente']['tarifa'] <= 0) {
+                $errorCount++;
+                $detalle['fallidos'][] = [
+                    'nombre' => $nombre,
+                    'motivo' => 'Sin tarifa válida',
                 ];
                 continue;
             }
@@ -564,12 +567,32 @@ class PlantillaFinalBatchService
      * Resuelve la cotización a usar cuando hay varias con el mismo nombre (p. ej. fila reemplazada tras soft-delete).
      * Prioriza cotización activa (deleted_at null) y mayor id.
      */
-    protected function resolveCotizacionMatchForCliente($nombreCliente, $result)
+    protected function resolveCotizacionMatchForCliente($nombreCliente, $result, $dni = '')
     {
         $candidates = [];
         foreach ($result as $item) {
-            if ($this->matchClientName($nombreCliente, $item->nombre)) {
+            if ($this->matchClientName($nombreCliente, $item->nombre ?? '')) {
                 $candidates[] = $item;
+            }
+        }
+
+        if (empty($candidates)) {
+            $dniNorm = $this->normalizeDocumento($dni);
+            if ($dniNorm !== '') {
+                foreach ($result as $item) {
+                    if ($this->normalizeDocumento($item->documento ?? '') === $dniNorm) {
+                        $candidates[] = $item;
+                    }
+                }
+                if (!empty($candidates)) {
+                    Log::info('PlantillaFinalBatchService: coincidencia por DNI', [
+                        'nombre_excel' => $nombreCliente,
+                        'dni' => $dniNorm,
+                        'ids' => array_map(function ($c) {
+                            return (int) $c->id;
+                        }, $candidates),
+                    ]);
+                }
             }
         }
 
@@ -641,32 +664,31 @@ class PlantillaFinalBatchService
             return true;
         }
 
-        $fullWords = array_filter(explode(' ', $fullName));
-        $partialWords = array_filter(explode(' ', $partialName));
-
-        if (count($fullWords) !== count($partialWords)) {
-            return false;
+        $fullCompact = $this->compactName($fullName);
+        $partialCompact = $this->compactName($partialName);
+        if ($fullCompact !== '' && $fullCompact === $partialCompact) {
+            return true;
         }
 
-        if (empty($fullWords) || empty($partialWords)) {
+        $fullWords = array_values(array_filter(explode(' ', $fullName)));
+        $partialWords = array_values(array_filter(explode(' ', $partialName)));
+
+        if (count($fullWords) !== count($partialWords) || empty($fullWords) || empty($partialWords)) {
             return false;
         }
 
         sort($fullWords);
         sort($partialWords);
 
-        for ($i = 0; $i < count($fullWords); $i++) {
-            if ($fullWords[$i] !== $partialWords[$i]) {
-                return false;
-            }
-        }
-
-        return true;
+        return $fullWords === $partialWords;
     }
 
     protected function normalizeString($string)
     {
-        $string = strtolower(trim($string));
+        $string = trim((string) $string);
+        $string = function_exists('mb_strtolower')
+            ? mb_strtolower($string, 'UTF-8')
+            : strtolower($string);
         $accents = [
             'á' => 'a', 'à' => 'a', 'ä' => 'a', 'â' => 'a', 'ã' => 'a',
             'é' => 'e', 'è' => 'e', 'ë' => 'e', 'ê' => 'e',
@@ -674,8 +696,176 @@ class PlantillaFinalBatchService
             'ó' => 'o', 'ò' => 'o', 'ö' => 'o', 'ô' => 'o',
             'ú' => 'u', 'ù' => 'u', 'ü' => 'u', 'û' => 'u',
             'ñ' => 'n',
+            'Á' => 'a', 'À' => 'a', 'Ä' => 'a', 'Â' => 'a', 'Ã' => 'a',
+            'É' => 'e', 'È' => 'e', 'Ë' => 'e', 'Ê' => 'e',
+            'Í' => 'i', 'Ì' => 'i', 'Ï' => 'i', 'Î' => 'i',
+            'Ó' => 'o', 'Ò' => 'o', 'Ö' => 'o', 'Ô' => 'o',
+            'Ú' => 'u', 'Ù' => 'u', 'Ü' => 'u', 'Û' => 'u',
+            'Ñ' => 'n',
         ];
-        return strtr($string, $accents);
+        $string = strtr($string, $accents);
+        $string = str_replace('.', '', $string);
+        $string = preg_replace('/[^a-z0-9\s]+/u', ' ', $string) ?? $string;
+        $string = preg_replace('/\s+/', ' ', $string) ?? $string;
+
+        return trim($string);
+    }
+
+    protected function compactName($string)
+    {
+        return preg_replace('/\s+/', '', (string) $string) ?? '';
+    }
+
+    protected function normalizeDocumento($documento)
+    {
+        $documento = strtoupper(trim((string) $documento));
+        $documento = preg_replace('/[^A-Z0-9]/', '', $documento) ?? '';
+
+        return $documento;
+    }
+
+    protected function resolveVolumenAsignado($item): float
+    {
+        $selected = (string) ($item->vol_selected ?? '');
+        $bySelected = [
+            'volumen' => $item->volumen ?? null,
+            'volumen_china' => $item->volumen_china ?? null,
+            'volumen_doc' => $item->volumen_doc ?? null,
+        ];
+
+        if (isset($bySelected[$selected]) && is_numeric($bySelected[$selected]) && (float) $bySelected[$selected] > 0) {
+            return (float) $bySelected[$selected];
+        }
+
+        foreach (['volumen', 'volumen_china', 'volumen_doc'] as $field) {
+            $value = $item->{$field} ?? null;
+            if (is_numeric($value) && (float) $value > 0) {
+                return (float) $value;
+            }
+        }
+
+        return 0.0;
+    }
+
+    protected function volumenFromExcelCliente(array $cliente): float
+    {
+        if (isset($cliente['volumen_excel']) && is_numeric($cliente['volumen_excel']) && (float) $cliente['volumen_excel'] > 0) {
+            return (float) $cliente['volumen_excel'];
+        }
+
+        foreach ($cliente['productos'] ?? [] as $producto) {
+            if (isset($producto['cbm']) && is_numeric($producto['cbm']) && (float) $producto['cbm'] > 0) {
+                return (float) $producto['cbm'];
+            }
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * Una sola query: última calculadora por id_cotizacion (tarifa + extras).
+     *
+     * @param  array<int, int>  $cotizacionIds
+     * @return array<int, object>
+     */
+    protected function loadCalculadorasByCotizacionIds(array $cotizacionIds): array
+    {
+        $cotizacionIds = array_values(array_unique(array_filter(array_map('intval', $cotizacionIds))));
+        if ($cotizacionIds === [] || ! Schema::hasTable('calculadora_importacion')) {
+            return [];
+        }
+
+        $cols = [
+            'id',
+            'id_cotizacion',
+            'tarifa',
+            'tarifa_total_extra_proveedor',
+            'tarifa_total_extra_item',
+            'tarifa_descuento',
+            'tipo_cliente',
+            'created_at',
+        ];
+        if (Schema::hasColumn('calculadora_importacion', 'calculadora_tarifa_consolidado_id')) {
+            $cols[] = 'calculadora_tarifa_consolidado_id';
+        }
+        $rows = DB::table('calculadora_importacion')
+            ->whereIn('id_cotizacion', $cotizacionIds)
+            ->orderByDesc('id')
+            ->get($cols);
+
+        $byCotizacion = [];
+        foreach ($rows as $row) {
+            $cid = (int) $row->id_cotizacion;
+            if (! isset($byCotizacion[$cid])) {
+                $byCotizacion[$cid] = $row;
+            }
+        }
+
+        return $byCotizacion;
+    }
+
+    /**
+     * @return array{recargos: float, descuento: float}
+     */
+    protected function extrasFromCalculadoraRow(?object $row): array
+    {
+        if (! $row) {
+            return ['recargos' => 0.0, 'descuento' => 0.0];
+        }
+
+        $recargos = (float) ($row->tarifa_total_extra_proveedor ?? 0)
+            + (float) ($row->tarifa_total_extra_item ?? 0);
+        $descuento = (float) ($row->tarifa_descuento ?? 0);
+
+        return [
+            'recargos' => round($recargos, 2),
+            'descuento' => round($descuento, 2),
+        ];
+    }
+
+    /**
+     * Prioridad:
+     * 1. Re-buscar el rango CBM del volumen ACTUAL en la misma generación de tarifas
+     *    con que se armó la cotización inicial (usando created_at de la calculadora).
+     *    Esto garantiza que si el usuario modifica el CBM en la cotización final, se
+     *    aplique la tarifa correcta para el nuevo rango, sin salirse del período original.
+     * 2. Snapshot congelado de la calculadora (fallback si la DB no devuelve fila).
+     * 3. cc.tarifa del item.
+     * 4. Tabla legacy hardcoded.
+     */
+    protected function resolveTarifa($item, float $volumen, string $tipoCliente, ?object $calcRow = null): float
+    {
+        // Re-buscar solo cuando la calculadora tiene tarifa trazada en la DB
+        // (calculadora_tarifa_consolidado_id set). Esto evita consultas a la DB
+        // en contextos sin conexión y preserva snapshots manuales sin FK.
+        if (
+            $calcRow !== null
+            && !empty($calcRow->calculadora_tarifa_consolidado_id)
+            && !empty($calcRow->created_at)
+        ) {
+            $at = Carbon::parse($calcRow->created_at);
+            $tipoCalc = trim((string) ($calcRow->tipo_cliente ?? $tipoCliente));
+            if ($tipoCalc === '') {
+                $tipoCalc = $tipoCliente;
+            }
+            $tarifaRow = (new CalculadoraTarifaService())->findByTipoYCbmAt($tipoCalc, $volumen, $at);
+            if ($tarifaRow !== null) {
+                return (float) $tarifaRow->value;
+            }
+        }
+
+        // Fallback: snapshot congelado de la calculadora
+        if ($calcRow !== null && is_numeric($calcRow->tarifa ?? null) && (float) $calcRow->tarifa > 0) {
+            return (float) $calcRow->tarifa;
+        }
+
+        // Fallback: tarifa del item (contenedor_consolidado_cotizacion.tarifa)
+        $tarifa = is_numeric($item->tarifa ?? null) ? (float) $item->tarifa : 0.0;
+        if ($tarifa > 0) {
+            return $tarifa;
+        }
+
+        return TarifaTipoClienteCalculator::calculate($tipoCliente, $volumen, 0);
     }
 
     /**

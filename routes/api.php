@@ -101,6 +101,9 @@ require __DIR__.'/modules/soporte-ti.php';
 // Módulo de Noticias del Sistema
 require __DIR__.'/modules/news.php';
 
+// Manual de usuario (contenido MD por rol + PDF)
+require __DIR__.'/modules/manual-usuario.php';
+
 // Módulo de Vi?ticos
 require __DIR__.'/modules/viaticos.php';
 
@@ -126,6 +129,9 @@ require __DIR__.'/modules/public-ubicacion.php';
 
 // API pública: lead landing consolidado (Astro probusiness_consolidado_landing)
 require __DIR__.'/modules/public-landing-consolidado-lead.php';
+
+// API pública (solo lectura): próximas fechas de cierre de contenedores (Astro probusiness_consolidado_landing)
+require __DIR__.'/modules/public-landing-consolidado-departures.php';
 
 // API pública (solo lectura): exportación JSON de cotizaciones para terceros
 require __DIR__.'/modules/public-cotizaciones-export.php';
