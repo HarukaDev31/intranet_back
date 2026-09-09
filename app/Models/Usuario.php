@@ -52,6 +52,9 @@ class Usuario extends Authenticatable implements JWTSubject
     ];
     const ID_JEFE_VENTAS = 28791;
 
+    /** @var array<int, int>|null Memo en memoria de organizacionesPermitidas() para este request. */
+    private $organizacionesPermitidasMemo = null;
+
     /**
      * Get the identifier that will be stored in the subject claim of the JWT.
      *
@@ -86,6 +89,38 @@ class Usuario extends Authenticatable implements JWTSubject
     public function organizacion()
     {
         return $this->belongsTo(Organizacion::class, 'ID_Organizacion', 'ID_Organizacion');
+    }
+
+    /**
+     * IDs de organización a las que el usuario tiene acceso, resueltos en vivo
+     * desde grupo_usuario (un usuario puede tener una fila por organización).
+     * No se cachea en el token: si le quitan acceso a una organización, se
+     * corta en la siguiente request. Se memoiza solo en memoria de este
+     * request para no repetir la query dentro del mismo ciclo.
+     *
+     * @return array<int, int>
+     */
+    public function organizacionesPermitidas(): array
+    {
+        if ($this->organizacionesPermitidasMemo !== null) {
+            return $this->organizacionesPermitidasMemo;
+        }
+
+        $ids = GrupoUsuario::query()
+            ->where('ID_Usuario', $this->getKey())
+            ->whereNotNull('ID_Organizacion')
+            ->distinct()
+            ->pluck('ID_Organizacion')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+
+        $idOrganizacionPropia = $this->getAttribute('ID_Organizacion');
+        if ($ids === [] && $idOrganizacionPropia !== null) {
+            $ids = [(int) $idOrganizacionPropia];
+        }
+
+        return $this->organizacionesPermitidasMemo = $ids;
     }
 
     /**

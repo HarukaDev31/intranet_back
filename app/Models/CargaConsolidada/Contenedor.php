@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Models\Pais;
+use App\Models\Organizacion;
+use App\Models\CargaConsolidada\Scopes\OrganizacionScope;
 
 class Contenedor extends Model
 {
@@ -27,6 +29,11 @@ class Contenedor extends Model
     protected $primaryKey = 'id';
     public $timestamps = false;
 
+    protected static function booted()
+    {
+        static::addGlobalScope(new OrganizacionScope());
+    }
+
     /**
      * Los atributos que son asignables masivamente.
      *
@@ -35,6 +42,7 @@ class Contenedor extends Model
     protected $fillable = [
         'mes',
         'id_pais',
+        'organizacion_id',
         'carga',
         'parte',
         'id_contenedor_origen',
@@ -208,6 +216,14 @@ class Contenedor extends Model
     }
 
     /**
+     * Obtiene la organización asociada al contenedor.
+     */
+    public function organizacion()
+    {
+        return $this->belongsTo(Organizacion::class, 'organizacion_id', 'ID_Organizacion');
+    }
+
+    /**
      * TC Yuan vigente del consolidado (periodo dado por created_at/updated_at).
      */
     public function tcYuan()
@@ -269,6 +285,14 @@ class Contenedor extends Model
     public function scopePorPais($query, $idPais)
     {
         return $query->where('id_pais', $idPais);
+    }
+
+    /**
+     * Scope para filtrar por organización.
+     */
+    public function scopePorOrganizacion($query, $idOrganizacion)
+    {
+        return $query->where('organizacion_id', $idOrganizacion);
     }
 
     /**
