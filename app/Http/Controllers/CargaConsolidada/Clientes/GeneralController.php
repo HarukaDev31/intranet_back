@@ -433,8 +433,7 @@ class GeneralController extends Controller
         $estado = $request->estado_cliente;
         Log::info('id', ['id' => $id]);
         Log::info('estado', ['estado' => $estado]);
-        $cotizacion = DB::table($this->table_contenedor_cotizacion)
-            ->where('id', $id)
+        $cotizacion = Cotizacion::where('id', $id)
             ->update(['estado_cliente' => $estado]);
         if ($cotizacion) {
             return response()->json([
@@ -881,6 +880,7 @@ class GeneralController extends Controller
                     }
                     DB::table('contenedor_consolidado_cotizacion_proveedores_items')
                         ->where('id', $item['id'])
+                        ->where('organizacion_id', $container->getAttribute('organizacion_id'))
                         ->update(['tipo_producto' => $item['tipo_producto']]);
                 }
             }
@@ -958,11 +958,7 @@ class GeneralController extends Controller
             }
 
             // Obtener información de la cotización
-            $cot = DB::table('contenedor_consolidado_cotizacion')
-                ->select('id', 'nombre', 'telefono', 'id_contenedor', 'uuid')
-                ->where('id', $idCotizacion)
-                ->whereNull('deleted_at')
-                ->first();
+            $cot = Cotizacion::find($idCotizacion);
 
             if (!$cot) {
                 return response()->json([
@@ -971,14 +967,14 @@ class GeneralController extends Controller
                 ], 404);
             }
 
-            $nombreCliente = $cot->nombre;
-            $telefono = $cot->telefono;
+            $nombreCliente = $cot->getAttribute('nombre');
+            $telefono = $cot->getAttribute('telefono');
             $telefono = preg_replace('/\s+/', '', $telefono);
             $telefono = $telefono ? $telefono . '@c.us' : '';
             $uuidCotizacion = trim((string) ($cot->uuid ?? ''));
 
             $cargaRaw = DB::table('carga_consolidada_contenedor')
-                ->where('id', $cot->id_contenedor)
+                ->where('id', $cot->getAttribute('id_contenedor'))
                 ->value('carga');
             $cargaCode = is_numeric($cargaRaw)
                 ? str_pad((string) $cargaRaw, 2, '0', STR_PAD_LEFT)

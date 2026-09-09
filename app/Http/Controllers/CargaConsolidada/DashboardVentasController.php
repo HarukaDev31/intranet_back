@@ -8,9 +8,26 @@ use Illuminate\Support\Facades\DB;
 use App\Models\Usuario;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class DashboardVentasController extends Controller
 {
+    /**
+     * IDs de organizacion del usuario autenticado. Estos endpoints arman sus
+     * queries con DB::table() puro (no Eloquent), asi que no reciben el
+     * filtro de organizacion automatico -- hay que aplicarlo a mano en cada
+     * uno con este helper.
+     *
+     * @return array<int, int>
+     */
+    private function organizacionIdsUsuarioActual(): array
+    {
+        /** @var Usuario $usuario */
+        $usuario = JWTAuth::parseToken()->authenticate();
+
+        return $usuario->organizacionesPermitidas();
+    }
+
     /**
      * @OA\Get(
      *     path="/dashboard-ventas/contenedores-filtro",
@@ -41,7 +58,8 @@ class DashboardVentasController extends Controller
                     'cont.f_inicio',
                     DB::raw("CONCAT('Consolidado #',cont.carga) as label")
                 ])
-                ->where('cont.empresa', '!=', '1');
+                ->where('cont.empresa', '!=', '1')
+                ->whereIn('cont.organizacion_id', $this->organizacionIdsUsuarioActual());
             //order by carga carga is number string
             $query->orderByRaw('CAST(carga AS UNSIGNED)');
            
@@ -104,6 +122,7 @@ class DashboardVentasController extends Controller
                 ->join('contenedor_consolidado_cotizacion_proveedores as cccp', 'cc.id', '=', 'cccp.id_cotizacion')
                 ->join('carga_consolidada_contenedor as cont', 'cc.id_contenedor', '=', 'cont.id')
                 ->whereNull('cc.deleted_at')
+                ->whereIn('cont.organizacion_id', $this->organizacionIdsUsuarioActual())
                 ->groupBy('u.ID_Usuario', 'u.No_Nombres_Apellidos');
 
             if ($fechaInicio && $fechaFin) {
@@ -258,6 +277,7 @@ class DashboardVentasController extends Controller
                 ->leftJoin('usuario as u', 'cc.id_usuario', '=', 'u.ID_Usuario')
                 ->where('cont.empresa', '!=', '1')
                 ->where('cc.estado_cotizador', 'CONFIRMADO')
+                ->whereIn('cont.organizacion_id', $this->organizacionIdsUsuarioActual())
                 ->groupBy('cont.id', 'cont.carga', 'cont.fecha_zarpe', 'u.No_Nombres_Apellidos', 'u.ID_Usuario');
                 
             // Aplicar filtros si existen
@@ -361,7 +381,8 @@ class DashboardVentasController extends Controller
                 ->leftJoin($this->table_contenedor_cotizacion . ' as cc', 'u.ID_Usuario', '=', 'cc.id_usuario')
                 ->leftJoin($this->table_contenedor_cotizacion_proveedores . ' as cccp', 'cc.id', '=', 'cccp.id_cotizacion')
                 ->leftJoin($this->table_contenedor . ' as cont', 'cc.id_contenedor', '=', 'cont.id')
-                ->where('cont.empresa', '!=', '1');
+                ->where('cont.empresa', '!=', '1')
+                ->whereIn('cont.organizacion_id', $this->organizacionIdsUsuarioActual());
 
             // Filtrar por vendedor
             if ($request->input('id_vendedor')) {
@@ -588,7 +609,8 @@ class DashboardVentasController extends Controller
                         AND (cc2.estado_cotizador != "CONFIRMADO" OR cc2.estado_cotizador IS NULL)
                     ) as volumen_pendiente')
                 ])
-                ->where('cont.empresa', '!=', '1');
+                ->where('cont.empresa', '!=', '1')
+                ->whereIn('cont.organizacion_id', $this->organizacionIdsUsuarioActual());
 
             // Filtrar por vendedor
             if ($request->input('id_vendedor')) {
@@ -712,6 +734,7 @@ class DashboardVentasController extends Controller
                 ->leftJoin($this->table_contenedor . ' as cont', 'cc.id_contenedor', '=', 'cont.id')
                 ->where('cc.estado_cotizador', 'CONFIRMADO')
                 ->where('cont.empresa', '!=', '1')
+                ->whereIn('cc.organizacion_id', $this->organizacionIdsUsuarioActual())
                 ->whereNotNull('cc.fecha_confirmacion')
                 ->whereBetween(DB::raw('DATE(cc.fecha_confirmacion)'), [$fechaInicio, $fechaFin]);
 

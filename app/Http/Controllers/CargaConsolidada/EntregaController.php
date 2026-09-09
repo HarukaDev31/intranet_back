@@ -3159,7 +3159,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
         $tableName = $typeForm === 1 ? 'consolidado_delivery_form_lima_conformidad' : 'consolidado_delivery_form_province_conformidad';
 
         $row = DB::table($tableName)->where('id', $id)->first();
-        if (!$row) {
+        if (!$row || !Cotizacion::where('id', $row->id_cotizacion)->exists()) {
             return response()->json(['message' => 'Conformidad no encontrada', 'success' => false], 404);
         }
 
