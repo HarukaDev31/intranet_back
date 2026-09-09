@@ -3977,6 +3977,10 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 // Generar contrato completo con firma
                 $relativePath = 'contratos/' . $pdfFilename;
 
+                // Obtener información del contenedor para el contrato
+                $contenedor = \App\Models\CargaConsolidada\Contenedor::find($cotizacion->id_contenedor);
+                $carga = $contenedor ? $contenedor->carga : 'N/A';
+
                 // Convertir firma a base64
                 $imagePath = $signedFile->getPathname();
                 $imageData = base64_encode(file_get_contents($imagePath));
@@ -3991,7 +3995,9 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                     'carga' => $carga,
                     'logo_contrato_url' => BrandLogoPaths::contrato(),
                     'signature_base64' => $signatureBase64,
-                ]);
+                    'cod_contract' => $cotizacion->cod_contract,
+                    'cod_contract_calculator' => optional($cotizacion->calculadoraImportacion)->cod_cotizacion,
+                ];
 
                 // Renderizar vista del contrato con firma
                 $contractHtml = view('contracts.contrato_firmado', $viewData)->render();

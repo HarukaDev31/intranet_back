@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\CargaConsolidada\Contenedor;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -363,7 +364,8 @@ class AutoSignContracts extends Command
             'carga' => $carga,
             'logo_contrato_url' => BrandLogoPaths::contrato(),
             'signature_base64' => $signatureBase64,
-        ]);
+            'cod_contract' => $cotizacion->cod_contract,
+        ];
 
         // Renderizar vista del contrato con firma
         $contractHtml = view('contracts.contrato_firmado', $viewData)->render();
