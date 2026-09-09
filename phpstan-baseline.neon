@@ -7929,6 +7929,18 @@ parameters:
 		-
 			message: '#^Relation ''grupo'' is not found in App\\Models\\Usuario model\.$#'
 			identifier: larastan.relationExistence
+			count: 2
+			path: app/Listeners/SoporteTi/NotificarPushMensajeSoporteTi.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Usuario\:\:\$grupo\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Listeners/SoporteTi/NotificarPushMensajeSoporteTi.php
+
+		-
+			message: '#^Relation ''grupo'' is not found in App\\Models\\Usuario model\.$#'
+			identifier: larastan.relationExistence
 			count: 1
 			path: app/Listeners/SoporteTi/NotificarPushSolicitudCreada.php
 
