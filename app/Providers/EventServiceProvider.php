@@ -2,8 +2,10 @@
 
 namespace App\Providers;
 
+use App\Events\SoporteTi\SoporteTiMensajeCreado;
 use App\Events\UsuarioDatosFacturacionImportFinished;
 use App\Listeners\CreateContabilidadNotificationForUsuarioDatosFacturacionImportFinished;
+use App\Listeners\SoporteTi\NotificarPushMensajeSoporteTi;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Listeners\SendEmailVerificationNotification;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
@@ -22,6 +24,9 @@ class EventServiceProvider extends ServiceProvider
         ],
         UsuarioDatosFacturacionImportFinished::class => [
             CreateContabilidadNotificationForUsuarioDatosFacturacionImportFinished::class,
+        ],
+        SoporteTiMensajeCreado::class => [
+            NotificarPushMensajeSoporteTi::class,
         ],
     ];
 

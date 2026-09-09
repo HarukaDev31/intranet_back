@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Broadcasting\BroadcastController;
+use App\Http\Controllers\DeviceTokenController;
 use App\Http\Controllers\UserBusinessController;
 use App\Http\Controllers\UserProfileController;
 
@@ -25,6 +26,10 @@ Route::group(['prefix' => 'auth'], function () {
         Route::post('refresh', [AuthController::class, 'refresh']);
         Route::get('me', [AuthController::class, 'me']);
         Route::post('profile', [AuthController::class, 'profile']);
+
+        // Registro de dispositivo móvil para notificaciones push (FCM)
+        Route::post('device/token', [DeviceTokenController::class, 'store']);
+        Route::delete('device/token', [DeviceTokenController::class, 'destroy']);
     });
 });
 

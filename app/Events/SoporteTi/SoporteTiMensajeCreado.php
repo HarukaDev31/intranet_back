@@ -30,6 +30,11 @@ class SoporteTiMensajeCreado implements ShouldBroadcast
         $this->mensaje = $mensaje;
     }
 
+    public function getSolicitud(): SoporteTiSolicitud
+    {
+        return $this->solicitud;
+    }
+
     public function broadcastOn()
     {
         return SoporteTiBroadcastChannels::forSolicitudNotificaciones($this->solicitud, true);
