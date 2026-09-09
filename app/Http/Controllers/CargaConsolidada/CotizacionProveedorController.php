@@ -157,6 +157,13 @@ class CotizacionProveedorController extends Controller
 
             $rol = $user->getNombreGrupo();
 
+            if (!Contenedor::where('id', $idContenedor)->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no encontrado'
+                ], 404);
+            }
+
             $estadoChina = $request->estado_china ?? 'todos';
             $search = $request->search ?? '';
             // Compatibilidad con ambos nombres de parámetros
@@ -3701,6 +3708,13 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             }
 
             $rol = $user->getNombreGrupo();
+
+            if (!Contenedor::where('id', $idContenedor)->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no encontrado'
+                ], 404);
+            }
 
             $estadoChina = $request->estado_china ?? 'todos';
             $search = $request->search ?? '';

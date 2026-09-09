@@ -378,8 +378,7 @@ class CotizacionController extends Controller
 
             $userId = auth()->id();
 
-            $files = DB::table('carga_consolidada_contenedor')
-                ->where('id', $idContenedor)
+            $files = Contenedor::where('id', $idContenedor)
                 ->select('bl_file_url', 'lista_embarque_url')
                 ->first();
 

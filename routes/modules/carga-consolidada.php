@@ -34,7 +34,7 @@ use App\Http\Controllers\Commons\Google\SheetController;
 |
 */
 
-Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'carga-consolidada.cache']], function () {
+Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'carga-consolidada.organizacion', 'carga-consolidada.cache']], function () {
     
     // Commons
     Route::prefix('commons')->group(function () {
