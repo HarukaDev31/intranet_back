@@ -4,18 +4,17 @@ namespace App\Listeners\SoporteTi;
 
 use App\Events\SoporteTi\SoporteTiMensajeCreado;
 use App\Services\Firebase\FcmPushService;
-use App\Support\SoporteTi\SoporteTiQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Str;
 
 class NotificarPushMensajeSoporteTi implements ShouldQueue
 {
-    use InteractsWithQueue, SoporteTiQueue;
+    use InteractsWithQueue;
 
     public function viaQueue()
     {
-        return static::soporteTiQueueName();
+        return (string) config('soporte-ti.queue', 'soporte_ti');
     }
 
     public function handle(SoporteTiMensajeCreado $event)
