@@ -7927,6 +7927,12 @@ parameters:
 			path: app/Jobs/WaCopiloto/ProcessWaCopilotoScheduledMessageJob.php
 
 		-
+			message: '#^Relation ''grupo'' is not found in App\\Models\\Usuario model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: app/Listeners/SoporteTi/NotificarPushSolicitudCreada.php
+
+		-
 			message: '#^Access to an undefined property App\\Models\\BaseDatos\\BaseMediaModel\:\:\$extension\.$#'
 			identifier: property.notFound
 			count: 3
