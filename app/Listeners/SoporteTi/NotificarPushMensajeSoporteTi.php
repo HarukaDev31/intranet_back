@@ -13,9 +13,9 @@ class NotificarPushMensajeSoporteTi implements ShouldQueue
 {
     use InteractsWithQueue, SoporteTiQueue;
 
-    public function __construct()
+    public function viaQueue()
     {
-        $this->assignSoporteTiQueue();
+        return static::soporteTiQueueName();
     }
 
     public function handle(SoporteTiMensajeCreado $event)
