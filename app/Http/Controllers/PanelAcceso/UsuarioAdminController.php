@@ -9,10 +9,46 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\Usuario;
 use App\Models\GrupoUsuario;
+use App\Models\Organizacion;
 use App\Helpers\CodeIgniterEncryption;
 
 class UsuarioAdminController extends Controller
 {
+    /**
+     * ID_Organizacion que actua como "admin": el unico que puede crear/editar
+     * usuarios en cualquier organizacion. El resto solo puede gestionar la suya.
+     */
+    private const ID_ORGANIZACION_ADMIN = 1;
+
+    /**
+     * Resuelve id_org/id_empresa para crear o editar un usuario: si quien hace
+     * la request pertenece a la organizacion admin, puede elegir cualquier
+     * organizacion (la que venga en el request, validando que exista). Si no,
+     * se ignora lo que haya mandado el cliente y se fuerza su propia
+     * organizacion -- el select no deberia ni renderizarse para ese caso, pero
+     * esto es lo que realmente lo impide a nivel de datos.
+     *
+     * id_empresa nunca se toma del request: siempre se deriva de la
+     * organizacion resuelta, para que no puedan quedar incoherentes entre si.
+     *
+     * @return array{0: int, 1: int}|\Illuminate\Http\JsonResponse
+     */
+    private function resolverOrganizacionParaUsuario(Request $request, Usuario $authUser)
+    {
+        $puedeElegirOrganizacion = (int) $authUser->getAttribute('ID_Organizacion') === self::ID_ORGANIZACION_ADMIN;
+
+        $idOrg = $puedeElegirOrganizacion
+            ? (int) $request->input('id_org')
+            : (int) $authUser->getAttribute('ID_Organizacion');
+
+        $organizacion = Organizacion::find($idOrg);
+        if (!$organizacion) {
+            return response()->json(['success' => false, 'message' => 'Organización no encontrada'], 422);
+        }
+
+        return [(int) $organizacion->getAttribute('ID_Organizacion'), (int) $organizacion->getAttribute('ID_Empresa')];
+    }
+
     /**
      * Listado de usuarios con filtros opcionales.
      * GET /api/panel-acceso/usuarios
@@ -48,6 +84,11 @@ class UsuarioAdminController extends Controller
             // El root (ID=1) ve todo; el resto no ve al root
             if ($authUser->ID_Usuario != 1) {
                 $query->where('USR.ID_Usuario', '!=', 1);
+            }
+
+            // Solo la organizacion admin ve usuarios de todas las organizaciones.
+            if ((int) $authUser->getAttribute('ID_Organizacion') !== self::ID_ORGANIZACION_ADMIN) {
+                $query->where('USR.ID_Organizacion', $authUser->getAttribute('ID_Organizacion'));
             }
 
             if ($request->filled('empresa_id')) {
@@ -129,6 +170,13 @@ class UsuarioAdminController extends Controller
                 return response()->json(['success' => false, 'message' => 'Usuario no encontrado'], 404);
             }
 
+            $authUser = auth()->user();
+            $authUserOrgId = (int) $authUser->getAttribute('ID_Organizacion');
+            if ($authUserOrgId !== self::ID_ORGANIZACION_ADMIN
+                && (int) $usuario->ID_Organizacion !== $authUserOrgId) {
+                return response()->json(['success' => false, 'message' => 'Usuario no encontrado'], 404);
+            }
+
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -159,8 +207,8 @@ class UsuarioAdminController extends Controller
     {
         try {
             $request->validate([
-                'id_empresa'        => 'required|integer',
-                'id_org'            => 'required|integer',
+                'id_empresa'        => 'nullable|integer',
+                'id_org'            => 'nullable|integer',
                 'id_grupo'          => 'required|integer',
                 'usuario'           => 'required|string|max:100',
                 'nombres_apellidos' => 'nullable|string|max:100',
@@ -169,6 +217,13 @@ class UsuarioAdminController extends Controller
                 'celular'           => 'nullable|string|max:11',
                 'estado'            => 'required|integer|in:0,1',
             ]);
+
+            $authUser = auth()->user();
+            $resuelto = $this->resolverOrganizacionParaUsuario($request, $authUser);
+            if ($resuelto instanceof \Illuminate\Http\JsonResponse) {
+                return $resuelto;
+            }
+            [$idOrg, $idEmpresa] = $resuelto;
 
             $email = trim($request->usuario);
 
@@ -179,7 +234,7 @@ class UsuarioAdminController extends Controller
             // Validar duplicados
             $existeUsuario = DB::selectOne(
                 'SELECT COUNT(*) AS existe FROM usuario WHERE ID_Organizacion = ? AND No_Usuario = ? LIMIT 1',
-                [$request->id_org, $email]
+                [$idOrg, $email]
             );
             if ($existeUsuario->existe > 0) {
                 return response()->json(['success' => false, 'message' => 'El usuario ya existe'], 422);
@@ -190,7 +245,7 @@ class UsuarioAdminController extends Controller
             if ($celular) {
                 $existeCelular = DB::selectOne(
                     'SELECT COUNT(*) AS existe FROM usuario WHERE ID_Empresa = ? AND ID_Organizacion = ? AND Nu_Celular = ? LIMIT 1',
-                    [$request->id_empresa, $request->id_org, $celular]
+                    [$idEmpresa, $idOrg, $celular]
                 );
                 if ($existeCelular->existe > 0) {
                     return response()->json(['success' => false, 'message' => 'El número celular ya existe'], 422);
@@ -199,7 +254,7 @@ class UsuarioAdminController extends Controller
 
             $existeEmail = DB::selectOne(
                 'SELECT COUNT(*) AS existe FROM usuario WHERE ID_Empresa = ? AND ID_Organizacion = ? AND Txt_Email = ? LIMIT 1',
-                [$request->id_empresa, $request->id_org, $email]
+                [$idEmpresa, $idOrg, $email]
             );
             if ($existeEmail->existe > 0) {
                 return response()->json(['success' => false, 'message' => 'El correo ya existe'], 422);
@@ -216,8 +271,8 @@ class UsuarioAdminController extends Controller
             DB::beginTransaction();
 
             $dataUsuario = [
-                'ID_Empresa'            => $request->id_empresa,
-                'ID_Organizacion'       => $request->id_org,
+                'ID_Empresa'            => $idEmpresa,
+                'ID_Organizacion'       => $idOrg,
                 'ID_Grupo'              => $request->id_grupo,
                 'Nu_Codigo_Pais'        => 1,
                 'No_Usuario'            => $email,
@@ -239,15 +294,15 @@ class UsuarioAdminController extends Controller
             $grupoUsuarioId = DB::table('grupo_usuario')->insertGetId([
                 'ID_Usuario'      => $idUsuario,
                 'ID_Grupo'        => $request->id_grupo,
-                'ID_Empresa'      => $request->id_empresa,
-                'ID_Organizacion' => $request->id_org,
+                'ID_Empresa'      => $idEmpresa,
+                'ID_Organizacion' => $idOrg,
             ]);
 
             $this->ensureMenuCoordinadorGeneralClonado(
                 (int) $grupoUsuarioId,
                 (int) $request->id_grupo,
-                (int) $request->id_empresa,
-                (int) $request->id_org
+                $idEmpresa,
+                $idOrg
             );
 
             DB::commit();
@@ -271,8 +326,8 @@ class UsuarioAdminController extends Controller
     {
         try {
             $request->validate([
-                'id_empresa'        => 'required|integer',
-                'id_org'            => 'required|integer',
+                'id_empresa'        => 'nullable|integer',
+                'id_org'            => 'nullable|integer',
                 'id_grupo'          => 'required|integer',
                 'usuario'           => 'required|string|max:100',
                 'nombres_apellidos' => 'nullable|string|max:100',
@@ -281,6 +336,13 @@ class UsuarioAdminController extends Controller
                 'celular'           => 'nullable|string|max:11',
                 'estado'            => 'required|integer|in:0,1',
             ]);
+
+            $authUser = auth()->user();
+            $resuelto = $this->resolverOrganizacionParaUsuario($request, $authUser);
+            if ($resuelto instanceof \Illuminate\Http\JsonResponse) {
+                return $resuelto;
+            }
+            [$idOrg, $idEmpresa] = $resuelto;
 
             if ($id == 1) {
                 $email = trim($request->usuario);
@@ -294,14 +356,23 @@ class UsuarioAdminController extends Controller
                 return response()->json(['success' => false, 'message' => 'Usuario no encontrado'], 404);
             }
 
+            // Un admin de organizacion puede editar a cualquiera; el resto solo
+            // a usuarios de su propia organizacion (si no, el fix de arriba
+            // terminaria "secuestrando" ese usuario hacia su propia org).
+            $authUserOrgId = (int) $authUser->getAttribute('ID_Organizacion');
+            if ($authUserOrgId !== self::ID_ORGANIZACION_ADMIN
+                && (int) $usuario->ID_Organizacion !== $authUserOrgId) {
+                return response()->json(['success' => false, 'message' => 'Usuario no encontrado'], 404);
+            }
+
             $email = trim($request->usuario);
             $celular = $this->parseCelular($request->celular);
 
             // Validar duplicados solo si cambió algo
-            if ($usuario->ID_Organizacion != $request->id_org || $usuario->No_Usuario != $email) {
+            if ($usuario->ID_Organizacion != $idOrg || $usuario->No_Usuario != $email) {
                 $existeUsuario = DB::selectOne(
                     'SELECT COUNT(*) AS existe FROM usuario WHERE ID_Organizacion = ? AND No_Usuario = ? AND ID_Usuario != ? LIMIT 1',
-                    [$request->id_org, $email, $id]
+                    [$idOrg, $email, $id]
                 );
                 if ($existeUsuario->existe > 0) {
                     return response()->json(['success' => false, 'message' => 'El usuario ya existe'], 422);
@@ -311,7 +382,7 @@ class UsuarioAdminController extends Controller
             if ($celular && $celular != $usuario->Nu_Celular) {
                 $existeCelular = DB::selectOne(
                     'SELECT COUNT(*) AS existe FROM usuario WHERE ID_Empresa = ? AND ID_Organizacion = ? AND Nu_Celular = ? AND ID_Usuario != ? LIMIT 1',
-                    [$request->id_empresa, $request->id_org, $celular, $id]
+                    [$idEmpresa, $idOrg, $celular, $id]
                 );
                 if ($existeCelular->existe > 0) {
                     return response()->json(['success' => false, 'message' => 'El número celular ya existe'], 422);
@@ -321,7 +392,7 @@ class UsuarioAdminController extends Controller
             if ($email != $usuario->Txt_Email) {
                 $existeEmail = DB::selectOne(
                     'SELECT COUNT(*) AS existe FROM usuario WHERE ID_Empresa = ? AND ID_Organizacion = ? AND Txt_Email = ? AND ID_Usuario != ? LIMIT 1',
-                    [$request->id_empresa, $request->id_org, $email, $id]
+                    [$idEmpresa, $idOrg, $email, $id]
                 );
                 if ($existeEmail->existe > 0) {
                     return response()->json(['success' => false, 'message' => 'El correo ya existe'], 422);
@@ -329,8 +400,8 @@ class UsuarioAdminController extends Controller
             }
 
             $dataUpdate = [
-                'ID_Empresa'            => $request->id_empresa,
-                'ID_Organizacion'       => $request->id_org,
+                'ID_Empresa'            => $idEmpresa,
+                'ID_Organizacion'       => $idOrg,
                 'ID_Grupo'              => $request->id_grupo,
                 'No_Usuario'            => $email,
                 'No_Nombres_Apellidos'  => $request->nombres_apellidos,
@@ -358,8 +429,8 @@ class UsuarioAdminController extends Controller
 
             DB::table('grupo_usuario')->where('ID_Usuario', $id)->update([
                 'ID_Grupo'        => $request->id_grupo,
-                'ID_Empresa'      => $request->id_empresa,
-                'ID_Organizacion' => $request->id_org,
+                'ID_Empresa'      => $idEmpresa,
+                'ID_Organizacion' => $idOrg,
             ]);
 
             $grupoUsuario = DB::table('grupo_usuario')->where('ID_Usuario', $id)->first();
@@ -367,8 +438,8 @@ class UsuarioAdminController extends Controller
                 $this->ensureMenuCoordinadorGeneralClonado(
                     (int) $grupoUsuario->ID_Grupo_Usuario,
                     (int) $request->id_grupo,
-                    (int) $request->id_empresa,
-                    (int) $request->id_org
+                    $idEmpresa,
+                    $idOrg
                 );
             }
 
@@ -394,6 +465,17 @@ class UsuarioAdminController extends Controller
         try {
             if ($id == 1) {
                 return response()->json(['success' => false, 'message' => 'No se puede eliminar el usuario ROOT'], 422);
+            }
+
+            $authUser = auth()->user();
+            $usuarioObjetivo = DB::table('usuario')->where('ID_Usuario', $id)->first();
+            if (!$usuarioObjetivo) {
+                return response()->json(['success' => false, 'message' => 'Usuario no encontrado'], 404);
+            }
+            $authUserOrgId = (int) $authUser->getAttribute('ID_Organizacion');
+            if ($authUserOrgId !== self::ID_ORGANIZACION_ADMIN
+                && (int) $usuarioObjetivo->ID_Organizacion !== $authUserOrgId) {
+                return response()->json(['success' => false, 'message' => 'Usuario no encontrado'], 404);
             }
 
             $grupoUsuario = DB::table('grupo_usuario')->where('ID_Usuario', $id)->first();

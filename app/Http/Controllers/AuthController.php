@@ -225,6 +225,10 @@ class AuthController extends Controller
                                     'id' => $usuario->organizacion->ID_Organizacion,
                                     'nombre' => $usuario->organizacion->No_Organizacion
                                 ] : null,
+                                // Solo la organizacion 1 (admin) puede crear/editar usuarios de
+                                // cualquier organizacion; el resto queda fijo en la suya. El front
+                                // usa esto para decidir si renderiza el select de organizacion.
+                                'puedeGestionarOrganizaciones' => (int) $usuario->getAttribute('ID_Organizacion') === 1,
                                 'grupo' => $grupoInfo
                             ],
                             'iCantidadAcessoUsuario' => $result['iCantidadAcessoUsuario'] ?? null,
@@ -394,6 +398,7 @@ class AuthController extends Controller
                 'soldCBM' => (float) $soldCBM,
                 'embarquedCBM' => (float) $embarquedCBM,
                 'goals' => $usuario->Txt_Objetivos ?? null,
+                'puedeGestionarOrganizaciones' => (int) $usuario->getAttribute('ID_Organizacion') === 1,
             ];
 
             return response()->json([
@@ -742,7 +747,7 @@ class AuthController extends Controller
      * @param array $data
      * @return void
      */
-    private function registrarDeviceFcm(int $idUsuario, array $data)
+    private function    registrarDeviceFcm(int $idUsuario, array $data)
     {
         $platform = $data['platform'] ?? null;
         $fcmToken = $data['fcm_token'] ?? null;

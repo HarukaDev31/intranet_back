@@ -3,21 +3,27 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Organizacion extends Model
 {
     protected $table = 'organizacion';
     protected $primaryKey = 'ID_Organizacion';
-    
+    public $timestamps = false;
+
+
     protected $fillable = [
         'Nu_Estado',
-        'ID_Empresa'
+        'ID_Empresa',
+        'No_Organizacion',
+        'Txt_Organizacion',
     ];
 
     /**
      * Relación con Empresa
      */
-    public function empresa()
+    public function empresa(): BelongsTo
     {
         return $this->belongsTo(Empresa::class, 'ID_Empresa', 'ID_Empresa');
     }
@@ -25,7 +31,7 @@ class Organizacion extends Model
     /**
      * Relación con Usuario
      */
-    public function usuarios()
+    public function usuarios(): HasMany
     {
         return $this->hasMany(Usuario::class, 'ID_Organizacion', 'ID_Organizacion');
     }
@@ -33,7 +39,7 @@ class Organizacion extends Model
     /**
      * Relación con Almacen
      */
-    public function almacenes()
+    public function almacenes(): HasMany
     {
         return $this->hasMany(Almacen::class, 'ID_Organizacion', 'ID_Organizacion');
     }

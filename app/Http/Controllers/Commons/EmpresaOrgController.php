@@ -38,8 +38,18 @@ class EmpresaOrgController extends Controller
     {
         $request->validate(['empresa_id' => 'required|integer']);
 
-        $orgs = Organizacion::where('ID_Empresa', $request->empresa_id)
-            ->where('Nu_Estado', 1)
+        $query = Organizacion::where('ID_Empresa', $request->empresa_id)
+            ->where('Nu_Estado', 1);
+
+        // Solo la organizacion 1 (admin) puede elegir entre todas; el resto
+        // solo debe recibir la suya, sin importar que empresa_id le pidan.
+        $authUser = auth()->user();
+        $authUserOrgId = $authUser ? (int) $authUser->getAttribute('ID_Organizacion') : 0;
+        if ($authUserOrgId !== 1) {
+            $query->where('ID_Organizacion', $authUserOrgId);
+        }
+
+        $orgs = $query
             ->select('ID_Organizacion', 'No_Organizacion')
             ->orderBy('No_Organizacion')
             ->get();

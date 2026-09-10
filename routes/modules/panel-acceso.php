@@ -8,6 +8,7 @@ use App\Http\Controllers\PanelAcceso\MenuAccesoController;
 use App\Http\Controllers\PanelAcceso\MenuCatalogoController;
 use App\Http\Controllers\PanelAcceso\PermisoMenuUsuarioController;
 use App\Http\Controllers\PanelAcceso\MenuExternoController;
+use App\Http\Controllers\PanelAcceso\OrganizacionAdminController;
 
 /*
 |--------------------------------------------------------------------------
@@ -31,6 +32,15 @@ Route::group(['prefix' => 'panel-acceso', 'middleware' => 'jwt.auth'], function 
     Route::put('grupos/{id}', [GrupoController::class, 'update']);
     Route::delete('grupos/{id}', [GrupoController::class, 'destroy']);
     Route::patch('grupos/{id}/notificacion', [GrupoController::class, 'updateNotificacion']);
+
+    // -----------------------------------------------------------------------
+    // Organizaciones (mantenedor, solo organizacion admin -- ver
+    // OrganizacionAdminController::autorizarAdmin)
+    // -----------------------------------------------------------------------
+    Route::get('organizaciones', [OrganizacionAdminController::class, 'index']);
+    Route::post('organizaciones', [OrganizacionAdminController::class, 'store']);
+    Route::put('organizaciones/{id}', [OrganizacionAdminController::class, 'update']);
+    Route::delete('organizaciones/{id}', [OrganizacionAdminController::class, 'destroy']);
 
     // -----------------------------------------------------------------------
     // Usuarios (panel admin)
