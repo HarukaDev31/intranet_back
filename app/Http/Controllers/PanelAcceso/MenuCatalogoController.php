@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\PanelAcceso;
 
 use App\Http\Controllers\Controller;
+use App\Models\Organizacion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -24,15 +25,54 @@ class MenuCatalogoController extends Controller
     ];
 
     /**
+     * ID_Organizacion que actua como "admin": el unico que puede ver/crear/
+     * editar menus de cualquier organizacion. El resto queda forzado a la
+     * suya, tanto en el listado como en create/update/delete.
+     */
+    private const ID_ORGANIZACION_ADMIN = 1;
+
+    /**
+     * Resuelve la organizacion real a usar: si quien hace la request es de
+     * la organizacion admin, respeta la que pida (validando que exista); si
+     * no, ignora lo pedido y fuerza su propia organizacion.
+     */
+    private function resolverOrganizacion(int $orgIdSolicitado, $authUser): ?int
+    {
+        $puedeElegir = (int) $authUser->getAttribute('ID_Organizacion') === self::ID_ORGANIZACION_ADMIN;
+        $idOrg = $puedeElegir ? $orgIdSolicitado : (int) $authUser->getAttribute('ID_Organizacion');
+
+        return Organizacion::find($idOrg) ? $idOrg : null;
+    }
+
+    /**
      * Listado de todos los menús con nombre del padre.
      * GET /api/panel-acceso/menus
      */
-    public function index()
+    public function index(Request $request)
     {
         try {
+            $authUser = auth()->user();
+            $esAdmin = (int) $authUser->getAttribute('ID_Organizacion') === self::ID_ORGANIZACION_ADMIN;
+
+            $orgIdFiltro = null;
+            if (!$esAdmin) {
+                $orgIdFiltro = (int) $authUser->getAttribute('ID_Organizacion');
+            } elseif ($request->filled('org_id')) {
+                $orgIdFiltro = (int) $request->org_id;
+            }
+
+            $bindings = [];
+            $whereOrg = '';
+            if ($orgIdFiltro !== null) {
+                $whereOrg = 'WHERE m.ID_Organizacion = ?';
+                $bindings[] = $orgIdFiltro;
+            }
+
             $menus = DB::select("
                 SELECT
                     m.ID_Menu        AS id,
+                    m.ID_Organizacion AS id_org,
+                    org.No_Organizacion AS organizacion,
                     m.ID_Padre       AS id_padre,
                     p.No_Menu        AS padre_nombre,
                     m.No_Menu        AS nombre,
@@ -50,12 +90,16 @@ class MenuCatalogoController extends Controller
                      WHERE ma.ID_Menu = m.ID_Menu) AS total_roles
                 FROM menu m
                 LEFT JOIN menu p ON p.ID_Menu = m.ID_Padre
+                LEFT JOIN organizacion org ON org.ID_Organizacion = m.ID_Organizacion
+                {$whereOrg}
                 ORDER BY m.ID_Padre ASC, m.Nu_Orden ASC, m.ID_Menu ASC
-            ");
+            ", $bindings);
 
             $data = array_map(function ($m) {
                 return [
                     'id'           => $m->id,
+                    'id_org'       => $m->id_org,
+                    'organizacion' => $m->organizacion ?? null,
                     'id_padre'     => $m->id_padre,
                     'padre_nombre' => $m->padre_nombre ?? null,
                     'nombre'       => $m->nombre,
@@ -95,12 +139,30 @@ class MenuCatalogoController extends Controller
                 'activo'      => 'required|boolean',
                 'url_video'   => 'nullable|string|max:500',
                 'show_father' => 'nullable|boolean',
+                'id_org'      => 'nullable|integer',
             ]);
+
+            $authUser = auth()->user();
+            $idOrg = $this->resolverOrganizacion((int) $request->input('id_org'), $authUser);
+            if ($idOrg === null) {
+                return response()->json(['success' => false, 'message' => 'Organización no encontrada'], 422);
+            }
+
+            if ((int) $request->id_padre > 0) {
+                $padreExisteEnOrg = DB::table('menu')
+                    ->where('ID_Menu', $request->id_padre)
+                    ->where('ID_Organizacion', $idOrg)
+                    ->exists();
+                if (!$padreExisteEnOrg) {
+                    return response()->json(['success' => false, 'message' => 'El menú padre no pertenece a esta organización'], 422);
+                }
+            }
 
             // Nu_Activo invertido: activo=true → Nu_Activo=0
             $nuActivo = $request->boolean('activo') ? 0 : 1;
 
             $id = DB::table('menu')->insertGetId([
+                'ID_Organizacion' => $idOrg,
                 'ID_Padre'        => $request->id_padre,
                 'Nu_Orden'        => $request->orden,
                 'No_Menu'         => $request->nombre,
@@ -149,9 +211,26 @@ class MenuCatalogoController extends Controller
                 return response()->json(['success' => false, 'message' => 'Menú no encontrado'], 404);
             }
 
+            $authUser = auth()->user();
+            $authUserOrgId = (int) $authUser->getAttribute('ID_Organizacion');
+            if ($authUserOrgId !== self::ID_ORGANIZACION_ADMIN
+                && (int) $existe->ID_Organizacion !== $authUserOrgId) {
+                return response()->json(['success' => false, 'message' => 'Menú no encontrado'], 404);
+            }
+
             // Prevenir ciclos: id_padre no puede ser el mismo menú
             if ((int) $request->id_padre === (int) $id) {
                 return response()->json(['success' => false, 'message' => 'Un menú no puede ser su propio padre'], 422);
+            }
+
+            if ((int) $request->id_padre > 0) {
+                $padreExisteEnOrg = DB::table('menu')
+                    ->where('ID_Menu', $request->id_padre)
+                    ->where('ID_Organizacion', $existe->ID_Organizacion)
+                    ->exists();
+                if (!$padreExisteEnOrg) {
+                    return response()->json(['success' => false, 'message' => 'El menú padre no pertenece a esta organización'], 422);
+                }
             }
 
             $nuActivo = $request->boolean('activo') ? 0 : 1;
@@ -188,6 +267,13 @@ class MenuCatalogoController extends Controller
                 return response()->json(['success' => false, 'message' => 'Menú no encontrado'], 404);
             }
 
+            $authUser = auth()->user();
+            $authUserOrgId = (int) $authUser->getAttribute('ID_Organizacion');
+            if ($authUserOrgId !== self::ID_ORGANIZACION_ADMIN
+                && (int) $existe->ID_Organizacion !== $authUserOrgId) {
+                return response()->json(['success' => false, 'message' => 'Menú no encontrado'], 404);
+            }
+
             DB::transaction(function () use ($id) {
                 // 1. Desasignar de todos los roles
                 DB::table('menu_acceso')->where('ID_Menu', $id)->delete();
@@ -209,6 +295,18 @@ class MenuCatalogoController extends Controller
     public function getGruposConAcceso($id)
     {
         try {
+            $menu = DB::table('menu')->where('ID_Menu', $id)->first();
+            if (!$menu) {
+                return response()->json(['success' => false, 'message' => 'Menú no encontrado'], 404);
+            }
+
+            $authUser = auth()->user();
+            $authUserOrgId = (int) $authUser->getAttribute('ID_Organizacion');
+            if ($authUserOrgId !== self::ID_ORGANIZACION_ADMIN
+                && (int) $menu->ID_Organizacion !== $authUserOrgId) {
+                return response()->json(['success' => false, 'message' => 'Menú no encontrado'], 404);
+            }
+
             $grupos = DB::select("
                 SELECT DISTINCT
                     g.ID_Grupo                    AS id,
