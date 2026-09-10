@@ -4,9 +4,11 @@ namespace App\Models\BaseDatos\Clientes;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\Entidad;
+use App\Models\Usuario;
 
 class Cliente extends Model
 {
@@ -106,8 +108,12 @@ class Cliente extends Model
         }
 
         // Buscar en contenedor_consolidado_cotizacion
+        $usuarioActual = Auth::guard('api')->user();
+        $organizacionIds = $usuarioActual instanceof Usuario ? $usuarioActual->organizacionesPermitidas() : [];
+
         $cotizacion = DB::table('contenedor_consolidado_cotizacion')
             ->join('carga_consolidada_contenedor', 'contenedor_consolidado_cotizacion.id_contenedor', '=', 'carga_consolidada_contenedor.id')
+            ->whereIn('contenedor_consolidado_cotizacion.organizacion_id', $organizacionIds)
             ->whereNotNull('estado_cliente')
             ->whereNull('contenedor_consolidado_cotizacion.deleted_at')
             ->where('estado_cotizador', 'CONFIRMADO')
@@ -208,8 +214,12 @@ class Cliente extends Model
         }
 
         // Buscar en contenedor_consolidado_cotizacion
+        $usuarioActualServicios = Auth::guard('api')->user();
+        $organizacionIdsServicios = $usuarioActualServicios instanceof Usuario ? $usuarioActualServicios->organizacionesPermitidas() : [];
+
         $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
             ->join('carga_consolidada_contenedor', 'contenedor_consolidado_cotizacion.id_contenedor', '=', 'carga_consolidada_contenedor.id')
+            ->whereIn('contenedor_consolidado_cotizacion.organizacion_id', $organizacionIdsServicios)
             ->whereNotNull('contenedor_consolidado_cotizacion.estado_cliente')
             ->whereNull('contenedor_consolidado_cotizacion.deleted_at')
             ->where('contenedor_consolidado_cotizacion.estado_cotizador', 'CONFIRMADO')
@@ -354,8 +364,12 @@ class Cliente extends Model
         }
 
         // Buscar en contenedor_consolidado_cotizacion
+        $usuarioActualSinCategoria = Auth::guard('api')->user();
+        $organizacionIdsSinCategoria = $usuarioActualSinCategoria instanceof Usuario ? $usuarioActualSinCategoria->organizacionesPermitidas() : [];
+
         $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
             ->join('carga_consolidada_contenedor', 'contenedor_consolidado_cotizacion.id_contenedor', '=', 'carga_consolidada_contenedor.id')
+            ->whereIn('contenedor_consolidado_cotizacion.organizacion_id', $organizacionIdsSinCategoria)
             ->whereNotNull('estado_cliente')
             ->whereNull('contenedor_consolidado_cotizacion.deleted_at')
             ->where('estado_cotizador', 'CONFIRMADO')
@@ -364,12 +378,12 @@ class Cliente extends Model
                 if (!empty($this->telefono) && $this->telefono !== null) {
                     $query->where(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$this->telefono}%");
                 }
-                
+
                 // Validar que el documento no sea nulo o vacío antes de procesar
                 if (!empty($this->documento) && $this->documento !== null) {
                     $query->orWhere('documento', $this->documento);
                 }
-                
+
                 // Validar que el correo no sea nulo o vacío antes de procesar
                 if (!empty($this->correo) && $this->correo !== null) {
                     $query->orWhere(function($q) {

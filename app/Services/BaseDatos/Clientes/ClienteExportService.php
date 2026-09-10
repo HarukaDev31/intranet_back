@@ -3,7 +3,9 @@
 namespace App\Services\BaseDatos\Clientes;
 
 use App\Models\BaseDatos\Clientes\Cliente;
+use App\Models\Usuario;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -17,6 +19,18 @@ class ClienteExportService
     public function __construct(ClienteService $clienteService)
     {
         $this->clienteService = $clienteService;
+    }
+
+    /**
+     * IDs de organizacion del usuario autenticado (ver ClienteService).
+     *
+     * @return array<int, int>
+     */
+    private function organizacionIdsUsuarioActual(): array
+    {
+        $usuario = Auth::guard('api')->user();
+
+        return $usuario instanceof Usuario ? $usuario->organizacionesPermitidas() : [];
     }
 
     /**
@@ -374,6 +388,7 @@ class ClienteExportService
         // Obtener servicios de contenedor_consolidado_cotizacion
         $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
             ->where('estado_cotizador', 'CONFIRMADO')
+            ->whereIn('organizacion_id', $this->organizacionIdsUsuarioActual())
             ->whereNull('deleted_at')
             ->whereIn('id_cliente', $clienteIds)
             ->select(

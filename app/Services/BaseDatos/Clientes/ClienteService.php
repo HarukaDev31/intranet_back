@@ -7,6 +7,7 @@ use App\Models\Usuario;
 use App\Models\User;
 use App\Models\Provincia;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -14,6 +15,21 @@ use Carbon\Carbon;
 
 class ClienteService
 {
+    /**
+     * IDs de organizacion del usuario autenticado. La tabla `clientes` es una
+     * vista deduplicada sin organizacion propia; los datos de Carga Consolidada
+     * que se le asocian aqui via DB::table() no heredan ningun scope de
+     * Eloquent, asi que hay que filtrarlos a mano en cada query.
+     *
+     * @return array<int, int>
+     */
+    private function organizacionIdsUsuarioActual(): array
+    {
+        $usuario = Auth::guard('api')->user();
+
+        return $usuario instanceof Usuario ? $usuario->organizacionesPermitidas() : [];
+    }
+
     /**
      * Obtener clientes con paginación y filtros
      */
@@ -199,6 +215,7 @@ class ClienteService
                         try {
                             $cotizacionQuery = DB::table('contenedor_consolidado_cotizacion as CC')
                                 ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+                                ->whereIn('CC.organizacion_id', $this->organizacionIdsUsuarioActual())
                                 ->whereNull('CC.deleted_at')
                                 ->where('CC.estado_cotizador', 'CONFIRMADO')
                                 ->whereNotNull('CC.estado_cliente');
@@ -690,6 +707,7 @@ class ClienteService
             ->whereNotNull('estado_cliente')
             ->whereNull('deleted_at')
             ->where('estado_cotizador', 'CONFIRMADO')
+            ->whereIn('organizacion_id', $this->organizacionIdsUsuarioActual())
             ->whereIn('id_cliente', $clienteIds)
             ->select(
                 'id_cliente',
@@ -830,6 +848,7 @@ class ClienteService
                 if (!$provinciaName) {
                     $cotizacion = DB::table('contenedor_consolidado_cotizacion as CC')
                         ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+                        ->whereIn('CC.organizacion_id', $this->organizacionIdsUsuarioActual())
                         ->whereNull('CC.deleted_at')
                         ->where('CC.estado_cotizador', 'CONFIRMADO')
                         ->whereNotNull('CC.estado_cliente')
@@ -1014,6 +1033,7 @@ class ClienteService
                         try {
                             $cotizacionQuery = DB::table('contenedor_consolidado_cotizacion as CC')
                                 ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+                                ->whereIn('CC.organizacion_id', $this->organizacionIdsUsuarioActual())
                                 ->whereNull('CC.deleted_at')
                                 ->where('CC.estado_cotizador', 'CONFIRMADO')
                                 ->whereNotNull('CC.estado_cliente');
@@ -1224,6 +1244,7 @@ class ClienteService
         // Fecha mínima de CONSOLIDADO por cliente (solo confirmados)
         $minConsolidado = DB::table('contenedor_consolidado_cotizacion as ccc')
             ->where('ccc.estado_cotizador', 'CONFIRMADO')
+            ->whereIn('ccc.organizacion_id', $this->organizacionIdsUsuarioActual())
             ->whereNull('ccc.deleted_at')
             ->whereNotNull('ccc.id_cliente')
             ->groupBy('ccc.id_cliente')
