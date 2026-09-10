@@ -475,13 +475,18 @@ class ContenedorController extends Controller
     }
     public function generateSteps($idContenedor)
     {
+        // Contenedor::organizacion_id ya viene resuelto por store(); los pasos se crean
+        // con insert() masivo (no dispara SincronizaOrganizacionId), asi que hay que
+        // copiarlo a mano o quedan con organizacion_id NULL e invisibles bajo OrganizacionScope.
+        $organizacionId = Contenedor::query()->whereKey($idContenedor)->value('organizacion_id');
+
         $this->insertSteps(
             $this->getCotizacionSteps($idContenedor),
             $this->getDocumentacionSteps($idContenedor),
             $this->getJefeImportacionSteps($idContenedor),
             $this->getJefeMarketingSteps($idContenedor),
-            $this->getFinanzasSteps($idContenedor)
-
+            $this->getFinanzasSteps($idContenedor),
+            $organizacionId
         );
     }
     public function getCotizacionSteps($idContenedor)
@@ -576,13 +581,20 @@ class ContenedorController extends Controller
         }
         return $stepsFinanzas;
     }
-    public function insertSteps($stepsCotizador, $stepsDocumentacion, $stepsJefeImportacion, $stepsJefeMarketing, $stepsFinanzas)
+    public function insertSteps($stepsCotizador, $stepsDocumentacion, $stepsJefeImportacion, $stepsJefeMarketing, $stepsFinanzas, $organizacionId = null)
     {
-        ContenedorPasos::insert($stepsCotizador);
-        ContenedorPasos::insert($stepsDocumentacion);
-        ContenedorPasos::insert($stepsJefeImportacion);
-        ContenedorPasos::insert($stepsJefeMarketing);
-        ContenedorPasos::insert($stepsFinanzas);
+        $conOrganizacion = function (array $steps) use ($organizacionId) {
+            return array_map(function ($step) use ($organizacionId) {
+                $step['organizacion_id'] = $organizacionId;
+                return $step;
+            }, $steps);
+        };
+
+        ContenedorPasos::insert($conOrganizacion($stepsCotizador));
+        ContenedorPasos::insert($conOrganizacion($stepsDocumentacion));
+        ContenedorPasos::insert($conOrganizacion($stepsJefeImportacion));
+        ContenedorPasos::insert($conOrganizacion($stepsJefeMarketing));
+        ContenedorPasos::insert($conOrganizacion($stepsFinanzas));
     }
     
     /**
@@ -898,6 +910,11 @@ class ContenedorController extends Controller
                     break;
                 case Usuario::ROL_FINANZAS:
                     $query->where('tipo', 'FINANZAS');
+                    break;
+                case Usuario::ROL_SOCIO:
+                    // Socio ve COTIZACION+CLIENTES en "abiertos" y suma DOCUMENTACION en "completados".
+                    $query->where('tipo', 'COTIZADOR')
+                        ->limit($request->boolean('completado') ? 3 : 2);
                     break;
                 default:
                     $query->where('tipo', 'COTIZADOR');
