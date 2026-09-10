@@ -49,6 +49,9 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
     // Cotizacion "resumen" (sin items, documento leido por IA)
     Route::prefix('cotizacion-resumen')->group(function () {
         Route::post('/extraer-documento', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'extraerDocumento']);
+        Route::get('/', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'store']);
+        Route::put('/{id}/estado', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'updateEstado']);
     });
 
     // Dashboard ventas

@@ -3,6 +3,7 @@
 namespace App\Models\CargaConsolidada;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\CotizacionProveedorItems;
 use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
@@ -111,7 +112,7 @@ class CotizacionProveedor extends Model
     /**
      * Cabecera "resumen" (sin items) cuando modo_cotizacion = 'resumen'.
      */
-    public function resumen()
+    public function resumen(): HasOne
     {
         return $this->hasOne(CotizacionProveedorResumen::class, 'id_proveedor');
     }
