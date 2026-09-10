@@ -135,6 +135,62 @@ class GeminiService
     }
 
     /**
+     * Extrae datos de cliente y proveedores desde un documento de cotización
+     * (usado por el flujo "resumen": organizaciones sin items, que suben un
+     * documento en vez de cargar la calculadora item por item).
+     *
+     * @param string $filePath  Ruta absoluta del archivo
+     * @param string $mimeType  MIME type soportado (ver COTIZACION_RESUMEN_SUPPORTED_MIMES)
+     * @return array{success: bool, error: string|null, data: array{cliente: array, proveedores: array}|null}
+     */
+    public function extractFromCotizacionResumen($filePath, $mimeType)
+    {
+        $prompt = 'Analiza este documento de cotización de importación (puede ser una cotización de proveedor, ' .
+            'una factura proforma o una lista de productos con costos). Extrae los datos del cliente y de cada ' .
+            'proveedor/producto que encuentres. ' .
+            'Reglas: ' .
+            '- cliente.nombre: nombre o razón social del cliente/destinatario. null si no aparece. ' .
+            '- cliente.tipo_documento: "RUC" si el identificador tiene formato de RUC (11 dígitos u otro estándar del país), "ID" en cualquier otro caso o si no se puede determinar. ' .
+            '- cliente.documento: el número de RUC/ID/cédula del cliente. null si no aparece. ' .
+            '- cliente.whatsapp: teléfono de contacto del cliente, con código de país si aparece. null si no aparece. ' .
+            '- cliente.correo: correo electrónico del cliente. null si no aparece. ' .
+            '- proveedores: un elemento por cada proveedor o grupo de productos con costos propios que encuentres (al menos uno). Si el documento no distingue proveedores, usa un solo elemento con el total del documento. ' .
+            '- proveedores[].cbm_total: volumen total en CBM/m3 de ese proveedor. null si no aparece. ' .
+            '- proveedores[].peso_total: peso total en KG de ese proveedor. null si no aparece. ' .
+            '- proveedores[].qty_cajas: cantidad de cajas/bultos de ese proveedor. null si no aparece. ' .
+            '- proveedores[].productos: descripción breve de los productos de ese proveedor (nombres separados por coma). null si no aparece. ' .
+            'Responde solo con el JSON del schema (una línea, compacto).';
+
+        $result = $this->callGemini(
+            $filePath,
+            $mimeType,
+            $prompt,
+            4096,
+            self::cotizacionResumenResponseSchema()
+        );
+
+        if (!$result['success']) {
+            return ['success' => false, 'error' => $result['error'], 'data' => null];
+        }
+
+        $extracted = $result['data'];
+
+        Log::info('GeminiService extractFromCotizacionResumen: datos extraídos', [
+            'file'      => basename($filePath),
+            'extracted' => $extracted,
+        ]);
+
+        return [
+            'success' => true,
+            'error'   => null,
+            'data'    => [
+                'cliente'     => $extracted['cliente'] ?? [],
+                'proveedores' => $extracted['proveedores'] ?? [],
+            ],
+        ];
+    }
+
+    /**
      * Genera y parsea JSON desde un prompt de texto (sin archivo adjunto).
      *
      * @param  string  $prompt
@@ -316,6 +372,45 @@ class GeminiService
                 'monto_detraccion_dolares',
                 'monto_detraccion_soles',
             ],
+        ];
+    }
+
+    /**
+     * Schema Gemini para el flujo "resumen" (cliente + proveedores sin items).
+     *
+     * @return array<string, mixed>
+     */
+    private static function cotizacionResumenResponseSchema()
+    {
+        return [
+            'type' => 'OBJECT',
+            'properties' => [
+                'cliente' => [
+                    'type' => 'OBJECT',
+                    'properties' => [
+                        'nombre' => ['type' => 'STRING', 'nullable' => true],
+                        'tipo_documento' => ['type' => 'STRING', 'nullable' => true],
+                        'documento' => ['type' => 'STRING', 'nullable' => true],
+                        'whatsapp' => ['type' => 'STRING', 'nullable' => true],
+                        'correo' => ['type' => 'STRING', 'nullable' => true],
+                    ],
+                    'required' => ['nombre', 'tipo_documento', 'documento', 'whatsapp', 'correo'],
+                ],
+                'proveedores' => [
+                    'type' => 'ARRAY',
+                    'items' => [
+                        'type' => 'OBJECT',
+                        'properties' => [
+                            'cbm_total' => ['type' => 'NUMBER', 'nullable' => true],
+                            'peso_total' => ['type' => 'NUMBER', 'nullable' => true],
+                            'qty_cajas' => ['type' => 'NUMBER', 'nullable' => true],
+                            'productos' => ['type' => 'STRING', 'nullable' => true],
+                        ],
+                        'required' => ['cbm_total', 'peso_total', 'qty_cajas', 'productos'],
+                    ],
+                ],
+            ],
+            'required' => ['cliente', 'proveedores'],
         ];
     }
 

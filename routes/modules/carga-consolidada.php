@@ -46,6 +46,11 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
         Route::post('/force-send-recordatorio-datos-proveedor', [CotizacionProveedorController::class, 'forceSendRecordatorioDatosProveedor']);
     });
 
+    // Cotizacion "resumen" (sin items, documento leido por IA)
+    Route::prefix('cotizacion-resumen')->group(function () {
+        Route::post('/extraer-documento', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'extraerDocumento']);
+    });
+
     // Dashboard ventas
     Route::prefix('dashboard-ventas')->group(function () {
         Route::get('/resumen', [App\Http\Controllers\CargaConsolidada\DashboardVentasController::class, 'getResumenVentas']);

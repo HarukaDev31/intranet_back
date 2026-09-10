@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\PanelAcceso;
 
 use App\Http\Controllers\Controller;
+use App\Models\Organizacion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -10,12 +11,46 @@ use Illuminate\Support\Facades\Log;
 class MenuAccesoController extends Controller
 {
     /**
+     * ID_Organizacion que actua como "admin": el unico que puede ver/editar
+     * permisos de menu de cargos de cualquier organizacion. El resto solo
+     * puede gestionar los de la suya, sin importar que id_empresa/id_org
+     * mande el cliente.
+     */
+    private const ID_ORGANIZACION_ADMIN = 1;
+
+    /**
+     * Resuelve empresa/organizacion reales a usar: si quien hace la request
+     * es de la organizacion admin, respeta lo pedido (validando que exista);
+     * si no, ignora lo pedido y fuerza su propia organizacion/empresa.
+     *
+     * @return array{0: int|null, 1: int|null} [idOrg, idEmpresa], ambos null si la organizacion no existe.
+     */
+    private function resolverOrganizacion(int $orgIdSolicitado, $authUser): array
+    {
+        $puedeElegir = (int) $authUser->getAttribute('ID_Organizacion') === self::ID_ORGANIZACION_ADMIN;
+        $idOrg = $puedeElegir ? $orgIdSolicitado : (int) $authUser->getAttribute('ID_Organizacion');
+
+        $organizacion = Organizacion::find($idOrg);
+        if (!$organizacion) {
+            return [null, null];
+        }
+
+        return [(int) $organizacion->getAttribute('ID_Organizacion'), (int) $organizacion->getAttribute('ID_Empresa')];
+    }
+
+    /**
      * Obtener menú de acceso para un grupo específico.
      * GET /api/panel-acceso/menu-acceso/{empresaId}/{orgId}/{grupoId}
      */
-    public function getMenuPorGrupo($empresaId, $orgId, $grupoId)
+    public function getMenuPorGrupo(Request $request, $empresaId, $orgId, $grupoId)
     {
         try {
+            $authUser = auth()->user();
+            [$orgId, $empresaId] = $this->resolverOrganizacion((int) $orgId, $authUser);
+            if ($orgId === null) {
+                return response()->json(['success' => false, 'message' => 'Organización no encontrada'], 422);
+            }
+
             // Verificar que el grupo tenga usuarios
             $tieneUsuarios = DB::selectOne(
                 'SELECT COUNT(*) AS existe FROM usuario WHERE ID_Empresa = ? AND ID_Organizacion = ? AND ID_Grupo = ? LIMIT 1',
@@ -99,13 +134,19 @@ class MenuAccesoController extends Controller
                 'menus'         => 'required|array',
             ]);
 
+            $authUser = auth()->user();
+            [$idOrg, $idEmpresa] = $this->resolverOrganizacion((int) $request->id_org, $authUser);
+            if ($idOrg === null) {
+                return response()->json(['success' => false, 'message' => 'Organización no encontrada'], 422);
+            }
+
             $menuIds = array_map('intval', array_keys($request->menus ?? []));
             $requestedPerms = $request->menus ?? [];
 
             // Obtener TODOS los ID_Grupo_Usuario que correspondan (evitar LIMIT 1, que puede afectar a otro rol/org)
             $grupoUsuarios = DB::select(
                 'SELECT ID_Grupo_Usuario FROM grupo_usuario WHERE ID_Empresa = ? AND ID_Organizacion = ? AND ID_Grupo = ?',
-                [$request->id_empresa, $request->id_org, $request->id_grupo]
+                [$idEmpresa, $idOrg, $request->id_grupo]
             );
 
             if (!$grupoUsuarios || count($grupoUsuarios) === 0) {
@@ -124,8 +165,8 @@ class MenuAccesoController extends Controller
                 ->toArray();
 
             Log::info('menu_acceso.guardar_permisos.inicio', [
-                'id_empresa' => (int) $request->id_empresa,
-                'id_org' => (int) $request->id_org,
+                'id_empresa' => $idEmpresa,
+                'id_org' => $idOrg,
                 'id_grupo' => (int) $request->id_grupo,
                 'roles_grupo_usuario' => $grupoUsuariosIds,
                 'usuarios_afectados' => $usuariosAfectados,
@@ -156,10 +197,10 @@ class MenuAccesoController extends Controller
                 DB::table('menu_acceso')->where('ID_Grupo_Usuario', $idGrupoUsuario)->delete();
 
                 // Insertar menús seleccionados (con padres y abuelos automáticos)
-                $this->insertarMenusConJerarquia($request->id_empresa, $idGrupoUsuario, $request->menus);
+                $this->insertarMenusConJerarquia($idEmpresa, $idGrupoUsuario, $request->menus);
 
                 // Insertar menús de seguridad automáticos según el nombre del grupo
-                $this->insertarMenusSeguridad($request->id_empresa, $idGrupoUsuario, $request->id_grupo);
+                $this->insertarMenusSeguridad($idEmpresa, $idGrupoUsuario, $request->id_grupo);
 
                 $newRows = [];
                 if (!empty($menuIds)) {
@@ -175,8 +216,8 @@ class MenuAccesoController extends Controller
 
                 Log::info('menu_acceso.guardar_permisos.resultado', [
                     'id_grupo_usuario' => $idGrupoUsuario,
-                    'id_empresa' => (int) $request->id_empresa,
-                    'id_org' => (int) $request->id_org,
+                    'id_empresa' => $idEmpresa,
+                    'id_org' => $idOrg,
                     'id_grupo' => (int) $request->id_grupo,
                     'antiguos' => [
                         'count_total' => $oldCount,
@@ -192,8 +233,8 @@ class MenuAccesoController extends Controller
             DB::commit();
 
             Log::info('menu_acceso.guardar_permisos.fin', [
-                'id_empresa' => (int) $request->id_empresa,
-                'id_org' => (int) $request->id_org,
+                'id_empresa' => $idEmpresa,
+                'id_org' => $idOrg,
                 'id_grupo' => (int) $request->id_grupo,
                 'updated_groups' => count($grupoUsuarios),
             ]);
