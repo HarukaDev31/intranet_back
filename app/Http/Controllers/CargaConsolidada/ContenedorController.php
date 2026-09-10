@@ -1269,6 +1269,9 @@ Le estaré informando cualquier avance 🫡.";
             $fechaFin = $request->input('fecha_fin');
             $idContenedor = $request->input('id_contenedor');
 
+            $authUser = auth()->user();
+            $orgIdsPermitidas = $authUser ? $authUser->organizacionesPermitidas() : [];
+
             $query = DB::table('usuario as u')
                 ->select([
                     'u.ID_Usuario as id',
@@ -1282,6 +1285,7 @@ Le estaré informando cualquier avance 🫡.";
                 ->join('contenedor_consolidado_cotizacion_proveedores as cccp', 'cc.id', '=', 'cccp.id_cotizacion','left')
                 ->join('carga_consolidada_contenedor as cont', 'cc.id_contenedor', '=', 'cont.id','left')
                 ->whereNull('cc.deleted_at')
+                ->whereIn('u.ID_Organizacion', $orgIdsPermitidas)
                 ->groupBy('u.ID_Usuario', 'u.No_Nombres_Apellidos', 'g.No_Grupo');
 
             if ($fechaInicio && $fechaFin) {
