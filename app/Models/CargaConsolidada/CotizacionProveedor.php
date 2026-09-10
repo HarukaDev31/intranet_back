@@ -59,7 +59,8 @@ class CotizacionProveedor extends Model
         'excel_conf_form_cerrado',
         'canal',
         'fecha_entrega',
-        'observaciones_seguimiento'
+        'observaciones_seguimiento',
+        'modo_cotizacion'
     ];
 
     // Permitir asignación masiva de los nuevos estados de documentos (casts definidos abajo)
@@ -105,6 +106,22 @@ class CotizacionProveedor extends Model
     public function items()
     {
         return $this->hasMany(CotizacionProveedorItems::class, 'id_proveedor');
+    }
+
+    /**
+     * Cabecera "resumen" (sin items) cuando modo_cotizacion = 'resumen'.
+     */
+    public function resumen()
+    {
+        return $this->hasOne(CotizacionProveedorResumen::class, 'id_proveedor');
+    }
+
+    /**
+     * Historial de archivos subidos + lo que la IA extrajo de cada uno.
+     */
+    public function archivosIa()
+    {
+        return $this->hasMany(CotizacionProveedorArchivoIa::class, 'id_proveedor');
     }
 
     /**

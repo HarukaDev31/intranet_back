@@ -25,6 +25,16 @@ class Usuario extends Authenticatable implements JWTSubject
     const ROL_PM = 'PM';
     const ROL_FINANZAS = 'Finanzas';
     const ROL_RRHH = 'RRHH';
+
+    /**
+     * Roles que operan fisicamente para todas las organizaciones a la vez
+     * (ej. el almacen de China recibe carga de cualquier organizacion) y por
+     * eso necesitan ver y editar datos cross-org, sin depender de filas en
+     * grupo_usuario por cada organizacion nueva que se cree.
+     */
+    const ROLES_VISIBILIDAD_GLOBAL = [
+        self::ROL_ALMACEN_CHINA,
+    ];
     protected $fillable = [
         'No_Usuario',
         'No_Password',
@@ -104,6 +114,15 @@ class Usuario extends Authenticatable implements JWTSubject
     {
         if ($this->organizacionesPermitidasMemo !== null) {
             return $this->organizacionesPermitidasMemo;
+        }
+
+        if (in_array($this->getNombreGrupo(), self::ROLES_VISIBILIDAD_GLOBAL, true)) {
+            return $this->organizacionesPermitidasMemo = Organizacion::query()
+                ->where('Nu_Estado', 1)
+                ->pluck('ID_Organizacion')
+                ->map(fn ($id) => (int) $id)
+                ->values()
+                ->all();
         }
 
         $ids = GrupoUsuario::query()
