@@ -424,6 +424,9 @@ class ContenedorController extends Controller
             $data = $request->all();
                 $tcYuan = isset($data['tc_yuan']) ? $data['tc_yuan'] : null;
                 unset($data['tc_yuan']);
+                // organizacion_id nunca se toma del request (evita que un contenedor
+                // "cambie" de organizacion o se cree en otra distinta a la del usuario).
+                unset($data['organizacion_id']);
                 if ($data['id']) {
                     $contenedor = Contenedor::find($data['id']);
                     $contenedor->update($data);
@@ -440,6 +443,11 @@ class ContenedorController extends Controller
                         }
                         $data['f_inicio'] = sprintf('%04d-%02d-01', $year, $month);
                     }
+
+                    // El contenedor es la raiz del escopeo por organizacion: siempre la
+                    // del usuario autenticado (Socio queda asi forzado a la suya; el pais
+                    // sigue siendo libre, no tiene relacion con la organizacion).
+                    $data['organizacion_id'] = (int) auth()->user()->getAttribute('ID_Organizacion');
 
                     $contenedor = Contenedor::create($data);
                     $this->generateSteps($contenedor->id);
