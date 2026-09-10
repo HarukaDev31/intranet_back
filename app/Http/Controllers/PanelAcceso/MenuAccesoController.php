@@ -102,9 +102,10 @@ class MenuAccesoController extends Controller
             AND (MNUSUBPADRE.Nu_Cantidad_Menu_Hijos = 0 OR MNUSUBPADRE.Nu_Cantidad_Menu_Hijos IS NULL)
             AND MNU.Nu_Seguridad = 0
             AND MNU.Nu_Activo = 0
-            AND MNU.Nu_Tipo_Sistema = 0";
+            AND MNU.Nu_Tipo_Sistema = 0
+            AND MNU.ID_Organizacion = ?";
 
-            $arrData = DB::select($query, [$empresaId, $grupoId]);
+            $arrData = DB::select($query, [$empresaId, $grupoId, $orgId]);
 
             foreach ($arrData as &$row) {
                 $row->No_Menu_Padre = $this->getMenuPadreNombre($row->ID_Padre);
