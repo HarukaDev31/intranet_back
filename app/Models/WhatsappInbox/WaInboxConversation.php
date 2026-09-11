@@ -3,7 +3,15 @@
 namespace App\Models\WhatsappInbox;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int $id
+ * @property int|null $session_id
+ * @property string|null $phone_e164
+ * @property-read WaInboxSession|null $session
+ */
 class WaInboxConversation extends Model
 {
     protected $table = 'wa_inbox_conversations';
@@ -37,12 +45,12 @@ class WaInboxConversation extends Model
         'unread_count' => 'integer',
     ];
 
-    public function session()
+    public function session(): BelongsTo
     {
         return $this->belongsTo(WaInboxSession::class, 'session_id');
     }
 
-    public function messages()
+    public function messages(): HasMany
     {
         return $this->hasMany(WaInboxMessage::class, 'conversation_id');
     }
