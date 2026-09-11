@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * @property int $ID_Organizacion
@@ -12,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $Nu_Estado
  * @property string|null $No_Organizacion
  * @property string|null $Txt_Organizacion
+ * @property-read OrganizacionPortal|null $portal
  */
 class Organizacion extends Model
 {
@@ -51,7 +53,10 @@ class Organizacion extends Model
         return $this->hasMany(Almacen::class, 'ID_Organizacion', 'ID_Organizacion');
     }
 
-    public function portal()
+    /**
+     * @return HasOne<OrganizacionPortal, $this>
+     */
+    public function portal(): HasOne
     {
         return $this->hasOne(OrganizacionPortal::class, 'organizacion_id', 'ID_Organizacion');
     }

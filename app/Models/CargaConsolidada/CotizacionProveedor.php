@@ -3,6 +3,7 @@
 namespace App\Models\CargaConsolidada;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\CotizacionProveedorItems;
@@ -40,6 +41,8 @@ use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
  * @property string|null $excel_confirmacion
  * @property string|null $excel_confirmacion_drive_link
  * @property string|null $packing_list
+ * @property-read Cotizacion|null $cotizacion
+ * @property-read Contenedor|null $contenedor
  */
 class CotizacionProveedor extends Model
 {
@@ -121,8 +124,10 @@ class CotizacionProveedor extends Model
 
     /**
      * Relación con Cotizacion
+     *
+     * @return BelongsTo<Cotizacion, $this>
      */
-    public function cotizacion()
+    public function cotizacion(): BelongsTo
     {
         return $this->belongsTo(Cotizacion::class, 'id_cotizacion', 'id');
     }

@@ -83,7 +83,7 @@ class OrganizacionAdminController extends Controller
                 'Nu_Estado'        => $request->input('estado', 1),
             ]);
 
-            $this->syncPortal($organizacion, $request);
+            $this->syncPortal($organizacion, $this->requestPayload($request));
 
             return response()->json([
                 'success' => true,
@@ -127,20 +127,22 @@ class OrganizacionAdminController extends Controller
                 'regenerar_public_key'   => 'nullable|boolean',
             ]);
 
-            if ($request->filled('id_empresa')) {
-                $organizacion->setAttribute('ID_Empresa', $request->id_empresa);
+            $input = $this->requestPayload($request);
+
+            if ($this->inputFilled($input, 'id_empresa')) {
+                $organizacion->setAttribute('ID_Empresa', $input['id_empresa']);
             }
-            if ($request->filled('no_organizacion')) {
-                $organizacion->setAttribute('No_Organizacion', trim($request->no_organizacion));
+            if ($this->inputFilled($input, 'no_organizacion')) {
+                $organizacion->setAttribute('No_Organizacion', trim((string) $input['no_organizacion']));
             }
-            if ($request->has('txt_organizacion')) {
-                $organizacion->setAttribute('Txt_Organizacion', $request->txt_organizacion);
+            if (array_key_exists('txt_organizacion', $input)) {
+                $organizacion->setAttribute('Txt_Organizacion', $input['txt_organizacion']);
             }
-            if ($request->filled('estado')) {
-                $organizacion->setAttribute('Nu_Estado', $request->estado);
+            if ($this->inputFilled($input, 'estado')) {
+                $organizacion->setAttribute('Nu_Estado', $input['estado']);
             }
             $organizacion->save();
-            $this->syncPortal($organizacion, $request);
+            $this->syncPortal($organizacion, $input);
 
             return response()->json([
                 'success' => true,
@@ -204,19 +206,52 @@ class OrganizacionAdminController extends Controller
         ];
     }
 
-    private function syncPortal(Organizacion $organizacion, Request $request): void
+    /**
+     * PUT en algunos PHP/nginx no llena $_POST; mezclamos query + body + JSON.
+     *
+     * @return array<string, mixed>
+     */
+    private function requestPayload(Request $request): array
+    {
+        $json = $request->json() ? $request->json()->all() : [];
+        if (!is_array($json)) {
+            $json = [];
+        }
+
+        return array_merge($request->query->all(), $request->request->all(), $request->all(), $json);
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     */
+    private function inputFilled(array $input, string $key): bool
+    {
+        if (!array_key_exists($key, $input)) {
+            return false;
+        }
+
+        $value = $input[$key];
+
+        return $value !== null && $value !== '';
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     */
+    private function syncPortal(Organizacion $organizacion, array $input): void
     {
         $orgId = (int) $organizacion->getAttribute('ID_Organizacion');
         $portal = OrganizacionPortal::firstOrCreateForOrganizacion($orgId);
 
         $campos = ['url_clientes', 'url_excel_confirmacion', 'url_datos_proveedor', 'nombre_publico', 'drive_folder_id', 'logo_url'];
         foreach ($campos as $campo) {
-            if ($request->exists($campo)) {
-                $valor = trim((string) $request->input($campo, ''));
-                $portal->setAttribute($campo, $valor !== '' ? $valor : null);
+            if (!array_key_exists($campo, $input)) {
+                continue;
             }
+            $valor = trim((string) ($input[$campo] ?? ''));
+            $portal->setAttribute($campo, $valor !== '' ? $valor : null);
         }
-        if ($request->boolean('regenerar_public_key')) {
+        if (!empty($input['regenerar_public_key'])) {
             $portal->setAttribute('public_key', (string) \Illuminate\Support\Str::uuid());
         }
         $portal->save();
