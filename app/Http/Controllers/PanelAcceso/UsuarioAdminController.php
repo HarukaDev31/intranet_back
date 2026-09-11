@@ -86,17 +86,17 @@ class UsuarioAdminController extends Controller
                 $query->where('USR.ID_Usuario', '!=', 1);
             }
 
-            // Solo la organizacion admin ve usuarios de todas las organizaciones.
-            if ((int) $authUser->getAttribute('ID_Organizacion') !== self::ID_ORGANIZACION_ADMIN) {
-                $query->where('USR.ID_Organizacion', $authUser->getAttribute('ID_Organizacion'));
-            }
-
-            if ($request->filled('empresa_id')) {
-                $query->where('USR.ID_Empresa', $request->empresa_id);
-            }
-
-            if ($request->filled('org_id')) {
-                $query->where('USR.ID_Organizacion', $request->org_id);
+            // Org ≠ 1: solo su organización. Ignorar empresa_id/org_id del request.
+            $authOrg = (int) $authUser->getAttribute('ID_Organizacion');
+            if ($authOrg !== self::ID_ORGANIZACION_ADMIN) {
+                $query->where('USR.ID_Organizacion', $authOrg);
+            } else {
+                if ($request->filled('empresa_id')) {
+                    $query->where('USR.ID_Empresa', $request->empresa_id);
+                }
+                if ($request->filled('org_id')) {
+                    $query->where('USR.ID_Organizacion', $request->org_id);
+                }
             }
 
             if ($request->filled('search')) {

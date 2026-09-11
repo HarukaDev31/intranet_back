@@ -67,18 +67,19 @@ class GrupoController extends Controller
                 ->join('empresa AS emp', 'emp.ID_Empresa', '=', 'grupo.ID_Empresa')
                 ->join('organizacion AS org', 'org.ID_Organizacion', '=', 'grupo.ID_Organizacion');
 
-            if ($request->filled('empresa_id')) {
-                $query->where('grupo.ID_Empresa', $request->empresa_id);
-            }
-
-            // Solo la organizacion admin ve/filtra cargos de cualquier organizacion.
             $user = auth()->user();
-            $orgIdFiltro = (int) $user->getAttribute('ID_Organizacion') !== self::ID_ORGANIZACION_ADMIN
-                ? $user->getAttribute('ID_Organizacion')
-                : ($request->filled('org_id') ? $request->org_id : null);
+            $authOrg = (int) $user->getAttribute('ID_Organizacion');
 
-            if ($orgIdFiltro !== null) {
-                $query->where('grupo.ID_Organizacion', $orgIdFiltro);
+            // Org ≠ 1: solo sus cargos. Ignorar empresa_id/org_id del request.
+            if ($authOrg !== self::ID_ORGANIZACION_ADMIN) {
+                $query->where('grupo.ID_Organizacion', $authOrg);
+            } else {
+                if ($request->filled('empresa_id')) {
+                    $query->where('grupo.ID_Empresa', $request->empresa_id);
+                }
+                if ($request->filled('org_id')) {
+                    $query->where('grupo.ID_Organizacion', $request->org_id);
+                }
             }
 
             if ($request->filled('search')) {
