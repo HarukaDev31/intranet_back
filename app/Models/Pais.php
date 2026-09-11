@@ -13,6 +13,11 @@ class Pais extends Model
         'No_Pais'
     ];
 
+    public function flag()
+    {
+        return $this->hasOne(PaisFlag::class, 'id_pais', 'ID_Pais');
+    }
+
     /**
      * Relación con Empresa
      */

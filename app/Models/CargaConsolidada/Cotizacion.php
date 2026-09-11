@@ -78,6 +78,7 @@ class Cotizacion extends Model
         'factura_general_url',
         'cotizacion_final_url',
         'estado_cotizador',
+        'estado_resumen',
         'fecha_confirmacion',
         'estado_pagos_coordinacion',
         'estado_cotizacion_final',
@@ -175,6 +176,11 @@ class Cotizacion extends Model
         'CONFIRMADO' => 'Confirmado',
         'INTERESADO' => 'Interesado',
         'CONTACTADO' => 'Contactado'
+    ];
+
+    public const ESTADOS_RESUMEN = [
+        'COTIZADO' => 'Cotizado',
+        'CONFIRMADO' => 'Confirmado',
     ];
 
     /**

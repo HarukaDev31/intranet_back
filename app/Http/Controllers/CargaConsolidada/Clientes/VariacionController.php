@@ -5,8 +5,11 @@ namespace App\Http\Controllers\CargaConsolidada\Clientes;
 use App\Http\Controllers\Controller;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\Usuario;
+use App\Support\CargaConsolidada\ClientesVisibility;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class VariacionController extends Controller
 {
@@ -48,18 +51,24 @@ class VariacionController extends Controller
             ->where('CC.id_contenedor', $idContenedor)
             ->whereNull('CC.deleted_at')
             ->whereNull('id_cliente_importacion')
-            ->where('CC.estado_cotizador', 'CONFIRMADO')
             ->whereExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('contenedor_consolidado_cotizacion_proveedores')
                     ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'CC.id');
             });
 
-        // Mientras el contenedor no haya completado la recepción en China, se listan
-        // todas las cotizaciones; al llegar a COMPLETADO se exige estado_cliente definido.
-        if (Contenedor::where('id', $idContenedor)->value('estado_china') === Contenedor::ESTADOS_CHINA['COMPLETADO']) {
-            $query->whereNotNull('CC.estado_cliente');
+        $user = null;
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+        } catch (\Exception $e) {
+            $user = null;
         }
+        $esSocio = $user && (
+            $user->getNombreGrupo() === Usuario::ROL_SOCIO
+            || (int) $user->getAttribute('ID_Organizacion') !== 1
+        );
+        $contenedorCerrado = Contenedor::where('id', $idContenedor)->value('estado_china') === Contenedor::ESTADOS_CHINA['COMPLETADO'];
+        ClientesVisibility::applyListado($query, 'CC', $esSocio, $contenedorCerrado);
         // Aplicar filtro de estado si se proporciona
         $estado = $request->input('estado', '0');
         if ($estado !== '0') {

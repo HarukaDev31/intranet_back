@@ -131,4 +131,48 @@ class CodeSupplierHelper
 
         return $code ?? ('SUP-' . $index);
     }
+
+    /**
+     * Primeras 3 letras de la organización (ASCII mayúsculas).
+     * Usado como prefijo del code_supplier en cotizaciones "resumen" (socios).
+     */
+    public static function orgPrefix(?string $nombreOrganizacion): string
+    {
+        $sanitized = self::sanitize((string) $nombreOrganizacion);
+        if ($sanitized === null) {
+            return 'ORG';
+        }
+        $letters = preg_replace('/[^A-Z]/', '', $sanitized);
+        if ($letters !== null && strlen($letters) >= 3) {
+            return substr($letters, 0, 3);
+        }
+        $alnum = preg_replace('/[^A-Z0-9]/', '', $sanitized);
+        $prefix = $alnum !== null ? substr($alnum, 0, 3) : '';
+
+        return $prefix !== '' ? str_pad($prefix, 3, 'X') : 'ORG';
+    }
+
+    /**
+     * Prefijo completo resumen: {3 letras org}{iniciales cliente}{carga}
+     *
+     * @param mixed $carga
+     */
+    public static function basePrefixWithOrg(?string $nombreOrganizacion, string $nombreCliente, $carga): string
+    {
+        return self::orgPrefix($nombreOrganizacion) . self::basePrefix($nombreCliente, $carga);
+    }
+
+    /**
+     * code_supplier de resumen: igual que el cotizador, con prefijo de 3 letras de la org.
+     * Ejemplo: org "Andes Import", cliente "Juan Perez", carga "B5" → ANDJUPE5-1
+     *
+     * @param mixed $carga
+     */
+    public static function generateWithOrgPrefix(?string $nombreOrganizacion, string $nombreCliente, $carga, int $index): string
+    {
+        $base = self::basePrefixWithOrg($nombreOrganizacion, $nombreCliente, $carga);
+        $code = self::sanitize($base . '-' . $index);
+
+        return $code ?? ('SUP-' . $index);
+    }
 }

@@ -12,14 +12,14 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Carbon\Carbon;
+use App\Support\CargaConsolidada\ClientesVisibility;
 
 class ClienteService
 {
     /**
-     * IDs de organizacion del usuario autenticado. La tabla `clientes` es una
-     * vista deduplicada sin organizacion propia; los datos de Carga Consolidada
-     * que se le asocian aqui via DB::table() no heredan ningun scope de
-     * Eloquent, asi que hay que filtrarlos a mano en cada query.
+     * IDs de organizacion del usuario autenticado. Eloquent en `clientes`
+     * ya filtra por OrganizacionScope. Las queries de Carga Consolidada
+     * hechas con DB::table() no heredan ese scope: filtrar a mano.
      *
      * @return array<int, int>
      */
@@ -217,28 +217,9 @@ class ClienteService
                                 ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
                                 ->whereIn('CC.organizacion_id', $this->organizacionIdsUsuarioActual())
                                 ->whereNull('CC.deleted_at')
-                                ->where('CC.estado_cotizador', 'CONFIRMADO')
                                 ->whereNotNull('CC.estado_cliente');
-
-                            if (!empty($cliente->telefono)) {
-                                $telefonoLimpio = preg_replace('/[^0-9]/', '', $cliente->telefono);
-                                $cotizacionQuery->where(function($q) use ($telefonoLimpio) {
-                                    $q->where(DB::raw('REPLACE(REPLACE(CC.telefono, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%")
-                                      ->orWhere(DB::raw('REPLACE(REPLACE(CC.telefono, " ", ""), "-", "")'), 'LIKE', "%" . preg_replace('/^51/', '', $telefonoLimpio) . "%");
-                                });
-                            }
-
-                            if (!empty($cliente->documento)) {
-                                $cotizacionQuery->orWhere('CC.documento', $cliente->documento);
-                            }
-
-                            if (!empty($cliente->correo)) {
-                                $cotizacionQuery->orWhere(function($q2) use ($cliente) {
-                                    $q2->whereNotNull('CC.correo')
-                                       ->where('CC.correo', '!=', '')
-                                       ->where('CC.correo', $cliente->correo);
-                                });
-                            }
+                            ClientesVisibility::applyConfirmadoParaBd($cotizacionQuery, 'CC');
+                            ClientesVisibility::applyMatchCliente($cotizacionQuery, $cliente, 'CC');
 
                             $cotizacion = $cotizacionQuery->select('CC.*')
                                 ->orderBy('CC.fecha', 'asc')
@@ -706,9 +687,10 @@ class ClienteService
         $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
             ->whereNotNull('estado_cliente')
             ->whereNull('deleted_at')
-            ->where('estado_cotizador', 'CONFIRMADO')
             ->whereIn('organizacion_id', $this->organizacionIdsUsuarioActual())
-            ->whereIn('id_cliente', $clienteIds)
+            ->whereIn('id_cliente', $clienteIds);
+        ClientesVisibility::applyConfirmadoParaBd($cotizaciones, '');
+        $cotizaciones = $cotizaciones
             ->select(
                 'id_cliente',
                 'fecha',
@@ -846,29 +828,14 @@ class ClienteService
                     }
                 }
                 if (!$provinciaName) {
-                    $cotizacion = DB::table('contenedor_consolidado_cotizacion as CC')
+                    $cotizacionQuery = DB::table('contenedor_consolidado_cotizacion as CC')
                         ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
                         ->whereIn('CC.organizacion_id', $this->organizacionIdsUsuarioActual())
                         ->whereNull('CC.deleted_at')
-                        ->where('CC.estado_cotizador', 'CONFIRMADO')
-                        ->whereNotNull('CC.estado_cliente')
-                        ->where(function ($q) use ($cliente) {
-                            if (!empty($cliente->telefono)) {
-                                $telefonoLimpio = preg_replace('/[^0-9]/', '', $cliente->telefono);
-                                $q->where(function ($q2) use ($telefonoLimpio) {
-                                    $q2->where(DB::raw('REPLACE(REPLACE(CC.telefono, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%")
-                                        ->orWhere(DB::raw('REPLACE(REPLACE(CC.telefono, " ", ""), "-", "")'), 'LIKE', "%" . preg_replace('/^51/', '', $telefonoLimpio) . "%");
-                                });
-                            }
-                            if (!empty($cliente->documento)) {
-                                $q->orWhere('CC.documento', $cliente->documento);
-                            }
-                            if (!empty($cliente->correo)) {
-                                $q->orWhere(function ($q2) use ($cliente) {
-                                    $q2->whereNotNull('CC.correo')->where('CC.correo', '!=', '')->where('CC.correo', $cliente->correo);
-                                });
-                            }
-                        })
+                        ->whereNotNull('CC.estado_cliente');
+                    ClientesVisibility::applyConfirmadoParaBd($cotizacionQuery, 'CC');
+                    ClientesVisibility::applyMatchCliente($cotizacionQuery, $cliente, 'CC');
+                    $cotizacion = $cotizacionQuery
                         ->select('CC.*')
                         ->orderBy('CC.fecha', 'asc')
                         ->orderByRaw('CAST(C.carga AS UNSIGNED)')
@@ -1035,28 +1002,9 @@ class ClienteService
                                 ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
                                 ->whereIn('CC.organizacion_id', $this->organizacionIdsUsuarioActual())
                                 ->whereNull('CC.deleted_at')
-                                ->where('CC.estado_cotizador', 'CONFIRMADO')
                                 ->whereNotNull('CC.estado_cliente');
-
-                            if (!empty($cliente->telefono)) {
-                                $telefonoLimpio = preg_replace('/[^0-9]/', '', $cliente->telefono);
-                                $cotizacionQuery->where(function($q) use ($telefonoLimpio) {
-                                    $q->where(DB::raw('REPLACE(REPLACE(CC.telefono, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%")
-                                      ->orWhere(DB::raw('REPLACE(REPLACE(CC.telefono, " ", ""), "-", "")'), 'LIKE', "%" . preg_replace('/^51/', '', $telefonoLimpio) . "%");
-                                });
-                            }
-
-                            if (!empty($cliente->documento)) {
-                                $cotizacionQuery->orWhere('CC.documento', $cliente->documento);
-                            }
-
-                            if (!empty($cliente->correo)) {
-                                $cotizacionQuery->orWhere(function($q2) use ($cliente) {
-                                    $q2->whereNotNull('CC.correo')
-                                       ->where('CC.correo', '!=', '')
-                                       ->where('CC.correo', $cliente->correo);
-                                });
-                            }
+                            ClientesVisibility::applyConfirmadoParaBd($cotizacionQuery, 'CC');
+                            ClientesVisibility::applyMatchCliente($cotizacionQuery, $cliente, 'CC');
 
                             $cotizacion = $cotizacionQuery->select('CC.*')
                                 ->orderBy('CC.fecha', 'asc')
@@ -1243,10 +1191,11 @@ class ClienteService
 
         // Fecha mínima de CONSOLIDADO por cliente (solo confirmados)
         $minConsolidado = DB::table('contenedor_consolidado_cotizacion as ccc')
-            ->where('ccc.estado_cotizador', 'CONFIRMADO')
             ->whereIn('ccc.organizacion_id', $this->organizacionIdsUsuarioActual())
             ->whereNull('ccc.deleted_at')
-            ->whereNotNull('ccc.id_cliente')
+            ->whereNotNull('ccc.id_cliente');
+        ClientesVisibility::applyConfirmadoParaBd($minConsolidado, 'ccc');
+        $minConsolidado
             ->groupBy('ccc.id_cliente')
             ->select('ccc.id_cliente', DB::raw('MIN(ccc.fecha) as min_consolidado'));
 

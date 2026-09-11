@@ -39,9 +39,14 @@ class ValidateCotizacionesWithLoadedProveedoresJob implements ShouldQueue
 
             $cotizaciones = DB::table('contenedor_consolidado_cotizacion as ccc')
                 ->join('contenedor_consolidado_cotizacion_proveedores as cccp', 'ccc.id', '=', 'cccp.id_cotizacion')
+                ->leftJoin('carga_consolidada_contenedor as cont', 'cont.id', '=', 'ccc.id_contenedor')
                 ->where('ccc.id_contenedor', $this->contenedorId)
                 ->whereNull('ccc.deleted_at')
                 ->where('cccp.estados_proveedor', 'LOADED')
+                ->where(function ($q) {
+                    $q->where('ccc.estado_cotizador', 'CONFIRMADO')
+                        ->orWhere('ccc.estado_resumen', 'CONFIRMADO');
+                })
                 ->whereNotNull('ccc.nombre')
                 ->where('ccc.nombre', '!=', '')
                 ->whereRaw('LENGTH(TRIM(ccc.nombre)) >= 2')
@@ -62,7 +67,15 @@ class ValidateCotizacionesWithLoadedProveedoresJob implements ShouldQueue
                             ->whereRaw('ccc.correo REGEXP "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"');
                     });
                 })
-                ->select('ccc.id', 'ccc.telefono', 'ccc.nombre', 'ccc.documento', 'ccc.correo')
+                ->select(
+                    'ccc.id',
+                    'ccc.telefono',
+                    'ccc.nombre',
+                    'ccc.documento',
+                    'ccc.correo',
+                    'ccc.fecha',
+                    DB::raw('COALESCE(ccc.organizacion_id, cont.organizacion_id) as organizacion_id')
+                )
                 ->distinct()
                 ->get();
 
@@ -82,9 +95,18 @@ class ValidateCotizacionesWithLoadedProveedoresJob implements ShouldQueue
 
                 if ($this->validateClienteDataFromCommand($clienteObj)) {
                     $validados++;
-                    $clienteId = $this->insertOrGetClienteFromCommand($clienteObj, 'cotizacion_proveedor_loaded');
+                    $orgId = (int) ($cotizacion->organizacion_id ?: 1);
+                    $clienteId = $this->insertOrGetClienteFromCommand(
+                        $clienteObj,
+                        $cotizacion->fecha ?? null,
+                        $orgId
+                    );
 
                     if ($clienteId) {
+                        DB::table('contenedor_consolidado_cotizacion')
+                            ->where('id', $cotizacion->id)
+                            ->update(['id_cliente' => $clienteId]);
+
                         $clienteExistia = DB::table('clientes')->where('id', $clienteId)->exists();
 
                         if ($clienteExistia) {
@@ -160,14 +182,16 @@ class ValidateCotizacionesWithLoadedProveedoresJob implements ShouldQueue
         return $normalized ?: null;
     }
 
-    private function insertOrGetClienteFromCommand($data, $fuente = 'desconocida')
+    private function insertOrGetClienteFromCommand($data, $fecha = null, $organizacionId = 1)
     {
+        $organizacionId = (int) $organizacionId ?: 1;
         $telefonoNormalizado = $this->normalizePhoneFromCommand($data->telefono ?? null);
 
         $cliente = null;
 
         if (!empty($telefonoNormalizado)) {
             $cliente = DB::table('clientes')
+                ->where('organizacion_id', $organizacionId)
                 ->where('telefono', 'like', $telefonoNormalizado)
                 ->first();
 
@@ -178,6 +202,7 @@ class ValidateCotizacionesWithLoadedProveedoresJob implements ShouldQueue
 
         if (!$cliente && !empty(trim($data->documento ?? ''))) {
             $cliente = DB::table('clientes')
+                ->where('organizacion_id', $organizacionId)
                 ->where('documento', $data->documento)
                 ->first();
 
@@ -188,6 +213,7 @@ class ValidateCotizacionesWithLoadedProveedoresJob implements ShouldQueue
 
         if (!$cliente && !empty(trim($data->correo ?? ''))) {
             $cliente = DB::table('clientes')
+                ->where('organizacion_id', $organizacionId)
                 ->where('correo', $data->correo)
                 ->first();
 
@@ -201,6 +227,8 @@ class ValidateCotizacionesWithLoadedProveedoresJob implements ShouldQueue
             'documento' => $data->documento,
             'correo' => $data->correo,
             'telefono' => $telefonoNormalizado,
+            'fecha' => $fecha ?: now()->toDateString(),
+            'organizacion_id' => $organizacionId,
             'created_at' => now(),
             'updated_at' => now(),
         ]);

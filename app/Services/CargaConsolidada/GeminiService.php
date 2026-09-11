@@ -158,14 +158,19 @@ class GeminiService
             '- proveedores[].cbm_total: volumen total en CBM/m3 de ese proveedor. null si no aparece. ' .
             '- proveedores[].peso_total: peso total en KG de ese proveedor. null si no aparece. ' .
             '- proveedores[].qty_cajas: cantidad de cajas/bultos de ese proveedor. null si no aparece. ' .
+            '- proveedores[].unidades: cantidad de unidades/piezas de ese proveedor. null si no aparece. ' .
+            '- proveedores[].incoterm: Incoterm si aparece (FOB, EXW, CIF, DDP, Consolidado, etc.). null si no aparece. ' .
             '- proveedores[].productos: descripción breve de los productos de ese proveedor (nombres separados por coma). null si no aparece. ' .
+            '- proveedores[].costos: desglose de inversión/costos del documento (tablas o listas de conceptos). ' .
+            'Incluye cada concepto que encuentres: Valor de Mercadería, FOB, Flete, Transferencia, ISD, Logística Internacional, Tributos, Impuestos Aduaneros, Seguro, u otros con su nombre tal cual aparece. ' .
+            'Cada elemento tiene concepto (texto) y valor (número sin símbolo de moneda). Si el concepto no tiene monto, valor null. Si no hay desglose, array vacío. ' .
             'Responde solo con el JSON del schema (una línea, compacto).';
 
         $result = $this->callGemini(
             $filePath,
             $mimeType,
             $prompt,
-            4096,
+            8192,
             self::cotizacionResumenResponseSchema()
         );
 
@@ -174,6 +179,30 @@ class GeminiService
         }
 
         $extracted = $result['data'];
+        $proveedores = isset($extracted['proveedores']) && is_array($extracted['proveedores'])
+            ? $extracted['proveedores']
+            : [];
+
+        foreach ($proveedores as $idx => $prov) {
+            $costos = isset($prov['costos']) && is_array($prov['costos']) ? $prov['costos'] : [];
+            $normalizados = [];
+            foreach ($costos as $costo) {
+                if (!is_array($costo)) {
+                    continue;
+                }
+                $concepto = isset($costo['concepto']) ? trim((string) $costo['concepto']) : '';
+                if ($concepto === '') {
+                    continue;
+                }
+                $normalizados[] = [
+                    'concepto' => $concepto,
+                    'valor' => array_key_exists('valor', $costo) && $costo['valor'] !== null
+                        ? (float) $costo['valor']
+                        : null,
+                ];
+            }
+            $proveedores[$idx]['costos'] = $normalizados;
+        }
 
         Log::info('GeminiService extractFromCotizacionResumen: datos extraídos', [
             'file'      => basename($filePath),
@@ -185,7 +214,7 @@ class GeminiService
             'error'   => null,
             'data'    => [
                 'cliente'     => $extracted['cliente'] ?? [],
-                'proveedores' => $extracted['proveedores'] ?? [],
+                'proveedores' => $proveedores,
             ],
         ];
     }
@@ -404,9 +433,22 @@ class GeminiService
                             'cbm_total' => ['type' => 'NUMBER', 'nullable' => true],
                             'peso_total' => ['type' => 'NUMBER', 'nullable' => true],
                             'qty_cajas' => ['type' => 'NUMBER', 'nullable' => true],
+                            'unidades' => ['type' => 'NUMBER', 'nullable' => true],
+                            'incoterm' => ['type' => 'STRING', 'nullable' => true],
                             'productos' => ['type' => 'STRING', 'nullable' => true],
+                            'costos' => [
+                                'type' => 'ARRAY',
+                                'items' => [
+                                    'type' => 'OBJECT',
+                                    'properties' => [
+                                        'concepto' => ['type' => 'STRING', 'nullable' => true],
+                                        'valor' => ['type' => 'NUMBER', 'nullable' => true],
+                                    ],
+                                    'required' => ['concepto', 'valor'],
+                                ],
+                            ],
                         ],
-                        'required' => ['cbm_total', 'peso_total', 'qty_cajas', 'productos'],
+                        'required' => ['cbm_total', 'peso_total', 'qty_cajas', 'unidades', 'incoterm', 'productos', 'costos'],
                     ],
                 ],
             ],

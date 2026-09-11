@@ -43,6 +43,7 @@ class CotizacionProveedor extends Model
         'peso_china',
         'qty_box',
         'cbm_total',
+        'cbm_imo',
         'maxcbm',
         'supplier',
         'supplier_phone',
@@ -78,6 +79,10 @@ class CotizacionProveedor extends Model
         'excel_conf_form_cerrado' => 'boolean',
         'canal' => 'string',
         'fecha_entrega' => 'date:Y-m-d'
+    ];
+
+    protected $attributes = [
+        'tipo_rotulado' => 'pendiente',
     ];
 
     /**

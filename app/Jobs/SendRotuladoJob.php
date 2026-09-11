@@ -126,6 +126,8 @@ class SendRotuladoJob implements ShouldQueue
                 Log::warning('No se encontró la cotización con ID: ' . $this->idCotizacion);
             }
 
+            // Socios (org ≠ 1): más adelante irán por API keys EMTA por organización.
+            // Por ahora se usa la conexión general de coordinación que ya existe.
             if (
                 $this->whatsappCoordinacionBatchId === null
                 && config('meta_whatsapp.coordinacion_enabled')

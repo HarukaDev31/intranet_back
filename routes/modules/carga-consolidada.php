@@ -21,6 +21,7 @@ use App\Http\Controllers\CargaConsolidada\Clientes\PagosController as ClientesPa
 use App\Http\Controllers\CargaConsolidada\EntregaController;
 use App\Http\Controllers\CargaConsolidada\ExcelConfirmacionCoordinacionController;
 use App\Http\Controllers\CargaConsolidada\InspeccionadosController;
+use App\Http\Controllers\CargaConsolidada\CustomersController;
 use App\Http\Controllers\CargaConsolidada\BoletinQuimicoController;
 use App\Http\Controllers\Clientes\ComprobanteFormController;
 use App\Http\Controllers\Commons\Google\SheetController;
@@ -51,7 +52,11 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
         Route::post('/extraer-documento', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'extraerDocumento']);
         Route::get('/', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'index']);
         Route::post('/', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'store']);
+        Route::get('/{id}', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'update']);
+        Route::post('/{id}/duplicar', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'duplicar']);
         Route::put('/{id}/estado', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'updateEstado']);
+        Route::delete('/{id}', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'destroy']);
     });
 
     // Dashboard ventas
@@ -375,6 +380,9 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
 
     // Inspeccionados (vista global Contabilidad)
     Route::get('inspeccionados', [InspeccionadosController::class, 'index']);
+
+    // Customers global (Almacén China)
+    Route::get('customers', [CustomersController::class, 'index']);
 
     // Boletín químico
     Route::group(['prefix' => 'boletin-quimico'], function () {

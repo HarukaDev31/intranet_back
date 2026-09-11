@@ -178,6 +178,7 @@ class CotizacionProveedorController extends Controller
                 ->leftJoin('contenedor_consolidado_tipo_cliente AS TC', 'TC.id', '=', 'main.id_tipo_cliente')
                 ->leftJoin('usuario AS U', 'U.ID_Usuario', '=', 'main.id_usuario')
                 ->where('main.id_contenedor', $idContenedor)
+                ->whereNull('main.deleted_at')
                 ->whereRaw('NOT EXISTS (SELECT 1 FROM calculadora_importacion ci WHERE ci.id_cotizacion = main.id AND ci.estado = ?)', ['PENDIENTE']);
 
             if (!empty($search)) {
@@ -207,6 +208,9 @@ class CotizacionProveedorController extends Controller
 
 
             switch ($rol) {
+                case Usuario::ROL_SOCIO:
+                    break;
+
                 case Usuario::ROL_COTIZADOR:
                     if ($user->getIdUsuario() != 28791 && $user->getIdUsuario() != 28911) {
                         $query->where('main.id_usuario', $user->getIdUsuario());
@@ -1721,7 +1725,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 return response()->json(['success' => false, 'message' => 'Usuario no autenticado'], 401);
             }
 
-            $allowedRoles = [Usuario::ROL_COTIZADOR, Usuario::ROL_COORDINACION];
+            $allowedRoles = [Usuario::ROL_COTIZADOR, Usuario::ROL_COORDINACION, Usuario::ROL_SOCIO];
             if (!in_array($user->getNombreGrupo(), $allowedRoles)) {
                 return response()->json(['success' => false, 'message' => 'No tienes permisos para realizar esta acción'], 403);
             }
@@ -3727,7 +3731,8 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 ])
                 ->leftJoin('contenedor_consolidado_tipo_cliente AS TC', 'TC.id', '=', 'main.id_tipo_cliente')
                 ->leftJoin('usuario AS U', 'U.ID_Usuario', '=', 'main.id_usuario')
-                ->where('main.id_contenedor', $idContenedor);
+                ->where('main.id_contenedor', $idContenedor)
+                ->whereNull('main.deleted_at');
 
             if (!empty($search)) {
                 Log::info('search: ' . $search);

@@ -223,6 +223,11 @@ class ContenedorController extends Controller
 
         $pageIds = collect($data->items())->pluck('id')->all();
         ['vendidos' => $cbmVendidos, 'embarcados' => $cbmEmbarcados] = $this->loadCbmTotalsForContenedores($pageIds);
+        $orgByContenedor = [];
+        foreach ($data->items() as $contenedorItem) {
+            $orgByContenedor[$contenedorItem->id] = (int) $contenedorItem->organizacion_id;
+        }
+        $cbmImoPorContenedor = $this->loadCbmImoForContenedores($pageIds, $orgByContenedor);
 
         $estadoPermisoPorContenedor = [];
         if ($pageIds && in_array($effectiveRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
@@ -254,7 +259,7 @@ class ContenedorController extends Controller
             }
         }
 
-        $items = collect($data->items())->map(function ($c) use ($cbmVendidos, $cbmEmbarcados, $estadoPermisoPorContenedor, $effectiveRole) {
+        $items = collect($data->items())->map(function ($c) use ($cbmVendidos, $cbmEmbarcados, $cbmImoPorContenedor, $estadoPermisoPorContenedor, $effectiveRole) {
             $cbm_total_peru = 0;
             $cbm_total_china = 0;
             if ($c->estado_china === Contenedor::CONTEDOR_CERRADO) {
@@ -294,6 +299,7 @@ class ContenedorController extends Controller
                 'valor_flete' => $c->valor_flete,
                 'costo_destino' => $c->costo_destino,
                 'limite_cbm_imo' => $c->limite_cbm_imo,
+                'cbm_total_imo' => number_format((float) ($cbmImoPorContenedor[$c->id] ?? 0), 2),
                 'tc_yuan' => $c->tcYuan ? (float) $c->tcYuan->tc_yuan : null,
                 'cbm_total_peru' => number_format($cbm_total_peru, 2),
                 'cbm_total_china' => number_format($cbm_total_china, 2),
@@ -388,6 +394,52 @@ class ContenedorController extends Controller
         }
 
         return ['vendidos' => $cbmVendidos, 'embarcados' => $cbmEmbarcados];
+    }
+
+    /**
+     * CBM IMO del listado: org 1 usa calculadora (es_imo + proveedores);
+     * el resto suma cbm_imo de proveedores resumen (más calculadora si hubiera).
+     *
+     * @param  array<int, int>  $pageIds
+     * @param  array<int, int>  $orgByContenedor
+     * @return array<int, float>
+     */
+    private function loadCbmImoForContenedores(array $pageIds, array $orgByContenedor)
+    {
+        if ($pageIds === []) {
+            return [];
+        }
+
+        $imoCalculadora = DB::table('contenedor_consolidado_cotizacion as cci')
+            ->join('calculadora_importacion as ci', function ($join) {
+                $join->on('ci.id_cotizacion', '=', 'cci.id')
+                    ->where('ci.es_imo', '=', 1);
+            })
+            ->join('calculadora_importacion_proveedores as cip', 'ci.id', '=', 'cip.id_calculadora_importacion')
+            ->whereIn('cci.id_contenedor', $pageIds)
+            ->whereNull('cci.deleted_at')
+            ->where('cci.estado_cotizador', 'CONFIRMADO')
+            ->groupBy('cci.id_contenedor')
+            ->selectRaw('cci.id_contenedor, COALESCE(SUM(cip.cbm), 0) as cbm_imo')
+            ->pluck('cbm_imo', 'id_contenedor');
+
+        $imoProveedores = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
+            ->join('contenedor_consolidado_cotizacion as cc', 'cc.id', '=', 'cccp.id_cotizacion')
+            ->whereIn('cccp.id_contenedor', $pageIds)
+            ->whereNull('cc.deleted_at')
+            ->groupBy('cccp.id_contenedor')
+            ->selectRaw('cccp.id_contenedor, COALESCE(SUM(cccp.cbm_imo), 0) as cbm_imo')
+            ->pluck('cbm_imo', 'id_contenedor');
+
+        $result = [];
+        foreach ($pageIds as $id) {
+            $orgId = (int) ($orgByContenedor[$id] ?? 0);
+            $calc = (float) ($imoCalculadora[$id] ?? 0);
+            $prov = (float) ($imoProveedores[$id] ?? 0);
+            $result[$id] = $orgId === 1 ? $calc : ($calc + $prov);
+        }
+
+        return $result;
     }
 
     private function invalidateContenedorListCache(): void
