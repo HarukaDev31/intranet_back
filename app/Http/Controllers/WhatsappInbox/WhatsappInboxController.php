@@ -107,7 +107,12 @@ class WhatsappInboxController extends Controller
     public function messages(Request $request, $id)
     {
         try {
-            return response()->json($this->messageService->listMessages((int) $id, $request->all()));
+            $conversation = WaInboxConversation::query()->with('session')->find((int) $id);
+            if (!$conversation) {
+                return response()->json(['success' => false, 'message' => 'Conversación no encontrada'], 404);
+            }
+
+            return response()->json($this->messageService->listMessages($conversation, $request->all()));
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
