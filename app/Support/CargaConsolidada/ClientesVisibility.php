@@ -35,18 +35,9 @@ class ClientesVisibility
     }
 
     /**
-     * Cotización que ya “graduó” a BD clientes (contenedor cerrado + al menos un LOADED).
-     *
-     * @param \Illuminate\Database\Query\Builder $query
-     * @param string $cotizacionAlias
-     * @param string $contenedorAlias
-     * @param string $proveedoresTable
-     * @return void
-     */
-    /**
      * Confirmada para BD / almacén: cotizador clásico o resumen socio.
      *
-     * @param \Illuminate\Database\Query\Builder $query
+     * @param \Illuminate\Database\Query\Builder|\Illuminate\Database\Eloquent\Builder $query
      * @param string $alias
      * @return void
      */

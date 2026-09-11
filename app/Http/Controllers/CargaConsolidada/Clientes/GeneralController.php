@@ -110,7 +110,7 @@ class GeneralController extends Controller
 
     private function buildSocioClientesHeaders($idContenedor)
     {
-        $contenedor = Contenedor::with('pais')->find($idContenedor);
+        $contenedor = Contenedor::with('pais')->find((int) $idContenedor);
         $flags = $this->resolveContenedorHeaderFlags($contenedor);
 
         $totales = DB::table('contenedor_consolidado_cotizacion as cc')
@@ -619,7 +619,7 @@ class GeneralController extends Controller
             if ($this->esUsuarioSocio($user)) {
                 return $this->buildSocioClientesHeaders($idContenedor);
             }
-            $contenedor = Contenedor::with('pais')->find($idContenedor);
+            $contenedor = Contenedor::with('pais')->find((int) $idContenedor);
             $paisFlags = $this->resolveContenedorHeaderFlags($contenedor);
             // Consulta principal con múltiples subconsultas
             $result = DB::table($this->table_contenedor_cotizacion_proveedores . ' as cccp')

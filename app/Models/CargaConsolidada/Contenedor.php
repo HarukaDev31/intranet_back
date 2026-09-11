@@ -4,11 +4,25 @@ namespace App\Models\CargaConsolidada;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Models\Pais;
 use App\Models\Organizacion;
 use App\Models\CargaConsolidada\Scopes\OrganizacionScope;
 
+/**
+ * @property int $id
+ * @property int|null $id_pais
+ * @property int|null $organizacion_id
+ * @property string|null $carga
+ * @property string|null $parte
+ * @property string|null $estado_china
+ * @property string|null $fecha_documentacion_max
+ * @property-read Pais|null $pais
+ * @property-read Organizacion|null $organizacion
+ * @property-read ContenedorTcYuan|null $tcYuan
+ */
 class Contenedor extends Model
 {
     use HasFactory;
@@ -202,31 +216,37 @@ class Contenedor extends Model
     /**
      * Contenedor original del grupo partido (parte A).
      */
-    public function contenedorOrigen()
+    public function contenedorOrigen(): BelongsTo
     {
         return $this->belongsTo(self::class, 'id_contenedor_origen');
     }
 
     /**
      * Obtiene el país asociado al contenedor.
+     *
+     * @return BelongsTo<Pais, $this>
      */
-    public function pais()
+    public function pais(): BelongsTo
     {
         return $this->belongsTo(Pais::class, 'id_pais', 'ID_Pais');
     }
 
     /**
      * Obtiene la organización asociada al contenedor.
+     *
+     * @return BelongsTo<Organizacion, $this>
      */
-    public function organizacion()
+    public function organizacion(): BelongsTo
     {
         return $this->belongsTo(Organizacion::class, 'organizacion_id', 'ID_Organizacion');
     }
 
     /**
      * TC Yuan vigente del consolidado (periodo dado por created_at/updated_at).
+     *
+     * @return HasOne<ContenedorTcYuan, $this>
      */
-    public function tcYuan()
+    public function tcYuan(): HasOne
     {
         return $this->hasOne(ContenedorTcYuan::class, 'id_contenedor');
     }

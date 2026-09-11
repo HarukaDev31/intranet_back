@@ -8,6 +8,15 @@ use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\CotizacionProveedorItems;
 use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
+/**
+ * @property int $id
+ * @property int|null $id_cotizacion
+ * @property int|null $id_contenedor
+ * @property string|null $code_supplier
+ * @property string|null $estados_proveedor
+ * @property string|null $tipo_rotulado
+ * @property int|null $organizacion_id
+ */
 class CotizacionProveedor extends Model
 {
     use SincronizaOrganizacionId;
@@ -49,6 +58,7 @@ class CotizacionProveedor extends Model
         'supplier_phone',
         'id_proveedor',
         'id_contenedor_pago',
+        'organizacion_id',
         'estado_china',
         'send_rotulado_status',
         'tipo_rotulado',

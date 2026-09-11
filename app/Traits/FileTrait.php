@@ -77,6 +77,6 @@ trait FileTrait
         //remote /public/ from ruta
         $ruta = str_replace('public/', '', $ruta);
         // Generar URL completa desde storage
-        return env('APP_URL_REDIS').'/'.$ruta;
+        return rtrim((string) config('app.url_redis'), '/') . '/' . ltrim($ruta, '/');
     }
 }

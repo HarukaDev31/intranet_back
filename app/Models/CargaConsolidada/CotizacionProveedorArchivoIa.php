@@ -10,6 +10,12 @@ use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
  * Auditoria del archivo subido y de lo que la IA extrajo de el, para poder
  * depurar/reprocesar una extraccion sin depender de lo que haya quedado (o
  * se haya editado a mano) en CotizacionProveedorResumen.
+ *
+ * @property int $id
+ * @property int|null $id_contenedor
+ * @property int $id_cotizacion
+ * @property int $id_proveedor
+ * @property int|null $organizacion_id
  */
 class CotizacionProveedorArchivoIa extends Model
 {

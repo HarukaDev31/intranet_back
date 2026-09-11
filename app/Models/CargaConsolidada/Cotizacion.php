@@ -12,6 +12,12 @@ use App\Models\CargaConsolidada\Detraccion;
 use App\Models\CargaConsolidada\ReasonDeleteCotizacion;
 use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
+/**
+ * @property int $id
+ * @property int|null $id_contenedor
+ * @property string|null $estado_resumen
+ * @property int|null $organizacion_id
+ */
 class Cotizacion extends Model
 {
     use HasFactory;

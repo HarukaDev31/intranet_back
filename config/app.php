@@ -66,6 +66,11 @@ return [
     'url_excel_confirmacion' => env('APP_URL_EXCEL_CONFIRMACION', ''),
 
     /*
+    | URL pública legacy (constancias / archivos Redis). No usar env() fuera de config.
+    */
+    'url_redis' => env('APP_URL_REDIS', ''),
+
+    /*
     | Clave legacy CodeIgniter (ciEncrypt/ciDecrypt, contraseñas Moodle en BD).
     | Copiar el mismo valor que en el intranet PHP antiguo / producción.
     */
