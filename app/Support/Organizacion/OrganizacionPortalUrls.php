@@ -114,32 +114,30 @@ class OrganizacionPortalUrls
     }
 
     /**
-     * Público: solo X-Org-Key → org. Nunca organizacion_id del body.
-     * Sin key o key inválida → 403 (no hay fallback a org admin).
+     * Público: X-Org-Key → org. Nunca organizacion_id del body.
+     * Sin key (portal principal / prod) → org 1. Key inválida → 403.
      *
      * @return int
      */
     public static function orgIdFromPublicRequest(Request $request)
     {
         $key = trim((string) $request->header('X-Org-Key', ''));
-        if ($key === '') {
-            abort(response()->json([
-                'success' => false,
-                'message' => 'X-Org-Key requerido',
-                'code' => 'ORG_KEY_REQUIRED',
-            ], 403));
+        if ($key !== '') {
+            $portal = self::findPortalByPublicKey($key);
+            if (!$portal) {
+                abort(response()->json([
+                    'success' => false,
+                    'message' => 'X-Org-Key inválido',
+                    'code' => 'ORG_KEY_INVALID',
+                ], 403));
+            }
+
+            return (int) $portal->organizacion_id;
         }
 
-        $portal = OrganizacionPortal::where('public_key', $key)->first();
-        if (!$portal) {
-            abort(response()->json([
-                'success' => false,
-                'message' => 'X-Org-Key inválido',
-                'code' => 'ORG_KEY_INVALID',
-            ], 403));
-        }
+        $fromOrigin = self::tryOrgIdFromOrigin($request);
 
-        return (int) $portal->organizacion_id;
+        return $fromOrigin ?: self::ADMIN_ORG;
     }
 
     /**
@@ -151,12 +149,59 @@ class OrganizacionPortalUrls
     {
         $key = trim((string) $request->header('X-Org-Key', ''));
         if ($key === '') {
-            return null;
+            return self::tryOrgIdFromOrigin($request);
         }
 
-        $portal = OrganizacionPortal::where('public_key', $key)->first();
+        $portal = self::findPortalByPublicKey($key);
 
         return $portal ? (int) $portal->organizacion_id : null;
+    }
+
+    /**
+     * @return OrganizacionPortal|null
+     */
+    private static function findPortalByPublicKey(string $key)
+    {
+        try {
+            return OrganizacionPortal::where('public_key', $key)->first();
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Front clientes: Origin/Referer (el Host de la request es el API).
+     *
+     * @return int|null
+     */
+    private static function tryOrgIdFromOrigin(Request $request)
+    {
+        $candidates = [
+            $request->header('Origin'),
+            $request->header('Referer'),
+        ];
+        foreach ($candidates as $url) {
+            $host = strtolower((string) parse_url((string) $url, PHP_URL_HOST));
+            if ($host === '') {
+                continue;
+            }
+            try {
+                $portales = OrganizacionPortal::query()
+                    ->whereNotNull('url_clientes')
+                    ->where('url_clientes', '!=', '')
+                    ->get(['organizacion_id', 'url_clientes']);
+            } catch (\Throwable $e) {
+                return null;
+            }
+            foreach ($portales as $portal) {
+                $portalHost = strtolower((string) parse_url((string) $portal->url_clientes, PHP_URL_HOST));
+                if ($portalHost !== '' && $portalHost === $host) {
+                    return (int) $portal->organizacion_id;
+                }
+            }
+        }
+
+        return null;
     }
 
     /**

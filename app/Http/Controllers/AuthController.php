@@ -1488,7 +1488,7 @@ class AuthController extends Controller
         Log::info('validated data', $validatedData);
 
         try {
-            $user = User::create([
+            $userPayload = [
                 'name' => $validatedData['nombre'],
                 'lastname' => $validatedData['lastname'] ?? null,
                 'email' => $validatedData['email'],
@@ -1496,15 +1496,23 @@ class AuthController extends Controller
                 'goals' => $validatedData['goals'] ?? null,
                 'password' => Hash::make($validatedData['password']),
                 'dni' => $validatedData['dni'] ?? null,
-                'birth_date' => $validatedData['fechaNacimiento'] ?? null,  
+                'birth_date' => $validatedData['fechaNacimiento'] ?? null,
                 'provincia_id' => $validatedData['provincia_id'] ?? null,
                 'departamento_id' => $validatedData['departamento_id'] ?? null,
                 'distrito_id' => $validatedData['distrito_id'] ?? null,
                 'no_como_entero' => $validatedData['no_como_entero'] ?? null,
                 'no_otros_como_entero_empresa' => $validatedData['no_otros_como_entero_empresa'] ?? null,
                 'pais_id' => $validatedData['pais_id'] ?? null,
-                'organizacion_id' => OrganizacionPortalUrls::orgIdFromPublicRequest($request),
-            ]);
+            ];
+            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'organizacion_id')) {
+                $orgId = (int) $request->attributes->get('organizacion_id', 0);
+                if ($orgId <= 0) {
+                    $orgId = OrganizacionPortalUrls::orgIdFromPublicRequest($request);
+                }
+                $userPayload['organizacion_id'] = $orgId;
+            }
+
+            $user = User::create($userPayload);
 
             Log::info('user created', $user->toArray());
 
