@@ -25,14 +25,21 @@ class HomeStatsService
         $codigos = $this->sumarPorPais($orgIds, 'codigos');
         $contenedores = $this->sumarPorPais($orgIds, 'contenedores');
 
+        $cards = [
+            $this->card('cbm', $cbm, $conDesglosePais),
+            $this->card('customers', $clientes, $conDesglosePais),
+            $this->card('codes', $codigos, $conDesglosePais),
+        ];
+
+        if (!$conDesglosePais) {
+            $cards[] = $this->card('warehouse', $this->sumarPorPais($orgIds, 'warehouse'), false);
+        }
+
+        $cards[] = $this->card('containers', $contenedores, true);
+
         return [
             'scope' => $conDesglosePais ? 'global' : 'organizacion',
-            'cards' => [
-                $this->card('cbm', $cbm, $conDesglosePais),
-                $this->card('customers', $clientes, $conDesglosePais),
-                $this->card('codes', $codigos, $conDesglosePais),
-                $this->card('containers', $contenedores, true),
-            ],
+            'cards' => $cards,
         ];
     }
 
@@ -88,6 +95,13 @@ class HomeStatsService
                 ->where('p.code_supplier', '!=', '')
                 ->selectRaw('UPPER(TRIM(COALESCE(pa.No_Pais, "SIN PAIS"))) as country')
                 ->selectRaw('COUNT(p.id) as value');
+        } elseif ($tipo === 'warehouse') {
+            $query->join('contenedor_consolidado_cotizacion_proveedores as p', 'p.id_contenedor', '=', 'cont.id')
+                ->join('contenedor_consolidado_cotizacion as cc', 'cc.id', '=', 'p.id_cotizacion')
+                ->whereNull('cc.deleted_at')
+                ->whereIn('p.estados_proveedor', ['R', 'INSPECTION', 'INSPECCIONADO'])
+                ->selectRaw('UPPER(TRIM(COALESCE(pa.No_Pais, "SIN PAIS"))) as country')
+                ->selectRaw('COALESCE(SUM(COALESCE(p.cbm_total, 0) + COALESCE(p.cbm_imo, 0)), 0) as value');
         } else {
             $query->selectRaw('UPPER(TRIM(COALESCE(pa.No_Pais, "SIN PAIS"))) as country')
                 ->selectRaw('COUNT(cont.id) as value');
@@ -121,14 +135,21 @@ class HomeStatsService
     {
         $empty = ['total' => 0.0, 'by_country' => []];
 
+        $cards = [
+            $this->card('cbm', $empty, $conDesglosePais),
+            $this->card('customers', $empty, $conDesglosePais),
+            $this->card('codes', $empty, $conDesglosePais),
+        ];
+
+        if (!$conDesglosePais) {
+            $cards[] = $this->card('warehouse', $empty, false);
+        }
+
+        $cards[] = $this->card('containers', $empty, true);
+
         return [
             'scope' => $conDesglosePais ? 'global' : 'organizacion',
-            'cards' => [
-                $this->card('cbm', $empty, $conDesglosePais),
-                $this->card('customers', $empty, $conDesglosePais),
-                $this->card('codes', $empty, $conDesglosePais),
-                $this->card('containers', $empty, true),
-            ],
+            'cards' => $cards,
         ];
     }
 }
