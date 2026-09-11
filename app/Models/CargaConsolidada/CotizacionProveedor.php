@@ -12,10 +12,34 @@ use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
  * @property int $id
  * @property int|null $id_cotizacion
  * @property int|null $id_contenedor
- * @property string|null $code_supplier
- * @property string|null $estados_proveedor
- * @property string|null $tipo_rotulado
+ * @property int|null $id_contenedor_pago
+ * @property int|null $id_proveedor
  * @property int|null $organizacion_id
+ * @property string|null $code_supplier
+ * @property string|null $products
+ * @property string|null $supplier
+ * @property string|null $supplier_phone
+ * @property string|null $estado
+ * @property string|null $estados
+ * @property string|null $estados_proveedor
+ * @property string|null $estado_china
+ * @property string|null $tipo_rotulado
+ * @property string|null $modo_cotizacion
+ * @property string|float|int|null $volumen_doc
+ * @property string|float|int|null $valor_doc
+ * @property string|float|int|null $peso
+ * @property string|float|int|null $peso_china
+ * @property string|float|int|null $cbm_total
+ * @property string|float|int|null $cbm_total_china
+ * @property string|float|int|null $cbm_imo
+ * @property string|float|int|null $maxcbm
+ * @property string|float|int|null $qty_box
+ * @property string|float|int|null $qty_box_china
+ * @property string|float|int|null $qty_pallet_china
+ * @property string|null $factura_comercial
+ * @property string|null $excel_confirmacion
+ * @property string|null $excel_confirmacion_drive_link
+ * @property string|null $packing_list
  */
 class CotizacionProveedor extends Model
 {

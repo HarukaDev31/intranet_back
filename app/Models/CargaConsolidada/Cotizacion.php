@@ -15,7 +15,58 @@ use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 /**
  * @property int $id
  * @property int|null $id_contenedor
+ * @property int|null $id_contenedor_pago
+ * @property int|null $id_contenedor_destino
+ * @property string|null $uuid
+ * @property int|null $id_tipo_cliente
+ * @property string|null $origen_marketing
+ * @property int|null $id_cliente
+ * @property \Illuminate\Support\Carbon|null $fecha
+ * @property string|null $nombre
+ * @property string|null $documento
+ * @property string|null $correo
+ * @property string|null $telefono
+ * @property string|float|int|null $volumen
+ * @property string|float|int|null $volumen_neto
+ * @property string|float|int|null $volumen_doc
+ * @property string|float|int|null $volumen_china
+ * @property string|float|int|null $volumen_final
+ * @property string|float|int|null $valor_doc
+ * @property string|float|int|null $valor_cot
+ * @property string|float|int|null $monto
+ * @property string|float|int|null $monto_final
+ * @property string|float|int|null $fob
+ * @property string|float|int|null $fob_final
+ * @property string|float|int|null $impuestos
+ * @property string|float|int|null $impuestos_final
+ * @property string|float|int|null $tarifa
+ * @property string|float|int|null $tarifa_final
+ * @property string|float|int|null $peso
+ * @property string|float|int|null $peso_final
+ * @property string|float|int|null $logistica_final
+ * @property string|float|int|null $servicios_extra_final
+ * @property string|float|int|null $total_pago_delivery
+ * @property int|null $qty_item
+ * @property int|null $id_usuario
+ * @property int|null $id_cliente_importacion
+ * @property string|null $estado
+ * @property string|null $estado_cliente
+ * @property string|null $estado_cotizador
  * @property string|null $estado_resumen
+ * @property string|null $estado_pagos_coordinacion
+ * @property string|null $estado_cotizacion_final
+ * @property string|null $cotizacion_file_url
+ * @property string|null $cotizacion_contrato_url
+ * @property string|null $cotizacion_contrato_firmado_url
+ * @property string|null $cotizacion_final_file_url
+ * @property string|null $guia_remision_url
+ * @property string|null $factura_general_url
+ * @property string|null $cotizacion_final_url
+ * @property string|null $cotizacion_contrato_autosigned_url
+ * @property string|null $cod_contract
+ * @property \Illuminate\Support\Carbon|null $fecha_confirmacion
+ * @property \Illuminate\Support\Carbon|null $autosigned_contract_at
+ * @property \Illuminate\Support\Carbon|null $delivery_form_registered_at
  * @property int|null $organizacion_id
  */
 class Cotizacion extends Model

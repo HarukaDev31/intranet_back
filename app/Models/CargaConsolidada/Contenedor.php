@@ -13,12 +13,41 @@ use App\Models\CargaConsolidada\Scopes\OrganizacionScope;
 
 /**
  * @property int $id
+ * @property string|null $mes
  * @property int|null $id_pais
  * @property int|null $organizacion_id
  * @property string|null $carga
  * @property string|null $parte
+ * @property int|null $id_contenedor_origen
+ * @property \Illuminate\Support\Carbon|null $f_puerto
+ * @property \Illuminate\Support\Carbon|null $f_entrega
+ * @property \Illuminate\Support\Carbon|null $f_cierre
+ * @property \Illuminate\Support\Carbon|null $f_inicio
+ * @property string|int|null $empresa
+ * @property string|null $estado
  * @property string|null $estado_china
+ * @property string|null $estado_documentacion
+ * @property string|null $estado_finanzas
+ * @property string|null $tipo_carga
+ * @property string|null $naviera
+ * @property string|null $tipo_contenedor
+ * @property string|null $canal_control
+ * @property string|null $numero_dua
+ * @property \Illuminate\Support\Carbon|null $fecha_zarpe
+ * @property \Illuminate\Support\Carbon|null $fecha_arribo
+ * @property \Illuminate\Support\Carbon|null $fecha_declaracion
+ * @property \Illuminate\Support\Carbon|null $fecha_levante
+ * @property string|float|int|null $valor_fob
+ * @property string|float|int|null $valor_flete
+ * @property string|float|int|null $costo_destino
+ * @property string|float|int|null $ajuste_valor
+ * @property string|float|int|null $multa
+ * @property string|float|int|null $limite_cbm_imo
+ * @property string|null $observaciones
  * @property string|null $fecha_documentacion_max
+ * @property string|null $lista_embarque_url
+ * @property string|null $bl_file_url
+ * @property string|null $factura_general_url
  * @property-read Pais|null $pais
  * @property-read Organizacion|null $organizacion
  * @property-read ContenedorTcYuan|null $tcYuan
