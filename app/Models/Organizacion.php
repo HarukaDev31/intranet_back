@@ -13,7 +13,10 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property int|null $Nu_Estado
  * @property string|null $No_Organizacion
  * @property string|null $Txt_Organizacion
+ * @property int|null $id_pais
  * @property-read OrganizacionPortal|null $portal
+ * @property-read Pais|null $pais
+ * @property-read PaisFlag|null $paisFlag
  */
 class Organizacion extends Model
 {
@@ -27,6 +30,7 @@ class Organizacion extends Model
         'ID_Empresa',
         'No_Organizacion',
         'Txt_Organizacion',
+        'id_pais',
     ];
 
     /**
@@ -59,5 +63,15 @@ class Organizacion extends Model
     public function portal(): HasOne
     {
         return $this->hasOne(OrganizacionPortal::class, 'organizacion_id', 'ID_Organizacion');
+    }
+
+    public function pais(): BelongsTo
+    {
+        return $this->belongsTo(Pais::class, 'id_pais', 'ID_Pais');
+    }
+
+    public function paisFlag(): HasOne
+    {
+        return $this->hasOne(PaisFlag::class, 'id_pais', 'id_pais');
     }
 } 

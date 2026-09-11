@@ -421,7 +421,7 @@ class CotizacionResumenController extends Controller
                 'nombre' => $cliente['nombre'],
                 'documento' => $cliente['documento'] ?? null,
                 'correo' => $cliente['correo'] ?? null,
-                'telefono' => $this->telefonoConPrefijoContenedor($cliente['whatsapp'] ?? null, $contenedor),
+                'telefono' => $this->telefonoConPrefijoOrg($cliente['whatsapp'] ?? null, $orgId, $contenedor),
                 'estado' => 'PENDIENTE',
                 'estado_cotizador' => 'PENDIENTE',
                 'estado_resumen' => 'COTIZADO',
@@ -678,8 +678,9 @@ class CotizacionResumenController extends Controller
                 'nombre' => $cliente['nombre'],
                 'documento' => $cliente['documento'] ?? null,
                 'correo' => $cliente['correo'] ?? null,
-                'telefono' => $this->telefonoConPrefijoContenedor(
+                'telefono' => $this->telefonoConPrefijoOrg(
                     $cliente['whatsapp'] ?? null,
+                    $orgId,
                     isset($contenedor) ? $contenedor : $cotizacion->contenedor
                 ),
                 'tarifa_descuento' => $request->input('descuento', 0),
@@ -952,9 +953,10 @@ class CotizacionResumenController extends Controller
         return $authOrg;
     }
 
-    private function telefonoConPrefijoContenedor($whatsapp, $contenedor)
+    private function telefonoConPrefijoOrg($whatsapp, $orgId, $contenedor = null)
     {
-        $code = CountryPhoneHelper::codeForContenedor($contenedor);
+        $code = CountryPhoneHelper::codeForOrganizacionId($orgId)
+            ?: CountryPhoneHelper::codeForContenedor($contenedor);
         $guardado = CountryPhoneHelper::ensureCountryCode($whatsapp, $code);
 
         return $guardado !== '' ? $guardado : null;

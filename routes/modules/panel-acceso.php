@@ -37,6 +37,7 @@ Route::group(['prefix' => 'panel-acceso', 'middleware' => 'jwt.auth'], function 
     // Organizaciones (mantenedor, solo organizacion admin -- ver
     // OrganizacionAdminController::autorizarAdmin)
     // -----------------------------------------------------------------------
+    Route::get('paises', [OrganizacionAdminController::class, 'paises']);
     Route::get('organizaciones', [OrganizacionAdminController::class, 'index']);
     Route::post('organizaciones', [OrganizacionAdminController::class, 'store']);
     Route::match(['put', 'patch', 'post'], 'organizaciones/{id}', [OrganizacionAdminController::class, 'update']);

@@ -123,7 +123,7 @@ class AuthController extends Controller
                         $this->registrarDeviceFcm((int) $usuario->ID_Usuario, $data);
 
                         // Cargar relaciones del usuario
-                        $usuario->load(['grupo', 'empresa', 'organizacion']);
+                        $usuario->load(['grupo', 'empresa', 'organizacion.paisFlag']);
 
                         // Obtener menús del usuario
                         $menus = $this->obtenerMenusUsuario($usuario);
@@ -224,7 +224,10 @@ class AuthController extends Controller
                                 ] : null,
                                 'organizacion' => $usuario->organizacion ? [
                                     'id' => $usuario->organizacion->ID_Organizacion,
-                                    'nombre' => $usuario->organizacion->No_Organizacion
+                                    'nombre' => $usuario->organizacion->No_Organizacion,
+                                    'phone_code' => \App\Support\Phone\CountryPhoneHelper::codeForOrganizacionId(
+                                        $usuario->organizacion->ID_Organizacion
+                                    ),
                                 ] : null,
                                 // Solo la organizacion 1 (admin) puede crear/editar usuarios de
                                 // cualquier organizacion; el resto queda fijo en la suya. El front

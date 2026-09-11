@@ -2158,7 +2158,16 @@ class CotizacionController extends Controller
         }
 
         $digits = preg_replace('/\D+/u', '', $text);
-        return $digits === '' ? null : $digits;
+        if ($digits === '') {
+            return null;
+        }
+        $orgId = auth()->user() ? (int) auth()->user()->getAttribute('ID_Organizacion') : 0;
+        $conPrefijo = \App\Support\Phone\CountryPhoneHelper::ensureCountryCode(
+            $digits,
+            \App\Support\Phone\CountryPhoneHelper::codeForOrganizacionId($orgId)
+        );
+
+        return $conPrefijo !== '' ? $conPrefijo : $digits;
     }
 
     /**

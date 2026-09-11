@@ -6,9 +6,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Prefijo telefónico desde pais_flags (join por id_pais del contenedor).
+ * Prefijo telefónico desde pais_flags (país de la org, o del contenedor).
  *
- * Guardado: si el número no trae código, se antepone el del consolidado.
+ * Guardado: si el número no trae código, se antepone el de la organización.
  * Comparación: dígitos internacionales + nacionales (prefijos de la tabla).
  */
 class CountryPhoneHelper
@@ -72,6 +72,24 @@ class CountryPhoneHelper
         $digits = preg_replace('/[^0-9]/', '', (string) $code);
 
         return $digits !== '' ? $digits : null;
+    }
+
+    /**
+     * Prefijo por defecto de la organización (organizacion.id_pais → pais_flags.phone_code).
+     *
+     * @param int|null $orgId
+     * @return string|null
+     */
+    public static function codeForOrganizacionId($orgId)
+    {
+        $orgId = (int) $orgId;
+        if ($orgId <= 0 || !Schema::hasTable('organizacion') || !Schema::hasColumn('organizacion', 'id_pais')) {
+            return null;
+        }
+
+        $idPais = DB::table('organizacion')->where('ID_Organizacion', $orgId)->value('id_pais');
+
+        return self::codeForPaisId($idPais);
     }
 
     /**
