@@ -27,6 +27,7 @@ use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Traits\WhatsappTrait;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\RecuperarContrasenaMail;
+use App\Support\Organizacion\OrganizacionPortalUrls;
 
 class ClientesController extends Controller
 {
@@ -310,9 +311,9 @@ class ClientesController extends Controller
                 ], 404);
             }
 
-            // Obtener URL base de clientes desde .env
-            $baseUrl = config('app.url_clientes');
-            $recuperarContrasenaUrl = rtrim($baseUrl, '/') . '/recuperar-contrasena';
+            $recuperarContrasenaUrl = OrganizacionPortalUrls::recuperarContrasena(
+                OrganizacionPortalUrls::orgIdFromParent($cliente)
+            );
 
            
 

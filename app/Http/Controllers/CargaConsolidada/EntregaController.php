@@ -23,6 +23,7 @@ use App\Jobs\SendDeliveryFormBulkJob;
 use App\Helpers\UsuarioDatosFacturacionHelper;
 use App\Services\Delivery\DeliveryFormLinkCoordinationNotifier;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
+use App\Support\Organizacion\OrganizacionPortalUrls;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use ZipArchive;
@@ -132,15 +133,13 @@ class EntregaController extends Controller
      */
     private function buildFormularioEntregaUrl(int $idContenedor, ?int $typeForm): string
     {
-        $base = rtrim((string) config('app.url_clientes'), '/') . '/formulario-entrega/' . $idContenedor;
-        if ($typeForm === 1) {
-            return $base . '?destino=lima';
-        }
-        if ($typeForm === 0) {
-            return $base . '?destino=provincia';
-        }
+        $contenedor = Contenedor::query()->whereKey($idContenedor)->first();
 
-        return $base;
+        return OrganizacionPortalUrls::formularioEntrega(
+            OrganizacionPortalUrls::orgIdFromParent($contenedor),
+            $idContenedor,
+            $typeForm
+        );
     }
 
     /**

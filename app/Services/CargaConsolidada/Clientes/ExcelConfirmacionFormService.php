@@ -11,6 +11,7 @@ use App\Models\Notificacion;
 use App\Models\Usuario;
 use App\Services\Storage\S3ObjectStorageConnector;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
+use App\Support\Organizacion\OrganizacionPortalUrls;
 use App\Traits\UsesObjectStorage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -468,7 +469,11 @@ class ExcelConfirmacionFormService
                 ? str_pad((string) $carga, 2, '0', STR_PAD_LEFT)
                 : (string) $carga;
 
-            $enlace = CoordinacionWhatsappPayload::buildExcelConfirmacionUrl($uuid);
+            $enlace = CoordinacionWhatsappPayload::buildExcelConfirmacionUrl(
+                $uuid,
+                null,
+                OrganizacionPortalUrls::orgIdFromParent($cotizacion)
+            );
             if ($enlace === '') {
                 Log::warning('ExcelConfirmacionFormService: sin enlace web para notificar Excel conf. recibido', [
                     'uuid' => $uuid,

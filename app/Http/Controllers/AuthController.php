@@ -28,6 +28,7 @@ use App\Models\CargaConsolidada\Cotizacion;
 use App\Traits\FileTrait;
 use App\Traits\UsesObjectStorage;
 use App\Support\Menu\PedidosCursoMenuFilter;
+use App\Support\Organizacion\OrganizacionPortalUrls;
 
 class AuthController extends Controller
 {
@@ -1499,6 +1500,7 @@ class AuthController extends Controller
                 'no_como_entero' => $validatedData['no_como_entero'] ?? null,
                 'no_otros_como_entero_empresa' => $validatedData['no_otros_como_entero_empresa'] ?? null,
                 'pais_id' => $validatedData['pais_id'] ?? null,
+                'organizacion_id' => OrganizacionPortalUrls::orgIdFromPublicRequest($request),
             ]);
 
             Log::info('user created', $user->toArray());
@@ -1637,6 +1639,22 @@ class AuthController extends Controller
                     'status' => 'danger',
                     'message' => 'Usuario no encontrado'
                 ], 401);
+            }
+
+            $orgId = (int) $request->attributes->get(
+                'organizacion_id',
+                OrganizacionPortalUrls::orgIdFromPublicRequest($request)
+            );
+            $userOrg = (int) ($user->organizacion_id ?? 0);
+            if ($userOrg <= 0) {
+                $userOrg = OrganizacionPortalUrls::ADMIN_ORG;
+            }
+            if ($userOrg !== $orgId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El usuario no pertenece a esta organización',
+                    'code' => 'ORG_MISMATCH',
+                ], 403);
             }
 
             // Verificar contraseña
@@ -2011,6 +2029,22 @@ class AuthController extends Controller
                 ], 404);
             }
 
+            $orgId = (int) $request->attributes->get(
+                'organizacion_id',
+                OrganizacionPortalUrls::orgIdFromPublicRequest($request)
+            );
+            $userOrg = (int) ($user->organizacion_id ?? 0);
+            if ($userOrg <= 0) {
+                $userOrg = OrganizacionPortalUrls::ADMIN_ORG;
+            }
+            if ($userOrg !== $orgId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El usuario no pertenece a esta organización',
+                    'code' => 'ORG_MISMATCH',
+                ], 403);
+            }
+
             // Generar token único
             $token = Str::random(64);
 
@@ -2024,9 +2058,11 @@ class AuthController extends Controller
                 ]
             );
 
-            // Construir URL de reset (viene del frontend)
-            $frontendUrl = config('app.url_clientes');
-            $resetUrl = $frontendUrl . '/reset-password?token=' . $token;
+            $orgReset = (int) ($user->organizacion_id ?? 0);
+            if ($orgReset <= 0) {
+                $orgReset = $orgId;
+            }
+            $resetUrl = OrganizacionPortalUrls::resetPassword($orgReset, $token);
 
             // Despachar job para enviar email
             \App\Jobs\SendForgotPasswordEmailJob::dispatch($email, $token, $resetUrl)->onQueue('emails');

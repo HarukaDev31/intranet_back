@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Services\Delivery\DeliveryFormLinkCoordinationNotifier;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
+use App\Support\Organizacion\OrganizacionPortalUrls;
 use App\Traits\WhatsappTrait;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -231,15 +232,13 @@ class SendDeliveryFormBulkJob implements ShouldQueue
 
     private function buildFormularioEntregaUrl(int $idContenedor, ?int $typeForm): string
     {
-        $base = rtrim((string) config('app.url_clientes'), '/') . '/formulario-entrega/' . $idContenedor;
-        if ($typeForm === 1) {
-            return $base . '?destino=lima';
-        }
-        if ($typeForm === 0) {
-            return $base . '?destino=provincia';
-        }
+        $contenedor = Contenedor::query()->whereKey($idContenedor)->first();
 
-        return $base;
+        return OrganizacionPortalUrls::formularioEntrega(
+            OrganizacionPortalUrls::orgIdFromParent($contenedor),
+            $idContenedor,
+            $typeForm
+        );
     }
 
     private function buildDeliveryFormsMessages(string $carga, string $nombreCliente, ?int $typeForm, int $idContenedor): array

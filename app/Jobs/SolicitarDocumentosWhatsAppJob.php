@@ -9,6 +9,7 @@ use App\Services\Google\GoogleDriveExcelConfirmacionService;
 use App\Services\Storage\S3ObjectStorageConnector;
 use App\Services\WhatsApp\WhatsAppCoordinacionBatchService;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
+use App\Support\Organizacion\OrganizacionPortalUrls;
 use App\Traits\DatabaseConnectionTrait;
 use App\Traits\UsesObjectStorage;
 use App\Traits\WhatsappTrait;
@@ -141,7 +142,11 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
 
             $driveLink = null;
             $formLink = $cotizacionUuid !== ''
-                ? CoordinacionWhatsappPayload::buildExcelConfirmacionUrl($cotizacionUuid)
+                ? CoordinacionWhatsappPayload::buildExcelConfirmacionUrl(
+                    $cotizacionUuid,
+                    null,
+                    OrganizacionPortalUrls::orgIdFromParent($cot)
+                )
                 : '';
             $idProveedorRef = isset($proveedorModels[0]) ? (int) $proveedorModels[0]->id : null;
             $codigoLabel = 'General';

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\PanelAcceso;
 
 use App\Http\Controllers\Controller;
 use App\Models\Organizacion;
+use App\Models\OrganizacionPortal;
+use App\Support\Organizacion\OrganizacionPortalUrls;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -36,7 +38,7 @@ class OrganizacionAdminController extends Controller
         }
 
         try {
-            $query = Organizacion::with('empresa')->orderBy('No_Organizacion');
+            $query = Organizacion::with(['empresa', 'portal'])->orderBy('No_Organizacion');
 
             if ($request->filled('empresa_id')) {
                 $query->where('ID_Empresa', $request->empresa_id);
@@ -62,10 +64,16 @@ class OrganizacionAdminController extends Controller
 
         try {
             $request->validate([
-                'id_empresa'       => 'required|integer|exists:empresa,ID_Empresa',
-                'no_organizacion'  => 'required|string|max:100',
-                'txt_organizacion' => 'nullable|string',
-                'estado'           => 'nullable|integer|in:0,1',
+                'id_empresa'             => 'required|integer|exists:empresa,ID_Empresa',
+                'no_organizacion'        => 'required|string|max:100',
+                'txt_organizacion'       => 'nullable|string',
+                'estado'                 => 'nullable|integer|in:0,1',
+                'url_clientes'           => 'nullable|string|max:255',
+                'url_excel_confirmacion' => 'nullable|string|max:255',
+                'url_datos_proveedor'    => 'nullable|string|max:255',
+                'nombre_publico'         => 'nullable|string|max:120',
+                'drive_folder_id'        => 'nullable|string|max:128',
+                'logo_url'               => 'nullable|string|max:255',
             ]);
 
             $organizacion = Organizacion::create([
@@ -75,10 +83,12 @@ class OrganizacionAdminController extends Controller
                 'Nu_Estado'        => $request->input('estado', 1),
             ]);
 
+            $this->syncPortal($organizacion, $request);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Organización creada exitosamente',
-                'data' => $this->serializar($organizacion->fresh('empresa')),
+                'data' => $this->serializar($organizacion->fresh(['empresa', 'portal'])),
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json(['success' => false, 'message' => $e->errors()], 422);
@@ -104,10 +114,17 @@ class OrganizacionAdminController extends Controller
             }
 
             $request->validate([
-                'id_empresa'       => 'sometimes|required|integer|exists:empresa,ID_Empresa',
-                'no_organizacion'  => 'sometimes|required|string|max:100',
-                'txt_organizacion' => 'nullable|string',
-                'estado'           => 'nullable|integer|in:0,1',
+                'id_empresa'             => 'sometimes|required|integer|exists:empresa,ID_Empresa',
+                'no_organizacion'        => 'sometimes|required|string|max:100',
+                'txt_organizacion'       => 'nullable|string',
+                'estado'                 => 'nullable|integer|in:0,1',
+                'url_clientes'           => 'nullable|string|max:255',
+                'url_excel_confirmacion' => 'nullable|string|max:255',
+                'url_datos_proveedor'    => 'nullable|string|max:255',
+                'nombre_publico'         => 'nullable|string|max:120',
+                'drive_folder_id'        => 'nullable|string|max:128',
+                'logo_url'               => 'nullable|string|max:255',
+                'regenerar_public_key'   => 'nullable|boolean',
             ]);
 
             if ($request->filled('id_empresa')) {
@@ -123,11 +140,12 @@ class OrganizacionAdminController extends Controller
                 $organizacion->setAttribute('Nu_Estado', $request->estado);
             }
             $organizacion->save();
+            $this->syncPortal($organizacion, $request);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Organización actualizada exitosamente',
-                'data' => $this->serializar($organizacion->fresh('empresa')),
+                'data' => $this->serializar($organizacion->fresh(['empresa', 'portal'])),
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json(['success' => false, 'message' => $e->errors()], 422);
@@ -166,15 +184,42 @@ class OrganizacionAdminController extends Controller
 
     private function serializar(Organizacion $o): array
     {
-        $empresa = $o->getRelation('empresa');
+        $empresa = $o->relationLoaded('empresa') ? $o->getRelation('empresa') : $o->empresa;
+        $portal = $o->relationLoaded('portal') ? $o->getRelation('portal') : $o->portal;
 
         return [
-            'id'               => $o->getAttribute('ID_Organizacion'),
-            'id_empresa'       => $o->getAttribute('ID_Empresa'),
-            'empresa'          => $empresa?->getAttribute('No_Empresa'),
-            'no_organizacion'  => $o->getAttribute('No_Organizacion'),
-            'txt_organizacion' => $o->getAttribute('Txt_Organizacion'),
-            'estado'           => $o->getAttribute('Nu_Estado'),
+            'id'                     => $o->getAttribute('ID_Organizacion'),
+            'id_empresa'             => $o->getAttribute('ID_Empresa'),
+            'empresa'                => $empresa ? $empresa->getAttribute('No_Empresa') : null,
+            'no_organizacion'        => $o->getAttribute('No_Organizacion'),
+            'txt_organizacion'       => $o->getAttribute('Txt_Organizacion'),
+            'estado'                 => $o->getAttribute('Nu_Estado'),
+            'url_clientes'           => $portal ? $portal->url_clientes : null,
+            'url_excel_confirmacion' => $portal ? $portal->url_excel_confirmacion : null,
+            'url_datos_proveedor'    => $portal ? $portal->url_datos_proveedor : null,
+            'nombre_publico'         => $portal ? $portal->nombre_publico : null,
+            'drive_folder_id'        => $portal ? $portal->drive_folder_id : null,
+            'logo_url'               => $portal ? $portal->logo_url : null,
+            'public_key'             => $portal ? $portal->public_key : null,
         ];
+    }
+
+    private function syncPortal(Organizacion $organizacion, Request $request): void
+    {
+        $orgId = (int) $organizacion->getAttribute('ID_Organizacion');
+        $portal = OrganizacionPortal::firstOrCreateForOrganizacion($orgId);
+
+        $campos = ['url_clientes', 'url_excel_confirmacion', 'url_datos_proveedor', 'nombre_publico', 'drive_folder_id', 'logo_url'];
+        foreach ($campos as $campo) {
+            if ($request->exists($campo)) {
+                $valor = trim((string) $request->input($campo, ''));
+                $portal->setAttribute($campo, $valor !== '' ? $valor : null);
+            }
+        }
+        if ($request->boolean('regenerar_public_key')) {
+            $portal->setAttribute('public_key', (string) \Illuminate\Support\Str::uuid());
+        }
+        $portal->save();
+        OrganizacionPortalUrls::forgetCache($orgId);
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Support\WhatsApp;
 
 use App\Models\CargaConsolidada\CotizacionProveedor;
+use App\Support\Organizacion\OrganizacionPortalUrls;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -39,24 +40,23 @@ class CoordinacionWhatsappPayload
     private const DOCS_RECORDATORIO_PROVEEDOR = 'pb_docs_recordatorio_proveedor_v1';
 
     /**
-     * Base del formulario web Excel de confirmación (APP_URL_EXCEL_CONFIRMACION o APP_URL_CLIENTES).
+     * Base del formulario web Excel de confirmación (portal de la org o fallback .env).
+     *
+     * @param  mixed  $organizacionId
      */
-    public static function excelConfirmacionBaseUrl(): string
+    public static function excelConfirmacionBaseUrl($organizacionId = null): string
     {
-        $base = rtrim(trim((string) config('app.url_excel_confirmacion', '')), '/');
-        if ($base !== '') {
-            return $base;
-        }
-
-        return rtrim(trim((string) config('app.url_clientes', '')), '/');
+        return OrganizacionPortalUrls::urlExcelConfirmacion($organizacionId);
     }
 
     /**
      * URL del formulario web de Excel de confirmación (corrige http:/ → http://).
+     *
+     * @param  mixed  $organizacionId
      */
-    public static function buildExcelConfirmacionUrl(string $uuid, ?string $codeSupplier = null): string
+    public static function buildExcelConfirmacionUrl(string $uuid, ?string $codeSupplier = null, $organizacionId = null): string
     {
-        $base = self::excelConfirmacionBaseUrl();
+        $base = self::excelConfirmacionBaseUrl($organizacionId);
         if ($base === '') {
             return self::normalizeExternalUrl(ltrim($uuid, '/'));
         }
@@ -72,10 +72,12 @@ class CoordinacionWhatsappPayload
 
     /**
      * URL del formulario datos proveedor (corrige http:/ → http://).
+     *
+     * @param  mixed  $organizacionId
      */
-    public static function buildDatosProveedorUrl(string $uuid): string
+    public static function buildDatosProveedorUrl(string $uuid, $organizacionId = null): string
     {
-        $base = rtrim(trim((string) env('APP_URL_DATOS_PROVEEDOR', '')), '/');
+        $base = OrganizacionPortalUrls::urlDatosProveedor($organizacionId);
         if ($base === '') {
             return self::normalizeExternalUrl(ltrim($uuid, '/'));
         }
@@ -489,7 +491,11 @@ class CoordinacionWhatsappPayload
         }
 
         // Link de intranet a nivel cotización (todos los proveedores en el mismo formulario).
-        return self::buildExcelConfirmacionUrl($uuid);
+        return self::buildExcelConfirmacionUrl(
+            $uuid,
+            null,
+            OrganizacionPortalUrls::orgIdFromParent($proveedor->cotizacion)
+        );
     }
 
     public static function resolveExcelConfirmacionIntranetLink(int $idProveedor): ?string

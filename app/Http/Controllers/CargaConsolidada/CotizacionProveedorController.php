@@ -36,6 +36,7 @@ use Illuminate\Support\Str;
 use App\Traits\UserGroupsTrait;
 use App\Traits\FileTrait;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
+use App\Support\Organizacion\OrganizacionPortalUrls;
 use App\Support\BrandLogoPaths;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\EmbarqueExport;
@@ -2171,9 +2172,12 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $qtyPalletChina = (int) ($proveedor->qty_pallet_china ?? 0);
 
             // Preparar mensaje inicial de inspección (solo pb_inspeccion_llegada_v1; 1 vez por proveedor)
-            $baseUrl = rtrim((string) config('app.url_clientes'), '/');
             $cotizacionUuid = Cotizacion::where('id', $idCotizacion)->value('uuid');
-            $inspeccionViewUrl = $baseUrl . '/inspeccion/' . ($cotizacionUuid ?? '') . '?id_proveedor=' . $idProveedor;
+            $inspeccionViewUrl = OrganizacionPortalUrls::inspeccion(
+                OrganizacionPortalUrls::orgIdFromParent($cotizacion),
+                $cotizacionUuid ?? '',
+                $idProveedor
+            );
             $inspectionMessage = $this->buildInspectionMessage(
                 $cotizacion->nombre,
                 $proveedor->code_supplier,

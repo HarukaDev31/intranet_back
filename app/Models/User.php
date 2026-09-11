@@ -41,6 +41,7 @@ class User extends Authenticatable implements JWTSubject
         'no_como_entero',
         'no_otros_como_entero_empresa',
         'domicilio_fiscal',
+        'organizacion_id',
     ];
 
     /**

@@ -1,6 +1,6 @@
 # Pendiente — Portal de clientes por organización
 
-**Estado:** PENDIENTE. No implementar en el lote QA del inbox.  
+**Estado:** EN CURSO (tabla + helper + links intranet). Falta front clientes #2, CORS y prueba socio.  
 **Fecha:** 2026-09-11  
 **Dueño conceptual:** el core es el **portal clientes**. WhatsApp, Drive y datos proveedor se cuelgan de la misma config, no al revés.
 
@@ -92,16 +92,19 @@ Un solo API. No duplicar webhook Meta, Graph, CDN ni Gemini.
 
 ## 4. Checklist de implementación
 
-- [ ] Migración `organizacion_portales` + seed org 1
-- [ ] Resolver org por `X-Org-Key` / `Host` en `register` y `loginCliente`
-- [ ] Helper `urlClientesForOrganizacion($orgId)` y usarlo en:
-  - `CotizacionController` (firma)
+- [x] Migración `organizacion_portales` + seed org 1 + `users.organizacion_id`
+- [x] Resolver org por `X-Org-Key` / `Host` en `register` y `forgotPassword` (`OrganizacionPortalUrls::orgIdFromPublicRequest`)
+- [x] Helper `OrganizacionPortalUrls` y usarlo en:
+  - `CotizacionController` (firma + `url_clientes` en headers)
   - `CotizacionProveedorController` + `SendInspectionMediaJob`
   - `FacturaGuiaController`
   - `EntregaController` + `SendDeliveryFormBulkJob`
   - `CoordinacionWhatsappPayload` (excel + datos proveedor)
   - `ClientesController` / `AuthController` (reset)
-- [ ] Quitar hardcodes del front intranet (composable, no service en pages)
+- [x] Quitar hardcodes del front intranet (`useOrganizacionPortal`)
+- [x] Panel organizaciones: URLs del portal + `public_key`
+- [x] El front clientes #2 manda `X-Org-Key` (env `NUXT_PUBLIC_ORG_KEY`)
+- [x] Back: sin `X-Org-Key` válido → 403 (`RequireOrgKey` + `orgIdFromPublicRequest`)
 - [ ] CORS: origen del front 2
 - [ ] Deploy del portal clientes #2 (mismo repo, env distinto) **o** un build que resuelva por dominio
 - [ ] Prueba: registro en front 2 → cliente org 2; link de firma abre el front 2

@@ -22,6 +22,7 @@ use App\Models\PaisFlag;
 use App\Models\Notificacion;
 use App\Traits\WhatsappTrait;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
+use App\Support\Organizacion\OrganizacionPortalUrls;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -887,6 +888,9 @@ class CotizacionController extends Controller
                 'f_cierre' => $contenedor->fecha_cierre??$contenedor->f_cierre,
                 'lista_embarque_url' => $this->cdnStorageUrl($contenedor->lista_embarque_url),
                 'excel_seguimiento_drive' => $this->excelSeguimientoDrivePayload($idContenedor, $user),
+                'url_clientes' => OrganizacionPortalUrls::urlClientes(
+                    OrganizacionPortalUrls::orgIdFromParent($contenedor)
+                ),
             ]);
         }
 
@@ -900,6 +904,9 @@ class CotizacionController extends Controller
             'carga' => $contenedor->carga,
             'lista_embarque_url' => $this->cdnStorageUrl($contenedor->lista_embarque_url),
             'excel_seguimiento_drive' => $this->excelSeguimientoDrivePayload($idContenedor, $user),
+            'url_clientes' => OrganizacionPortalUrls::urlClientes(
+                OrganizacionPortalUrls::orgIdFromParent($contenedor)
+            ),
         ]);
     }
 
@@ -4057,7 +4064,10 @@ class CotizacionController extends Controller
             // Construir el mensaje
             $nombreCliente = $cotizacion->nombre;
             $carga = $contenedor->carga;
-            $signUrl = rtrim((string) config('app.url_clientes'), '/') . '/firma-acuerdo-servicio/' . ($cotizacion->uuid ?? '');
+            $signUrl = OrganizacionPortalUrls::firmaAcuerdoServicio(
+                OrganizacionPortalUrls::orgIdFromParent($cotizacion),
+                $cotizacion->uuid ?? ''
+            );
             
             $message = "Hola {$nombreCliente} porfavor firmar su contrato del consolidado #{$carga} {$signUrl}";
 

@@ -66,6 +66,12 @@ return [
     'url_excel_confirmacion' => env('APP_URL_EXCEL_CONFIRMACION', ''),
 
     /*
+    | Formulario datos proveedor (WhatsApp link_datos_proveedor).
+    | Fallback global; por org manda organizacion_portales.
+    */
+    'url_datos_proveedor' => env('APP_URL_DATOS_PROVEEDOR', ''),
+
+    /*
     | URL pública legacy (constancias / archivos Redis). No usar env() fuera de config.
     */
     'url_redis' => env('APP_URL_REDIS', ''),

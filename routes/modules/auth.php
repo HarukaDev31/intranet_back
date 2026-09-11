@@ -6,6 +6,7 @@ use App\Http\Controllers\Broadcasting\BroadcastController;
 use App\Http\Controllers\DeviceTokenController;
 use App\Http\Controllers\UserBusinessController;
 use App\Http\Controllers\UserProfileController;
+use App\Http\Controllers\OrganizacionPortalController;
 
 /*
 |--------------------------------------------------------------------------
@@ -34,7 +35,7 @@ Route::group(['prefix' => 'auth'], function () {
 });
 
 // Autenticación - Usuarios externos (clientes)
-Route::group(['prefix' => 'auth/clientes'], function () {
+Route::group(['prefix' => 'auth/clientes', 'middleware' => 'org.key'], function () {
     Route::post('register', [AuthController::class, 'register'])->middleware('throttle:5,1');
     Route::post('login', [AuthController::class, 'loginCliente'])->middleware('throttle:5,1');
     Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:10,1');
@@ -60,4 +61,5 @@ Route::group(['prefix' => 'auth/clientes'], function () {
 // Broadcasting (usuarios internos)
 Route::group(['middleware' => 'jwt.auth'], function () {
     Route::post('/broadcasting/auth', [BroadcastController::class, 'authenticate']);
+    Route::get('organizacion-portales', [OrganizacionPortalController::class, 'show']);
 });

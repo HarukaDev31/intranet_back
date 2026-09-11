@@ -13,6 +13,7 @@ use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\AlmacenInspection;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
+use App\Support\Organizacion\OrganizacionPortalUrls;
 use App\Traits\WhatsappTrait;
 use App\Traits\DatabaseConnectionTrait;
 use Carbon\Carbon;
@@ -182,8 +183,11 @@ class SendInspectionMediaJob implements ShouldQueue
             // Solo pb_inspeccion_llegada_v1 (máx. 1 vez/proveedor). Sin imagen/video WA.
             $qtyBoxChina = (int) ($proveedor->qty_box_china ?? $proveedor->qty_box ?? 0);
             $qtyPalletChina = (int) ($proveedor->qty_pallet_china ?? 0);
-            $baseUrl = rtrim((string) config('app.url_clientes'), '/');
-            $inspeccionLink = $baseUrl . '/inspeccion/' . ($cotizacion->uuid ?? '') . '?id_proveedor=' . $this->idProveedor;
+            $inspeccionLink = OrganizacionPortalUrls::inspeccion(
+                OrganizacionPortalUrls::orgIdFromParent($cotizacion),
+                $cotizacion->uuid ?? '',
+                $this->idProveedor
+            );
             $resolved = CoordinacionWhatsappPayload::resolveInspeccionLlegadaTemplate($qtyBoxChina, $qtyPalletChina);
             $message = CoordinacionWhatsappPayload::inspeccionLlegadaPreview(
                 (string) $cliente,

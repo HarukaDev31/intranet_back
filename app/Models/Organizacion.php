@@ -50,4 +50,9 @@ class Organizacion extends Model
     {
         return $this->hasMany(Almacen::class, 'ID_Organizacion', 'ID_Organizacion');
     }
+
+    public function portal()
+    {
+        return $this->hasOne(OrganizacionPortal::class, 'organizacion_id', 'ID_Organizacion');
+    }
 } 

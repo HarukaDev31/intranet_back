@@ -25,6 +25,7 @@ use App\Models\UsuarioDatosFacturacion;
 use App\Helpers\ComprobanteFormResolverHelper;
 use App\Helpers\UserLookupHelper;
 use App\Exports\FacturaGuiaClientesFacturacionExport;
+use App\Support\Organizacion\OrganizacionPortalUrls;
 use Maatwebsite\Excel\Facades\Excel;
 
 class FacturaGuiaController extends Controller
@@ -1894,7 +1895,10 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 return response()->json(['success' => false, 'message' => 'Debe seleccionar al menos un cliente'], 400);
             }
 
-            $clientesUrlBase = config('app.url_clientes');
+            $contenedor = Contenedor::query()->whereKey($idContenedor)->first();
+            $clientesUrlBase = OrganizacionPortalUrls::urlClientes(
+                OrganizacionPortalUrls::orgIdFromParent($contenedor)
+            );
             $enviados = [];
             $errores  = [];
 
@@ -2320,7 +2324,9 @@ Cualquier duda nos escribe.  ¡Gracias! */
             $numeroWhatsapp = $telefono . '@c.us';
 
             $idContenedor = $cotizacion->id_contenedor;
-            $clientesUrlBase = config('app.url_clientes');
+            $clientesUrlBase = OrganizacionPortalUrls::urlClientes(
+                OrganizacionPortalUrls::orgIdFromParent($cotizacion)
+            );
             $datosFacturacion = $this->getDatosFacturacionParaMensaje($cotizacion);
             $message = $datosFacturacion
                 ? $this->buildMensajeFormularioAntiguo($cotizacion, $datosFacturacion)
