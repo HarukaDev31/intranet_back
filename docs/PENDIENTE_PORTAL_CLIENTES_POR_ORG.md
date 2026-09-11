@@ -112,4 +112,4 @@ Un solo API. No duplicar webhook Meta, Graph, CDN ni Gemini.
 
 Estimado **3–5,5 días (24–43 h)**. Detalle en la sección 8 de [TECNICO_WHATSAPP_INBOX_MULTI_ORG.md](./TECNICO_WHATSAPP_INBOX_MULTI_ORG.md).
 
-Invertido hasta ahora en el análisis de URLs + acuerdo de diseño: **~2 h** (dentro de las ~10,5 h del lote inbox).
+Lote multi-org en `qa` desde el 9 sep: **~38–48 h** (scope, panel-acceso, resumen IA, customers, inbox). El análisis de URLs + diseño de este pendiente son ~2 h de esas.

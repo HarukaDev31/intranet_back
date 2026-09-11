@@ -147,17 +147,26 @@ No es inbox, pero estaba en working tree y se sube junto:
 
 ---
 
-## 8. Tiempos (estimado, sesión 2026-09-11)
+## 8. Tiempos (commits `qa` desde 2026-09-09)
 
-| Bloque | Invertido | Estado |
-|---|---|---|
-| Tabla + servicio + webhook/envío/WS por org + pantalla admin | 6 h | Hecho |
-| Cifrado de secretos + API sin devolver tokens | 1,5 h | Hecho |
-| Inventario de URLs externas + diseño portal key | 2 h | Análisis hecho; implementación pendiente |
-| Documentación + push QA | 1 h | Este doc |
-| **Total invertido** | **~10,5 h (~1,3 días)** | |
+Fuente: log de `qa` en ambos repos, 9 sep 00:46 → 11 sep 09:24. No es clock de sesión; es estimado por densidad de commits + tamaño.
 
-### Qué falta (ver doc pendiente)
+**Calendario:** ~2,5 días. **Efectivo:** **~38–48 h** (unas **5–6 jornadas**). El inbox de hoy es solo ~8–10 h de ese total.
+
+| Día | Ventana (commits) | Qué | Est. |
+|---|---|---|---|
+| 9 | 00:46–08:00 | Soporte TI push + logout JWT (ruido, no multi-org) | 3–4 h |
+| 9 | 11:55–14:53 | Merge QA + **fase 1/2 multi-org**: scope, `organizacion_id` en pipeline, middleware, tapar fugas | 7–9 h |
+| 9–10 | 20:14–01:17 | BD clientes por org + panel-acceso (orgs, cargos, usuarios) | 5–7 h |
+| 10 | 09:47–18:36 | **Cotización resumen IA** (tablas, Gemini, wizard, listado, guardado) + menús por org + socio crea consolidado / 2 de 3 pasos | 10–13 h |
+| 11 | 00:43 | Customers + cierre a BD clientes + wizard/listado socio + i18n almacén | 6–8 h |
+| 11 | 07:22–07:28 | phpstan modelos | 0,5–1 h |
+| 11 | ~mañana → 09:24 | Inbox WhatsApp por org + cifrado + docs portal (un commit gordo) | 8–10 h |
+| | | **Invertido 9–11 sep** | **~38–48 h** |
+
+Conteos (sin merges): front ~11 commits / +6,0k −0,6k; back ~27 commits / +10,2k −0,9k.
+
+### Qué falta — portal clientes por org (ver doc pendiente)
 
 | Bloque | Estimado restante |
 |---|---|
