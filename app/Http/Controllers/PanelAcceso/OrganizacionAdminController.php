@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Organizacion;
 use App\Models\OrganizacionPortal;
 use App\Models\Pais;
+use App\Models\PaisFlag;
 use App\Support\Organizacion\OrganizacionPortalUrls;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -179,16 +180,24 @@ class OrganizacionAdminController extends Controller
             return $denegado;
         }
 
-        $paises = Pais::query()->with('flag')->orderBy('No_Pais')->get();
+        $paises = Pais::query()->orderBy('No_Pais')->get();
+        $flags = PaisFlag::query()
+            ->whereIn('id_pais', $paises->map(function (Pais $pais) {
+                return (int) $pais->getAttribute('ID_Pais');
+            })->all())
+            ->get()
+            ->keyBy('id_pais');
 
         return response()->json([
             'success' => true,
-            'data' => $paises->map(function (Pais $p) {
-                $iso = $p->flag ? strtoupper(trim((string) $p->flag->iso2)) : '';
-                $phone = $p->flag ? preg_replace('/[^0-9]/', '', (string) $p->flag->phone_code) : '';
+            'data' => $paises->map(function (Pais $p) use ($flags) {
+                $idPais = (int) $p->getAttribute('ID_Pais');
+                $flag = $flags->get($idPais);
+                $iso = $flag ? strtoupper(trim((string) $flag->getAttribute('iso2'))) : '';
+                $phone = $flag ? preg_replace('/[^0-9]/', '', (string) $flag->getAttribute('phone_code')) : '';
 
                 return [
-                    'value'      => (int) $p->getAttribute('ID_Pais'),
+                    'value'      => $idPais,
                     'label'      => $p->getAttribute('No_Pais'),
                     'iso2'       => $iso !== '' ? $iso : null,
                     'phone_code' => $phone !== '' ? $phone : null,

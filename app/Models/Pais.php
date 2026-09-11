@@ -3,7 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
+/**
+ * @property int $ID_Pais
+ * @property string|null $No_Pais
+ * @property-read PaisFlag|null $flag
+ */
 class Pais extends Model
 {
     protected $table = 'pais';
@@ -13,7 +19,7 @@ class Pais extends Model
         'No_Pais'
     ];
 
-    public function flag()
+    public function flag(): HasOne
     {
         return $this->hasOne(PaisFlag::class, 'id_pais', 'ID_Pais');
     }

@@ -78,7 +78,7 @@ class GrupoController extends Controller
                     $query->where('grupo.ID_Empresa', $request->empresa_id);
                 }
                 if ($request->filled('org_id')) {
-                    $query->where('grupo.ID_Organizacion', $request->org_id);
+                    $query->whereRaw('grupo.ID_Organizacion = ?', [$request->org_id]);
                 }
             }
 
