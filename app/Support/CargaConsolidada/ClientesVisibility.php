@@ -2,6 +2,8 @@
 
 namespace App\Support\CargaConsolidada;
 
+use App\Helpers\ClienteLookupHelper;
+
 /**
  * Visibilidad de filas en Clientes / Embarcados / Variación.
  * Abierto: mismas filas que Cotizaciones (socio incluye resumen COTIZADO/CONFIRMADO).
@@ -75,13 +77,9 @@ class ClientesVisibility
                 $started = true;
             }
             if (!empty($telefono)) {
-                $telefonoLimpio = preg_replace('/[^0-9]/', '', $telefono);
-                $telefonoSinCodigo = preg_replace('/^51/', '', $telefonoLimpio);
                 $fn = $started ? 'orWhere' : 'where';
-                $q->{$fn}(function ($q2) use ($p, $telefonoLimpio, $telefonoSinCodigo) {
-                    $col = $p . 'telefono';
-                    $q2->where(\Illuminate\Support\Facades\DB::raw('REPLACE(REPLACE(' . $col . ', " ", ""), "-", "")'), 'LIKE', '%' . $telefonoLimpio . '%')
-                        ->orWhere(\Illuminate\Support\Facades\DB::raw('REPLACE(REPLACE(' . $col . ', " ", ""), "-", "")'), 'LIKE', '%' . $telefonoSinCodigo . '%');
+                $q->{$fn}(function ($q2) use ($p, $telefono) {
+                    ClienteLookupHelper::applyPhoneMatch($q2, $telefono, $p . 'telefono');
                 });
                 $started = true;
             }

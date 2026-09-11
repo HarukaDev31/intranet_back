@@ -128,6 +128,80 @@ class CierreContenedorClientesOrganizacionTest extends TestCase
         );
     }
 
+    public function test_job_reusa_cliente_de_la_misma_org_aunque_el_telefono_este_con_prefijo_51()
+    {
+        $this->skipSiFaltaSchema();
+
+        $org2 = (int) DB::table('organizacion')->where('ID_Organizacion', 2)->value('ID_Organizacion');
+        $idPais = (int) DB::table('pais')->orderBy('ID_Pais')->value('ID_Pais');
+        $idTipo = (int) DB::table('contenedor_consolidado_tipo_cliente')->orderBy('id')->value('id');
+        if ($org2 !== 2 || $idPais <= 0 || $idTipo <= 0) {
+            $this->markTestSkipped('Faltan org 2, pais o tipo de cliente.');
+        }
+
+        $local = '987' . substr(preg_replace('/[^0-9]/', '', $this->marker), 0, 6);
+
+        $clienteExistenteId = DB::table('clientes')->insertGetId([
+            'nombre' => 'Cliente +51 ' . $this->marker,
+            'documento' => '10987654',
+            'correo' => 'fmt-' . $this->marker . '@example.test',
+            'telefono' => '+51 ' . substr($local, 0, 3) . ' ' . substr($local, 3, 3) . ' ' . substr($local, 6),
+            'fecha' => now()->toDateString(),
+            'organizacion_id' => $org2,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $contenedorId = DB::table('carga_consolidada_contenedor')->insertGetId([
+            'mes' => 'SEPTIEMBRE',
+            'id_pais' => $idPais,
+            'organizacion_id' => $org2,
+            'carga' => 'QA51-' . $this->marker,
+            'empresa' => 2,
+            'estado' => 'PENDIENTE',
+            'estado_china' => 'COMPLETADO',
+            'tipo_carga' => 'CARGA CONSOLIDADA',
+            'f_inicio' => now()->toDateString(),
+        ]);
+
+        $cotizacionId = DB::table('contenedor_consolidado_cotizacion')->insertGetId([
+            'organizacion_id' => $org2,
+            'uuid' => (string) Str::uuid(),
+            'id_contenedor' => $contenedorId,
+            'id_tipo_cliente' => $idTipo,
+            'fecha' => now(),
+            'nombre' => 'Cliente local ' . $this->marker,
+            'documento' => '20987654',
+            'correo' => $this->marker . '@example.test',
+            'telefono' => $local,
+            'estado' => 'CONFIRMADO',
+            'estado_cotizador' => 'CONFIRMADO',
+            'estado_resumen' => 'CONFIRMADO',
+            'estado_cliente' => 'RESERVADO',
+            'id_cliente' => null,
+        ]);
+
+        DB::table('contenedor_consolidado_cotizacion_proveedores')->insert([
+            'organizacion_id' => $org2,
+            'id_cotizacion' => $cotizacionId,
+            'id_contenedor' => $contenedorId,
+            'products' => 'Item +51 ' . $this->marker,
+            'estados_proveedor' => 'LOADED',
+            'cbm_total' => 1.1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        (new ValidateCotizacionesWithLoadedProveedoresJob($contenedorId))->handle();
+
+        $cotizacion = DB::table('contenedor_consolidado_cotizacion')->where('id', $cotizacionId)->first();
+        $this->assertSame(
+            (int) $clienteExistenteId,
+            (int) $cotizacion->id_cliente,
+            'Debe reutilizar el cliente de la misma org aunque el teléfono esté como +51.'
+        );
+    }
+
     public function test_listado_socio_abierto_incluye_cotizado_y_cerrado_solo_loaded()
     {
         $this->skipSiFaltaSchema();

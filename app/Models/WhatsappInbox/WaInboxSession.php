@@ -9,6 +9,7 @@ class WaInboxSession extends Model
     protected $table = 'wa_inbox_sessions';
 
     protected $fillable = [
+        'organizacion_id',
         'phone_number_id',
         'display_number',
         'label',

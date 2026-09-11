@@ -22,6 +22,7 @@ use App\Http\Controllers\CargaConsolidada\EntregaController;
 use App\Http\Controllers\CargaConsolidada\ExcelConfirmacionCoordinacionController;
 use App\Http\Controllers\CargaConsolidada\InspeccionadosController;
 use App\Http\Controllers\CargaConsolidada\CustomersController;
+use App\Http\Controllers\CargaConsolidada\HomeStatsController;
 use App\Http\Controllers\CargaConsolidada\BoletinQuimicoController;
 use App\Http\Controllers\Clientes\ComprobanteFormController;
 use App\Http\Controllers\Commons\Google\SheetController;
@@ -50,6 +51,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
     // Cotizacion "resumen" (sin items, documento leido por IA)
     Route::prefix('cotizacion-resumen')->group(function () {
         Route::post('/extraer-documento', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'extraerDocumento']);
+        Route::get('/clientes', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'searchClientes']);
         Route::get('/', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'index']);
         Route::post('/', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'store']);
         Route::get('/{id}', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'show']);
@@ -58,6 +60,8 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
         Route::put('/{id}/estado', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'updateEstado']);
         Route::delete('/{id}', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'destroy']);
     });
+
+    Route::get('home-stats', [HomeStatsController::class, 'index']);
 
     // Dashboard ventas
     Route::prefix('dashboard-ventas')->group(function () {

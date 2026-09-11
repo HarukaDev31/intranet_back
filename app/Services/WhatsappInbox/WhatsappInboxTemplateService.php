@@ -8,6 +8,20 @@ use Illuminate\Support\Facades\Log;
 
 class WhatsappInboxTemplateService
 {
+    /** @var int */
+    protected $organizacionId = 1;
+
+    /**
+     * @param  int  $organizacionId
+     * @return $this
+     */
+    public function usingOrganizacion($organizacionId)
+    {
+        $this->organizacionId = (int) $organizacionId > 0 ? (int) $organizacionId : 1;
+
+        return $this;
+    }
+
     /**
      * Plantillas conocidas con encabezado DOCUMENT (por si el caché no trae components).
      *
@@ -439,7 +453,8 @@ class WhatsappInboxTemplateService
         $fromMeta = trim($this->buildPreviewBody($templateName, $params));
         $missingMarker = '[' . $templateName . ']';
 
-        if (config('meta_whatsapp.coordinacion_inbox_preview_from_template', true)) {
+        $creds = app(WhatsappInboxOrgConfigService::class)->credentials($this->organizacionId);
+        if (!empty($creds['preview_from_template'])) {
             if ($fromMeta !== '' && $fromMeta !== $missingMarker) {
                 return $fromMeta;
             }
@@ -455,7 +470,7 @@ class WhatsappInboxTemplateService
      */
     public function listTemplates()
     {
-        $cacheKey = 'wa_inbox_meta_templates_v3';
+        $cacheKey = 'wa_inbox_meta_templates_org_' . $this->organizacionId;
 
         $templates = Cache::remember($cacheKey, 3600, function () {
             return $this->fetchFromMetaOrDefault();
@@ -472,13 +487,14 @@ class WhatsappInboxTemplateService
      */
     private function fetchFromMetaOrDefault()
     {
-        $wabaId = (string) config('meta_whatsapp.waba_id');
-        $token = (string) config('meta_whatsapp.access_token');
+        $creds = app(WhatsappInboxOrgConfigService::class)->credentials($this->organizacionId);
+        $wabaId = (string) $creds['waba_id'];
+        $token = (string) $creds['access_token'];
         if ($wabaId === '' || $token === '') {
             return $this->defaultTemplates();
         }
 
-        $version = (string) config('meta_whatsapp.graph_api_version', 'v19.0');
+        $version = (string) ($creds['graph_api_version'] ?: 'v19.0');
         $url = "https://graph.facebook.com/{$version}/{$wabaId}/message_templates";
 
         try {

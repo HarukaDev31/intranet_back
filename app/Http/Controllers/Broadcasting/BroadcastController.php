@@ -169,6 +169,25 @@ class BroadcastController extends Controller
                 return response()->json(['message' => 'No autorizado para este canal'], 403);
             }
 
+            $waInboxOrgPrefix = 'private-whatsapp-inbox.org.';
+            if (strpos($channelName, $waInboxOrgPrefix) === 0) {
+                $channelOrgId = (int) substr($channelName, strlen($waInboxOrgPrefix));
+                $userOrgId = (int) $user->getAttribute('ID_Organizacion');
+                if (
+                    $this->usuarioPuedeAccederWhatsappInbox($user)
+                    && $channelOrgId > 0
+                    && $channelOrgId === $userOrgId
+                ) {
+                    return response()->json($this->pusherAuthPayload($request, $channelName));
+                }
+                Log::error('User not authorized for whatsapp-inbox org channel', [
+                    'user_id' => $user->ID_Usuario,
+                    'channel' => $channelName,
+                    'user_org' => $userOrgId,
+                ]);
+                return response()->json(['message' => 'No autorizado para este canal'], 403);
+            }
+
             // Verificar si el canal está en nuestra lista de canales configurados (por rol)
             if (isset($this->CHANNELS[$channelName])) {
                 $requiredRole = $this->CHANNELS[$channelName];

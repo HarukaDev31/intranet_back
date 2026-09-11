@@ -74,6 +74,14 @@ Broadcast::channel('whatsapp-inbox.coordinacion', function ($user) {
     return $user instanceof Usuario && $user->puedeAccederWhatsappInbox();
 });
 
+Broadcast::channel('whatsapp-inbox.org.{organizacionId}', function ($user, $organizacionId) {
+    if (!$user instanceof Usuario || !$user->puedeAccederWhatsappInbox()) {
+        return false;
+    }
+
+    return (int) $user->getAttribute('ID_Organizacion') === (int) $organizacionId;
+});
+
 // WhatsApp Copiloto ventas — tiempo real del chat Meta (número ventas)
 Broadcast::channel('whatsapp-copiloto.ventas', function ($user) {
     if (!$user || !$user->grupo) {

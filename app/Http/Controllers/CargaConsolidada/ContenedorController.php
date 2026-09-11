@@ -5,6 +5,7 @@ namespace App\Http\Controllers\CargaConsolidada;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\CargaConsolidada\Contenedor;
+use App\Support\CargaConsolidada\CargaLabel;
 use App\Models\CargaConsolidada\ContenedorPasos;
 use App\Models\CargaConsolidada\ContenedorTcYuan;
 use App\Models\Usuario;
@@ -27,6 +28,7 @@ use App\Traits\GoogleSheetsHelper;
 use Carbon\Carbon;
 use App\Models\CargaConsolidada\Pago;
 use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
+use App\Models\Organizacion;
 use App\Services\CargaConsolidada\CargaConsolidadaCacheService;
 
 class ContenedorController extends Controller
@@ -150,7 +152,9 @@ class ContenedorController extends Controller
      */
     private function buildContenedorIndexPayload(Request $request, string $effectiveRole): array
     {
-        $query = Contenedor::with(['pais', 'tcYuan']);
+        $query = Contenedor::with(['pais', 'tcYuan', 'paisFlag', 'organizacion']);
+        $authUser = auth()->user();
+        $authOrg = $authUser ? (int) $authUser->getAttribute('ID_Organizacion') : 0;
         $completado = filter_var($request->completado, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
         if ($completado === null) {
             $completado = false;
@@ -182,10 +186,17 @@ class ContenedorController extends Controller
             $query->where('estado_finanzas', $request->estado_finanzas);
         }
 
+        if ($authOrg === Usuario::ID_ORGANIZACION_ADMIN) {
+            $orgFiltro = $request->input('id_org', $request->input('organizacion_id'));
+            if ($orgFiltro !== null && $orgFiltro !== '' && strtolower((string) $orgFiltro) !== 'todos') {
+                $query->where('organizacion_id', (int) $orgFiltro);
+            }
+        }
+
         $yearsQuery = clone $query;
         $yearsQuery->getQuery()->orders = null;
         $aniosDisponibles = $yearsQuery
-            ->without(['pais', 'tcYuan'])
+            ->without(['pais', 'tcYuan', 'paisFlag', 'organizacion'])
             ->whereNotNull('f_inicio')
             ->selectRaw('YEAR(f_inicio) as anio')
             ->groupBy('anio')
@@ -208,6 +219,9 @@ class ContenedorController extends Controller
             }
         }
 
+        if ($authOrg > 0) {
+            $query->orderByRaw('CASE WHEN organizacion_id = ? THEN 0 ELSE 1 END', [$authOrg]);
+        }
         $query->orderBy(DB::raw('YEAR(f_inicio)'), 'DESC');
         $query->orderByRaw('CAST(carga AS UNSIGNED) DESC');
         $query->orderByRaw("CASE WHEN parte IS NULL OR parte = '' THEN 0 ELSE 1 END ASC");
@@ -303,10 +317,33 @@ class ContenedorController extends Controller
                 'tc_yuan' => $c->tcYuan ? (float) $c->tcYuan->tc_yuan : null,
                 'cbm_total_peru' => number_format($cbm_total_peru, 2),
                 'cbm_total_china' => number_format($cbm_total_china, 2),
+                'organizacion_id' => (int) $c->organizacion_id,
+                'organizacion' => $c->organizacion ? [
+                    'id' => (int) $c->organizacion->ID_Organizacion,
+                    'nombre' => $c->organizacion->No_Organizacion,
+                ] : null,
             ] + (in_array($effectiveRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)
                 ? ['estado_permiso_por_tipo' => $estadoPermisoPorContenedor[$c->id] ?? []]
                 : []);
         });
+
+        $organizacionesFiltro = [];
+        if ($authOrg === Usuario::ID_ORGANIZACION_ADMIN && $authUser) {
+            $organizacionesFiltro = Organizacion::query()
+                ->where('Nu_Estado', 1)
+                ->whereIn('ID_Organizacion', $authUser->organizacionesPermitidas())
+                ->orderByRaw('CASE WHEN ID_Organizacion = ? THEN 0 ELSE 1 END', [$authOrg])
+                ->orderBy('No_Organizacion')
+                ->get(['ID_Organizacion', 'No_Organizacion'])
+                ->map(function ($organizacion) {
+                    return [
+                        'id' => (int) $organizacion->ID_Organizacion,
+                        'nombre' => $organizacion->No_Organizacion,
+                    ];
+                })
+                ->values()
+                ->all();
+        }
 
         return [
             'success' => true,
@@ -321,6 +358,7 @@ class ContenedorController extends Controller
             ],
             'filters' => [
                 'anios' => $aniosDisponibles,
+                'organizaciones' => $organizacionesFiltro,
             ],
         ];
     }
@@ -479,6 +517,12 @@ class ContenedorController extends Controller
                 // organizacion_id nunca se toma del request (evita que un contenedor
                 // "cambie" de organizacion o se cree en otra distinta a la del usuario).
                 unset($data['organizacion_id']);
+                if (isset($data['carga'])) {
+                    $numero = CargaLabel::soloNumero($data['carga']);
+                    if ($numero !== '') {
+                        $data['carga'] = $numero;
+                    }
+                }
                 if ($data['id']) {
                     $contenedor = Contenedor::find($data['id']);
                     $contenedor->update($data);
@@ -929,6 +973,12 @@ class ContenedorController extends Controller
                 }
             }
             $query = ContenedorPasos::where('id_pedido', $idContenedor)->orderBy('id_order', 'asc');
+            $contenedor = Contenedor::find($idContenedor);
+            $esContenedorSocio = $contenedor && (int) $contenedor->organizacion_id !== Usuario::ID_ORGANIZACION_ADMIN;
+            if ($esContenedorSocio && $role !== Usuario::ROL_ALMACEN_CHINA) {
+                $query->where('tipo', 'COTIZADOR')
+                    ->limit($request->boolean('completado') ? 3 : 2);
+            } else {
             switch ($role) {
                 case Usuario::ROL_COTIZADOR:
                     // Aseguramos que sólo consultamos pasos del cotizador
@@ -971,6 +1021,7 @@ class ContenedorController extends Controller
                 default:
                     $query->where('tipo', 'COTIZADOR');
                     break;
+            }
             }
             $data = $query->select('id', 'name', 'status', 'iconURL')->get();
             foreach ($data as $item) {
@@ -1125,22 +1176,26 @@ class ContenedorController extends Controller
     public function getCargasDisponiblesDropdown(Request $request){
         $year = $request->year ? $request->year : date('Y');
         $cargas = Contenedor::with('tcYuan')
-            ->where('empresa', '!=', 1)
-            ->whereYear('f_inicio', $year)
+            ->leftJoin('pais_flags as pf', 'pf.id_pais', '=', 'carga_consolidada_contenedor.id_pais')
+            ->where('carga_consolidada_contenedor.empresa', '!=', 1)
+            ->whereYear('carga_consolidada_contenedor.f_inicio', $year)
             ->where(function($query) use ($year){
-                $query->whereYear('f_inicio', $year)
-                    ->orWhereNull('f_inicio');
+                $query->whereYear('carga_consolidada_contenedor.f_inicio', $year)
+                    ->orWhereNull('carga_consolidada_contenedor.f_inicio');
             })
-            ->where('estado_china', '!=', Contenedor::CONTEDOR_CERRADO)
-            ->orderByRaw('CAST(carga AS UNSIGNED) DESC')
-            ->orderByRaw("CASE WHEN parte IS NULL OR parte = '' THEN 0 ELSE 1 END ASC")
-            ->orderByRaw('parte DESC')
+            ->where('carga_consolidada_contenedor.estado_china', '!=', Contenedor::CONTEDOR_CERRADO)
+            ->orderByRaw('CAST(carga_consolidada_contenedor.carga AS UNSIGNED) DESC')
+            ->orderByRaw("CASE WHEN carga_consolidada_contenedor.parte IS NULL OR carga_consolidada_contenedor.parte = '' THEN 0 ELSE 1 END ASC")
+            ->orderByRaw('carga_consolidada_contenedor.parte DESC')
+            ->select('carga_consolidada_contenedor.*', 'pf.phone_code as phone_code', 'pf.iso2 as iso2')
             ->get();
         $data = $cargas->map(function($carga){
             return [
                 'value' => $carga->id,
                 'label' => 'Contenedor #'.$carga->formatCargaLabel(),
                 'tc_yuan' => $carga->tcYuan ? (float) $carga->tcYuan->tc_yuan : null,
+                'id_pais' => $carga->id_pais,
+                'phone_code' => $carga->phone_code ?: null,
             ];
         });
         return response()->json(['data' => $data, 'success' => true]);

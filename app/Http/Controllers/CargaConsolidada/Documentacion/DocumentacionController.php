@@ -129,46 +129,57 @@ class DocumentacionController extends Controller
     public function getDocumentationFolderFiles($id)
     {
         try {
-            // Obtener el usuario autenticado
             $user = JWTAuth::user();
             $userGrupo = $user ? $user->getNombreGrupo() : null;
-            $roleDocumentacion = 'Documentacion'; // Definir el rol de documentación
+            $roleDocumentacion = 'Documentacion';
 
-            // Obtener la URL de la lista de embarque del contenedor
             $contenedor = Contenedor::find($id);
             $listaEmbarqueUrl = $contenedor ? $contenedor->lista_embarque_url : null;
             $listaEmbarquePublicUrl = $this->resolveDocumentationPublicUrl($listaEmbarqueUrl);
+            $esContenedorSocio = $this->esContenedorSocio($contenedor);
+            $puedeEditar = $this->puedeEditarDocumentacionContenedor($user, $contenedor);
 
-            // Obtener las carpetas con sus archivos usando Eloquent
-            $folders = DocumentacionFolder::with(['files' => function ($query) use ($id) {
-                $query->where('id_contenedor', $id);
-            }])
-                ->forContenedor($id)
-                ->forUserGroup($userGrupo, $roleDocumentacion)
-                ->get();
+            if ($esContenedorSocio && $contenedor) {
+                $this->ensureSocioDocumentacionFolders($contenedor);
+                $folders = DocumentacionFolder::with(['files' => function ($query) use ($id) {
+                    $query->where('id_contenedor', $id);
+                }])
+                    ->where('id_contenedor', $id)
+                    ->forUserGroup($userGrupo, $roleDocumentacion)
+                    ->get();
+                $folders = $this->sortSocioDocumentacionFolders($folders);
+            } else {
+                $folders = DocumentacionFolder::with(['files' => function ($query) use ($id) {
+                    $query->where('id_contenedor', $id);
+                }])
+                    ->forContenedor($id)
+                    ->forUserGroup($userGrupo, $roleDocumentacion)
+                    ->get();
+            }
 
-            // Transformar los datos para mantener la estructura original
             $result = [];
             foreach ($folders as $folder) {
+                $esPackingList = $this->esFolderPackingListChina($folder, $esContenedorSocio);
                 $folderData = $folder->toArray();
 
                 $folderData['lista_embarque_url'] = $listaEmbarquePublicUrl;
+                $folderData['es_packing_list_china'] = $esPackingList;
                 if (!empty($folderData['files']) && is_array($folderData['files'])) {
                     $folderData['files'] = $this->mapDocumentationFilesPublicUrls($folderData['files']);
                 }
 
-                if ($folder->id == 1) {
+                if ($folder->id == 1 || $esPackingList) {
                     $folderData['file_url'] = $listaEmbarquePublicUrl;
                 }
-                
-                // Procesar los archivos de la carpeta
-                if ($folder->files->count() > 0) {
+
+                if ($folder->files->count() > 0 && !$esPackingList) {
                     foreach ($folder->files as $file) {
                         $fileData = [
                             'id' => $folder->id,
                             'id_file' => $file->id,
                             'type' => $file->file_type,
-                            'lista_embarque_url' => $listaEmbarquePublicUrl
+                            'lista_embarque_url' => $listaEmbarquePublicUrl,
+                            'es_packing_list_china' => $esPackingList,
                         ];
                         if ($folder->id == 1) {
                             $fileData['file_url'] = $listaEmbarquePublicUrl;
@@ -176,14 +187,14 @@ class DocumentacionController extends Controller
                             $fileData['file_url'] = $this->resolveDocumentationPublicUrl($file->file_url);
                         }
 
-                        // Combinar datos de la carpeta con datos del archivo
                         $result[] = array_merge($folderData, $fileData);
                     }
                 } else {
-                    // Carpeta sin archivos
                     $folderData['id_file'] = null;
-                    $folderData['file_url'] = null;
-                    if ($folder->id == 1) {
+                    if (!$esPackingList && $folder->id != 1) {
+                        $folderData['file_url'] = null;
+                    }
+                    if ($folder->id == 1 || $esPackingList) {
                         $folderData['file_url'] = $listaEmbarquePublicUrl;
                     }
                     $folderData['type'] = null;
@@ -194,6 +205,9 @@ class DocumentacionController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => $result,
+                'es_contenedor_socio' => $esContenedorSocio,
+                'puede_editar' => $puedeEditar,
+                'organizacion_id' => $contenedor ? (int) $contenedor->organizacion_id : null,
                 'message' => 'Carpetas de documentación obtenidas exitosamente'
             ]);
         } catch (\Exception $e) {
@@ -202,6 +216,109 @@ class DocumentacionController extends Controller
                 'message' => 'Error al obtener carpetas de documentación: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * @return string[]
+     */
+    private function socioDocumentacionFolderNames()
+    {
+        return [
+            'Packing list china',
+            'BL draft',
+            'Resumen de pago',
+        ];
+    }
+
+    private function esContenedorSocio($contenedor)
+    {
+        return $contenedor && (int) $contenedor->organizacion_id !== Usuario::ID_ORGANIZACION_ADMIN;
+    }
+
+    private function puedeEditarDocumentacionContenedor($user, $contenedor)
+    {
+        if (!$user || !$this->esContenedorSocio($contenedor)) {
+            return false;
+        }
+
+        if ((int) $user->getAttribute('ID_Organizacion') !== Usuario::ID_ORGANIZACION_ADMIN) {
+            return false;
+        }
+
+        $rol = $user->getNombreGrupo();
+        if (Usuario::rolEquivaleJefeImportacion($rol)) {
+            return true;
+        }
+
+        return in_array($rol, [
+            Usuario::ROL_COORDINACION,
+            Usuario::ROL_DOCUMENTACION,
+        ], true);
+    }
+
+    private function denySocioDocumentacionMutation($user, $contenedor)
+    {
+        if (!$this->esContenedorSocio($contenedor)) {
+            return null;
+        }
+
+        if (!$this->puedeEditarDocumentacionContenedor($user, $contenedor)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tienes permiso para modificar la documentación de este contenedor.',
+            ], 403);
+        }
+
+        return null;
+    }
+
+    private function esFolderPackingListChina($folder, $esContenedorSocio)
+    {
+        if (!$folder) {
+            return false;
+        }
+
+        if ((int) $folder->id === 1) {
+            return true;
+        }
+
+        return $esContenedorSocio && strtolower(trim((string) $folder->folder_name)) === 'packing list china';
+    }
+
+    private function ensureSocioDocumentacionFolders($contenedor)
+    {
+        foreach ($this->socioDocumentacionFolderNames() as $folderName) {
+            $exists = DocumentacionFolder::where('id_contenedor', $contenedor->id)
+                ->whereRaw('LOWER(TRIM(folder_name)) = ?', [strtolower($folderName)])
+                ->exists();
+            if ($exists) {
+                continue;
+            }
+
+            DocumentacionFolder::create([
+                'id_contenedor' => $contenedor->id,
+                'folder_name' => $folderName,
+                'only_doc_profile' => 0,
+            ]);
+        }
+    }
+
+    private function sortSocioDocumentacionFolders($folders)
+    {
+        $order = [
+            'packing list china' => 0,
+            'bl draft' => 1,
+            'resumen de pago' => 2,
+        ];
+
+        return $folders->sortBy(function ($folder) use ($order) {
+            $key = strtolower(trim((string) $folder->folder_name));
+            if (isset($order[$key])) {
+                return $order[$key];
+            }
+
+            return 100 + (int) $folder->id;
+        })->values();
     }
 
     /**
@@ -449,6 +566,20 @@ class DocumentacionController extends Controller
                 ], 400);
             }
 
+            $contenedor = Contenedor::find($idContenedor);
+            $denied = $this->denySocioDocumentacionMutation($user, $contenedor);
+            if ($denied) {
+                return $denied;
+            }
+
+            $folder = DocumentacionFolder::find($idFolder);
+            if ($this->esFolderPackingListChina($folder, $this->esContenedorSocio($contenedor))) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El packing list de China se carga automáticamente y no se puede reemplazar aquí.',
+                ], 403);
+            }
+
             $file = $request->file('file');
 
             $maxFileSize = 200 * 1024 * 1024;
@@ -492,12 +623,7 @@ class DocumentacionController extends Controller
 
             $documentacionFile->save();
 
-            // Obtener información de la carpeta para la notificación
-            $folder = DocumentacionFolder::find($idFolder);
             $folderName = $folder ? $folder->folder_name : 'Documento';
-
-            // Obtener información del contenedor
-            $contenedor = Contenedor::find($idContenedor);
             $contenedorNombre = $contenedor ? $contenedor->carga : 'Contenedor';
 
             // Crear notificación para el perfil Coordinación
@@ -1707,6 +1833,21 @@ class DocumentacionController extends Controller
             ], 404);
         }
 
+        $user = JWTAuth::user();
+        $contenedor = Contenedor::find($file->id_contenedor);
+        $denied = $this->denySocioDocumentacionMutation($user, $contenedor);
+        if ($denied) {
+            return $denied;
+        }
+
+        $folder = DocumentacionFolder::find($file->id_folder);
+        if ($this->esFolderPackingListChina($folder, $this->esContenedorSocio($contenedor))) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El packing list de China no se elimina desde esta vista.',
+            ], 403);
+        }
+
         Log::info('deleteFileDocumentation invoked for idFile=' . $idFile . ', id_folder=' . ($file->id_folder ?? 'NULL') . ', id_contenedor=' . ($file->id_contenedor ?? 'NULL') . ', file_url=' . ($file->file_url ?? 'NULL'));
 
         // Intentar eliminar imports vinculados a este archivo (aplica a folder 9 y también a otros folders)
@@ -2129,6 +2270,12 @@ class DocumentacionController extends Controller
                 ], 401);
             }
 
+            $contenedor = Contenedor::find($request->idContenedor);
+            $denied = $this->denySocioDocumentacionMutation($user, $contenedor);
+            if ($denied) {
+                return $denied;
+            }
+
             // Validar extensión del archivo
             $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'];
             if (!in_array($request->file('file')->getClientOriginalExtension(), $allowedExtensions)) {
@@ -2150,8 +2297,9 @@ class DocumentacionController extends Controller
                 ], 500);
             }
 
-            // Verificar si el usuario tiene perfil de documentación
-            $isDocumentationProfile = $user->getNombreGrupo() === $this->roleDocumentacion;
+            // En contenedor socio el extra debe ser visible para el socio (solo lectura).
+            $isDocumentationProfile = $user->getNombreGrupo() === $this->roleDocumentacion
+                && !$this->esContenedorSocio($contenedor);
 
             // Crear carpeta de documentación
             DB::beginTransaction();

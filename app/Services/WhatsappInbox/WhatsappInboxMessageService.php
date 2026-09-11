@@ -531,7 +531,8 @@ class WhatsappInboxMessageService
         $result = $sendService->dispatchMetaTemplate(
             $conversation->phone_e164,
             $templateName,
-            $templateParams
+            $templateParams,
+            $this->conversationService->organizacionIdOf($conversation)
         );
 
         if (empty($result['success'])) {
@@ -644,11 +645,16 @@ class WhatsappInboxMessageService
         }
 
         try {
+            $conversation = $message->conversation;
+            $orgId = $conversation
+                ? $this->conversationService->organizacionIdOf($conversation)
+                : 0;
             event(new WaInboxMessageStatusUpdated(
                 (int) $message->conversation_id,
                 (int) $message->id,
                 (string) $message->delivery_status,
-                $this->formatMessage($message)
+                $this->formatMessage($message),
+                $orgId
             ));
         } catch (BroadcastException $e) {
             WaInboxLog::warning('broadcastMessageStatusUpdated.failed', [

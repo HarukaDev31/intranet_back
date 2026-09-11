@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\WhatsappInbox\MetaInboxWebhookController;
+use App\Http\Controllers\WhatsappInbox\WhatsappInboxConfigController;
 use App\Http\Controllers\WhatsappInbox\WhatsappInboxController;
 use Illuminate\Support\Facades\Route;
 
@@ -15,8 +16,10 @@ Route::match(['get', 'post'], '/webhooks/meta/whatsapp-inbox', function () {
 
 Route::group([
     'prefix' => 'whatsapp-inbox',
-    'middleware' => ['jwt.auth', 'role.whatsapp_inbox'],
+    'middleware' => ['jwt.auth'],
 ], function () {
+    Route::get('/config', [WhatsappInboxConfigController::class, 'show']);
+    Route::put('/config', [WhatsappInboxConfigController::class, 'update']);
     Route::get('/session', [WhatsappInboxController::class, 'session']);
     Route::get('/conversations', [WhatsappInboxController::class, 'conversations']);
     Route::post('/conversations', [WhatsappInboxController::class, 'storeConversation']);

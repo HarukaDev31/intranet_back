@@ -8,8 +8,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Models\Pais;
+use App\Models\PaisFlag;
 use App\Models\Organizacion;
 use App\Models\CargaConsolidada\Scopes\OrganizacionScope;
+use App\Support\CargaConsolidada\CargaLabel;
 
 /**
  * @property int $id
@@ -228,18 +230,43 @@ class Contenedor extends Model
     ];
 
     /**
-     * Label de carga para listados: "15 - 2026" o partido "15A-2026".
+     * Label de carga para tablas y selects: "15-2026" / "15A-2026". Sin prefijo de país.
      *
      * @return string
      */
     public function formatCargaLabel()
     {
-        $year = $this->f_inicio ? date('Y', strtotime($this->f_inicio)) : date('Y');
-        if (!empty($this->parte)) {
-            return $this->carga . $this->parte . '-' . $year;
+        return CargaLabel::format($this->carga, $this->f_inicio, $this->parte);
+    }
+
+    /**
+     * ISO-2 del país del contenedor (pais_flags), no se guarda en `carga`.
+     *
+     * @return string
+     */
+    public function prefijoPais()
+    {
+        if (!empty($this->iso2)) {
+            return strtoupper(trim((string) $this->iso2));
+        }
+        if ($this->relationLoaded('paisFlag') && $this->paisFlag) {
+            return strtoupper(trim((string) $this->paisFlag->iso2));
+        }
+        if ((int) $this->id_pais <= 0) {
+            return '';
         }
 
-        return $this->carga . ' - ' . $year;
+        $iso = PaisFlag::query()->where('id_pais', $this->id_pais)->value('iso2');
+
+        return $iso ? strtoupper(trim((string) $iso)) : '';
+    }
+
+    /**
+     * @return HasOne<PaisFlag, $this>
+     */
+    public function paisFlag()
+    {
+        return $this->hasOne(PaisFlag::class, 'id_pais', 'id_pais');
     }
 
     /**

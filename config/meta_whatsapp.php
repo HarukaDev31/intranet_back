@@ -7,6 +7,10 @@ return [
     | Coordinación (WABA consolidado / fromNumber por defecto)
     |--------------------------------------------------------------------------
     */
+    /*
+     * Credenciales por organización viven en wa_inbox_organizacion_config.
+     * Estas claves .env solo respaldan org 1 si aún no hay fila en la tabla.
+     */
     'coordinacion_enabled' => filter_var(env('META_WHATSAPP_COORDINACION_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
 
     /** Si true y no hay plantilla en el payload, usa redis.probusiness.pe (transición). */

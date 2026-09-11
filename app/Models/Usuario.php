@@ -26,6 +26,8 @@ class Usuario extends Authenticatable implements JWTSubject
     const ROL_FINANZAS = 'Finanzas';
     const ROL_RRHH = 'RRHH';
     const ROL_SOCIO = 'Socio';
+    const ROL_GERENTE_GENERAL = 'GERENTE GENERAL';
+    const ID_ORGANIZACION_ADMIN = 1;
 
     /**
      * Roles que operan fisicamente para todas las organizaciones a la vez
@@ -117,7 +119,9 @@ class Usuario extends Authenticatable implements JWTSubject
             return $this->organizacionesPermitidasMemo;
         }
 
-        if (in_array($this->getNombreGrupo(), self::ROLES_VISIBILIDAD_GLOBAL, true)) {
+        if (in_array($this->getNombreGrupo(), self::ROLES_VISIBILIDAD_GLOBAL, true)
+            || $this->puedeVerContenedoresDeOtrasOrgs()
+        ) {
             return $this->organizacionesPermitidasMemo = Organizacion::query()
                 ->where('Nu_Estado', 1)
                 ->pluck('ID_Organizacion')
@@ -141,6 +145,27 @@ class Usuario extends Authenticatable implements JWTSubject
         }
 
         return $this->organizacionesPermitidasMemo = $ids;
+    }
+
+    /**
+     * Coordinación / Documentación / Jefe de org 1 ven contenedores de socios.
+     * El mismo rol en org ≠ 1 solo ve la suya.
+     */
+    public function puedeVerContenedoresDeOtrasOrgs(): bool
+    {
+        if ((int) $this->getAttribute('ID_Organizacion') !== self::ID_ORGANIZACION_ADMIN) {
+            return false;
+        }
+
+        $rol = $this->getNombreGrupo();
+        if (self::rolEquivaleJefeImportacion($rol)) {
+            return true;
+        }
+
+        return in_array($rol, [
+            self::ROL_COORDINACION,
+            self::ROL_DOCUMENTACION,
+        ], true);
     }
 
     /**
@@ -286,31 +311,39 @@ class Usuario extends Authenticatable implements JWTSubject
         return trim((string) $this->getNombreGrupo()) === self::ROL_RRHH;
     }
 
-    public static function rolesConAccesoWhatsappInbox()
-    {
-        return array_values(array_unique(array_merge(
-            [
-                self::ROL_COORDINACION,
-                self::ROL_CONTABILIDAD,
-                self::ROL_ADMINISTRACION,
-            ],
-            self::rolesEquivalentesJefeImportacion()
-        )));
-    }
-
     /**
+     * El inbox se abre por menú en la intranet. API y canal WS solo exigen sesión.
+     *
      * @return bool
      */
     public function puedeAccederWhatsappInbox()
     {
-        if (!$this->grupo) {
+        return $this->getKey() !== null;
+    }
+
+    /**
+     * Org 1: Gerencia General / GERENCIA (root). Resto: Socio.
+     *
+     * @return bool
+     */
+    public function puedeConfigurarWhatsappInbox()
+    {
+        if ($this->getKey() === null) {
             return false;
         }
 
-        return in_array(
-            trim((string) $this->grupo->No_Grupo),
-            self::rolesConAccesoWhatsappInbox(),
-            true
-        );
+        $orgId = (int) $this->getAttribute('ID_Organizacion');
+        $grupo = trim((string) $this->getNombreGrupo());
+        $usuario = strtolower(trim((string) $this->No_Usuario));
+
+        if ($orgId === self::ID_ORGANIZACION_ADMIN) {
+            if ($usuario === 'root') {
+                return true;
+            }
+
+            return in_array($grupo, [self::ROL_GERENCIA, self::ROL_GERENTE_GENERAL], true);
+        }
+
+        return $grupo === self::ROL_SOCIO;
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\WhatsappInbox;
 
 use App\Http\Controllers\Controller;
+use App\Services\WhatsappInbox\WhatsappInboxOrgConfigService;
 use App\Support\WhatsApp\MetaWhatsappWebhookRouter;
 use App\Support\WhatsApp\WaInboxJobContext;
 use Illuminate\Http\Request;
@@ -21,7 +22,8 @@ class MetaInboxWebhookController extends Controller
         $token = $request->query('hub_verify_token');
         $challenge = $request->query('hub_challenge');
 
-        if ($mode === 'subscribe' && $token === config('meta_whatsapp.webhook_verify_token')) {
+        $configService = app(WhatsappInboxOrgConfigService::class);
+        if ($mode === 'subscribe' && $configService->matchesVerifyToken($token)) {
             return response($challenge, 200)->header('Content-Type', 'text/plain');
         }
 
@@ -52,18 +54,11 @@ class MetaInboxWebhookController extends Controller
      */
     private function isValidSignature(Request $request)
     {
-        $secret = (string) config('meta_whatsapp.app_secret');
-        if ($secret === '') {
-            return app()->environment('local');
-        }
+        $configService = app(WhatsappInboxOrgConfigService::class);
 
-        $signature = (string) $request->header('X-Hub-Signature-256');
-        if ($signature === '') {
-            return false;
-        }
-
-        $expected = 'sha256=' . hash_hmac('sha256', $request->getContent(), $secret);
-
-        return hash_equals($expected, $signature);
+        return $configService->isValidWebhookSignature(
+            $request->getContent(),
+            (string) $request->header('X-Hub-Signature-256')
+        );
     }
 }

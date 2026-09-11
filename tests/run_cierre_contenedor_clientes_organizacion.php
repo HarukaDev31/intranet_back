@@ -12,6 +12,7 @@ $kernel->bootstrap();
 
 use App\Jobs\ValidateCotizacionesWithLoadedProveedoresJob;
 use App\Support\CargaConsolidada\ClientesVisibility;
+use App\Support\Phone\CountryPhoneHelper;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -155,7 +156,87 @@ try {
     DB::rollBack();
 }
 
-echo "2) Visibilidad socio: abierto vs cerrado\n";
+echo "2) Detecta cliente existente con +51 aunque la cotización venga en 9 dígitos\n";
+DB::beginTransaction();
+try {
+    $marker = 'qa-51-' . substr(str_replace('-', '', (string) Str::uuid()), 0, 10);
+    $local = '987' . substr(preg_replace('/[^0-9]/', '', $marker), 0, 6);
+    $correo = $marker . '@example.test';
+
+    $clienteExistenteId = DB::table('clientes')->insertGetId([
+        'nombre' => 'Cliente +51 ' . $marker,
+        'documento' => '10987654',
+        'correo' => 'fmt-' . $correo,
+        'telefono' => '+51 ' . substr($local, 0, 3) . ' ' . substr($local, 3, 3) . ' ' . substr($local, 6),
+        'fecha' => now()->toDateString(),
+        'organizacion_id' => $org2,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $contenedorId = DB::table('carga_consolidada_contenedor')->insertGetId([
+        'mes' => 'SEPTIEMBRE',
+        'id_pais' => $idPais,
+        'organizacion_id' => $org2,
+        'carga' => 'QA51-' . $marker,
+        'empresa' => 2,
+        'estado' => 'PENDIENTE',
+        'estado_china' => 'COMPLETADO',
+        'tipo_carga' => 'CARGA CONSOLIDADA',
+        'f_inicio' => now()->toDateString(),
+    ]);
+
+    $cotizacionId = DB::table('contenedor_consolidado_cotizacion')->insertGetId([
+        'organizacion_id' => $org2,
+        'uuid' => (string) Str::uuid(),
+        'id_contenedor' => $contenedorId,
+        'id_tipo_cliente' => $idTipo,
+        'fecha' => now(),
+        'nombre' => 'Cliente local ' . $marker,
+        'documento' => '20987654',
+        'correo' => $correo,
+        'telefono' => $local,
+        'estado' => 'CONFIRMADO',
+        'estado_cotizador' => 'CONFIRMADO',
+        'estado_resumen' => 'CONFIRMADO',
+        'estado_cliente' => 'RESERVADO',
+        'id_cliente' => null,
+    ]);
+
+    DB::table('contenedor_consolidado_cotizacion_proveedores')->insert([
+        'organizacion_id' => $org2,
+        'id_cotizacion' => $cotizacionId,
+        'id_contenedor' => $contenedorId,
+        'products' => 'Item +51 ' . $marker,
+        'estados_proveedor' => 'LOADED',
+        'cbm_total' => 1.1,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    (new ValidateCotizacionesWithLoadedProveedoresJob($contenedorId))->handle();
+
+    $cotizacion = DB::table('contenedor_consolidado_cotizacion')->where('id', $cotizacionId)->first();
+    qa_assert(
+        $cotizacion && (int) $cotizacion->id_cliente === (int) $clienteExistenteId,
+        'Reutiliza el cliente de la misma org aunque el teléfono esté guardado como +51'
+    );
+} catch (Throwable $e) {
+    echo "  FAIL  excepción: " . $e->getMessage() . "\n";
+    $failed++;
+} finally {
+    DB::rollBack();
+}
+
+echo "3) Prefijo de país: guardar y comparar sin hardcodear solo +51\n";
+qa_assert(CountryPhoneHelper::ensureCountryCode('987654321', '51') === '51987654321', 'Perú local → 51 + número');
+qa_assert(CountryPhoneHelper::ensureCountryCode('991234567', '593') === '593991234567', 'Ecuador local → 593 + número');
+qa_assert(CountryPhoneHelper::ensureCountryCode('+51 987 654 321', '593') === '51987654321', 'Ya tiene +51: no se pisa con 593');
+qa_assert(in_array('987654321', CountryPhoneHelper::searchVariants('51987654321'), true), 'Buscar 51… también por nacionales');
+qa_assert(in_array('991234567', CountryPhoneHelper::searchVariants('593991234567'), true), 'Buscar 593… también por nacionales');
+qa_assert(!in_array('593987654321', CountryPhoneHelper::searchVariants('987654321'), true), 'Un local no inventa el prefijo del otro país');
+
+echo "4) Visibilidad socio: abierto vs cerrado\n";
 $queryAbierta = DB::table('contenedor_consolidado_cotizacion as CC');
 ClientesVisibility::applyListado($queryAbierta, 'CC', true, false);
 $sqlAbierta = $queryAbierta->toSql();

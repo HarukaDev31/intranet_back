@@ -55,42 +55,7 @@ class CustomersController extends Controller
             $estadoChina = $request->input('estado_china', 'todos');
 
             $baseQuery = $this->baseCustomersQuery($orgIds);
-
-            if ($search !== '') {
-                $like = '%' . $search . '%';
-                $baseQuery->where(function ($q) use ($like) {
-                    $q->where('CC.nombre', 'like', $like)
-                        ->orWhere('CC.telefono', 'like', $like)
-                        ->orWhere('CC.documento', 'like', $like)
-                        ->orWhere('CONT.carga', 'like', $like)
-                        ->orWhere('P.No_Pais', 'like', $like)
-                        ->orWhereExists(function ($sub) use ($like) {
-                            $sub->select(DB::raw(1))
-                                ->from($this->tableProveedor . ' as PRS')
-                                ->whereColumn('PRS.id_cotizacion', 'CC.id')
-                                ->where(function ($inner) use ($like) {
-                                    $inner->where('PRS.supplier', 'like', $like)
-                                        ->orWhere('PRS.code_supplier', 'like', $like)
-                                        ->orWhere('PRS.products', 'like', $like)
-                                        ->orWhere('PRS.supplier_phone', 'like', $like);
-                                });
-                        });
-                });
-            }
-
-            if ($idPais !== null && $idPais !== '' && strtolower((string) $idPais) !== 'todos') {
-                $baseQuery->where('CONT.id_pais', (int) $idPais);
-            }
-
-            if ($estadoChina !== null && $estadoChina !== '' && strtolower((string) $estadoChina) !== 'todos') {
-                $estadoFiltro = (string) $estadoChina;
-                $baseQuery->whereExists(function ($sub) use ($estadoFiltro) {
-                    $sub->select(DB::raw(1))
-                        ->from($this->tableProveedor . ' as PRF')
-                        ->whereColumn('PRF.id_cotizacion', 'CC.id')
-                        ->where('PRF.estados_proveedor', $estadoFiltro);
-                });
-            }
+            $this->applyCustomersFilters($baseQuery, $search, $idPais, $estadoChina);
 
             $pageQuery = clone $baseQuery;
             $cotizacionesPage = $pageQuery
@@ -102,7 +67,7 @@ class CustomersController extends Controller
             $items = collect($cotizacionesPage->items());
             $ids = $items->pluck('id')->all();
 
-            $headers = $this->buildHeaders($orgIds);
+            $headers = $this->buildHeaders($orgIds, $search, $idPais, $estadoChina);
             $paises = $this->buildPaises($orgIds);
 
             if (empty($ids)) {
@@ -274,10 +239,94 @@ class CustomersController extends Controller
         return $query;
     }
 
-    private function buildHeaders($orgIds)
+    /**
+     * Mismos filtros de listado y de KPI (país, estado, búsqueda).
+     *
+     * @param \Illuminate\Database\Query\Builder $query
+     * @param string $search
+     * @param mixed $idPais
+     * @param mixed $estadoChina
+     * @param string|null $proveedorEstadoAlias si viene, filtra el join de proveedores
+     * @return void
+     */
+    private function applyCustomersFilters($query, $search, $idPais, $estadoChina, $proveedorEstadoAlias = null)
+    {
+        if ($search !== '') {
+            $like = '%' . $search . '%';
+            $query->where(function ($q) use ($like) {
+                $q->where('CC.nombre', 'like', $like)
+                    ->orWhere('CC.telefono', 'like', $like)
+                    ->orWhere('CC.documento', 'like', $like)
+                    ->orWhere('CONT.carga', 'like', $like)
+                    ->orWhere('P.No_Pais', 'like', $like)
+                    ->orWhereExists(function ($sub) use ($like) {
+                        $sub->select(DB::raw(1))
+                            ->from($this->tableProveedor . ' as PRS')
+                            ->whereColumn('PRS.id_cotizacion', 'CC.id')
+                            ->where(function ($inner) use ($like) {
+                                $inner->where('PRS.supplier', 'like', $like)
+                                    ->orWhere('PRS.code_supplier', 'like', $like)
+                                    ->orWhere('PRS.products', 'like', $like)
+                                    ->orWhere('PRS.supplier_phone', 'like', $like);
+                            });
+                    });
+            });
+        }
+
+        if (!$this->isCustomersFilterAll($idPais)) {
+            $query->where('CONT.id_pais', (int) $this->scalarCustomersFilter($idPais));
+        }
+
+        if (!$this->isCustomersFilterAll($estadoChina)) {
+            $estadoFiltro = (string) $this->scalarCustomersFilter($estadoChina);
+            if ($proveedorEstadoAlias) {
+                $query->where($proveedorEstadoAlias . '.estados_proveedor', $estadoFiltro);
+            } else {
+                $query->whereExists(function ($sub) use ($estadoFiltro) {
+                    $sub->select(DB::raw(1))
+                        ->from($this->tableProveedor . ' as PRF')
+                        ->whereColumn('PRF.id_cotizacion', 'CC.id')
+                        ->where('PRF.estados_proveedor', $estadoFiltro);
+                });
+            }
+        }
+    }
+
+    /**
+     * @param mixed $value
+     * @return mixed
+     */
+    private function scalarCustomersFilter($value)
+    {
+        if (is_array($value) && array_key_exists('value', $value)) {
+            return $this->scalarCustomersFilter($value['value']);
+        }
+
+        return $value;
+    }
+
+    /**
+     * @param mixed $value
+     * @return bool
+     */
+    private function isCustomersFilterAll($value)
+    {
+        $scalar = $this->scalarCustomersFilter($value);
+        if ($scalar === null || $scalar === '') {
+            return true;
+        }
+        if (is_array($scalar)) {
+            return true;
+        }
+
+        return in_array(strtolower(trim((string) $scalar)), ['todos', 'todas', 'all', 'todo'], true);
+    }
+
+    private function buildHeaders($orgIds, $search = '', $idPais = null, $estadoChina = 'todos')
     {
         $statsQuery = DB::table($this->tableCotizacion . ' as CC')
             ->join($this->tableContenedor . ' as CONT', 'CONT.id', '=', 'CC.id_contenedor')
+            ->leftJoin($this->tablePais . ' as P', 'P.ID_Pais', '=', 'CONT.id_pais')
             ->leftJoin($this->tableProveedor . ' as PR', 'PR.id_cotizacion', '=', 'CC.id')
             ->whereIn('CONT.organizacion_id', $orgIds)
             ->whereNull('CC.deleted_at')
@@ -291,6 +340,7 @@ class CustomersController extends Controller
             'CONT',
             $this->tableProveedor
         );
+        $this->applyCustomersFilters($statsQuery, $search, $idPais, $estadoChina, 'PR');
         $stats = $statsQuery
             ->selectRaw('
                 COALESCE(SUM(PR.cbm_total), 0) as cbm_warehouse,

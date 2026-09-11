@@ -73,9 +73,11 @@ class WhatsappInboxCoordinacionOutboundService
      */
     private function processTemplate(array $payload)
     {
-        if (!config('meta_whatsapp.coordinacion_enabled')) {
-            return ['status' => false, 'error' => 'Meta coordinación deshabilitado'];
+        if (!$this->isEnabledForPayload($payload)) {
+            return ['status' => false, 'error' => 'WhatsApp no está activo para esta organización'];
         }
+
+        $this->templateService->usingOrganizacion($this->organizacionIdFromPayload($payload));
 
         $phone = $this->normalizePhoneE164((string) ($payload['phone'] ?? ''));
         if ($phone === '') {
@@ -122,7 +124,7 @@ class WhatsappInboxCoordinacionOutboundService
             return ['status' => false, 'error' => 'No se pudo resolver el texto de la plantilla para el inbox'];
         }
 
-        $session = $this->sessionService->ensureDefaultSession();
+        $session = $this->sessionForPayload($payload);
         $contactName = $this->resolveContactName($payload, $phone);
         $conversation = $this->conversationService->findOrCreateConversation(
             $session,
@@ -189,8 +191,8 @@ class WhatsappInboxCoordinacionOutboundService
      */
     private function processLegacyMessage(array $payload)
     {
-        if (!config('meta_whatsapp.coordinacion_enabled')) {
-            return ['status' => false, 'error' => 'Meta coordinación deshabilitado'];
+        if (!$this->isEnabledForPayload($payload)) {
+            return ['status' => false, 'error' => 'WhatsApp no está activo para esta organización'];
         }
 
         $phone = $this->normalizePhoneE164((string) ($payload['phone'] ?? ''));
@@ -199,7 +201,7 @@ class WhatsappInboxCoordinacionOutboundService
             return ['status' => false, 'error' => 'Teléfono o mensaje vacío'];
         }
 
-        $session = $this->sessionService->ensureDefaultSession();
+        $session = $this->sessionForPayload($payload);
         $conversation = $this->conversationService->findOrCreateConversation(
             $session,
             $phone,
@@ -225,8 +227,8 @@ class WhatsappInboxCoordinacionOutboundService
      */
     private function processLegacyMedia(array $payload)
     {
-        if (!config('meta_whatsapp.coordinacion_enabled')) {
-            return ['status' => false, 'error' => 'Meta coordinación deshabilitado'];
+        if (!$this->isEnabledForPayload($payload)) {
+            return ['status' => false, 'error' => 'WhatsApp no está activo para esta organización'];
         }
 
         $phone = $this->normalizePhoneE164((string) ($payload['phone'] ?? ''));
@@ -251,7 +253,7 @@ class WhatsappInboxCoordinacionOutboundService
             return ['status' => false, 'error' => 'No se pudo subir el archivo a S3'];
         }
 
-        $session = $this->sessionService->ensureDefaultSession();
+        $session = $this->sessionForPayload($payload);
         $conversation = $this->conversationService->findOrCreateConversation(
             $session,
             $phone,
@@ -346,7 +348,8 @@ class WhatsappInboxCoordinacionOutboundService
      */
     private function tryProcessTemplateAsSessionMessage(array $payload)
     {
-        if (!config('meta_whatsapp.coordinacion_session_message_when_window_open', true)) {
+        $creds = app(WhatsappInboxOrgConfigService::class)->credentials($this->organizacionIdFromPayload($payload));
+        if (empty($creds['session_when_window_open'])) {
             return null;
         }
 
@@ -356,7 +359,7 @@ class WhatsappInboxCoordinacionOutboundService
             return null;
         }
 
-        $session = $this->sessionService->ensureDefaultSession();
+        $session = $this->sessionForPayload($payload);
         if (!$this->windowService->isWindowOpenForPhone($phone, (int) $session->id)) {
             return null;
         }
@@ -541,5 +544,36 @@ class WhatsappInboxCoordinacionOutboundService
         }
 
         return $this->conversationService->normalizePhoneE164($phone);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return int
+     */
+    private function organizacionIdFromPayload(array $payload)
+    {
+        if (isset($payload['organizacion_id']) && (int) $payload['organizacion_id'] > 0) {
+            return (int) $payload['organizacion_id'];
+        }
+
+        return 1;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return bool
+     */
+    private function isEnabledForPayload(array $payload)
+    {
+        return app(WhatsappInboxOrgConfigService::class)->isEnabled($this->organizacionIdFromPayload($payload));
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return \App\Models\WhatsappInbox\WaInboxSession
+     */
+    private function sessionForPayload(array $payload)
+    {
+        return $this->sessionService->ensureSessionForOrganizacion($this->organizacionIdFromPayload($payload));
     }
 }

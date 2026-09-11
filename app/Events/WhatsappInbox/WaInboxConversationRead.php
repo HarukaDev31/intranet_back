@@ -2,9 +2,9 @@
 
 namespace App\Events\WhatsappInbox;
 
+use App\Support\WhatsApp\WaInboxBroadcastChannel;
 use App\Support\WhatsApp\WaInboxQueue;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
@@ -26,7 +26,9 @@ class WaInboxConversationRead implements ShouldBroadcastNow
 
     public function broadcastOn()
     {
-        return new PrivateChannel('whatsapp-inbox.coordinacion');
+        return WaInboxBroadcastChannel::channelsForOrganizacion(
+            (int) ($this->conversation['organizacion_id'] ?? 0)
+        );
     }
 
     public function broadcastAs()

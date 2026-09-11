@@ -5,6 +5,7 @@ namespace App\Http\Controllers\CargaConsolidada;
 use App\Contracts\ObjectStorageConnectorInterface;
 use App\Http\Controllers\Controller;
 use App\Traits\FileTrait;
+use App\Models\BaseDatos\Clientes\Cliente;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
@@ -15,6 +16,7 @@ use App\Models\Organizacion;
 use App\Models\Usuario;
 use App\Services\CalculadoraImportacion\CodeSupplierHelper;
 use App\Services\CargaConsolidada\GeminiService;
+use App\Support\Phone\CountryPhoneHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -112,6 +114,62 @@ class CotizacionResumenController extends Controller
                 'mime_type' => $mimeType,
                 'size' => $file->getSize(),
             ],
+        ]);
+    }
+
+    /**
+     * Autocomplete de BD clientes de la org (número existente o uno nuevo).
+     * GET /api/carga-consolidada/cotizacion-resumen/clientes?q=
+     */
+    public function searchClientes(Request $request)
+    {
+        $orgId = $this->orgIdEfectiva($request);
+        if ($orgId <= 0) {
+            return response()->json(['success' => false, 'message' => 'No autenticado', 'data' => []], 401);
+        }
+
+        $q = trim((string) $request->query('q', $request->input('q', '')));
+
+        $query = Cliente::query()
+            ->where('organizacion_id', $orgId)
+            ->whereNotNull('telefono')
+            ->where('telefono', '!=', '');
+
+        if ($q !== '') {
+            $digits = CountryPhoneHelper::digits($q);
+            $query->where(function ($inner) use ($q, $digits) {
+                $inner->where('nombre', 'like', '%' . $q . '%')
+                    ->orWhere('documento', 'like', '%' . $q . '%')
+                    ->orWhere('correo', 'like', '%' . $q . '%')
+                    ->orWhere('telefono', 'like', '%' . $q . '%');
+                if ($digits !== '' && strlen($digits) >= 3) {
+                    $inner->orWhereRaw(
+                        'REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(telefono, " ", ""), "-", ""), "(", ""), ")", ""), "+", "") LIKE ?',
+                        ['%' . $digits . '%']
+                    );
+                }
+            });
+        }
+
+        $rows = $query->orderByDesc('id')->limit(20)->get([
+            'id', 'nombre', 'documento', 'correo', 'telefono',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => $rows->map(function ($c) {
+                $tel = (string) $c->getAttribute('telefono');
+                $nombre = (string) $c->getAttribute('nombre');
+                return [
+                    'id' => (int) $c->getAttribute('id'),
+                    'nombre' => $nombre,
+                    'documento' => $c->getAttribute('documento'),
+                    'correo' => $c->getAttribute('correo'),
+                    'telefono' => $tel,
+                    'label' => $nombre !== '' ? ($tel . ' · ' . $nombre) : $tel,
+                    'value' => $tel,
+                ];
+            })->values(),
         ]);
     }
 
@@ -307,6 +365,7 @@ class CotizacionResumenController extends Controller
             'cliente.nombre' => 'required|string|max:150',
             'cliente.tipo_documento' => 'nullable|string|in:ID,RUC',
             'cliente.documento' => 'nullable|string|max:50',
+            'cliente.id' => 'nullable|integer',
             'cliente.whatsapp' => 'nullable|string|max:50',
             'cliente.correo' => 'nullable|string|max:150',
             'proveedores' => 'required|array|min:1',
@@ -343,18 +402,26 @@ class CotizacionResumenController extends Controller
         try {
             $cliente = $request->input('cliente');
             $totalesCosto = $this->sumarCostosRequest($request->input('proveedores', []));
+            $orgId = (int) $contenedor->getAttribute('organizacion_id') ?: $this->orgIdEfectiva($request);
+            $clienteExistente = $this->resolverClienteDeLaOrg($cliente, $orgId);
+            if (!empty($cliente['id']) && !$clienteExistente) {
+                DB::rollBack();
+                return response()->json(['success' => false, 'message' => 'El cliente no pertenece a tu organización'], 403);
+            }
 
             $cotizacion = Cotizacion::create([
                 'id_contenedor' => $request->id_contenedor,
                 'uuid' => Str::uuid()->toString(),
                 'id_usuario' => $request->id_usuario,
                 'fecha' => now(),
-                // El wizard no distingue cliente nuevo/antiguo/socio todavía; 1 = NUEVO.
-                'id_tipo_cliente' => 1,
+                'id_tipo_cliente' => $clienteExistente
+                    ? $this->idTipoClientePorNombre('ANTIGUO', 1)
+                    : $this->idTipoClientePorNombre('NUEVO', 1),
+                'id_cliente' => $clienteExistente ? (int) $clienteExistente->id : null,
                 'nombre' => $cliente['nombre'],
                 'documento' => $cliente['documento'] ?? null,
                 'correo' => $cliente['correo'] ?? null,
-                'telefono' => $cliente['whatsapp'] ?? null,
+                'telefono' => $this->telefonoConPrefijoContenedor($cliente['whatsapp'] ?? null, $contenedor),
                 'estado' => 'PENDIENTE',
                 'estado_cotizador' => 'PENDIENTE',
                 'estado_resumen' => 'COTIZADO',
@@ -495,6 +562,7 @@ class CotizacionResumenController extends Controller
                 'id_usuario' => $cotizacion->getAttribute('id_usuario'),
                 'descuento' => (float) ($cotizacion->getAttribute('tarifa_descuento') ?? 0),
                 'cliente' => [
+                    'id' => $cotizacion->getAttribute('id_cliente'),
                     'nombre' => $cotizacion->getAttribute('nombre'),
                     'tipo_documento' => $this->tipoDocumentoCliente($cotizacion->getAttribute('documento')),
                     'documento' => $cotizacion->getAttribute('documento'),
@@ -546,6 +614,7 @@ class CotizacionResumenController extends Controller
             'cliente.nombre' => 'required|string|max:150',
             'cliente.tipo_documento' => 'nullable|string|in:ID,RUC',
             'cliente.documento' => 'nullable|string|max:50',
+            'cliente.id' => 'nullable|integer',
             'cliente.whatsapp' => 'nullable|string|max:50',
             'cliente.correo' => 'nullable|string|max:150',
             'proveedores' => 'required|array|min:1',
@@ -592,15 +661,27 @@ class CotizacionResumenController extends Controller
             $cliente = $request->input('cliente');
             $totalesCosto = $this->sumarCostosRequest($request->input('proveedores', []));
             $orgId = (int) $cotizacion->getAttribute('organizacion_id') ?: $this->orgIdAutenticada();
+            $clienteExistente = $this->resolverClienteDeLaOrg($cliente, $orgId);
+            if (!empty($cliente['id']) && !$clienteExistente) {
+                DB::rollBack();
+                return response()->json(['success' => false, 'message' => 'El cliente no pertenece a tu organización'], 403);
+            }
 
             $archivo = $request->input('archivo');
             $cotizacionFill = [
                 'id_contenedor' => $idContenedor,
                 'id_usuario' => $request->id_usuario,
+                'id_tipo_cliente' => $clienteExistente
+                    ? $this->idTipoClientePorNombre('ANTIGUO', 1)
+                    : $this->idTipoClientePorNombre('NUEVO', 1),
+                'id_cliente' => $clienteExistente ? (int) $clienteExistente->id : null,
                 'nombre' => $cliente['nombre'],
                 'documento' => $cliente['documento'] ?? null,
                 'correo' => $cliente['correo'] ?? null,
-                'telefono' => $cliente['whatsapp'] ?? null,
+                'telefono' => $this->telefonoConPrefijoContenedor(
+                    $cliente['whatsapp'] ?? null,
+                    isset($contenedor) ? $contenedor : $cotizacion->contenedor
+                ),
                 'tarifa_descuento' => $request->input('descuento', 0),
                 'fob' => $totalesCosto['fob'],
                 'monto' => $totalesCosto['logistica'],
@@ -819,6 +900,38 @@ class CotizacionResumenController extends Controller
         return $user ? (int) $user->getAttribute('ID_Organizacion') : 0;
     }
 
+    /**
+     * @param array $cliente
+     * @param int $orgId
+     * @return Cliente|null
+     */
+    private function resolverClienteDeLaOrg(array $cliente, $orgId)
+    {
+        $idCliente = isset($cliente['id']) ? (int) $cliente['id'] : 0;
+        if ($idCliente <= 0 || (int) $orgId <= 0) {
+            return null;
+        }
+
+        return Cliente::query()
+            ->where('id', $idCliente)
+            ->where('organizacion_id', (int) $orgId)
+            ->first();
+    }
+
+    /**
+     * @param string $nombre
+     * @param int $fallback
+     * @return int
+     */
+    private function idTipoClientePorNombre($nombre, $fallback = 1)
+    {
+        $id = (int) DB::table('contenedor_consolidado_tipo_cliente')
+            ->whereRaw('UPPER(TRIM(name)) = ?', [strtoupper((string) $nombre)])
+            ->value('id');
+
+        return $id > 0 ? $id : (int) $fallback;
+    }
+
     private function esOrgAdmin()
     {
         return $this->orgIdAutenticada() === self::ID_ORGANIZACION_ADMIN;
@@ -837,6 +950,14 @@ class CotizacionResumenController extends Controller
             }
         }
         return $authOrg;
+    }
+
+    private function telefonoConPrefijoContenedor($whatsapp, $contenedor)
+    {
+        $code = CountryPhoneHelper::codeForContenedor($contenedor);
+        $guardado = CountryPhoneHelper::ensureCountryCode($whatsapp, $code);
+
+        return $guardado !== '' ? $guardado : null;
     }
 
     private function contenedorPerteneceALaOrg(Contenedor $contenedor)

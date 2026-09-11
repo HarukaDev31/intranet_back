@@ -397,6 +397,8 @@ class ClienteService
                 'id_user' => $idUser,
                 'primer_servicio' => $primerServicio ? [
                     'servicio' => $primerServicio['servicio'],
+                    'detalle' => $primerServicio['detalle'] ?? null,
+                    'carga' => $primerServicio['carga'] ?? null,
                     'fecha' => Carbon::parse($primerServicio['fecha'])->format('d/m/Y'),
                     'categoria' => $primerServicio['categoria']
                 ] : null,
@@ -684,18 +686,20 @@ class ClienteService
             ->get();
 
         // Obtener servicios de contenedor_consolidado_cotizacion
-        $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
-            ->whereNotNull('estado_cliente')
-            ->whereNull('deleted_at')
-            ->whereIn('organizacion_id', $this->organizacionIdsUsuarioActual())
-            ->whereIn('id_cliente', $clienteIds);
-        ClientesVisibility::applyConfirmadoParaBd($cotizaciones, '');
+        $cotizaciones = DB::table('contenedor_consolidado_cotizacion as ccc')
+            ->leftJoin('carga_consolidada_contenedor as cont', 'cont.id', '=', 'ccc.id_contenedor')
+            ->whereNotNull('ccc.estado_cliente')
+            ->whereNull('ccc.deleted_at')
+            ->whereIn('ccc.organizacion_id', $this->organizacionIdsUsuarioActual())
+            ->whereIn('ccc.id_cliente', $clienteIds);
+        ClientesVisibility::applyConfirmadoParaBd($cotizaciones, 'ccc');
         $cotizaciones = $cotizaciones
             ->select(
-                'id_cliente',
-                'fecha',
+                'ccc.id_cliente',
+                'ccc.fecha',
                 DB::raw("'Consolidado' as servicio"),
-                'monto'
+                'ccc.monto',
+                'cont.carga'
             )
             ->get();
 
@@ -712,7 +716,9 @@ class ClienteService
             $serviciosPorCliente[$cotizacion->id_cliente][] = [
                 'servicio' => $cotizacion->servicio,
                 'fecha' => $cotizacion->fecha,
-                'monto' => $cotizacion->monto
+                'monto' => $cotizacion->monto,
+                'carga' => $cotizacion->carga,
+                'detalle' => Cliente::detalleCarga($cotizacion->carga, $cotizacion->fecha),
             ];
         }
 
@@ -1136,6 +1142,8 @@ class ClienteService
                 'categoria' => $categoria,
                 'primer_servicio' => $primerServicio ? [
                     'servicio' => $primerServicio['servicio'],
+                    'detalle' => $primerServicio['detalle'] ?? null,
+                    'carga' => $primerServicio['carga'] ?? null,
                     'fecha' => Carbon::parse($primerServicio['fecha'])->format('d/m/Y'),
                     'categoria' => $categoria
                 ] : null,
@@ -1143,6 +1151,8 @@ class ClienteService
                 'servicios' => collect($servicios)->map(function ($servicio) use ($categoria) {
                     return [
                         'servicio' => $servicio['servicio'],
+                        'detalle' => $servicio['detalle'] ?? null,
+                        'carga' => $servicio['carga'] ?? null,
                         'fecha' => Carbon::parse($servicio['fecha'])->format('d/m/Y'),
                         'categoria' => $categoria
                     ];

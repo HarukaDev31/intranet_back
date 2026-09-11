@@ -11,6 +11,7 @@ class PaisFlag extends Model
     protected $fillable = [
         'id_pais',
         'iso2',
+        'phone_code',
         'nombre',
         'flag_url',
     ];

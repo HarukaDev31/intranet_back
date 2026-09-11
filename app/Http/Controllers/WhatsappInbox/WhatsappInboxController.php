@@ -56,9 +56,12 @@ class WhatsappInboxController extends Controller
     public function session()
     {
         try {
+            $user = JWTAuth::parseToken()->authenticate();
+            $orgId = $user ? (int) $user->getAttribute('ID_Organizacion') : 0;
+
             return response()->json([
                 'success' => true,
-                'data' => $this->sessionService->getSessionPayload(),
+                'data' => $this->sessionService->getSessionPayloadForOrganizacion($orgId, $user),
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -74,6 +77,7 @@ class WhatsappInboxController extends Controller
             $user = JWTAuth::parseToken()->authenticate();
             $params = $request->all();
             $params['auth_user_id'] = $user ? (int) $user->getIdUsuario() : 0;
+            $params['organizacion_id'] = $user ? (int) $user->getAttribute('ID_Organizacion') : 0;
 
             return response()->json($this->conversationService->listConversations($params));
         } catch (\Exception $e) {
@@ -87,10 +91,12 @@ class WhatsappInboxController extends Controller
     public function storeConversation(Request $request)
     {
         try {
+            $user = JWTAuth::parseToken()->authenticate();
             $result = $this->conversationService->createManualContact([
                 'phone' => $request->input('phone'),
                 'contact_name' => $request->input('contact_name'),
                 'assigned_user_id' => (int) $request->input('assigned_user_id', 0),
+                'organizacion_id' => $user ? (int) $user->getAttribute('ID_Organizacion') : 0,
             ]);
 
             $status = !empty($result['success']) ? 200 : 422;
@@ -107,6 +113,11 @@ class WhatsappInboxController extends Controller
     public function messages(Request $request, $id)
     {
         try {
+            $denied = $this->denyIfConversationOutsideOrg((int) $id);
+            if ($denied) {
+                return $denied;
+            }
+
             return response()->json($this->messageService->listMessages((int) $id, $request->all()));
         } catch (\Exception $e) {
             return response()->json([
@@ -122,6 +133,11 @@ class WhatsappInboxController extends Controller
             $text = trim((string) $request->input('message', ''));
             $replyMetaId = trim((string) $request->input('reply_to_meta_message_id', ''));
             $file = $request->file('file');
+
+            $denied = $this->denyIfConversationOutsideOrg((int) $id);
+            if ($denied) {
+                return $denied;
+            }
 
             $conversation = WaInboxConversation::query()->findOrFail((int) $id);
             $window = $this->windowService->computeWindowState($conversation);
@@ -234,10 +250,18 @@ class WhatsappInboxController extends Controller
                 $params = [];
             }
 
+            $denied = $this->denyIfConversationOutsideOrg((int) $id);
+            if ($denied) {
+                return $denied;
+            }
+
             $conversation = WaInboxConversation::query()->findOrFail((int) $id);
             $user = JWTAuth::parseToken()->authenticate();
             $userId = $user ? (int) $user->getIdUsuario() : null;
 
+            $this->templateService->usingOrganizacion(
+                $this->conversationService->organizacionIdOf($conversation)
+            );
             $headerFormat = $this->templateService->getTemplateHeaderFormat($templateName);
             $requiresHeaderMedia = $this->templateService->templateRequiresHeaderMedia($templateName)
                 || count($request->allFiles()) > 0;
@@ -407,6 +431,11 @@ class WhatsappInboxController extends Controller
     public function assign(Request $request, $id)
     {
         try {
+            $denied = $this->denyIfConversationOutsideOrg((int) $id);
+            if ($denied) {
+                return $denied;
+            }
+
             $userId = (int) $request->input('user_id', 0);
 
             return response()->json($this->conversationService->assign((int) $id, $userId));
@@ -421,6 +450,11 @@ class WhatsappInboxController extends Controller
     public function renameContact(Request $request, $id)
     {
         try {
+            $denied = $this->denyIfConversationOutsideOrg((int) $id);
+            if ($denied) {
+                return $denied;
+            }
+
             $result = $this->conversationService->renameContact(
                 (int) $id,
                 $request->input('contact_name', '')
@@ -439,6 +473,11 @@ class WhatsappInboxController extends Controller
     public function markRead($id)
     {
         try {
+            $denied = $this->denyIfConversationOutsideOrg((int) $id);
+            if ($denied) {
+                return $denied;
+            }
+
             return response()->json($this->conversationService->markRead((int) $id));
         } catch (\Exception $e) {
             return response()->json([
@@ -451,6 +490,10 @@ class WhatsappInboxController extends Controller
     public function templates()
     {
         try {
+            $user = JWTAuth::parseToken()->authenticate();
+            $orgId = $user ? (int) $user->getAttribute('ID_Organizacion') : 0;
+            $this->templateService->usingOrganizacion($orgId);
+
             return response()->json($this->templateService->listTemplates());
         } catch (\Exception $e) {
             return response()->json([
@@ -463,7 +506,10 @@ class WhatsappInboxController extends Controller
     public function assignableUsers()
     {
         try {
-            return response()->json($this->conversationService->getAssignableUsers());
+            $user = JWTAuth::parseToken()->authenticate();
+            $orgId = $user ? (int) $user->getAttribute('ID_Organizacion') : 0;
+
+            return response()->json($this->conversationService->getAssignableUsers($orgId));
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -672,6 +718,24 @@ class WhatsappInboxController extends Controller
         }
 
         return 'El archivo pesa ' . $fileMb . ' MB. WhatsApp permite máximo ' . $maxMb . ' MB para documentos en plantilla.';
+    }
+
+    /**
+     * @param  int  $conversationId
+     * @return \Illuminate\Http\JsonResponse|null
+     */
+    private function denyIfConversationOutsideOrg($conversationId)
+    {
+        $user = JWTAuth::parseToken()->authenticate();
+        $conversation = WaInboxConversation::query()->find($conversationId);
+        if (!$conversation) {
+            return response()->json(['success' => false, 'message' => 'Conversación no encontrada'], 404);
+        }
+        if (!$this->conversationService->belongsToUserOrganizacion($conversation, $user)) {
+            return response()->json(['success' => false, 'message' => 'No autorizado'], 403);
+        }
+
+        return null;
     }
 
     /**

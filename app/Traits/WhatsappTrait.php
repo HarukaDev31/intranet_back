@@ -772,7 +772,7 @@ trait WhatsappTrait
             return false;
         }
 
-        return (bool) config('meta_whatsapp.coordinacion_enabled', false);
+        return app(\App\Services\WhatsappInbox\WhatsappInboxOrgConfigService::class)->isEnabled(1);
     }
 
     /**

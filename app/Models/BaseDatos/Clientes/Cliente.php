@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 use App\Models\Entidad;
 use App\Models\Usuario;
 use App\Models\CargaConsolidada\Scopes\OrganizacionScope;
+use App\Support\CargaConsolidada\CargaLabel;
 use App\Support\CargaConsolidada\ClientesVisibility;
 
 class Cliente extends Model
@@ -141,17 +142,37 @@ class Cliente extends Model
         $cotizacion = $cotizacion
             ->orderBy('fecha', 'asc')
             ->orderByRaw('CAST(carga_consolidada_contenedor.carga AS UNSIGNED)')
+            ->select(
+                'contenedor_consolidado_cotizacion.fecha',
+                'carga_consolidada_contenedor.carga as carga_contenedor'
+            )
             ->first();
 
         if ($cotizacion) {
+            $carga = $cotizacion->carga_contenedor ?? '';
             return [
                 'servicio' => 'Consolidado',
+                'detalle' => self::detalleCarga($carga, $cotizacion->fecha),
+                'carga' => $carga,
                 'fecha' => $cotizacion->fecha,
                 'categoria' => $this->determinarCategoria($cotizacion->fecha)
             ];
         }
 
         return null;
+    }
+
+    /**
+     * Número de consolidado para BD clientes: 6-2026. Sin prefijo de país.
+     *
+     * @param mixed $carga
+     * @param mixed $fecha
+     * @param mixed $iso2 Ignorado.
+     * @return string
+     */
+    public static function detalleCarga($carga, $fecha = null, $iso2 = null)
+    {
+        return CargaLabel::format($carga, $fecha);
     }
 
     /**
@@ -225,22 +246,22 @@ class Cliente extends Model
             ->orderBy('fecha', 'asc')
             ->orderByRaw('CAST(carga_consolidada_contenedor.carga AS UNSIGNED)')
             ->select(
-                'contenedor_consolidado_cotizacion.*', 
-                'carga_consolidada_contenedor.carga', 
+                'contenedor_consolidado_cotizacion.*',
+                'carga_consolidada_contenedor.carga as carga_contenedor',
                 'carga_consolidada_contenedor.empresa',
                 'carga_consolidada_contenedor.id as id_contenedor'
             )
             ->get();
 
         foreach ($cotizaciones as $cotizacion) {
-            $anioCarga = (int) $cotizacion->carga . '-' . (int) date('Y', strtotime($cotizacion->fecha));
+            $carga = $cotizacion->carga_contenedor ?? $cotizacion->carga ?? '';
             $servicios[] = [
                 'id' => $cotizacion->id,
                 'monto' => $cotizacion->monto,
                 'is_imported' => $cotizacion->id_cliente_importacion ? 1 : 0,
                 'servicio' => 'Consolidado',
-                'detalle' => $anioCarga,
-                'carga' => $cotizacion->carga,
+                'detalle' => self::detalleCarga($carga, $cotizacion->fecha),
+                'carga' => $carga,
                 'empresa' => $cotizacion->empresa,
                 'fecha' => $cotizacion->fecha,
                 'categoria' => $this->determinarCategoria($cotizacion->fecha)
