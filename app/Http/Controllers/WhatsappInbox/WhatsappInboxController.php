@@ -113,12 +113,12 @@ class WhatsappInboxController extends Controller
     public function messages(Request $request, $id)
     {
         try {
-            $denied = $this->denyIfConversationOutsideOrg((int) $id);
-            if ($denied) {
-                return $denied;
+            $conversation = $this->conversationForCurrentOrg((int) $id);
+            if (!$conversation instanceof WaInboxConversation) {
+                return $conversation;
             }
 
-            return response()->json($this->messageService->listMessages((int) $id, $request->all()));
+            return response()->json($this->messageService->listMessages($conversation, $request->all()));
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -722,12 +722,12 @@ class WhatsappInboxController extends Controller
 
     /**
      * @param  int  $conversationId
-     * @return \Illuminate\Http\JsonResponse|null
+     * @return WaInboxConversation|\Illuminate\Http\JsonResponse
      */
-    private function denyIfConversationOutsideOrg($conversationId)
+    private function conversationForCurrentOrg($conversationId)
     {
         $user = JWTAuth::parseToken()->authenticate();
-        $conversation = WaInboxConversation::query()->find($conversationId);
+        $conversation = WaInboxConversation::query()->with('session')->find($conversationId);
         if (!$conversation) {
             return response()->json(['success' => false, 'message' => 'Conversación no encontrada'], 404);
         }
@@ -735,7 +735,18 @@ class WhatsappInboxController extends Controller
             return response()->json(['success' => false, 'message' => 'No autorizado'], 403);
         }
 
-        return null;
+        return $conversation;
+    }
+
+    /**
+     * @param  int  $conversationId
+     * @return \Illuminate\Http\JsonResponse|null
+     */
+    private function denyIfConversationOutsideOrg($conversationId)
+    {
+        $conversation = $this->conversationForCurrentOrg($conversationId);
+
+        return $conversation instanceof WaInboxConversation ? null : $conversation;
     }
 
     /**

@@ -47,7 +47,8 @@ return [
     'cdn_when_upload_disk_s3' => env('OBJECT_STORAGE_CDN_WHEN_S3', true),
 
     /**
-     * Chat inbox: usa CDN por defecto; templates/ sigue forzando URL firmada desde CoordinacionMediaLink.
+     * Chat inbox: CDN por defecto (también templates/ estáticos).
+     * true solo si hace falta URL firmada S3 para todo el media del chat.
      */
     'inbox_display_use_presigned' => filter_var(env('OBJECT_STORAGE_INBOX_DISPLAY_PRESIGNED', false), FILTER_VALIDATE_BOOLEAN),
 

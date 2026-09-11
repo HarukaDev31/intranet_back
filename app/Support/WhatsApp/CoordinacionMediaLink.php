@@ -4,6 +4,7 @@ namespace App\Support\WhatsApp;
 
 use App\Contracts\ObjectStorageConnectorInterface;
 use App\Support\Storage\StoragePathSanitizer;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -14,6 +15,9 @@ use Illuminate\Support\Str;
 class CoordinacionMediaLink
 {
     public const META_TEMP_PREFIX = 'temp/whatsapp-meta';
+
+    /** @var array<string, string|null> */
+    private static $displayUrlMemo = [];
 
     /**
      * Resuelve ruta local, relativa en storage o URL existente a HTTPS usable por Meta Graph API.
@@ -308,49 +312,174 @@ class CoordinacionMediaLink
     }
 
     /**
-     * URL para el chat / intranet (presigned S3 por defecto; evita CDN 403 en templates privados).
+     * URL para el chat / intranet.
+     * No hace HEAD a S3: la clave ya se persistió al subir el archivo.
+     * Usa CDN (incluye templates/ estáticos). Solo firma S3 si OBJECT_STORAGE_INBOX_DISPLAY_PRESIGNED=true.
      *
      * @param  string|null  $pathOrUrl  Clave relativa S3 o URL guardada en BD
      * @return string|null
      */
     public static function urlForDisplay($pathOrUrl)
     {
+        if ($pathOrUrl === null) {
+            return null;
+        }
+
+        $raw = trim((string) $pathOrUrl);
+        if ($raw === '') {
+            return null;
+        }
+
+        if (array_key_exists($raw, self::$displayUrlMemo)) {
+            return self::$displayUrlMemo[$raw];
+        }
+
+        $url = self::buildDisplayUrlWithoutProbe($raw);
+        self::$displayUrlMemo[$raw] = $url;
+
+        return $url;
+    }
+
+    /**
+     * Precarga URLs de media únicas (listados de chat).
+     *
+     * @param  array<int, string|null>  $pathsOrUrls
+     */
+    public static function primeDisplayUrls(array $pathsOrUrls)
+    {
+        $seen = [];
+        foreach ($pathsOrUrls as $pathOrUrl) {
+            if ($pathOrUrl === null) {
+                continue;
+            }
+            $raw = trim((string) $pathOrUrl);
+            if ($raw === '' || isset($seen[$raw])) {
+                continue;
+            }
+            $seen[$raw] = true;
+            self::urlForDisplay($raw);
+        }
+    }
+
+    /**
+     * @param  string  $pathOrUrl
+     * @return string|null
+     */
+    private static function buildDisplayUrlWithoutProbe($pathOrUrl)
+    {
+        if (filter_var($pathOrUrl, FILTER_VALIDATE_URL)
+            && stripos($pathOrUrl, 'X-Amz-Signature=') === false
+            && stripos($pathOrUrl, 'X-Amz-Algorithm=') === false) {
+            return $pathOrUrl;
+        }
+
         $resolved = self::resolveStoragePath($pathOrUrl);
-        if ($resolved === null) {
+        if ($resolved === null || $resolved === '') {
             return self::stringOrNullUrl($pathOrUrl);
         }
 
+        if (self::shouldUsePresignedForDisplay()) {
+            $signed = self::presignedDisplayUrl($resolved);
+            if ($signed !== null) {
+                return $signed;
+            }
+        }
+
+        $cdn = self::cdnUrlForRelativePath($resolved);
+        if ($cdn !== null) {
+            return $cdn;
+        }
+
         try {
-            $storage = app(ObjectStorageConnectorInterface::class);
-            if (!$storage->exists($resolved)) {
-                $sanitized = StoragePathSanitizer::relativePath($resolved);
-                if ($sanitized !== '' && $sanitized !== $resolved && $storage->exists($sanitized)) {
-                    $resolved = $sanitized;
-                } else {
-                    return self::stringOrNullUrl($pathOrUrl);
-                }
+            if (config('filesystems.disks.s3.bucket')) {
+                return Storage::disk('s3')->url($resolved);
             }
-
-            if (method_exists($storage, 'metaPresignedUrl') && self::shouldUsePresignedForDisplay($resolved)) {
-                try {
-                    return $storage->metaPresignedUrl($resolved);
-                } catch (\Throwable $e) {
-                    Log::debug('CoordinacionMediaLink: urlForDisplay presigned fallback CDN', [
-                        'path' => $resolved,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
-            }
-
-            return $storage->url($resolved);
         } catch (\Throwable $e) {
-            Log::debug('CoordinacionMediaLink: urlForDisplay', [
+            Log::debug('CoordinacionMediaLink: urlForDisplay s3.url', [
                 'path' => $resolved,
                 'error' => $e->getMessage(),
             ]);
         }
 
         return self::stringOrNullUrl($pathOrUrl);
+    }
+
+    /**
+     * Firma local (sin HEAD a S3). Cachea el resultado: el mismo PDF de plantilla
+     * se reutiliza en muchos mensajes/conversaciones.
+     *
+     * @param  string  $relativePath
+     * @return string|null
+     */
+    private static function presignedDisplayUrl($relativePath)
+    {
+        $minutes = (int) config('object_storage.signed_url_minutes', 120);
+        $cacheTtl = max(60, ($minutes - 15) * 60);
+        $cacheKey = 'wa:media:v1:presign:' . sha1($relativePath);
+
+        try {
+            $cached = Cache::get($cacheKey);
+            if (is_string($cached) && $cached !== '') {
+                return $cached;
+            }
+        } catch (\Throwable $e) {
+            // Continúa a firmar en local si Redis no está disponible.
+        }
+
+        try {
+            $url = Storage::disk('s3')->temporaryUrl($relativePath, now()->addMinutes($minutes));
+        } catch (\Throwable $e) {
+            Log::debug('CoordinacionMediaLink: urlForDisplay presign', [
+                'path' => $relativePath,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        try {
+            Cache::put($cacheKey, $url, $cacheTtl);
+        } catch (\Throwable $e) {
+            // La firma local ya es barata; Redis es solo para reutilizar entre requests.
+        }
+
+        return $url;
+    }
+
+    /**
+     * @param  string  $relativePath
+     * @return string|null
+     */
+    private static function cdnUrlForRelativePath($relativePath)
+    {
+        $base = rtrim((string) config('object_storage.cdn_base_url', ''), '/');
+        if ($base === '') {
+            return null;
+        }
+
+        $uploadDisk = (string) config('object_storage.upload_disk', config('filesystems.default'));
+        if (filter_var(config('object_storage.cdn_when_upload_disk_s3', true), FILTER_VALIDATE_BOOLEAN)
+            && $uploadDisk !== 's3') {
+            return null;
+        }
+
+        $prefix = trim(str_replace('\\', '/', (string) config('object_storage.s3_prefix', '')), '/');
+        $includePrefix = filter_var(config('object_storage.cdn_include_s3_prefix', false), FILTER_VALIDATE_BOOLEAN);
+        if (!$includePrefix && $prefix !== '') {
+            return null;
+        }
+
+        $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+        $encoded = StoragePathSanitizer::encodeRelativePathForUrl($relativePath);
+        if ($encoded === '') {
+            return null;
+        }
+
+        if ($includePrefix && $prefix !== '') {
+            return $base . '/' . $prefix . '/' . $encoded;
+        }
+
+        return $base . '/' . $encoded;
     }
 
     /**
@@ -467,16 +596,11 @@ class CoordinacionMediaLink
     }
 
     /**
-     * @param  string  $relativePath
      * @return bool
      */
-    private static function shouldUsePresignedForDisplay($relativePath)
+    private static function shouldUsePresignedForDisplay()
     {
-        if (config('object_storage.inbox_display_use_presigned', true)) {
-            return true;
-        }
-
-        return strpos($relativePath, 'templates/') === 0;
+        return (bool) config('object_storage.inbox_display_use_presigned', false);
     }
 
     /**

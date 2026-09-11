@@ -38,14 +38,20 @@ class WhatsappInboxMessageService
     }
 
     /**
-     * @param  int  $conversationId
+     * @param  int|WaInboxConversation  $conversationId
      * @param  array<string, mixed>  $params
      * @return array<string, mixed>
      */
     public function listMessages($conversationId, array $params = [])
     {
         $perPage = max(1, min(200, (int) ($params['per_page'] ?? 100)));
-        $conversation = WaInboxConversation::query()->findOrFail($conversationId);
+        $conversation = $conversationId instanceof WaInboxConversation
+            ? $conversationId
+            : WaInboxConversation::query()->with('session')->findOrFail((int) $conversationId);
+
+        if (!$conversation->relationLoaded('session')) {
+            $conversation->load('session');
+        }
 
         $messages = WaInboxMessage::query()
             ->where('conversation_id', $conversation->id)
@@ -53,8 +59,17 @@ class WhatsappInboxMessageService
             ->orderBy('id')
             ->paginate($perPage);
 
+        $items = $messages->items();
+        $mediaPaths = [];
+        foreach ($items as $msg) {
+            if (!empty($msg->media_url)) {
+                $mediaPaths[] = $msg->media_url;
+            }
+        }
+        CoordinacionMediaLink::primeDisplayUrls($mediaPaths);
+
         $rows = [];
-        foreach ($messages->items() as $msg) {
+        foreach ($items as $msg) {
             $rows[] = $this->formatMessage($msg);
         }
 
@@ -110,7 +125,11 @@ class WhatsappInboxMessageService
             'direction' => $message->direction,
             'body' => $message->body,
             'sent_at' => $message->sent_at,
-            'time_label' => $message->sent_at ? Carbon::parse($message->sent_at)->format('H:i') : '',
+            'time_label' => $message->sent_at
+                ? ($message->sent_at instanceof Carbon
+                    ? $message->sent_at->format('H:i')
+                    : Carbon::parse($message->sent_at)->format('H:i'))
+                : '',
             'delivery_status' => $message->delivery_status,
             'failed_reason' => $message->failed_reason,
             'is_template' => $isTemplate,
