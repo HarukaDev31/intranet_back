@@ -3,9 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Tymon\JWTAuth\Contracts\JWTSubject;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 
+/**
+ * @property-read Grupo|null $grupo
+ */
 class Usuario extends Authenticatable implements JWTSubject
 {
     protected $table = 'usuario';
@@ -171,7 +175,7 @@ class Usuario extends Authenticatable implements JWTSubject
     /**
      * Relación directa con Grupo
      */
-    public function grupo()
+    public function grupo(): BelongsTo
     {
         return $this->belongsTo(Grupo::class, 'ID_Grupo', 'ID_Grupo');
     }

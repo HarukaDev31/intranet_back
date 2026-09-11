@@ -427,6 +427,18 @@ parameters:
 			path: app/Console/Commands/TestJWTAuth.php
 
 		-
+			message: '#^Access to an undefined property App\\Models\\Grupo\:\:\$Nu_Estado\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Console/Commands/TestLoginGrupo.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Grupo\:\:\$Nu_Notificacion\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Console/Commands/TestLoginGrupo.php
+
+		-
 			message: '#^Access to an undefined property App\\Models\\Usuario\:\:\$ID_Empresa\.$#'
 			identifier: property.notFound
 			count: 1
@@ -463,12 +475,6 @@ parameters:
 			path: app/Console/Commands/TestLoginGrupo.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Usuario\:\:\$grupo\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Console/Commands/TestLoginGrupo.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Usuario\:\:\$organizacion\.$#'
 			identifier: property.notFound
 			count: 1
@@ -476,12 +482,6 @@ parameters:
 
 		-
 			message: '#^Relation ''empresa'' is not found in App\\Models\\Usuario model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Console/Commands/TestLoginGrupo.php
-
-		-
-			message: '#^Relation ''grupo'' is not found in App\\Models\\Usuario model\.$#'
 			identifier: larastan.relationExistence
 			count: 1
 			path: app/Console/Commands/TestLoginGrupo.php
@@ -785,6 +785,18 @@ parameters:
 			identifier: larastan.noEnvCallsOutsideOfConfig
 			count: 5
 			path: app/Http/Controllers/Api/EvolutionWebhookController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Grupo\:\:\$Nu_Estado\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/AuthController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Grupo\:\:\$Nu_Notificacion\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/AuthController.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\CargaConsolidada\\Cotizacion\:\:\$fob\.$#'
@@ -1624,18 +1636,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiChatSala\:\:\$solicitud\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Http/Controllers/Broadcasting/BroadcastController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Usuario\:\:\$grupo\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Http/Controllers/Broadcasting/BroadcastController.php
-
-		-
-			message: '#^Method App\\Http\\Controllers\\Broadcasting\\BroadcastController\:\:authenticate\(\) should return Illuminate\\Http\\Response but returns Illuminate\\Http\\JsonResponse\.$#'
-			identifier: return.type
-			count: 22
 			path: app/Http/Controllers/Broadcasting/BroadcastController.php
 
 		-
@@ -4929,17 +4929,23 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Models\\CargaConsolidada\\DocumentacionFile\:\:\$file_url\.$#'
 			identifier: property.notFound
-			count: 2
+			count: 3
 			path: app/Http/Controllers/CargaConsolidada/Documentacion/DocumentacionController.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\CargaConsolidada\\DocumentacionFile\:\:\$id_contenedor\.$#'
 			identifier: property.notFound
-			count: 1
+			count: 5
 			path: app/Http/Controllers/CargaConsolidada/Documentacion/DocumentacionController.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\CargaConsolidada\\DocumentacionFile\:\:\$id_folder\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/CargaConsolidada/Documentacion/DocumentacionController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\CargaConsolidada\\DocumentacionFile\:\:\$created_at\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/CargaConsolidada/Documentacion/DocumentacionController.php
@@ -4954,12 +4960,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Models\\CargaConsolidada\\DocumentacionFile\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\CargaConsolidada\\DocumentacionFile\>\:\:\$file_url\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Http/Controllers/CargaConsolidada/Documentacion/DocumentacionController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\CargaConsolidada\\DocumentacionFile\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\CargaConsolidada\\DocumentacionFile\>\:\:\$id_contenedor\.$#'
-			identifier: property.notFound
-			count: 3
 			path: app/Http/Controllers/CargaConsolidada/Documentacion/DocumentacionController.php
 
 		-
@@ -6697,18 +6697,6 @@ parameters:
 			path: app/Http/Controllers/PanelAcceso/GrupoController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Grupo\:\:\$No_Grupo\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/PanelAcceso/GrupoController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Grupo\:\:\$No_Grupo_Descripcion\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/PanelAcceso/GrupoController.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Grupo\:\:\$No_Organizacion\.$#'
 			identifier: property.notFound
 			count: 1
@@ -6724,12 +6712,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Models\\Grupo\:\:\$Nu_Notificacion\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Http/Controllers/PanelAcceso/GrupoController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Grupo\:\:\$Nu_Tipo_Privilegio_Acceso\.$#'
-			identifier: property.notFound
-			count: 2
 			path: app/Http/Controllers/PanelAcceso/GrupoController.php
 
 		-
@@ -8275,9 +8257,9 @@ parameters:
 			path: app/Models/Usuario.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Usuario\:\:\$grupo\.$#'
+			message: '#^Access to an undefined property App\\Models\\Usuario\:\:\$No_Usuario\.$#'
 			identifier: property.notFound
-			count: 5
+			count: 1
 			path: app/Models/Usuario.php
 
 		-
@@ -9328,12 +9310,6 @@ parameters:
 			message: '#^PHPDoc tag @var for variable \$templateService contains unknown class App\\Traits\\WhatsappInboxTemplateService\.$#'
 			identifier: class.notFound
 			count: 1
-			path: app/Services/CargaConsolidada/CotizacionFinal/CotizacionFinalCobranzaWhatsappService.php
-
-		-
-			message: '#^Relation ''conversation'' is not found in App\\Models\\WhatsappInbox\\WaInboxMessage model\.$#'
-			identifier: larastan.relationExistence
-			count: 2
 			path: app/Services/CargaConsolidada/CotizacionFinal/CotizacionFinalCobranzaWhatsappService.php
 
 		-
@@ -10487,12 +10463,6 @@ parameters:
 			identifier: return.unusedType
 			count: 1
 			path: app/Services/WhatsappInbox/WhatsappInboxCoordinacionOutboundService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\WhatsappInbox\\WaInboxMessage\:\:\$conversation\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/WhatsappInbox/WhatsappInboxSendService.php
 
 		-
 			message: '#^Call to an undefined method Illuminate\\Pagination\\AbstractPaginator\:\:lastPage\(\)\.$#'

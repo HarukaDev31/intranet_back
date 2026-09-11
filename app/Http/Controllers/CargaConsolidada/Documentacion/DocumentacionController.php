@@ -1825,7 +1825,7 @@ class DocumentacionController extends Controller
      */
     public function deleteFileDocumentation(Request $request, $idFile)
     {
-        $file = DocumentacionFile::find($idFile);
+        $file = DocumentacionFile::query()->whereKey($idFile)->first();
         if (!$file) {
             return response()->json([
                 'success' => false,

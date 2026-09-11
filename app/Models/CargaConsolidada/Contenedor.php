@@ -53,6 +53,8 @@ use App\Support\CargaConsolidada\CargaLabel;
  * @property-read Pais|null $pais
  * @property-read Organizacion|null $organizacion
  * @property-read ContenedorTcYuan|null $tcYuan
+ * @property string|null $phone_code
+ * @property string|null $iso2
  */
 class Contenedor extends Model
 {

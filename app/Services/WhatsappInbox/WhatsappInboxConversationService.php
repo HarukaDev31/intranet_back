@@ -561,9 +561,11 @@ class WhatsappInboxConversationService
      */
     public function organizacionIdOf(WaInboxConversation $conversation)
     {
-        $session = $conversation->relationLoaded('session')
-            ? $conversation->session
-            : $conversation->session()->first();
+        if (!$conversation->relationLoaded('session')) {
+            $conversation->load('session');
+        }
+
+        $session = $conversation->session;
 
         return $session ? (int) $session->organizacion_id : 0;
     }

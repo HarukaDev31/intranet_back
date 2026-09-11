@@ -335,7 +335,7 @@ class ContenedorController extends Controller
                 ->orderByRaw('CASE WHEN ID_Organizacion = ? THEN 0 ELSE 1 END', [$authOrg])
                 ->orderBy('No_Organizacion')
                 ->get(['ID_Organizacion', 'No_Organizacion'])
-                ->map(function ($organizacion) {
+                ->map(function (Organizacion $organizacion) {
                     return [
                         'id' => (int) $organizacion->ID_Organizacion,
                         'nombre' => $organizacion->No_Organizacion,
@@ -525,7 +525,8 @@ class ContenedorController extends Controller
                 }
                 if ($data['id']) {
                     $contenedor = Contenedor::find($data['id']);
-                    $contenedor->update($data);
+                    $contenedor->fill($data);
+                    $contenedor->save();
                 } else {
                     // Calcular f_inicio usando mes (campo mes) y año de f_cierre
                     if (!empty($data['f_cierre'])) {
@@ -1177,19 +1178,19 @@ class ContenedorController extends Controller
         $year = $request->year ? $request->year : date('Y');
         $cargas = Contenedor::with('tcYuan')
             ->leftJoin('pais_flags as pf', 'pf.id_pais', '=', 'carga_consolidada_contenedor.id_pais')
-            ->where('carga_consolidada_contenedor.empresa', '!=', 1)
+            ->whereRaw('carga_consolidada_contenedor.empresa != ?', [1])
             ->whereYear('carga_consolidada_contenedor.f_inicio', $year)
             ->where(function($query) use ($year){
                 $query->whereYear('carga_consolidada_contenedor.f_inicio', $year)
                     ->orWhereNull('carga_consolidada_contenedor.f_inicio');
             })
-            ->where('carga_consolidada_contenedor.estado_china', '!=', Contenedor::CONTEDOR_CERRADO)
+            ->whereRaw('carga_consolidada_contenedor.estado_china != ?', [Contenedor::CONTEDOR_CERRADO])
             ->orderByRaw('CAST(carga_consolidada_contenedor.carga AS UNSIGNED) DESC')
             ->orderByRaw("CASE WHEN carga_consolidada_contenedor.parte IS NULL OR carga_consolidada_contenedor.parte = '' THEN 0 ELSE 1 END ASC")
             ->orderByRaw('carga_consolidada_contenedor.parte DESC')
             ->select('carga_consolidada_contenedor.*', 'pf.phone_code as phone_code', 'pf.iso2 as iso2')
             ->get();
-        $data = $cargas->map(function($carga){
+        $data = $cargas->map(function (Contenedor $carga) {
             return [
                 'value' => $carga->id,
                 'label' => 'Contenedor #'.$carga->formatCargaLabel(),

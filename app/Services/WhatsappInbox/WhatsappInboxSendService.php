@@ -530,9 +530,10 @@ class WhatsappInboxSendService
         $conversation = $message->conversation;
         $orgId = 1;
         if ($conversation) {
-            $session = $conversation->relationLoaded('session')
-                ? $conversation->session
-                : $conversation->session()->first();
+            if (!$conversation->relationLoaded('session')) {
+                $conversation->load('session');
+            }
+            $session = $conversation->session;
             if ($session && (int) $session->organizacion_id > 0) {
                 $orgId = (int) $session->organizacion_id;
             }
