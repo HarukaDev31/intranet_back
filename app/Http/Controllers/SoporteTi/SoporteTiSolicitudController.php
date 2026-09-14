@@ -134,7 +134,7 @@ class SoporteTiSolicitudController extends Controller
     public function postMaqueta(Request $request, $id)
     {
         $request->validate(array(
-            'archivo' => 'required|file|mimes:jpg,jpeg,png,gif,webp,bmp,pdf|max:20480',
+            'archivo' => 'required|file|max:20480',
         ));
 
         $file = $request->file('archivo') ?: $request->file('maqueta');

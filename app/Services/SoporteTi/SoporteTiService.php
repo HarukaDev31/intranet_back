@@ -62,6 +62,12 @@ class SoporteTiService
     /** Estados en los que se muestra el contador (corriendo o pausado en Desplegado). */
     const ESTADOS_SLA_CONTADOR_VISIBLE = array('en_progreso', 'hecho', 'desplegado', 'observado');
 
+    /** Extensiones de maqueta (imagen, PDF, HTML o comprimido). */
+    const MAQUETA_EXTENSIONES = array(
+        'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'pdf',
+        'html', 'htm', 'rar', 'zip', '7z',
+    );
+
     /** @var SoporteTiCacheService */
     protected $cache;
 
@@ -2364,10 +2370,24 @@ class SoporteTiService
 
     /**
      * @param UploadedFile $archivo
+     */
+    protected function asegurarArchivoMaquetaPermitido(UploadedFile $archivo)
+    {
+        $ext = strtolower($archivo->getClientOriginalExtension());
+        if (!in_array($ext, self::MAQUETA_EXTENSIONES, true)) {
+            throw new \InvalidArgumentException(
+                'Formato no permitido. Usa imagen, PDF, HTML o RAR/ZIP.'
+            );
+        }
+    }
+
+    /**
+     * @param UploadedFile $archivo
      * @return array
      */
     public function subirMaqueta($solicitudId, UploadedFile $archivo, $mensajePm = null, ?Authenticatable $user = null)
     {
+        $this->asegurarArchivoMaquetaPermitido($archivo);
         $user = $user ?: Auth::user();
         $solicitud = $this->asegurarAccesoSolicitud($solicitudId, $user, array('salaChat', 'maqueta'));
         $tamano = $archivo->getSize() > 1048576
