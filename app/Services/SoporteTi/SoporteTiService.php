@@ -1762,7 +1762,6 @@ class SoporteTiService
         $estadoEditableStaff = $esTipoA
             ? ($esPm ? $pmOk : ($esAnalista ? $anOk : $complejidadOk))
             : $complejidadOk;
-        $nombreGrupo = ($user instanceof Usuario) ? (string) $user->getNombreGrupo() : '';
 
         return array(
             'es_creador' => $esCreador,
@@ -1788,7 +1787,7 @@ class SoporteTiService
             'sla_etiqueta' => $slaEtiqueta,
             'ver_sla' => $esStaff && ($esTipoA ? ($slaEtiqueta !== null) : $complejidadOk),
             'puede_en_progreso' => $this->puedeEnProgreso($solicitud),
-            'puede_marcar_revisado' => strcasecmp($nombreGrupo, 'Soporte') === 0,
+            'puede_marcar_revisado' => $esStaff,
             'contador_activo' => $contador['activo'],
             'contador_pausado' => $contador['pausado'],
             'contador_fin' => $contador['fin'],
@@ -2720,9 +2719,8 @@ class SoporteTiService
         }
         $this->asegurarAccesoSolicitudModel($sala->solicitud, $user);
 
-        $nombreGrupo = ($user instanceof Usuario) ? (string) $user->getNombreGrupo() : '';
-        if (strcasecmp($nombreGrupo, 'Soporte') !== 0) {
-            throw new AuthorizationException('Solo el rol Soporte puede marcar mensajes como revisados');
+        if (!$this->usuarioEsStaffSoporteTi($user)) {
+            throw new AuthorizationException('Solo el staff de Soporte TI puede marcar mensajes como revisados');
         }
 
         $mensaje = SoporteTiMensaje::where('sala_id', $sala->id)
