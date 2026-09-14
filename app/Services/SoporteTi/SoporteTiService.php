@@ -1480,7 +1480,8 @@ class SoporteTiService
                 return $helperA->complejidadValida($solicitud->complejidad_analista)
                     || $helperA->complejidadValida($solicitud->complejidad_pm);
             }
-            if ($prevCodigo === 'observado') {
+            // Retomar o reabrir un proyecto ya avanzado (p. ej. desde Desplegado).
+            if (in_array($prevCodigo, array('observado', 'desplegado', 'hecho'), true)) {
                 return true;
             }
 
@@ -1743,6 +1744,7 @@ class SoporteTiService
         $estadoEditableStaff = $esTipoA
             ? ($esPm ? $pmOk : ($esAnalista ? $anOk : $complejidadOk))
             : $complejidadOk;
+        $nombreGrupo = ($user instanceof Usuario) ? (string) $user->getNombreGrupo() : '';
 
         return array(
             'es_creador' => $esCreador,
@@ -1768,6 +1770,7 @@ class SoporteTiService
             'sla_etiqueta' => $slaEtiqueta,
             'ver_sla' => $esStaff && ($esTipoA ? ($slaEtiqueta !== null) : $complejidadOk),
             'puede_en_progreso' => $this->puedeEnProgreso($solicitud),
+            'puede_marcar_revisado' => strcasecmp($nombreGrupo, 'Soporte') === 0,
             'contador_activo' => $contador['activo'],
             'contador_pausado' => $contador['pausado'],
             'contador_fin' => $contador['fin'],
