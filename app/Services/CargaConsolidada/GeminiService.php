@@ -10,17 +10,27 @@ use Illuminate\Support\Facades\Log;
  * Modelo usado: gemini-1.5-flash (soporta visión/documentos; estable y disponible).
  * Puedes cambiar a gemini-2.5-flash en GEMINI_MODEL si tu cuenta tiene acceso.
  *
- * Configuración:
+ * Configuración (config/services.php → .env):
  *   GEMINI_API_KEY=<tu clave en Google AI Studio>
  *   GEMINI_MODEL=gemini-1.5-flash (opcional; por defecto gemini-1.5-flash)
+ *
+ * No usar env() aquí: con `config:cache` (deploy QA/PROD) Laravel deja de
+ * cargar .env en runtime y env() queda vacío.
  */
 class GeminiService
 {
     const GEMINI_MODEL_DEFAULT = 'gemini-1.5-flash';
 
+    protected static function getApiKey()
+    {
+        return (string) config('services.gemini.api_key', '');
+    }
+
     protected static function getModel(): string
     {
-        return env('GEMINI_MODEL', self::GEMINI_MODEL_DEFAULT);
+        $model = config('services.gemini.model', self::GEMINI_MODEL_DEFAULT);
+
+        return $model ? (string) $model : self::GEMINI_MODEL_DEFAULT;
     }
 
     protected static function getApiUrl(): string
@@ -59,7 +69,7 @@ class GeminiService
             $filePath,
             $mimeType,
             $prompt,
-            (int) env('GEMINI_COMPROBANTE_MAX_TOKENS', 4096),
+            (int) config('services.gemini.comprobante_max_tokens', 4096),
             self::comprobanteResponseSchema()
         );
 
@@ -236,10 +246,10 @@ class GeminiService
      */
     public function analyzeTextAsJson($prompt, $maxOutputTokens = 2048, $temperature = 0.2, $responseSchema = null)
     {
-        $apiKey = env('GEMINI_API_KEY');
+        $apiKey = self::getApiKey();
 
         if (!$apiKey) {
-            Log::error('GeminiService: GEMINI_API_KEY no configurado en .env');
+            Log::error('GeminiService: GEMINI_API_KEY no configurado');
             return ['success' => false, 'data' => null, 'error' => 'GEMINI_API_KEY no configurado', 'finish_reason' => null];
         }
 
@@ -464,10 +474,10 @@ class GeminiService
      */
     private function callGemini($filePath, $mimeType, $prompt, $maxOutputTokens = 256, $responseSchema = null)
     {
-        $apiKey = env('GEMINI_API_KEY');
+        $apiKey = self::getApiKey();
 
         if (!$apiKey) {
-            Log::error('GeminiService: GEMINI_API_KEY no configurado en .env');
+            Log::error('GeminiService: GEMINI_API_KEY no configurado');
             return ['success' => false, 'data' => null, 'error' => 'GEMINI_API_KEY no configurado'];
         }
 
@@ -530,7 +540,7 @@ class GeminiService
         $fileBase64,
         $useThinkingBudgetZero = true
     ) {
-        $apiKey = env('GEMINI_API_KEY');
+        $apiKey = self::getApiKey();
 
         $generationConfig = [
             'temperature' => 0,

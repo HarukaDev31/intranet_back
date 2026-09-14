@@ -40,6 +40,7 @@ return [
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),
         'model' => env('GEMINI_MODEL', 'gemini-2.0-flash'),
+        'comprobante_max_tokens' => (int) env('GEMINI_COMPROBANTE_MAX_TOKENS', 4096),
     ],
 
     'bitrix' => [
