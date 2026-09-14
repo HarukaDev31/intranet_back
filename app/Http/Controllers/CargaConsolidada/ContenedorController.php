@@ -863,10 +863,14 @@ class ContenedorController extends Controller
                 ], 404);
             }
 
-            if ($origen->estado_china !== Contenedor::CONTEDOR_PENDIENTE) {
+            $estadoChina = strtoupper(trim((string) $origen->estado_china));
+            $authOrg = auth()->check() ? (int) auth()->user()->getAttribute('ID_Organizacion') : 0;
+            $esPendiente = $estadoChina === Contenedor::CONTEDOR_PENDIENTE;
+            $esRecibiendo = in_array($estadoChina, ['RECIBIENDO', 'RECEIVING'], true);
+            if (!$esPendiente && !($authOrg === 1 && $esRecibiendo)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Solo se puede partir un consolidado que aún no fue recibido',
+                    'message' => 'Solo se puede partir un consolidado en PENDIENTE. En Probusiness también se permite si se está recibiendo.',
                 ], 422);
             }
 
