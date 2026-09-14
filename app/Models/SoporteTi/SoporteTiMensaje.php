@@ -18,6 +18,7 @@ class SoporteTiMensaje extends Model
         'texto',
         'es_sistema',
         'es_maqueta',
+        'revisado',
         'reply_to_id',
         'archivo_nombre',
     ];
@@ -25,6 +26,7 @@ class SoporteTiMensaje extends Model
     protected $casts = [
         'es_sistema' => 'boolean',
         'es_maqueta' => 'boolean',
+        'revisado' => 'boolean',
     ];
 
     public function sala()
