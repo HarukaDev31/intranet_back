@@ -1173,6 +1173,10 @@ class SoporteTiService
      */
     protected function asegurarSlaContadorSincronizado(SoporteTiSolicitud $solicitud)
     {
+        // Tipo A: el acumulado es por etapa. No reconstruir desde todo el historial.
+        if ($solicitud->tipo_solicitud === 'A') {
+            return;
+        }
         if (!$this->slaConfigurado($solicitud) || !$this->obtenerInicioEnProgreso($solicitud)) {
             return;
         }
@@ -1315,12 +1319,20 @@ class SoporteTiService
         }
 
         if ($correAhora) {
-            if ($codigoNuevo === 'en_progreso') {
+            if ($codigoNuevo === 'en_progreso' && $solicitud->tipo_solicitud === 'A') {
+                $inicioFresco = $codigoAnterior === 'en_maqueta'
+                    || ($codigoAnterior === 'pendiente' && (int) $solicitud->sla_segundos_acumulados === 0);
+                if ($inicioFresco) {
+                    $this->reiniciarSlaFaseActual($solicitud);
+                } else {
+                    $this->tipoASla()->aplicarSlaEnSolicitud($solicitud);
+                }
+            } elseif ($codigoNuevo === 'en_progreso') {
                 $this->reiniciarFechaFinSlaAlEntrarEnProgreso($solicitud);
             }
             $this->iniciarSegmentoSla($solicitud);
         } else {
-            // Pausa (p. ej. Desplegado): deja acumulado y sin segmento abierto.
+            // Pausa (Desplegado o Pendiente en tipo A): deja acumulado y sin segmento abierto.
             $solicitud->sla_reanudado_en = null;
         }
 
@@ -1335,7 +1347,9 @@ class SoporteTiService
     protected function reiniciarFechaFinSlaAlEntrarEnProgreso(SoporteTiSolicitud $solicitud)
     {
         if ($solicitud->tipo_solicitud === 'A') {
-            $this->tipoASla()->aplicarSlaEnSolicitud($solicitud);
+            $this->reiniciarSlaFaseActual($solicitud);
+
+            return;
         }
 
         if (!$this->slaConfigurado($solicitud)) {
@@ -1350,6 +1364,69 @@ class SoporteTiService
         }
 
         $solicitud->fecha_fin_estimado = $this->bhHelper()->addHorasHabiles(Carbon::now(), $horas)->toDateString();
+    }
+
+    /**
+     * Tipo A: el contador usa solo las horas de la etapa actual y arranca de cero.
+     *
+     * @param SoporteTiSolicitud $solicitud
+     */
+    protected function reiniciarSlaFaseActual(SoporteTiSolicitud $solicitud)
+    {
+        if ($solicitud->tipo_solicitud !== 'A') {
+            return;
+        }
+        $this->tipoASla()->aplicarSlaEnSolicitud($solicitud);
+        $solicitud->sla_segundos_acumulados = 0;
+        $solicitud->horas_transcurridas = 0;
+        $solicitud->sla_reanudado_en = null;
+        $horas = (int) $solicitud->sla_horas;
+        if ($horas <= 0) {
+            $solicitud->fecha_fin_estimado = null;
+
+            return;
+        }
+        $solicitud->fecha_fin_estimado = $this->bhHelper()->addHorasHabiles(Carbon::now(), $horas)->toDateString();
+        $codigo = $solicitud->estadoActual ? $solicitud->estadoActual->codigo : null;
+        if ($codigo && in_array($codigo, self::ESTADOS_SLA_CORRE, true)) {
+            $solicitud->sla_reanudado_en = Carbon::now();
+        }
+    }
+
+    /**
+     * Tickets antiguos guardaban la suma de fases en sla_horas. Alinea a la etapa actual.
+     *
+     * @param SoporteTiSolicitud $s
+     */
+    protected function sincronizarSlaHorasFaseSiDesfasado(SoporteTiSolicitud $s)
+    {
+        if ($s->tipo_solicitud !== 'A') {
+            return;
+        }
+        $codigo = $s->estadoActual ? $s->estadoActual->codigo : null;
+        $min = $this->faseIndexMinimoPorEstado('A', $codigo);
+        if ((int) $s->fase_index < $min) {
+            $s->fase_index = $min;
+            $s->save();
+        }
+        $helper = $this->tipoASla();
+        $horasFase = $helper->horasSlaFaseActual($s);
+        if ($horasFase <= 0) {
+            return;
+        }
+        if ((int) $s->sla_horas === $horasFase) {
+            return;
+        }
+        $total = $helper->resolverSla($s);
+        $horasTotal = $total['horas'] !== null ? (int) $total['horas'] : 0;
+        if ($horasTotal > 0 && (int) $s->sla_horas === $horasTotal) {
+            $this->reiniciarSlaFaseActual($s);
+            $s->save();
+
+            return;
+        }
+        $s->sla_horas = $horasFase;
+        $s->save();
     }
 
     /**
@@ -1538,7 +1615,14 @@ class SoporteTiService
         );
 
         $estadoCodigo = $solicitud->estadoActual ? $solicitud->estadoActual->codigo : null;
-        if (!in_array($estadoCodigo, self::ESTADOS_SLA_CONTADOR_VISIBLE, true)) {
+        $visibles = self::ESTADOS_SLA_CONTADOR_VISIBLE;
+        $pausaPendienteTipoA = $solicitud->tipo_solicitud === 'A'
+            && $estadoCodigo === 'pendiente'
+            && (int) $solicitud->fase_index >= 2;
+        if ($pausaPendienteTipoA) {
+            $visibles[] = 'pendiente';
+        }
+        if (!in_array($estadoCodigo, $visibles, true)) {
             return $inactivo;
         }
 
@@ -1558,8 +1642,8 @@ class SoporteTiService
 
         $transcurridos = $this->segundosSlaTranscurridos($solicitud);
         $restanteSeg = max(0, $totalSeg - $transcurridos);
-        // Corre en En progreso / Hecho / Observado; pausa en Desplegado; cerrado fuera de visibles.
-        $pausado = $estadoCodigo === 'desplegado';
+        // Corre en En progreso / Hecho / Observado; pausa en Desplegado o Pendiente (tipo A).
+        $pausado = $estadoCodigo === 'desplegado' || $pausaPendienteTipoA;
         $vencido = $restanteSeg <= 0;
         $finIso = $this->calcularIsoFinContadorSla($solicitud, $totalSeg, $pausado, $restanteSeg);
 
@@ -1637,10 +1721,10 @@ class SoporteTiService
 
         $slaEtiqueta = null;
         $tiempoEstimadoRango = false;
-        if ($esTipoA && $pmOk) {
-            $slaRes = $helperA->resolverSla($solicitud);
+        if ($esTipoA) {
+            $slaRes = $helperA->resolverSlaFaseActual($solicitud);
             $slaEtiqueta = $slaRes['etiqueta'];
-            $tiempoEstimadoRango = $slaRes['es_rango'];
+            $tiempoEstimadoRango = false;
         } elseif ($complejidadOk && !$esTipoA) {
             try {
                 $slaEtiqueta = $this->slaHorasPorComplejidad($solicitud->tipo_solicitud, $solicitud->criticidad) . ' h';
@@ -1681,7 +1765,7 @@ class SoporteTiService
                 : 'Elegir',
             'termino_estimado' => $this->terminoEstimado($solicitud),
             'sla_etiqueta' => $slaEtiqueta,
-            'ver_sla' => $esStaff && ($esTipoA ? $pmOk : $complejidadOk),
+            'ver_sla' => $esStaff && ($esTipoA ? ($slaEtiqueta !== null) : $complejidadOk),
             'puede_en_progreso' => $this->puedeEnProgreso($solicitud),
             'contador_activo' => $contador['activo'],
             'contador_pausado' => $contador['pausado'],
@@ -1851,9 +1935,30 @@ class SoporteTiService
         );
 
         $patch = array();
+        $faseAntes = (int) $solicitud->fase_index;
 
         if (isset($data['fase_index'])) {
-            $patch['fase_index'] = (int) $data['fase_index'];
+            $nueva = (int) $data['fase_index'];
+            $actual = $this->faseIndexEfectivo($solicitud);
+            if ($nueva !== $actual) {
+                if ($solicitud->tipo_solicitud !== 'A') {
+                    throw new \InvalidArgumentException('Solo los proyectos tipo A tienen fases.');
+                }
+                if (!$this->usuarioEsStaffSoporteTi($user)) {
+                    throw new AuthorizationException('Solo soporte o PM puede avanzar la fase.');
+                }
+                $codigo = $solicitud->estadoActual ? $solicitud->estadoActual->codigo : null;
+                if ($codigo !== 'en_progreso') {
+                    throw new \InvalidArgumentException('Pase el ticket a En progreso para avanzar de fase.');
+                }
+                if ($nueva !== $actual + 1) {
+                    throw new \InvalidArgumentException('Solo puede avanzar a la siguiente fase.');
+                }
+                if ($nueva < 3 || $nueva > 4) {
+                    throw new \InvalidArgumentException('Esa fase se avanza con el estado del ticket.');
+                }
+                $patch['fase_index'] = $nueva;
+            }
         }
         if (isset($data['progreso'])) {
             $patch['progreso'] = (int) $data['progreso'];
@@ -1877,6 +1982,24 @@ class SoporteTiService
             $patch['ultima_actualizacion'] = Carbon::now();
             $solicitud->fill($patch);
             $solicitud->save();
+        }
+
+        if (
+            $solicitud->tipo_solicitud === 'A'
+            && isset($patch['fase_index'])
+            && (int) $patch['fase_index'] !== $faseAntes
+        ) {
+            $solicitud->load('estadoActual', 'salaChat');
+            $this->reiniciarSlaFaseActual($solicitud);
+            $solicitud->save();
+            if ($solicitud->salaChat) {
+                $nombreFase = $this->tipoASla()->nombreFasePorIndex((int) $solicitud->fase_index);
+                $this->crearMensajeSistema(
+                    $solicitud->salaChat,
+                    $solicitud,
+                    'Fase actualizada a "' . $nombreFase . '". El contador usa las horas de esta etapa.'
+                );
+            }
         }
 
         $mapped = $this->mapSolicitudRecargada($solicitud, $user);
@@ -3229,6 +3352,7 @@ class SoporteTiService
     public function mapSolicitud(SoporteTiSolicitud $s, ?Authenticatable $viewer = null)
     {
         $viewer = $viewer ?: Auth::user();
+        $this->sincronizarSlaHorasFaseSiDesfasado($s);
         $estado = $s->estadoActual;
         $chatUuid = $s->salaChat ? $s->salaChat->chat_uuid : null;
         $ultima = $s->ultima_actualizacion ? Carbon::parse($s->ultima_actualizacion) : Carbon::parse($s->updated_at);
