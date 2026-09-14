@@ -231,7 +231,7 @@ class CotizacionResumenController extends Controller
             if ($perPage > 100) $perPage = 100;
             if ($page <= 0) $page = 1;
 
-            $paginator = $query->orderByDesc('id')->paginate($perPage, ['*'], 'page', $page);
+            $paginator = $query->orderByDesc('fecha')->orderByDesc('id')->paginate($perPage, ['*'], 'page', $page);
 
             $cotizacionIds = collect($paginator->items())->map(fn ($c) => $c->getAttribute('id'))->values()->all();
 
