@@ -2717,6 +2717,11 @@ class SoporteTiService
         }
         $this->asegurarAccesoSolicitudModel($sala->solicitud, $user);
 
+        $nombreGrupo = ($user instanceof Usuario) ? (string) $user->getNombreGrupo() : '';
+        if (strcasecmp($nombreGrupo, 'Soporte') !== 0) {
+            throw new AuthorizationException('Solo el rol Soporte puede marcar mensajes como revisados');
+        }
+
         $mensaje = SoporteTiMensaje::where('sala_id', $sala->id)
             ->where('id', (int) $mensajeId)
             ->where('es_sistema', false)
