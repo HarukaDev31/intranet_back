@@ -26,10 +26,9 @@ use Illuminate\Support\Str;
  * Flujo "resumen": organizaciones sin items (calculadora), que suben un
  * documento y lo leen con IA en vez de cargar producto por producto.
  *
- * La extracción ocurre ANTES de que exista Cotizacion/CotizacionProveedor
- * (se crean recien al finalizar el wizard), asi que el archivo se guarda en
- * una ruta de staging por organizacion; el registro de auditoria
- * (CotizacionProveedorArchivoIa) se crea recien al finalizar, cuando ya
+ * El PDF/Excel se guarda en la carpeta final de la org
+ * (assets/images/agentecompra/{organizacion_id}/). El registro
+ * CotizacionProveedorArchivoIa se crea al finalizar el wizard, cuando ya
  * existen los ids reales de contenedor/cotizacion/proveedor.
  */
 class CotizacionResumenController extends Controller
@@ -71,7 +70,7 @@ class CotizacionResumenController extends Controller
 
         $storedPath = $this->objectStorage()->storeUploadedFile(
             $file,
-            'cargaconsolidada/cotizacion-resumen/staging/' . $orgId,
+            $this->directorioArchivoFinal($orgId),
             Str::uuid()->toString() . '-' . $originalName
         );
 
@@ -231,7 +230,7 @@ class CotizacionResumenController extends Controller
             if ($perPage > 100) $perPage = 100;
             if ($page <= 0) $page = 1;
 
-            $paginator = $query->orderByDesc('fecha')->orderByDesc('id')->paginate($perPage, ['*'], 'page', $page);
+                $paginator = $query->orderByDesc('fecha')->orderByDesc('id')->paginate($perPage, ['*'], 'page', $page);
 
             $cotizacionIds = collect($paginator->items())->map(fn ($c) => $c->getAttribute('id'))->values()->all();
 
@@ -492,6 +491,9 @@ class CotizacionResumenController extends Controller
             }
 
             $archivo = $request->input('archivo');
+            if ($archivo && !empty($archivo['path'])) {
+                $archivo['path'] = $this->persistirArchivoCotizacion($archivo['path'], $orgId);
+            }
             $cotizacionUpdate = [
                 'volumen' => $totalCbmFull,
                 'es_imo' => $totalCbmImo > 0,
@@ -668,6 +670,9 @@ class CotizacionResumenController extends Controller
             }
 
             $archivo = $request->input('archivo');
+            if ($archivo && !empty($archivo['path'])) {
+                $archivo['path'] = $this->persistirArchivoCotizacion($archivo['path'], $orgId);
+            }
             $cotizacionFill = [
                 'id_contenedor' => $idContenedor,
                 'id_usuario' => $request->id_usuario,
@@ -737,6 +742,10 @@ class CotizacionResumenController extends Controller
             $nueva->cod_contract = null;
             $nueva->fecha_confirmacion = null;
             $nueva->organizacion_id = $orgId;
+            $nueva->cotizacion_file_url = $this->persistirArchivoCotizacion(
+                $nueva->getAttribute('cotizacion_file_url'),
+                $orgId
+            );
             $nueva->save();
 
             $proveedores = CotizacionProveedor::query()
@@ -788,6 +797,10 @@ class CotizacionResumenController extends Controller
                 $nuevoArchivo->id_cotizacion = $nueva->getAttribute('id');
                 $nuevoArchivo->id_proveedor = $primerNuevoProveedorId;
                 $nuevoArchivo->organizacion_id = $orgId;
+                $nuevoArchivo->archivo_path = $this->persistirArchivoCotizacion(
+                    $nuevoArchivo->getAttribute('archivo_path'),
+                    $orgId
+                ) ?: $nuevoArchivo->getAttribute('archivo_path');
                 $nuevoArchivo->save();
             }
 
@@ -1030,6 +1043,65 @@ class CotizacionResumenController extends Controller
             }
         }
         return ['fob' => $fob, 'logistica' => $logistica, 'impuesto' => $impuesto];
+    }
+
+    /**
+     * Carpeta definitiva de archivos de cotización (misma que el cotizador).
+     *
+     * @param int $orgId
+     * @return string
+     */
+    private function directorioArchivoFinal($orgId)
+    {
+        return 'assets/images/agentecompra/' . (int) $orgId;
+    }
+
+    /**
+     * Si el archivo quedó en staging (wizard previo), lo copia a la carpeta final
+     * de la org y borra el staging. Si ya está en destino, no hace nada.
+     *
+     * @param string|null $path
+     * @param int $orgId
+     * @return string|null
+     */
+    private function persistirArchivoCotizacion($path, $orgId)
+    {
+        $storage = $this->objectStorage();
+        $path = $storage->normalizeRelativePath($path);
+        if ($path === null || $path === '') {
+            return null;
+        }
+
+        $orgId = (int) $orgId;
+        $stagingPrefix = 'cargaconsolidada/cotizacion-resumen/staging/' . $orgId . '/';
+        if (strpos($path, $stagingPrefix) !== 0) {
+            return $path;
+        }
+
+        $destino = $this->directorioArchivoFinal($orgId) . '/' . basename($path);
+        if ($destino === $path) {
+            return $path;
+        }
+
+        try {
+            $local = $storage->localPath($path);
+            $contents = file_get_contents($local);
+            if ($contents === false) {
+                Log::warning('CotizacionResumenController: no se pudo leer el archivo de staging', array(
+                    'path' => $path,
+                ));
+                return $path;
+            }
+            $storage->putContents($destino, $contents);
+            $storage->delete($path);
+            return $destino;
+        } catch (\Exception $e) {
+            Log::warning('CotizacionResumenController: no se pudo mover staging a carpeta final', array(
+                'path' => $path,
+                'error' => $e->getMessage(),
+            ));
+            return $path;
+        }
     }
 
     private function urlArchivo($path)
