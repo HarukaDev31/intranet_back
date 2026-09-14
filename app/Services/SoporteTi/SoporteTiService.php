@@ -1403,11 +1403,11 @@ class SoporteTiService
      */
     protected function puedeEnProgreso(SoporteTiSolicitud $solicitud)
     {
-        if ($this->criticidadSinDefinir($solicitud->criticidad)) {
-            return false;
-        }
         $prevCodigo = $solicitud->estadoActual ? $solicitud->estadoActual->codigo : null;
         if ($solicitud->tipo_solicitud === 'A') {
+            if ($prevCodigo === 'pendiente') {
+                return $this->tipoASla()->complejidadValida($solicitud->complejidad_analista);
+            }
             if ($prevCodigo === 'en_maqueta') {
                 if (!$this->tipoASla()->complejidadValida($solicitud->complejidad_pm)) {
                     return false;
@@ -1420,6 +1420,9 @@ class SoporteTiService
                 return true;
             }
 
+            return false;
+        }
+        if ($this->criticidadSinDefinir($solicitud->criticidad)) {
             return false;
         }
         if ($solicitud->tipo_solicitud === 'B') {
@@ -1782,11 +1785,11 @@ class SoporteTiService
             return 'solicitante';
         }
         $helperA = $this->tipoASla();
-        if ($helperA->usuarioEsPm($user)) {
-            return 'pm';
-        }
         if ($helperA->usuarioEsAnalista($user)) {
             return 'analista';
+        }
+        if ($helperA->usuarioEsPm($user)) {
+            return 'pm';
         }
         if ($this->usuarioEsStaffSoporteTi($user)) {
             return 'staff';
@@ -2000,9 +2003,11 @@ class SoporteTiService
      *
      * @param int|string $id
      * @param string $criticidad
+     * @param Authenticatable|null $user
+     * @param string|null $rolCampo pm|analista
      * @return array
      */
-    public function actualizarComplejidad($id, $criticidad, ?Authenticatable $user = null)
+    public function actualizarComplejidad($id, $criticidad, ?Authenticatable $user = null, $rolCampo = null)
     {
         $user = $user ?: Auth::user();
         if (!$this->usuarioEsStaffSoporteTi($user)) {
@@ -2016,11 +2021,18 @@ class SoporteTiService
 
         $c = $this->normalizarComplejidad($criticidad);
         $helperA = $this->tipoASla();
+        $rolCampo = strtolower(trim((string) $rolCampo));
         if ($solicitud->tipo_solicitud === 'A') {
-            if ($helperA->usuarioEsPm($user)) {
-                $solicitud->complejidad_pm = $c;
-            } elseif ($helperA->usuarioEsAnalista($user)) {
+            if ($rolCampo === 'analista' || ($rolCampo === '' && $helperA->usuarioEsAnalista($user))) {
+                if (!$helperA->usuarioEsAnalista($user)) {
+                    throw new AuthorizationException('Solo el analista puede asignar la complejidad de analista.');
+                }
                 $solicitud->complejidad_analista = $c;
+            } elseif ($rolCampo === 'pm' || $helperA->usuarioEsPm($user)) {
+                if (!$helperA->usuarioEsPm($user)) {
+                    throw new AuthorizationException('Solo el PM puede asignar la complejidad de PM.');
+                }
+                $solicitud->complejidad_pm = $c;
             }
             $solicitud->criticidad = $c;
         } else {
