@@ -291,7 +291,7 @@ class GeminiService
             'isd' => 'ISD',
         ];
         foreach ($mapa as $campo => $concepto) {
-            if (!isset($prov[$campo]) || $prov[$campo] === null || (float) $prov[$campo] <= 0) {
+            if (!isset($prov[$campo]) || (float) $prov[$campo] <= 0) {
                 continue;
             }
             $yaExiste = false;

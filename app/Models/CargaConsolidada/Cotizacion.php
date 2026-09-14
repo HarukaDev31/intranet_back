@@ -36,6 +36,7 @@ use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
  * @property string|float|int|null $monto
  * @property string|float|int|null $monto_final
  * @property string|float|int|null $fob
+ * @property string|float|int|null $isd
  * @property string|float|int|null $fob_final
  * @property string|float|int|null $impuestos
  * @property string|float|int|null $impuestos_final
