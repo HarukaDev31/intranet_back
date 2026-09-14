@@ -1633,12 +1633,6 @@ parameters:
 			path: app/Http/Controllers/BaseDatos/Regulaciones/PermisoController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiChatSala\:\:\$solicitud\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Broadcasting/BroadcastController.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\CalculadoraImportacion\:\:\$carga_contenedor\.$#'
 			identifier: property.notFound
 			count: 2
@@ -10069,12 +10063,6 @@ parameters:
 			path: app/Services/SoporteTi/SoporteTiAreaService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiChatSala\:\:\$solicitud\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Services/SoporteTi/SoporteTiService.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\SoporteTi\\SoporteTiMensaje\:\:\$imagenes\.$#'
 			identifier: property.notFound
 			count: 1
@@ -10174,12 +10162,6 @@ parameters:
 			message: '#^Relation ''replyTo'' is not found in App\\Models\\SoporteTi\\SoporteTiMensaje model\.$#'
 			identifier: larastan.relationExistence
 			count: 2
-			path: app/Services/SoporteTi/SoporteTiService.php
-
-		-
-			message: '#^Relation ''solicitud'' is not found in App\\Models\\SoporteTi\\SoporteTiChatSala model\.$#'
-			identifier: larastan.relationExistence
-			count: 3
 			path: app/Services/SoporteTi/SoporteTiService.php
 
 		-
