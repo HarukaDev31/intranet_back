@@ -1037,15 +1037,19 @@ class CotizacionResumenController extends Controller
         if (!$path) {
             return null;
         }
-        $cdn = $this->cdnStorageUrl($path);
-        if ($cdn) {
-            return $cdn;
-        }
+        $path = (string) $path;
         try {
-            return $this->objectStorage()->url($path);
+            $url = $this->objectStorage()->url($path);
+            if ($url) {
+                return $url;
+            }
         } catch (\Exception $e) {
-            return null;
+            Log::warning('CotizacionResumenController@urlArchivo: ' . $e->getMessage(), array(
+                'path' => $path,
+            ));
         }
+
+        return $this->cdnStorageUrl($path);
     }
 
     private function findResumen($id)
