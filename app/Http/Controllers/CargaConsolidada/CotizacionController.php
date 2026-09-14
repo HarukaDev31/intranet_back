@@ -330,10 +330,26 @@ class CotizacionController extends Controller
                         ->orWhere('estados_proveedor', $request->estado_china);
                 });
             }
-            // filtrar por estado_cotizador (socio: COTIZADO = estado_resumen)
-            if ($request->has('estado_cotizador') && !empty($request->estado_cotizador)) {
+            // filtrar por estado_cotizador (socio: COTIZADO/CONFIRMADO = estado_resumen)
+            if ($request->has('estado_cotizador') && !empty($request->estado_cotizador) && $request->estado_cotizador !== 'todos') {
                 if ($request->estado_cotizador === 'COTIZADO') {
-                    $query->where('estado_resumen', 'COTIZADO');
+                    $query->where(function ($q) {
+                        $q->where('estado_resumen', 'COTIZADO')
+                            ->orWhere(function ($q2) {
+                                $q2->where(function ($q3) {
+                                    $q3->whereNull('estado_resumen')
+                                        ->orWhere('estado_resumen', '');
+                                })->where(function ($q4) {
+                                    $q4->whereNull('estado_cotizador')
+                                        ->orWhere('estado_cotizador', '!=', 'CONFIRMADO');
+                                });
+                            });
+                    });
+                } elseif ($request->estado_cotizador === 'CONFIRMADO') {
+                    $query->where(function ($q) {
+                        $q->where('estado_resumen', 'CONFIRMADO')
+                            ->orWhere('estado_cotizador', 'CONFIRMADO');
+                    });
                 } else {
                     $query->where('estado_cotizador', $request->estado_cotizador);
                 }
@@ -1399,15 +1415,25 @@ class CotizacionController extends Controller
                 'deleted_reason_id' => 'nullable|integer|exists:reason_delete_cotizacion,id',
             ]);
 
+            $cotizacion = Cotizacion::find($id);
+            if (!$cotizacion) {
+                return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
+            }
+
+            $esResumen = CotizacionProveedor::where('id_cotizacion', $id)
+                ->where('modo_cotizacion', 'resumen')
+                ->exists();
+            $estadoResumen = (string) ($cotizacion->getAttribute('estado_resumen') ?: '');
+            if ($esResumen && $estadoResumen === 'CONFIRMADO') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Solo se puede eliminar una cotización en estado COTIZADO.',
+                ], 422);
+            }
+
             DB::statement('SET FOREIGN_KEY_CHECKS = 0');
             $cotizacionProveedor = CotizacionProveedor::where('id_cotizacion', $id);
             $cotizacionProveedor->delete();
-            //delete cotizacion
-            $cotizacion = Cotizacion::find($id);
-            if (!$cotizacion) {
-                DB::statement('SET FOREIGN_KEY_CHECKS = 1');
-                return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
-            }
             $cotizacion->deleted_reason_id = $validated['deleted_reason_id'] ?? null;
             $cotizacion->save();
             $cotizacion->delete();

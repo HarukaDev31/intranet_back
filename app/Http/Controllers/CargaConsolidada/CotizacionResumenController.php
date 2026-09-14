@@ -878,6 +878,14 @@ class CotizacionResumenController extends Controller
             return response()->json(['success' => false, 'message' => 'No es una cotización de resumen'], 422);
         }
 
+        $estadoResumen = (string) ($cotizacion->getAttribute('estado_resumen') ?: 'COTIZADO');
+        if ($estadoResumen === 'CONFIRMADO') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Solo se puede eliminar una cotización en estado COTIZADO.',
+            ], 422);
+        }
+
         $cotizacion->delete();
 
         return response()->json(['success' => true, 'message' => 'Cotización eliminada']);
