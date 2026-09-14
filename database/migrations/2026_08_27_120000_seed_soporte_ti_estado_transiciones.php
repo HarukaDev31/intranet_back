@@ -48,8 +48,11 @@ return new class extends Migration
         // Tipo A — staff / pm
         $add('pendiente', 'en_maqueta', 'staff', 'A');
         $add('pendiente', 'en_maqueta', 'pm', 'A');
+        $add('pendiente', 'en_progreso', 'staff', 'A');
+        $add('pendiente', 'en_progreso', 'analista', 'A');
         $add('en_maqueta', 'en_progreso', 'staff', 'A');
         $add('en_maqueta', 'en_progreso', 'pm', 'A');
+        $add('en_maqueta', 'en_progreso', 'analista', 'A');
         $add('en_progreso', 'desplegado', 'staff', 'A');
         $add('en_progreso', 'desplegado', 'pm', 'A');
         $add('observado', 'en_progreso', 'staff', 'A');

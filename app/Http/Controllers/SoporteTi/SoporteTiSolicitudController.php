@@ -184,13 +184,15 @@ class SoporteTiSolicitudController extends Controller
     {
         $request->validate(array(
             'criticidad' => 'required|string|in:Baja,Media,Alta,Máxima',
+            'rol' => 'nullable|string|in:pm,analista,legacy',
         ));
 
         try {
             $data = $this->service->actualizarComplejidad(
                 $id,
                 $request->input('criticidad'),
-                Auth::user()
+                Auth::user(),
+                $request->input('rol')
             );
 
             return $this->soporteTiOk($data);
