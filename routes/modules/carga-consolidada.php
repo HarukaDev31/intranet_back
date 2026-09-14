@@ -62,6 +62,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
         Route::post('packing-list', [ContenedorController::class, 'uploadPackingList']);
         Route::get('valid-containers', [ContenedorController::class, 'getValidContainers']);
         Route::get('valid-containers-documentacion', [ContenedorController::class, 'getValidContainersDocumentacion']);
+        Route::get('empresas', [ContenedorController::class, 'getEmpresasCreadas']);
         Route::get('cargas-disponibles', [ContenedorController::class, 'getCargasDisponibles']);
         Route::get('cargas-disponibles-dropdown', [ContenedorController::class, 'getCargasDisponiblesDropdown']);
         Route::get('tc-yuan-global', [ContenedorController::class, 'getTcYuanGlobal']);

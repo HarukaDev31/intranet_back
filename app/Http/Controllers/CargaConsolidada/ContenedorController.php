@@ -422,8 +422,23 @@ class ContenedorController extends Controller
     {
         try {
             $data = $request->all();
+                $authOrg = (int) auth()->user()->getAttribute('ID_Organizacion');
+                $isCreate = empty($data['id']);
                 $tcYuan = isset($data['tc_yuan']) ? $data['tc_yuan'] : null;
                 unset($data['tc_yuan']);
+                // Socios: no editan TC Yuan. Al crear queda fijo en 15.
+                if ($authOrg !== Usuario::ID_ORGANIZACION_ADMIN) {
+                    $tcYuan = $isCreate ? 15 : null;
+                }
+                // organizacion_id nunca se toma del request (evita que un contenedor
+                // "cambie" de organizacion o se cree en otra distinta a la del usuario).
+                unset($data['organizacion_id']);
+                if (isset($data['carga'])) {
+                    $numero = CargaLabel::soloNumero($data['carga']);
+                    if ($numero !== '') {
+                        $data['carga'] = $numero;
+                    }
+                }
                 if ($data['id']) {
                     $contenedor = Contenedor::find($data['id']);
                     $contenedor->update($data);
@@ -974,6 +989,39 @@ class ContenedorController extends Controller
         }
 
         return response()->json(['data' => $data, 'success' => true]);
+    }
+
+    /**
+     * Nombres de empresa usados en consolidados de las orgs permitidas del usuario.
+     */
+    public function getEmpresasCreadas()
+    {
+        $nombres = Contenedor::query()
+            ->whereNotNull('empresa')
+            ->where('empresa', '!=', '')
+            ->where('empresa', '!=', '1')
+            ->orderBy('empresa')
+            ->pluck('empresa');
+
+        $seen = [];
+        $data = [];
+        foreach ($nombres as $nombre) {
+            $trimmed = trim((string) $nombre);
+            if ($trimmed === '' || $trimmed === '1') {
+                continue;
+            }
+            $key = mb_strtolower($trimmed);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $data[] = [
+                'label' => $trimmed,
+                'value' => $trimmed,
+            ];
+        }
+
+        return response()->json(['success' => true, 'data' => $data]);
     }
 
     /**
