@@ -19,6 +19,14 @@ class SoporteTiTipoASlaHelper
 
   const AMBITO_ANALISTA_CONFIG = 'analista_config';
 
+  const FASE_CODIGO_POR_INDEX = array(
+    0 => 'levantamiento',
+    1 => 'maqueta',
+    2 => 'configuracion',
+    3 => 'pruebas',
+    4 => 'capacitacion',
+  );
+
   /**
    * @param string|null $criticidad
    * @return bool
@@ -157,6 +165,135 @@ class SoporteTiTipoASlaHelper
   }
 
   /**
+   * @param int $faseIndex
+   * @return string
+   */
+  public function codigoFasePorIndex($faseIndex)
+  {
+    $i = (int) $faseIndex;
+    if (isset(self::FASE_CODIGO_POR_INDEX[$i])) {
+      return self::FASE_CODIGO_POR_INDEX[$i];
+    }
+
+    return 'levantamiento';
+  }
+
+  /**
+   * @param int $faseIndex
+   * @return string
+   */
+  public function nombreFasePorIndex($faseIndex)
+  {
+    $labels = $this->labelsFasesTodas();
+    $codigo = $this->codigoFasePorIndex($faseIndex);
+
+    return isset($labels[$codigo]) ? $labels[$codigo] : $codigo;
+  }
+
+  /**
+   * @return array
+   */
+  protected function labelsFasesTodas()
+  {
+    $labels = $this->labelsFasesPm();
+    $labels['configuracion'] = 'Configuración';
+
+    return $labels;
+  }
+
+  /**
+   * Horas de una fase PM (levantamiento, maqueta, pruebas, capacitación).
+   *
+   * @param string $faseCodigo
+   * @param string $criticidad
+   * @return int
+   */
+  public function horasFasePm($faseCodigo, $criticidad)
+  {
+    $c = trim((string) $criticidad);
+    $fc = trim((string) $faseCodigo);
+    if (!\Schema::hasTable('soporte_ti_fase_horas_a')) {
+      return $this->horasFasePmFallback($fc, $c);
+    }
+    $row = DB::table('soporte_ti_fase_horas_a')
+      ->where('fase_codigo', $fc)
+      ->where('criticidad', $c)
+      ->first();
+    if ($row && (int) $row->horas > 0) {
+      return (int) $row->horas;
+    }
+
+    return $this->horasFasePmFallback($fc, $c);
+  }
+
+  /**
+   * @param string $faseCodigo
+   * @param string $criticidad
+   * @return int
+   */
+  protected function horasFasePmFallback($faseCodigo, $criticidad)
+  {
+    $base = array(
+      'levantamiento' => 16,
+      'maqueta' => 24,
+      'pruebas' => 16,
+      'capacitacion' => 8,
+    );
+    $mult = array('Baja' => 0.75, 'Media' => 1.0, 'Alta' => 1.25, 'Máxima' => 1.5);
+    if (!isset($base[$faseCodigo]) || !isset($mult[$criticidad])) {
+      throw new \InvalidArgumentException('Fase o complejidad PM no válida.');
+    }
+
+    return (int) max(1, round($base[$faseCodigo] * $mult[$criticidad]));
+  }
+
+  /**
+   * Horas del contador según la etapa actual del ticket (no la suma total).
+   *
+   * @param SoporteTiSolicitud $s
+   * @return int
+   */
+  public function horasSlaFaseActual(SoporteTiSolicitud $s)
+  {
+    $codigo = $this->codigoFasePorIndex((int) $s->fase_index);
+    try {
+      if ($codigo === 'configuracion') {
+        if (!$this->complejidadValida($s->complejidad_analista)) {
+          return 0;
+        }
+
+        return $this->horasConfigAnalista($s->complejidad_analista);
+      }
+      if (!$this->complejidadValida($s->complejidad_pm)) {
+        return 0;
+      }
+
+      return $this->horasFasePm($codigo, $s->complejidad_pm);
+    } catch (\InvalidArgumentException $e) {
+      return 0;
+    }
+  }
+
+  /**
+   * @param SoporteTiSolicitud $s
+   * @return array{horas: int|null, etiqueta: string|null, es_rango: bool}
+   */
+  public function resolverSlaFaseActual(SoporteTiSolicitud $s)
+  {
+    $horas = $this->horasSlaFaseActual($s);
+    if ($horas <= 0) {
+      return array('horas' => null, 'etiqueta' => null, 'es_rango' => false);
+    }
+    $nombre = $this->nombreFasePorIndex((int) $s->fase_index);
+
+    return array(
+      'horas' => $horas,
+      'etiqueta' => $nombre . ': ' . $horas . ' h',
+      'es_rango' => false,
+    );
+  }
+
+  /**
    * @param string $criticidad
    * @return int
    */
@@ -240,7 +377,10 @@ class SoporteTiTipoASlaHelper
    */
   public function terminoEstimadoTexto(SoporteTiSolicitud $s, Carbon $base = null)
   {
-    $sla = $this->resolverSla($s);
+    $sla = $this->resolverSlaFaseActual($s);
+    if (!$sla['etiqueta']) {
+      $sla = $this->resolverSla($s);
+    }
     if (!$sla['etiqueta']) {
       return 'Por definir';
     }
@@ -261,12 +401,8 @@ class SoporteTiTipoASlaHelper
    */
   public function aplicarSlaEnSolicitud(SoporteTiSolicitud $s)
   {
-    $sla = $this->resolverSla($s);
-    if ($sla['horas'] !== null) {
-      $s->sla_horas = (int) $sla['horas'];
-    } else {
-      $s->sla_horas = 0;
-    }
+    $horas = $this->horasSlaFaseActual($s);
+    $s->sla_horas = $horas > 0 ? (int) $horas : 0;
   }
 
   /**
