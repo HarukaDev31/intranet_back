@@ -1189,15 +1189,20 @@ class ContenedorController extends Controller
      *     @OA\Response(response=200, description="Cargas obtenidas exitosamente")
      * )
      */
-    public function getCargasDisponibles()
+    public function getCargasDisponibles(Request $request)
     {
-        $hoy = date('Y-m-d');
         $query = Contenedor::where('empresa', '!=', 1)
-        //where estado_documentacion is not COMPLETED
             ->where('estado_documentacion', '!=', Contenedor::ESTADOS_DOCUMENTACION['COMPLETADO'])
             ->orderByRaw('CAST(carga AS UNSIGNED) DESC')
             ->orderByRaw("CASE WHEN parte IS NULL OR parte = '' THEN 0 ELSE 1 END ASC")
             ->orderByRaw('parte DESC');
+
+        if ($request->filled('id_pais')) {
+            $query->where('id_pais', (int) $request->id_pais);
+        }
+        if ($request->filled('id_contenedor_origen')) {
+            $query->where('id', '!=', (int) $request->id_contenedor_origen);
+        }
 
         return $query->get();
     }
@@ -1333,7 +1338,11 @@ class ContenedorController extends Controller
             if (!$cotizacion) {
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
             }
-            $idContenedorOrigen=Cotizacion::find($idCotizacion)->id_contenedor;
+            $idContenedorOrigen = $cotizacion->id_contenedor;
+            $paisError = $this->errorSiContenedoresDistintoPais($idContenedorOrigen, $idContenedorDestino);
+            if ($paisError) {
+                return $paisError;
+            }
 
             $cotizacion->id_contenedor = $idContenedorDestino;
             $cotizacion->updated_at = date('Y-m-d H:i:s');
@@ -1412,6 +1421,13 @@ Le estaré informando cualquier avance 🫡.";
             $calculadora = CalculadoraImportacion::where('id', $idCotizacion)->first();
             if (!$calculadora) {
                 return response()->json(['message' => 'Calculadora importación no encontrada', 'success' => false], 404);
+            }
+            $paisError = $this->errorSiContenedoresDistintoPais(
+                $calculadora->id_carga_consolidada_contenedor,
+                $idContenedorDestino
+            );
+            if ($paisError) {
+                return $paisError;
             }
             $calculadora->id_carga_consolidada_contenedor = $idContenedorDestino;
             $calculadora->save();
@@ -2007,9 +2023,34 @@ Le estaré informando cualquier avance 🫡.";
         }
     }
 
-    
+    /**
+     * @param int|string|null $idOrigen
+     * @param int|string|null $idDestino
+     * @return \Illuminate\Http\JsonResponse|null
+     */
+    private function errorSiContenedoresDistintoPais($idOrigen, $idDestino)
+    {
+        $idOrigen = (int) $idOrigen;
+        $idDestino = (int) $idDestino;
+        if ($idOrigen <= 0 || $idDestino <= 0) {
+            return null;
+        }
 
-    
+        $origen = Contenedor::find($idOrigen);
+        $destino = Contenedor::find($idDestino);
+        if (!$origen || !$destino) {
+            return null;
+        }
 
+        $paisOrigen = (int) $origen->getAttribute('id_pais');
+        $paisDestino = (int) $destino->getAttribute('id_pais');
+        if ($paisOrigen <= 0 || $paisOrigen === $paisDestino) {
+            return null;
+        }
 
+        return response()->json([
+            'success' => false,
+            'message' => 'Solo puedes mover la cotización a un consolidado del mismo país.',
+        ], 422);
+    }
 }
