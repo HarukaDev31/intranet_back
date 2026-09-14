@@ -1404,7 +1404,7 @@ class SoporteTiService
 
             return;
         }
-        $solicitud->fecha_fin_estimado = $this->bhHelper()->addHorasHabiles(Carbon::now(), $horas)->toDateString();
+        $solicitud->fecha_fin_estimado = $this->bhHelper()->addHorasHabiles(Carbon::now(), $horas);
         $codigo = $solicitud->estadoActual ? $solicitud->estadoActual->codigo : null;
         if ($codigo && in_array($codigo, self::ESTADOS_SLA_CORRE, true)) {
             $solicitud->sla_reanudado_en = Carbon::now();
@@ -1743,7 +1743,7 @@ class SoporteTiService
             $slaRes = $helperA->resolverSlaFaseActual($solicitud);
             $slaEtiqueta = $slaRes['etiqueta'];
             $tiempoEstimadoRango = false;
-        } elseif ($complejidadOk && !$esTipoA) {
+        } elseif ($complejidadOk) {
             try {
                 $slaEtiqueta = $this->slaHorasPorComplejidad($solicitud->tipo_solicitud, $solicitud->criticidad) . ' h';
             } catch (\Exception $e) {
