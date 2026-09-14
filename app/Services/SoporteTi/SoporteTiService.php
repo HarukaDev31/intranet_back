@@ -1391,12 +1391,10 @@ class SoporteTiService
                 return $this->tipoASla()->complejidadValida($solicitud->complejidad_analista);
             }
             if ($prevCodigo === 'en_maqueta') {
-                if (!$this->tipoASla()->complejidadValida($solicitud->complejidad_pm)) {
-                    return false;
-                }
-                $solicitud->loadMissing('maqueta');
+                $helperA = $this->tipoASla();
 
-                return $solicitud->maqueta && (bool) $solicitud->maqueta->aprobada;
+                return $helperA->complejidadValida($solicitud->complejidad_analista)
+                    || $helperA->complejidadValida($solicitud->complejidad_pm);
             }
             if ($prevCodigo === 'observado') {
                 return true;
@@ -1412,6 +1410,40 @@ class SoporteTiService
         }
 
         return false;
+    }
+
+    /**
+     * Fase mínima del tipo A según el estado (la barra no debe quedar atrás).
+     *
+     * @param string $tipoSolicitud
+     * @param string|null $codigoEstado
+     * @return int
+     */
+    protected function faseIndexMinimoPorEstado($tipoSolicitud, $codigoEstado)
+    {
+        if ($tipoSolicitud !== 'A') {
+            return 0;
+        }
+        if ($codigoEstado === 'en_maqueta') {
+            return 1;
+        }
+        if (in_array($codigoEstado, array('en_progreso', 'hecho', 'desplegado', 'observado', 'operativo'), true)) {
+            return 2;
+        }
+
+        return 0;
+    }
+
+    /**
+     * @param SoporteTiSolicitud $solicitud
+     * @return int
+     */
+    protected function faseIndexEfectivo(SoporteTiSolicitud $solicitud)
+    {
+        $fi = (int) $solicitud->fase_index;
+        $codigo = $solicitud->estadoActual ? $solicitud->estadoActual->codigo : null;
+
+        return max($fi, $this->faseIndexMinimoPorEstado($solicitud->tipo_solicitud, $codigo));
     }
 
     /**
@@ -2068,6 +2100,12 @@ class SoporteTiService
         $solicitud->estado_actual_id = $nuevoEstadoId;
         if ($nuevoEstado->codigo === 'operativo') {
             $solicitud->progreso = 100;
+        }
+        if ($solicitud->tipo_solicitud === 'A') {
+            $minFase = $this->faseIndexMinimoPorEstado('A', $nuevoEstado->codigo);
+            if ((int) $solicitud->fase_index < $minFase) {
+                $solicitud->fase_index = $minFase;
+            }
         }
         $solicitud->ultima_actualizacion = Carbon::now();
         $solicitud->save();
@@ -3189,7 +3227,7 @@ class SoporteTiService
             'complejidad_pm' => $s->complejidad_pm,
             'complejidad_analista' => $s->complejidad_analista,
             'estado_id' => (int) $s->estado_actual_id,
-            'fase_index' => (int) $s->fase_index,
+            'fase_index' => $this->faseIndexEfectivo($s),
             'progreso' => (int) $s->progreso,
             'sla_horas' => (int) $s->sla_horas,
             'horas_transcurridas' => round($this->segundosSlaTranscurridos($s) / 3600, 2),
