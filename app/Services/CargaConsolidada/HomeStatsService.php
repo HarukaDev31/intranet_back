@@ -2,6 +2,7 @@
 
 namespace App\Services\CargaConsolidada;
 
+use App\Models\CargaConsolidada\Contenedor;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -20,10 +21,14 @@ class HomeStatsService
             return $this->vacio($conDesglosePais);
         }
 
-        $cbm = $this->sumarPorPais($orgIds, 'cbm');
-        $clientes = $this->sumarPorPais($orgIds, 'clientes');
-        $codigos = $this->sumarPorPais($orgIds, 'codigos');
-        $contenedores = $this->sumarPorPais($orgIds, 'contenedores');
+        // Socio: CBM / clientes / códigos / consolidados solo de contenedores
+        // completados por China. Warehouse sigue sumando lo que está en almacén.
+        $soloCompletadosChina = !$conDesglosePais;
+
+        $cbm = $this->sumarPorPais($orgIds, 'cbm', $soloCompletadosChina);
+        $clientes = $this->sumarPorPais($orgIds, 'clientes', $soloCompletadosChina);
+        $codigos = $this->sumarPorPais($orgIds, 'codigos', $soloCompletadosChina);
+        $contenedores = $this->sumarPorPais($orgIds, 'contenedores', $soloCompletadosChina);
 
         $cards = [
             $this->card('cbm', $cbm, $conDesglosePais),
@@ -32,7 +37,7 @@ class HomeStatsService
         ];
 
         if (!$conDesglosePais) {
-            $cards[] = $this->card('warehouse', $this->sumarPorPais($orgIds, 'warehouse'), false);
+            $cards[] = $this->card('warehouse', $this->sumarPorPais($orgIds, 'warehouse', false), false);
         }
 
         $cards[] = $this->card('containers', $contenedores, true);
@@ -60,13 +65,17 @@ class HomeStatsService
      * @param array<int, int> $orgIds
      * @return array{total: float, by_country: array<int, array{country: string, value: float}>}
      */
-    private function sumarPorPais(array $orgIds, $tipo)
+    private function sumarPorPais(array $orgIds, $tipo, $soloCompletadosChina = false)
     {
         $query = DB::table('carga_consolidada_contenedor as cont')
             ->leftJoin('pais as pa', 'pa.ID_Pais', '=', 'cont.id_pais')
             ->whereIn('cont.organizacion_id', $orgIds)
             ->where('cont.empresa', '!=', 1)
             ->whereNull('cont.deleted_at');
+
+        if ($soloCompletadosChina) {
+            $query->where('cont.estado_china', Contenedor::CONTEDOR_CERRADO);
+        }
 
         if ($tipo === 'cbm') {
             $query->join('contenedor_consolidado_cotizacion_proveedores as p', 'p.id_contenedor', '=', 'cont.id')

@@ -13,7 +13,8 @@ class HomeStatsController extends Controller
 {
     /**
      * GET /carga-consolidada/home-stats
-     * Almacén China: todas las orgs. Socio: solo las suyas.
+     * Almacén China: todas las orgs. Socio: solo las suyas;
+     * CBM / clientes / códigos / consolidados = estado_china COMPLETADO.
      */
     public function index(Request $request)
     {

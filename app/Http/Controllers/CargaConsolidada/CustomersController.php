@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Exception;
+use App\Services\CargaConsolidada\CustomersHeadersService;
 use App\Support\CargaConsolidada\ClientesVisibility;
 
 /**
@@ -251,127 +252,12 @@ class CustomersController extends Controller
      */
     private function applyCustomersFilters($query, $search, $idPais, $estadoChina, $proveedorEstadoAlias = null)
     {
-        if ($search !== '') {
-            $like = '%' . $search . '%';
-            $query->where(function ($q) use ($like) {
-                $q->where('CC.nombre', 'like', $like)
-                    ->orWhere('CC.telefono', 'like', $like)
-                    ->orWhere('CC.documento', 'like', $like)
-                    ->orWhere('CONT.carga', 'like', $like)
-                    ->orWhere('P.No_Pais', 'like', $like)
-                    ->orWhereExists(function ($sub) use ($like) {
-                        $sub->select(DB::raw(1))
-                            ->from($this->tableProveedor . ' as PRS')
-                            ->whereColumn('PRS.id_cotizacion', 'CC.id')
-                            ->where(function ($inner) use ($like) {
-                                $inner->where('PRS.supplier', 'like', $like)
-                                    ->orWhere('PRS.code_supplier', 'like', $like)
-                                    ->orWhere('PRS.products', 'like', $like)
-                                    ->orWhere('PRS.supplier_phone', 'like', $like);
-                            });
-                    });
-            });
-        }
-
-        if (!$this->isCustomersFilterAll($idPais)) {
-            $query->where('CONT.id_pais', (int) $this->scalarCustomersFilter($idPais));
-        }
-
-        if (!$this->isCustomersFilterAll($estadoChina)) {
-            $estadoFiltro = (string) $this->scalarCustomersFilter($estadoChina);
-            if ($proveedorEstadoAlias) {
-                $query->where($proveedorEstadoAlias . '.estados_proveedor', $estadoFiltro);
-            } else {
-                $query->whereExists(function ($sub) use ($estadoFiltro) {
-                    $sub->select(DB::raw(1))
-                        ->from($this->tableProveedor . ' as PRF')
-                        ->whereColumn('PRF.id_cotizacion', 'CC.id')
-                        ->where('PRF.estados_proveedor', $estadoFiltro);
-                });
-            }
-        }
-    }
-
-    /**
-     * @param mixed $value
-     * @return mixed
-     */
-    private function scalarCustomersFilter($value)
-    {
-        if (is_array($value) && array_key_exists('value', $value)) {
-            return $this->scalarCustomersFilter($value['value']);
-        }
-
-        return $value;
-    }
-
-    /**
-     * @param mixed $value
-     * @return bool
-     */
-    private function isCustomersFilterAll($value)
-    {
-        $scalar = $this->scalarCustomersFilter($value);
-        if ($scalar === null || $scalar === '') {
-            return true;
-        }
-        if (is_array($scalar)) {
-            return true;
-        }
-
-        return in_array(strtolower(trim((string) $scalar)), ['todos', 'todas', 'all', 'todo'], true);
+        (new CustomersHeadersService())->applyFilters($query, $search, $idPais, $estadoChina, $proveedorEstadoAlias);
     }
 
     private function buildHeaders($orgIds, $search = '', $idPais = null, $estadoChina = 'todos')
     {
-        $statsQuery = DB::table($this->tableCotizacion . ' as CC')
-            ->join($this->tableContenedor . ' as CONT', 'CONT.id', '=', 'CC.id_contenedor')
-            ->leftJoin($this->tablePais . ' as P', 'P.ID_Pais', '=', 'CONT.id_pais')
-            ->leftJoin($this->tableProveedor . ' as PR', 'PR.id_cotizacion', '=', 'CC.id')
-            ->whereIn('CONT.organizacion_id', $orgIds)
-            ->whereNull('CC.deleted_at')
-            ->whereNull('CONT.deleted_at')
-            ->whereNull('CC.id_cliente_importacion')
-            ->where('CONT.empresa', '!=', 1);
-        ClientesVisibility::applyConfirmadoParaBd($statsQuery, 'CC');
-        ClientesVisibility::excludeGraduadosDeCustomers(
-            $statsQuery,
-            'CC',
-            'CONT',
-            $this->tableProveedor
-        );
-        $this->applyCustomersFilters($statsQuery, $search, $idPais, $estadoChina, 'PR');
-        $stats = $statsQuery
-            ->selectRaw('
-                COALESCE(SUM(PR.cbm_total), 0) as cbm_warehouse,
-                COUNT(DISTINCT CC.id) as total_customers,
-                COUNT(PR.id) as total_suppliers_code,
-                SUM(CASE WHEN PR.estados_proveedor = ? THEN 1 ELSE 0 END) as total_nc
-            ', ['NC'])
-            ->first();
-
-        return [
-            'cbm_warehouse' => [
-                'value' => number_format((float) ($stats->cbm_warehouse ?? 0), 3, '.', ''),
-                'label' => 'CBM warehouse',
-                'icon' => 'i-heroicons-cube',
-            ],
-            'total_customers' => [
-                'value' => (string) ((int) ($stats->total_customers ?? 0)),
-                'label' => 'Total customers',
-                'icon' => 'i-heroicons-users',
-            ],
-            'total_suppliers_code' => [
-                'value' => (string) ((int) ($stats->total_suppliers_code ?? 0)),
-                'label' => 'Total suppliers code',
-                'icon' => 'i-heroicons-tag',
-            ],
-            'total_nc' => [
-                'value' => (string) ((int) ($stats->total_nc ?? 0)),
-                'label' => 'Total NC',
-                'icon' => 'i-heroicons-exclamation-triangle',
-            ],
-        ];
+        return (new CustomersHeadersService())->build($orgIds, $search, $idPais, $estadoChina);
     }
 
     private function buildPaises($orgIds)
@@ -402,11 +288,6 @@ class CustomersController extends Controller
 
     private function emptyHeaders()
     {
-        return [
-            'cbm_warehouse' => ['value' => '0.000', 'label' => 'CBM warehouse', 'icon' => 'i-heroicons-cube'],
-            'total_customers' => ['value' => '0', 'label' => 'Total customers', 'icon' => 'i-heroicons-users'],
-            'total_suppliers_code' => ['value' => '0', 'label' => 'Total suppliers code', 'icon' => 'i-heroicons-tag'],
-            'total_nc' => ['value' => '0', 'label' => 'Total NC', 'icon' => 'i-heroicons-exclamation-triangle'],
-        ];
+        return (new CustomersHeadersService())->empty();
     }
 }

@@ -15,6 +15,7 @@ use App\Models\CargaConsolidada\CotizacionProveedorResumenCosto;
 use App\Models\Organizacion;
 use App\Models\Usuario;
 use App\Services\CalculadoraImportacion\CodeSupplierHelper;
+use App\Services\CargaConsolidada\CustomersHeadersService;
 use App\Services\CargaConsolidada\GeminiService;
 use App\Support\Phone\CountryPhoneHelper;
 use Illuminate\Http\Request;
@@ -35,8 +36,16 @@ class CotizacionResumenController extends Controller
 {
     use FileTrait;
 
-    private const GEMINI_SUPPORTED_MIMES = [
+    private const GEMINI_PDF_MIMES = [
         'application/pdf',
+    ];
+
+    private const GEMINI_SHEET_MIMES = [
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel',
+        'text/csv',
+        'text/plain',
+        'application/csv',
     ];
 
     private const MAX_FILE_SIZE_KB = 10240; // 10 MB
@@ -58,6 +67,8 @@ class CotizacionResumenController extends Controller
             'file' => 'required|file|max:' . self::MAX_FILE_SIZE_KB,
         ]);
 
+        try {
+
         $file = $request->file('file');
         if (!$file || !$file->isValid()) {
             return response()->json(['success' => false, 'message' => 'Archivo inválido'], 422);
@@ -66,28 +77,31 @@ class CotizacionResumenController extends Controller
         $orgId = $this->orgIdAutenticada();
 
         $originalName = $file->getClientOriginalName();
-        $mimeType = $file->getMimeType();
-
-        $storedPath = $this->objectStorage()->storeUploadedFile(
-            $file,
-            $this->directorioArchivoFinal($orgId),
-            Str::uuid()->toString() . '-' . $originalName
-        );
+        $mimeType = $this->mimeParaExtraccion($file);
+        $localPath = $file->getRealPath();
 
         $data = null;
         $extractedByAi = false;
         $error = null;
+        $esPdf = in_array($mimeType, self::GEMINI_PDF_MIMES, true);
+        $esHoja = in_array($mimeType, self::GEMINI_SHEET_MIMES, true);
 
-        if (in_array($mimeType, self::GEMINI_SUPPORTED_MIMES, true)) {
+        if ($localPath && is_file($localPath) && ($esPdf || $esHoja)) {
             $gemini = new GeminiService();
-            $filePath = $this->objectStorage()->localPath($storedPath);
-            $result = $gemini->extractFromCotizacionResumen($filePath, $mimeType);
+            if ($esHoja) {
+                $texto = $this->hojaCalculoATexto($localPath);
+                $result = $texto !== ''
+                    ? $gemini->extractFromCotizacionResumenText($texto)
+                    : ['success' => false, 'error' => 'La hoja está vacía', 'data' => null];
+            } else {
+                $result = $gemini->extractFromCotizacionResumen($localPath, $mimeType);
+            }
 
-            if ($result['success']) {
+            if (!empty($result['success'])) {
                 $data = $result['data'];
                 $extractedByAi = true;
             } else {
-                $error = $result['error'];
+                $error = isset($result['error']) ? $result['error'] : 'No se pudo leer el documento';
                 Log::warning('CotizacionResumenController: Gemini no pudo extraer datos', [
                     'organizacion_id' => $orgId,
                     'mime_type' => $mimeType,
@@ -99,6 +113,12 @@ class CotizacionResumenController extends Controller
                 'mime_type' => $mimeType,
             ]);
         }
+
+        $storedPath = $this->objectStorage()->storeUploadedFile(
+            $file,
+            $this->directorioArchivoFinal($orgId),
+            Str::uuid()->toString() . '-' . $originalName
+        );
 
         return response()->json([
             'success' => true,
@@ -114,6 +134,16 @@ class CotizacionResumenController extends Controller
                 'size' => $file->getSize(),
             ],
         ]);
+        } catch (\Exception $e) {
+            Log::error('CotizacionResumenController@extraerDocumento: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'extracted_by_ai' => false,
+                'message' => 'No se pudo procesar el archivo. Intenta de nuevo o completa los datos a mano.',
+                'data' => null,
+            ], 500);
+        }
     }
 
     /**
@@ -267,10 +297,14 @@ class CotizacionResumenController extends Controller
                 $fob = (float) ($c->getAttribute('fob') ?? 0);
                 $logistica = (float) ($c->getAttribute('monto') ?? 0);
                 $impuesto = (float) ($c->getAttribute('impuestos') ?? 0);
-                if ($fob <= 0 && $logistica <= 0 && $impuesto <= 0) {
+                $isd = (float) ($c->getAttribute('isd') ?? 0);
+                if ($fob <= 0 && $logistica <= 0 && $impuesto <= 0 && $isd <= 0) {
                     $fob = $totalesCosto['fob'];
                     $logistica = $totalesCosto['logistica'];
                     $impuesto = $totalesCosto['impuesto'];
+                    $isd = $totalesCosto['isd'];
+                } elseif ($isd <= 0) {
+                    $isd = $totalesCosto['isd'];
                 }
                 $totalInversion = $proveedores->sum(fn ($p) => (float) (optional($p->getRelation('resumen'))->getAttribute('inversion_total') ?? 0));
                 $contenedor = $contenedores->get($c->getAttribute('id_contenedor'));
@@ -295,6 +329,7 @@ class CotizacionResumenController extends Controller
                     'total_cajas' => $totalCajas,
                     'total_inversion' => $totalInversion,
                     'fob' => $fob,
+                    'isd' => $isd,
                     'logistica' => $logistica,
                     'impuesto' => $impuesto,
                     'tarifa' => (float) ($c->getAttribute('tarifa') ?? 0),
@@ -335,9 +370,14 @@ class CotizacionResumenController extends Controller
                 ];
             });
 
+            $headers = (new CustomersHeadersService())->build(
+                $orgEfectiva > 0 ? [$orgEfectiva] : []
+            );
+
             return response()->json([
                 'success' => true,
                 'data' => $data->values(),
+                'headers' => $headers,
                 'pagination' => [
                     'current_page' => $paginator->currentPage(),
                     'last_page' => $paginator->lastPage(),
@@ -498,8 +538,10 @@ class CotizacionResumenController extends Controller
                 'volumen' => $totalCbmFull,
                 'es_imo' => $totalCbmImo > 0,
                 'fob' => $totalesCosto['fob'],
+                'isd' => $totalesCosto['isd'],
                 'monto' => $totalesCosto['logistica'],
                 'impuestos' => $totalesCosto['impuesto'],
+                'tarifa' => $this->tarifaDesdeLogistica($totalesCosto['logistica'], $totalCbmFull),
                 'tarifa_descuento' => $request->input('descuento', 0),
             ];
             if ($archivo && !empty($archivo['path'])) {
@@ -563,6 +605,11 @@ class CotizacionResumenController extends Controller
                 'id_contenedor' => $cotizacion->getAttribute('id_contenedor'),
                 'id_usuario' => $cotizacion->getAttribute('id_usuario'),
                 'descuento' => (float) ($cotizacion->getAttribute('tarifa_descuento') ?? 0),
+                'tarifa' => (float) ($cotizacion->getAttribute('tarifa') ?? 0),
+                'fob' => (float) ($cotizacion->getAttribute('fob') ?? 0),
+                'isd' => (float) ($cotizacion->getAttribute('isd') ?? 0),
+                'logistica' => (float) ($cotizacion->getAttribute('monto') ?? 0),
+                'impuesto' => (float) ($cotizacion->getAttribute('impuestos') ?? 0),
                 'cliente' => [
                     'id' => $cotizacion->getAttribute('id_cliente'),
                     'nombre' => $cotizacion->getAttribute('nombre'),
@@ -690,8 +737,13 @@ class CotizacionResumenController extends Controller
                 ),
                 'tarifa_descuento' => $request->input('descuento', 0),
                 'fob' => $totalesCosto['fob'],
+                'isd' => $totalesCosto['isd'],
                 'monto' => $totalesCosto['logistica'],
                 'impuestos' => $totalesCosto['impuesto'],
+                'tarifa' => $this->tarifaDesdeLogistica(
+                    $totalesCosto['logistica'],
+                    $this->cbmFullDeProveedores($request->input('proveedores', []))
+                ),
             ];
             if ($archivo && !empty($archivo['path'])) {
                 $cotizacionFill['cotizacion_file_url'] = $archivo['path'];
@@ -1003,9 +1055,108 @@ class CotizacionResumenController extends Controller
         return (int) $vendedor->getAttribute('ID_Organizacion') === $this->orgIdAutenticada();
     }
 
-    private function clasificarCosto($concepto, $valor, &$fob, &$logistica, &$impuesto)
+    /**
+     * Tarifa = logística / CBM. Se persiste en `tarifa`; el front no la calcula.
+     *
+     * @param float $logistica
+     * @param float $cbm
+     * @return float
+     */
+    private function tarifaDesdeLogistica($logistica, $cbm)
+    {
+        $cbm = (float) $cbm;
+        if ($cbm <= 0) {
+            return 0.0;
+        }
+
+        return round(((float) $logistica) / $cbm, 2);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $proveedores
+     * @return float
+     */
+    private function cbmFullDeProveedores(array $proveedores)
+    {
+        $total = 0.0;
+        foreach ($proveedores as $prov) {
+            $partido = $this->partirCbmProveedor($prov);
+            if ($partido) {
+                $total += $partido['cbm_full'];
+            }
+        }
+
+        return $total;
+    }
+
+    /**
+     * @param \Illuminate\Http\UploadedFile $file
+     * @return string
+     */
+    private function mimeParaExtraccion($file)
+    {
+        $ext = strtolower((string) $file->getClientOriginalExtension());
+        $porExtension = [
+            'pdf' => 'application/pdf',
+            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'xls' => 'application/vnd.ms-excel',
+            'csv' => 'text/csv',
+        ];
+        if (isset($porExtension[$ext])) {
+            return $porExtension[$ext];
+        }
+
+        return (string) $file->getMimeType();
+    }
+
+    /**
+     * @param string $path
+     * @return string
+     */
+    private function hojaCalculoATexto($path)
+    {
+        try {
+            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($path);
+        } catch (\Exception $e) {
+            Log::warning('CotizacionResumenController: no se pudo leer la hoja', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return '';
+        }
+
+        $lines = [];
+        foreach ($spreadsheet->getWorksheetIterator() as $sheet) {
+            $lines[] = 'Hoja: ' . $sheet->getTitle();
+            $highestRow = min((int) $sheet->getHighestDataRow(), 200);
+            $highestCol = $sheet->getHighestDataColumn();
+            $highestColIndex = min(
+                \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestCol),
+                30
+            );
+            for ($row = 1; $row <= $highestRow; $row++) {
+                $cells = [];
+                for ($col = 1; $col <= $highestColIndex; $col++) {
+                    $coord = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col) . $row;
+                    $cells[] = trim((string) $sheet->getCell($coord)->getFormattedValue());
+                }
+                $line = implode("\t", $cells);
+                if (trim($line) !== '') {
+                    $lines[] = $line;
+                }
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function clasificarCosto($concepto, $valor, &$fob, &$logistica, &$impuesto, &$isd)
     {
         $c = mb_strtolower((string) $concepto);
+        if (preg_match('/\bisd\b/', $c) || strpos($c, 'salida de divisa') !== false) {
+            $isd += $valor;
+            return;
+        }
         if (strpos($c, 'mercader') !== false || strpos($c, 'fob') !== false) {
             $fob += $valor;
             return;
@@ -1022,12 +1173,13 @@ class CotizacionResumenController extends Controller
         $fob = 0.0;
         $logistica = 0.0;
         $impuesto = 0.0;
+        $isd = 0.0;
         foreach ($proveedores as $prov) {
             foreach (($prov['costos'] ?? []) as $costo) {
-                $this->clasificarCosto($costo['concepto'] ?? '', (float) ($costo['valor'] ?? 0), $fob, $logistica, $impuesto);
+                $this->clasificarCosto($costo['concepto'] ?? '', (float) ($costo['valor'] ?? 0), $fob, $logistica, $impuesto, $isd);
             }
         }
-        return ['fob' => $fob, 'logistica' => $logistica, 'impuesto' => $impuesto];
+        return ['fob' => $fob, 'logistica' => $logistica, 'impuesto' => $impuesto, 'isd' => $isd];
     }
 
     private function sumarCostosProveedores($proveedores)
@@ -1035,6 +1187,7 @@ class CotizacionResumenController extends Controller
         $fob = 0.0;
         $logistica = 0.0;
         $impuesto = 0.0;
+        $isd = 0.0;
         foreach ($proveedores as $p) {
             $resumen = $p->getRelation('resumen');
             if (!$resumen || !$resumen->getRelation('costos')) {
@@ -1046,11 +1199,12 @@ class CotizacionResumenController extends Controller
                     (float) $costo->getAttribute('valor'),
                     $fob,
                     $logistica,
-                    $impuesto
+                    $impuesto,
+                    $isd
                 );
             }
         }
-        return ['fob' => $fob, 'logistica' => $logistica, 'impuesto' => $impuesto];
+        return ['fob' => $fob, 'logistica' => $logistica, 'impuesto' => $impuesto, 'isd' => $isd];
     }
 
     /**
@@ -1273,9 +1427,15 @@ class CotizacionResumenController extends Controller
             }
         }
 
+        $totalesCosto = $this->sumarCostosRequest($proveedoresPayload);
         $cotizacion->update([
             'volumen' => $totalCbmFull,
             'es_imo' => $totalCbmImo > 0,
+            'fob' => $totalesCosto['fob'],
+            'isd' => $totalesCosto['isd'],
+            'monto' => $totalesCosto['logistica'],
+            'impuestos' => $totalesCosto['impuesto'],
+            'tarifa' => $this->tarifaDesdeLogistica($totalesCosto['logistica'], $totalCbmFull),
         ]);
 
         if ($archivo && !empty($archivo['path']) && $primerProveedorId) {

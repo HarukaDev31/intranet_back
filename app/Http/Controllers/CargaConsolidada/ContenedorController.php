@@ -29,6 +29,8 @@ use Carbon\Carbon;
 use App\Models\CargaConsolidada\Pago;
 use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
 use App\Models\Organizacion;
+use App\Models\Pais;
+use App\Support\Organizacion\OrganizacionPaisesHabilitados;
 use App\Services\CargaConsolidada\CargaConsolidadaCacheService;
 
 class ContenedorController extends Controller
@@ -523,6 +525,16 @@ class ContenedorController extends Controller
                 // organizacion_id nunca se toma del request (evita que un contenedor
                 // "cambie" de organizacion o se cree en otra distinta a la del usuario).
                 unset($data['organizacion_id']);
+                $idPaisRequest = isset($data['id_pais']) ? (int) $data['id_pais'] : 0;
+                $contenedorExistente = !empty($data['id']) ? Contenedor::find($data['id']) : null;
+                $paisActual = $contenedorExistente ? (int) $contenedorExistente->getAttribute('id_pais') : 0;
+                $cambiaPais = !$contenedorExistente || $idPaisRequest !== $paisActual;
+                if ($cambiaPais && !OrganizacionPaisesHabilitados::permite($authOrg, $idPaisRequest)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'El país no está habilitado para esta organización',
+                    ], 422);
+                }
                 if (isset($data['carga'])) {
                     $numero = CargaLabel::soloNumero($data['carga']);
                     if ($numero !== '') {
@@ -548,8 +560,7 @@ class ContenedorController extends Controller
                     }
 
                     // El contenedor es la raiz del escopeo por organizacion: siempre la
-                    // del usuario autenticado (Socio queda asi forzado a la suya; el pais
-                    // sigue siendo libre, no tiene relacion con la organizacion).
+                    // del usuario autenticado. Org ≠ 1 solo puede usar países habilitados.
                     $data['organizacion_id'] = (int) auth()->user()->getAttribute('ID_Organizacion');
 
                     $contenedor = Contenedor::create($data);
@@ -1113,6 +1124,34 @@ class ContenedorController extends Controller
         }
 
         return response()->json(['data' => $data, 'success' => true]);
+    }
+
+    /**
+     * Países disponibles al crear/editar consolidado: todos para org 1,
+     * solo los habilitados para el resto.
+     */
+    public function getPaisesHabilitados()
+    {
+        $user = auth()->user();
+        $orgId = $user ? (int) $user->getAttribute('ID_Organizacion') : 0;
+        $query = Pais::query()->orderBy('No_Pais');
+        $permitidos = OrganizacionPaisesHabilitados::idsPermitidos($orgId);
+        if (is_array($permitidos)) {
+            if (count($permitidos) === 0) {
+                return response()->json(['success' => true, 'data' => []]);
+            }
+            $query->whereIn('ID_Pais', $permitidos);
+        }
+
+        $data = [];
+        foreach ($query->get() as $pais) {
+            $data[] = [
+                'value' => (int) $pais->getAttribute('ID_Pais'),
+                'label' => $pais->getAttribute('No_Pais'),
+            ];
+        }
+
+        return response()->json(['success' => true, 'data' => $data]);
     }
 
     /**

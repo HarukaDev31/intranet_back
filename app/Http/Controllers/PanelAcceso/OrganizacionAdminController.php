@@ -7,9 +7,11 @@ use App\Models\Organizacion;
 use App\Models\OrganizacionPortal;
 use App\Models\Pais;
 use App\Models\PaisFlag;
+use App\Support\Organizacion\OrganizacionPaisesHabilitados;
 use App\Support\Organizacion\OrganizacionPortalUrls;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Mantenedor de organizaciones (crear/editar/desactivar organizaciones,
@@ -40,7 +42,11 @@ class OrganizacionAdminController extends Controller
         }
 
         try {
-            $query = Organizacion::with(['empresa', 'portal', 'pais', 'paisFlag'])->orderBy('No_Organizacion');
+            $with = ['empresa', 'portal', 'pais', 'paisFlag'];
+            if (Schema::hasTable('organizacion_paises_habilitados')) {
+                $with[] = 'paisesHabilitados';
+            }
+            $query = Organizacion::with($with)->orderBy('No_Organizacion');
 
             if ($request->filled('empresa_id')) {
                 $query->where('ID_Empresa', $request->empresa_id);
@@ -78,6 +84,8 @@ class OrganizacionAdminController extends Controller
                 'drive_folder_id'        => 'nullable|string|max:128',
                 'logo_url'               => 'nullable|string|max:255',
                 'id_pais'                => 'nullable|integer|exists:pais,ID_Pais',
+                'paises_habilitados'     => 'nullable|array',
+                'paises_habilitados.*'   => 'integer|exists:pais,ID_Pais',
             ]);
 
             $organizacion = Organizacion::create([
@@ -88,12 +96,16 @@ class OrganizacionAdminController extends Controller
                 'id_pais'          => $request->filled('id_pais') ? (int) $request->input('id_pais') : null,
             ]);
 
-            $this->syncPortal($organizacion, $this->requestPayload($request));
+            $payload = $this->requestPayload($request);
+            if (array_key_exists('paises_habilitados', $payload)) {
+                OrganizacionPaisesHabilitados::sync($organizacion, $payload['paises_habilitados']);
+            }
+            $this->syncPortal($organizacion, $payload);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Organización creada exitosamente',
-                'data' => $this->serializar($organizacion->fresh(['empresa', 'portal', 'pais', 'paisFlag'])),
+                'data' => $this->serializar($organizacion->fresh(['empresa', 'portal', 'pais', 'paisFlag', 'paisesHabilitados'])),
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json(['success' => false, 'message' => $e->errors()], 422);
@@ -132,6 +144,8 @@ class OrganizacionAdminController extends Controller
                 'logo_url'               => 'nullable|string|max:255',
                 'regenerar_public_key'   => 'nullable|boolean',
                 'id_pais'                => 'nullable|integer|exists:pais,ID_Pais',
+                'paises_habilitados'     => 'nullable|array',
+                'paises_habilitados.*'   => 'integer|exists:pais,ID_Pais',
             ]);
 
             $input = $this->requestPayload($request);
@@ -156,12 +170,15 @@ class OrganizacionAdminController extends Controller
                 );
             }
             $organizacion->save();
+            if (array_key_exists('paises_habilitados', $input)) {
+                OrganizacionPaisesHabilitados::sync($organizacion, $input['paises_habilitados']);
+            }
             $this->syncPortal($organizacion, $input);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Organización actualizada exitosamente',
-                'data' => $this->serializar($organizacion->fresh(['empresa', 'portal', 'pais', 'paisFlag'])),
+                'data' => $this->serializar($organizacion->fresh(['empresa', 'portal', 'pais', 'paisFlag', 'paisesHabilitados'])),
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json(['success' => false, 'message' => $e->errors()], 422);
@@ -241,6 +258,18 @@ class OrganizacionAdminController extends Controller
         $pais = $o->relationLoaded('pais') ? $o->getRelation('pais') : $o->pais;
         $flag = $o->relationLoaded('paisFlag') ? $o->getRelation('paisFlag') : $o->paisFlag;
         $phoneCode = $flag ? preg_replace('/[^0-9]/', '', (string) $flag->getAttribute('phone_code')) : '';
+        $paisesHabilitados = collect();
+        if (Schema::hasTable('organizacion_paises_habilitados')) {
+            $paisesHabilitados = $o->relationLoaded('paisesHabilitados')
+                ? $o->getRelation('paisesHabilitados')
+                : $o->paisesHabilitados;
+        }
+        $paisesIds = [];
+        $paisesNombres = [];
+        foreach ($paisesHabilitados as $paisHab) {
+            $paisesIds[] = (int) $paisHab->getAttribute('ID_Pais');
+            $paisesNombres[] = $paisHab->getAttribute('No_Pais');
+        }
 
         return [
             'id'                     => $o->getAttribute('ID_Organizacion'),
@@ -250,6 +279,8 @@ class OrganizacionAdminController extends Controller
             'txt_organizacion'       => $o->getAttribute('Txt_Organizacion'),
             'id_pais'                => $o->getAttribute('id_pais') ? (int) $o->getAttribute('id_pais') : null,
             'pais'                   => $pais ? $pais->getAttribute('No_Pais') : null,
+            'paises_habilitados'     => $paisesIds,
+            'paises_habilitados_nombres' => $paisesNombres,
             'prefijo'                => $phoneCode !== '' ? $phoneCode : null,
             'estado'                 => $o->getAttribute('Nu_Estado'),
             'url_clientes'           => $portal ? $portal->url_clientes : null,

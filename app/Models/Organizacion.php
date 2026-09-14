@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -17,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property-read OrganizacionPortal|null $portal
  * @property-read Pais|null $pais
  * @property-read PaisFlag|null $paisFlag
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, Pais> $paisesHabilitados
  */
 class Organizacion extends Model
 {
@@ -73,5 +75,17 @@ class Organizacion extends Model
     public function paisFlag(): HasOne
     {
         return $this->hasOne(PaisFlag::class, 'id_pais', 'id_pais');
+    }
+
+    public function paisesHabilitados(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Pais::class,
+            'organizacion_paises_habilitados',
+            'organizacion_id',
+            'id_pais',
+            'ID_Organizacion',
+            'ID_Pais'
+        );
     }
 } 

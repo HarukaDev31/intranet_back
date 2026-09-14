@@ -228,6 +228,9 @@ class AuthController extends Controller
                                     'phone_code' => \App\Support\Phone\CountryPhoneHelper::codeForOrganizacionId(
                                         $usuario->organizacion->ID_Organizacion
                                     ),
+                                    'paises_habilitados' => \App\Support\Organizacion\OrganizacionPaisesHabilitados::idsPermitidos(
+                                        $usuario->organizacion->ID_Organizacion
+                                    ),
                                 ] : null,
                                 // Solo la organizacion 1 (admin) puede crear/editar usuarios de
                                 // cualquier organizacion; el resto queda fijo en la suya. El front

@@ -82,7 +82,7 @@ class CotizacionController extends Controller
             if (!is_array($item) || !array_key_exists('value', $item)) {
                 continue;
             }
-            if (in_array($key, ['total_logistica', 'total_logistica_pagado', 'total_diferencia_logistica', 'total_fob', 'total_impuestos'])) {
+            if (in_array($key, ['total_logistica', 'total_logistica_pagado', 'total_diferencia_logistica', 'total_fob', 'total_isd', 'total_impuestos'])) {
                 $headers[$key]['value'] = $this->formatCurrency($item['value']);
             }
         }
@@ -115,6 +115,7 @@ class CotizacionController extends Controller
                     THEN cc.volumen ELSE 0
                 END), 0) AS cbm_pendiente_total,
                 COALESCE(SUM(cc.fob), 0) AS total_fob,
+                COALESCE(SUM(cc.isd), 0) AS total_isd,
                 COALESCE(SUM(cc.impuestos), 0) AS total_impuestos,
                 COALESCE(SUM(cc.monto), 0) AS total_logistica_todas
             FROM contenedor_consolidado_cotizacion AS cc
@@ -507,6 +508,7 @@ class CotizacionController extends Controller
                     'tarifa' => $cotizacion->tarifa,
                     'qty_item' => $cotizacion->qty_item,
                     'fob' => $cotizacion->fob,
+                    'isd' => $cotizacion->isd,
                     'cotizacion_file_url' => $this->cdnStorageUrl($excelPath),
                     'impuestos' => $cotizacion->impuestos,
                     'tipo_cliente' => optional($cotizacion->tipoCliente)->name,
@@ -581,8 +583,8 @@ class CotizacionController extends Controller
     }
 
     /**
-     * Headers de Prospectos y Embarcados para socios: CBM China, CBM {país},
-     * Pendiente, IMO, Fob, Logística e Impuestos.
+     * Headers de Prospectos y Embarcados para socios: CBM China (solo bandera),
+     * CBM destino (solo bandera), Pendiente, IMO, Fob, Total ISD, Logística e Impuestos.
      */
     private function buildSocioHeadersData($headers, array $paisFlags)
     {
@@ -592,6 +594,7 @@ class CotizacionController extends Controller
         $imoCalc = 0;
         $imoProv = 0;
         $fob = 0;
+        $isd = 0;
         $logistica = 0;
         $impuestos = 0;
         if ($headers) {
@@ -601,6 +604,7 @@ class CotizacionController extends Controller
             $imoCalc = isset($headers->cbm_total_imo) ? $headers->cbm_total_imo : 0;
             $imoProv = isset($headers->cbm_imo_proveedores) ? $headers->cbm_imo_proveedores : 0;
             $fob = isset($headers->total_fob) ? $headers->total_fob : 0;
+            $isd = isset($headers->total_isd) ? $headers->total_isd : 0;
             $logistica = isset($headers->total_logistica_todas) ? $headers->total_logistica_todas : $headers->total_logistica;
             $impuestos = isset($headers->total_impuestos) ? $headers->total_impuestos : 0;
         }
@@ -608,12 +612,12 @@ class CotizacionController extends Controller
         return [
             'cbm_total_china' => [
                 'value' => number_format((float) $china, 2, '.', ''),
-                'label' => 'CBM China',
+                'label' => '',
                 'icon' => $paisFlags['china'],
             ],
             'cbm_total_peru' => [
                 'value' => number_format((float) $destino, 2, '.', ''),
-                'label' => 'CBM ' . $paisFlags['nombre_destino'],
+                'label' => '',
                 'icon' => $paisFlags['destino'],
             ],
             'cbm_pendiente' => [
@@ -629,6 +633,11 @@ class CotizacionController extends Controller
             'total_fob' => [
                 'value' => $fob,
                 'label' => 'Fob',
+                'icon' => 'cryptocurrency-color:soc',
+            ],
+            'total_isd' => [
+                'value' => $isd,
+                'label' => 'Total ISD',
                 'icon' => 'cryptocurrency-color:soc',
             ],
             'total_logistica' => [
@@ -754,7 +763,7 @@ class CotizacionController extends Controller
 
         $roleAllowedMap = [
             Usuario::ROL_COTIZADOR => ['cbm_vendido', 'cbm_pendiente', 'cbm_embarcado', 'qty_items', 'cbm_total_peru', 'cbm_total_china','cbm_total_imo'],
-            Usuario::ROL_SOCIO => ['cbm_total_china', 'cbm_total_peru', 'cbm_pendiente', 'cbm_total_imo', 'total_fob', 'total_logistica', 'total_impuestos'],
+            Usuario::ROL_SOCIO => ['cbm_total_china', 'cbm_total_peru', 'cbm_pendiente', 'cbm_total_imo', 'total_fob', 'total_isd', 'total_logistica', 'total_impuestos'],
             Usuario::ROL_ALMACEN_CHINA => ['cbm_total_china', 'cbm_total_peru', 'qty_items'],
             Usuario::ROL_ADMINISTRACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
             Usuario::ROL_COORDINACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],

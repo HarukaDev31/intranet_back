@@ -62,7 +62,7 @@ class GeneralController extends Controller
      */
     private function addCurrencyFormatting(array $headers)
     {
-        $keysToFormat = ['total_logistica', 'total_logistica_pagado', 'total_fob', 'total_impuestos'];
+        $keysToFormat = ['total_logistica', 'total_logistica_pagado', 'total_fob', 'total_isd', 'total_impuestos'];
         foreach ($headers as $k => $item) {
             if (is_array($item) && array_key_exists('value', $item) && in_array($k, $keysToFormat)) {
                 $headers[$k]['value'] = $this->formatCurrency($item['value']);
@@ -119,6 +119,7 @@ class GeneralController extends Controller
                 COALESCE(SUM(cc.volumen), 0) as cbm_destino,
                 COALESCE(SUM(cc.qty_item), 0) as qty_items,
                 COALESCE(SUM(cc.fob), 0) as total_fob,
+                COALESCE(SUM(cc.isd), 0) as total_isd,
                 COALESCE(SUM(cc.monto), 0) as total_logistica,
                 COALESCE(SUM(cc.impuestos), 0) as total_impuestos
             ')
@@ -166,6 +167,11 @@ class GeneralController extends Controller
             'total_fob' => [
                 'value' => $totales->total_fob ?? 0,
                 'label' => 'Fob',
+                'icon' => 'cryptocurrency-color:soc',
+            ],
+            'total_isd' => [
+                'value' => $totales->total_isd ?? 0,
+                'label' => 'Total ISD',
                 'icon' => 'cryptocurrency-color:soc',
             ],
             'total_logistica' => [

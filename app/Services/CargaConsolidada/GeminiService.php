@@ -171,6 +171,10 @@ class GeminiService
             '- proveedores[].unidades: cantidad de unidades/piezas de ese proveedor. null si no aparece. ' .
             '- proveedores[].incoterm: Incoterm si aparece (FOB, EXW, CIF, DDP, Consolidado, etc.). null si no aparece. ' .
             '- proveedores[].productos: descripción breve de los productos de ese proveedor (nombres separados por coma). null si no aparece. ' .
+            '- proveedores[].logistica: total de logística (flete, logística internacional, transferencia, seguro de carga). null si no aparece. ' .
+            '- proveedores[].fob: valor FOB o mercadería. null si no aparece. ' .
+            '- proveedores[].impuesto: impuestos/tributos/aduana. null si no aparece. ' .
+            '- proveedores[].isd: Impuesto a la Salida de Divisas (ISD). null si no aparece. ' .
             '- proveedores[].costos: desglose de inversión/costos del documento (tablas o listas de conceptos). ' .
             'Incluye cada concepto que encuentres: Valor de Mercadería, FOB, Flete, Transferencia, ISD, Logística Internacional, Tributos, Impuestos Aduaneros, Seguro, u otros con su nombre tal cual aparece. ' .
             'Cada elemento tiene concepto (texto) y valor (número sin símbolo de moneda). Si el concepto no tiene monto, valor null. Si no hay desglose, array vacío. ' .
@@ -188,12 +192,56 @@ class GeminiService
             return ['success' => false, 'error' => $result['error'], 'data' => null];
         }
 
-        $extracted = $result['data'];
+        return $this->packCotizacionResumenExtracted($result['data'], basename($filePath));
+    }
+
+    /**
+     * Misma extracción, pero a partir del texto de un Excel/CSV.
+     *
+     * @param string $spreadsheetText
+     * @return array{success: bool, error: string|null, data: array{cliente: array, proveedores: array}|null}
+     */
+    public function extractFromCotizacionResumenText($spreadsheetText)
+    {
+        $prompt = 'Analiza este documento de cotización de importación extraído de una hoja de cálculo. ' .
+            'Extrae los datos del cliente y de cada proveedor/producto. ' .
+            'cliente.nombre, cliente.tipo_documento (RUC o ID), cliente.documento, cliente.whatsapp, cliente.correo. ' .
+            'Por proveedor: cbm_total, peso_total, qty_cajas, unidades, incoterm, productos, ' .
+            'logistica (flete/logística internacional), fob (mercadería), impuesto (tributos/aduana), isd (ISD) ' .
+            'y costos (concepto + valor). Si un dato no aparece, null. ' .
+            "Contenido:\n" . $spreadsheetText;
+
+        $result = $this->analyzeTextAsJson(
+            $prompt,
+            8192,
+            0.1,
+            self::cotizacionResumenResponseSchema()
+        );
+
+        if (!$result['success']) {
+            return ['success' => false, 'error' => $result['error'], 'data' => null];
+        }
+
+        return $this->packCotizacionResumenExtracted($result['data'], 'spreadsheet');
+    }
+
+    /**
+     * @param mixed $extracted
+     * @param string $source
+     * @return array{success: bool, error: null, data: array{cliente: array, proveedores: array}}
+     */
+    private function packCotizacionResumenExtracted($extracted, $source)
+    {
+        $extracted = is_array($extracted) ? $extracted : [];
         $proveedores = isset($extracted['proveedores']) && is_array($extracted['proveedores'])
             ? $extracted['proveedores']
             : [];
 
         foreach ($proveedores as $idx => $prov) {
+            if (!is_array($prov)) {
+                unset($proveedores[$idx]);
+                continue;
+            }
             $costos = isset($prov['costos']) && is_array($prov['costos']) ? $prov['costos'] : [];
             $normalizados = [];
             foreach ($costos as $costo) {
@@ -211,11 +259,11 @@ class GeminiService
                         : null,
                 ];
             }
-            $proveedores[$idx]['costos'] = $normalizados;
+            $proveedores[$idx]['costos'] = $this->completarCostosDesdeTotales($normalizados, $prov);
         }
 
         Log::info('GeminiService extractFromCotizacionResumen: datos extraídos', [
-            'file'      => basename($filePath),
+            'source'    => $source,
             'extracted' => $extracted,
         ]);
 
@@ -224,9 +272,54 @@ class GeminiService
             'error'   => null,
             'data'    => [
                 'cliente'     => $extracted['cliente'] ?? [],
-                'proveedores' => $proveedores,
+                'proveedores' => array_values($proveedores),
             ],
         ];
+    }
+
+    /**
+     * @param array<int, array{concepto: string, valor: float|null}> $costos
+     * @param array<string, mixed> $prov
+     * @return array<int, array{concepto: string, valor: float|null}>
+     */
+    private function completarCostosDesdeTotales(array $costos, array $prov)
+    {
+        $mapa = [
+            'logistica' => 'Logística',
+            'fob' => 'FOB',
+            'impuesto' => 'Impuestos',
+            'isd' => 'ISD',
+        ];
+        foreach ($mapa as $campo => $concepto) {
+            if (!isset($prov[$campo]) || $prov[$campo] === null || (float) $prov[$campo] <= 0) {
+                continue;
+            }
+            $yaExiste = false;
+            foreach ($costos as $costo) {
+                $c = mb_strtolower((string) $costo['concepto']);
+                if ($campo === 'logistica' && (strpos($c, 'logistic') !== false || strpos($c, 'flete') !== false)) {
+                    $yaExiste = true;
+                    break;
+                }
+                if ($campo === 'fob' && (strpos($c, 'fob') !== false || strpos($c, 'mercader') !== false)) {
+                    $yaExiste = true;
+                    break;
+                }
+                if ($campo === 'impuesto' && (strpos($c, 'impuest') !== false || strpos($c, 'tribut') !== false || strpos($c, 'aduana') !== false)) {
+                    $yaExiste = true;
+                    break;
+                }
+                if ($campo === 'isd' && (strpos($c, 'isd') !== false || strpos($c, 'salida de divisa') !== false)) {
+                    $yaExiste = true;
+                    break;
+                }
+            }
+            if (!$yaExiste) {
+                $costos[] = ['concepto' => $concepto, 'valor' => (float) $prov[$campo]];
+            }
+        }
+
+        return $costos;
     }
 
     /**
@@ -446,6 +539,10 @@ class GeminiService
                             'unidades' => ['type' => 'NUMBER', 'nullable' => true],
                             'incoterm' => ['type' => 'STRING', 'nullable' => true],
                             'productos' => ['type' => 'STRING', 'nullable' => true],
+                            'logistica' => ['type' => 'NUMBER', 'nullable' => true],
+                            'fob' => ['type' => 'NUMBER', 'nullable' => true],
+                            'impuesto' => ['type' => 'NUMBER', 'nullable' => true],
+                            'isd' => ['type' => 'NUMBER', 'nullable' => true],
                             'costos' => [
                                 'type' => 'ARRAY',
                                 'items' => [
@@ -458,7 +555,7 @@ class GeminiService
                                 ],
                             ],
                         ],
-                        'required' => ['cbm_total', 'peso_total', 'qty_cajas', 'unidades', 'incoterm', 'productos', 'costos'],
+                        'required' => ['cbm_total', 'peso_total', 'qty_cajas', 'unidades', 'incoterm', 'productos', 'logistica', 'fob', 'impuesto', 'isd', 'costos'],
                     ],
                 ],
             ],
