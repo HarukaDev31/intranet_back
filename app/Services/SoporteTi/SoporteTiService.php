@@ -3,6 +3,7 @@
 namespace App\Services\SoporteTi;
 
 use App\Events\SoporteTi\SoporteTiEstadoActualizado;
+use App\Events\SoporteTi\SoporteTiMensajeActualizado;
 use App\Events\SoporteTi\SoporteTiMensajeCreado;
 use App\Events\SoporteTi\SoporteTiSolicitudCreada;
 use App\Jobs\SoporteTi\ProcessSoporteTiChatAdjuntosJob;
@@ -2699,6 +2700,42 @@ class SoporteTiService
     }
 
     /**
+     * Marca o desmarca un mensaje como revisado (check en el chat).
+     *
+     * @param string $chatUuid
+     * @param int    $mensajeId
+     * @param bool   $revisado
+     * @param Authenticatable|null $user
+     * @return array
+     */
+    public function marcarMensajeRevisado($chatUuid, $mensajeId, $revisado, ?Authenticatable $user = null)
+    {
+        $user = $user ?: Auth::user();
+        $sala = SoporteTiChatSala::where('chat_uuid', $chatUuid)->with('solicitud')->firstOrFail();
+        if (!$sala->solicitud) {
+            throw new \RuntimeException('Solicitud no encontrada');
+        }
+        $this->asegurarAccesoSolicitudModel($sala->solicitud, $user);
+
+        $mensaje = SoporteTiMensaje::where('sala_id', $sala->id)
+            ->where('id', (int) $mensajeId)
+            ->where('es_sistema', false)
+            ->firstOrFail();
+
+        $mensaje->revisado = (bool) $revisado;
+        $mensaje->save();
+        $mensaje->load(array('usuario', 'imagenes', 'replyTo.imagenes'));
+
+        $solicitud = $sala->solicitud;
+        $solicitud->setRelation('salaChat', $sala);
+
+        event(new SoporteTiMensajeActualizado($solicitud, $this->mapMensaje($mensaje, null)));
+        $this->cache->invalidateAfterMensajeWrite($solicitud, $sala->chat_uuid);
+
+        return $this->mapMensaje($mensaje, $user);
+    }
+
+    /**
      * Info de lectura estilo WhatsApp para un mensaje propio.
      *
      * @param string $chatUuid
@@ -3524,6 +3561,7 @@ class SoporteTiService
             'texto' => $m->texto ? $m->texto : '',
             'es_sistema' => (bool) $m->es_sistema,
             'es_maqueta' => (bool) ($m->es_maqueta ?? false),
+            'revisado' => (bool) ($m->revisado ?? false),
             'marca_tiempo' => $this->formatearMarcaTiempo(Carbon::parse($m->created_at)),
             'created_at_iso' => Carbon::parse($m->created_at)->toIso8601String(),
             'es_propio' => $esPropio,

@@ -70,6 +70,34 @@ class SoporteTiChatController extends Controller
         }
     }
 
+    public function marcarRevisado(Request $request, $chatUuid, $mensajeId)
+    {
+        $request->validate(array(
+            'revisado' => 'required|boolean',
+        ));
+
+        try {
+            $data = $this->service->marcarMensajeRevisado(
+                $chatUuid,
+                (int) $mensajeId,
+                $request->boolean('revisado'),
+                Auth::user()
+            );
+
+            return response()->json(array(
+                'success' => true,
+                'data' => $data,
+            ));
+        } catch (AuthorizationException $e) {
+            return response()->json(
+                array('success' => false, 'message' => $e->getMessage() ?: 'No autorizado'),
+                403
+            );
+        } catch (\Exception $e) {
+            return response()->json(array('success' => false, 'message' => $e->getMessage()), 404);
+        }
+    }
+
     public function infoMensaje($chatUuid, $mensajeId)
     {
         try {
