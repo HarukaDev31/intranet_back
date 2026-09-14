@@ -1478,14 +1478,12 @@ class SoporteTiService
     protected function estadosParaUsuario(SoporteTiSolicitud $solicitud, ?Authenticatable $user = null)
     {
         $user = $user ?: Auth::user();
-        if ($this->esCreadorSolicitud($solicitud, $user)) {
-            return SoporteTiEstado::where('activo', true)
-                ->whereIn('codigo', array('operativo', 'observado'))
-                ->orderBy('orden_kanban')
-                ->get();
-        }
-        if ($this->usuarioEsStaffSoporteTi($user)) {
-            return SoporteTiEstado::where('activo', true)
+        $esCreador = $this->esCreadorSolicitud($solicitud, $user);
+        $esStaff = $this->usuarioEsStaffSoporteTi($user);
+
+        $staff = collect();
+        if ($esStaff) {
+            $staff = SoporteTiEstado::where('activo', true)
                 ->whereNotIn('codigo', array('operativo', 'observado'))
                 ->where(function ($q) use ($solicitud) {
                     $q->whereNull('tipo_solicitud')
@@ -1495,7 +1493,15 @@ class SoporteTiService
                 ->get();
         }
 
-        return collect();
+        $creador = collect();
+        if ($esCreador) {
+            $creador = SoporteTiEstado::where('activo', true)
+                ->whereIn('codigo', array('operativo', 'observado'))
+                ->orderBy('orden_kanban')
+                ->get();
+        }
+
+        return $staff->concat($creador)->unique('id')->sortBy('orden_kanban')->values();
     }
 
     /**
@@ -1819,9 +1825,6 @@ class SoporteTiService
     protected function rolParaTransicion(SoporteTiSolicitud $solicitud, ?Authenticatable $user = null)
     {
         $user = $user ?: Auth::user();
-        if ($this->esCreadorSolicitud($solicitud, $user)) {
-            return 'solicitante';
-        }
         $helperA = $this->tipoASla();
         if ($helperA->usuarioEsAnalista($user)) {
             return 'analista';
@@ -1831,6 +1834,9 @@ class SoporteTiService
         }
         if ($this->usuarioEsStaffSoporteTi($user)) {
             return 'staff';
+        }
+        if ($this->esCreadorSolicitud($solicitud, $user)) {
+            return 'solicitante';
         }
 
         return 'solicitante';
