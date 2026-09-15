@@ -12,6 +12,12 @@ class SoporteTiSolicitudController extends Controller
 {
     use RespondsSoporteTiJson;
 
+    /**
+     * Adjuntos del chat: mismas extensiones que el picker de documentos del front
+     * (PDF, Office, texto, comprimidos e imágenes).
+     */
+    const CHAT_ADJUNTOS_MIMES = 'jpg,jpeg,png,gif,webp,bmp,pdf,xls,xlsx,html,htm,doc,docx,ppt,pptx,txt,csv,zip,rar,7z';
+
     /** @var SoporteTiService */
     protected $service;
 
@@ -111,7 +117,7 @@ class SoporteTiSolicitudController extends Controller
             'texto' => 'nullable|string',
             'reply_to_id' => 'nullable|integer',
             'imagenes' => 'nullable|array',
-            'imagenes.*' => 'file|mimes:jpg,jpeg,png,gif,webp,bmp|max:10240',
+            'imagenes.*' => 'file|mimes:' . self::CHAT_ADJUNTOS_MIMES . '|max:10240',
         ));
 
         $imagenes = $this->extraerImagenesRequest($request);
