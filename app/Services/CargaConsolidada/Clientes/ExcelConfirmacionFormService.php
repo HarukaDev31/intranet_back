@@ -16,6 +16,7 @@ use App\Traits\UsesObjectStorage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class ExcelConfirmacionFormService
 {
@@ -36,11 +37,36 @@ class ExcelConfirmacionFormService
 
     public function findCotizacionByUuid(string $uuid): ?object
     {
-        return DB::table('contenedor_consolidado_cotizacion')
-            ->select('id', 'uuid', 'nombre', 'id_contenedor')
+        $query = DB::table('contenedor_consolidado_cotizacion')
+            ->select('id', 'uuid', 'nombre', 'id_contenedor', 'organizacion_id')
             ->where('uuid', $uuid)
-            ->whereNull('deleted_at')
-            ->first();
+            ->whereNull('deleted_at');
+
+        $orgId = $this->orgIdAutenticada();
+        if ($orgId > 0 && $orgId !== 1) {
+            $query->where('organizacion_id', $orgId);
+        }
+
+        return $query->first();
+    }
+
+    /**
+     * Org del usuario autenticado. 0 si no hay sesión.
+     *
+     * @return int
+     */
+    private function orgIdAutenticada()
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return 0;
+            }
+
+            return (int) $user->getAttribute('ID_Organizacion');
+        } catch (\Throwable $e) {
+            return 0;
+        }
     }
 
     public function buildShowPayload(string $uuid): ?array

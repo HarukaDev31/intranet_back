@@ -262,7 +262,14 @@ class ExcelConfirmacionCoordinacionController extends Controller
         }
 
         $allowed = array_merge(
-            [Usuario::ROL_COORDINACION, Usuario::ROL_ADMINISTRACION, Usuario::ROL_CONTABILIDAD],
+            [
+                Usuario::ROL_COORDINACION,
+                Usuario::ROL_ADMINISTRACION,
+                Usuario::ROL_CONTABILIDAD,
+                Usuario::ROL_COTIZADOR,
+                Usuario::ROL_DOCUMENTACION,
+                Usuario::ROL_SOCIO,
+            ],
             Usuario::rolesEquivalentesJefeImportacion()
         );
 
