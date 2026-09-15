@@ -1150,6 +1150,7 @@ class GeneralController extends Controller
                 );
 
                 $phoneDigits = preg_replace('/\D+/', '', (string) $telefono);
+                $this->setWhatsappFlujo('documentos');
                 $laravelBatchId = $this->runWhatsAppCoordinacionBatch('docs_recordatorio', [
                     'id_cotizacion' => $cot->id ?? null,
                     'cliente' => $nombreCliente,

@@ -58,6 +58,7 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
     ): void {
         try {
             $this->setDatabaseConnection($this->domain ?? 'localhost');
+            $this->setWhatsappFlujo('documentos');
 
             $cot = DB::table('contenedor_consolidado_cotizacion')
                 ->select('id_contenedor', 'telefono', 'nombre', 'uuid')

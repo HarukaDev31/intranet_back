@@ -2579,6 +2579,7 @@ class CotizacionController extends Controller
             $message = str_replace('@nombrecliente', $cotizacion->nombre, $message);
             $message = str_replace('@contenedorDestino', '#' . $contenedorDestino->carga, $message);
             if ($phone !== '') {
+                $this->setWhatsappFlujo('cambio_consolidado');
                 $this->sendMessage(
                     $message,
                     $phone,

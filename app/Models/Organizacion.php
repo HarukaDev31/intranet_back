@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property string|null $Txt_Organizacion
  * @property int|null $id_pais
  * @property-read OrganizacionPortal|null $portal
+ * @property-read OrganizacionMensajeria|null $mensajeria
  * @property-read Pais|null $pais
  * @property-read PaisFlag|null $paisFlag
  * @property-read \Illuminate\Database\Eloquent\Collection<int, Pais> $paisesHabilitados
@@ -65,6 +66,11 @@ class Organizacion extends Model
     public function portal(): HasOne
     {
         return $this->hasOne(OrganizacionPortal::class, 'organizacion_id', 'ID_Organizacion');
+    }
+
+    public function mensajeria(): HasOne
+    {
+        return $this->hasOne(OrganizacionMensajeria::class, 'organizacion_id', 'ID_Organizacion');
     }
 
     public function pais(): BelongsTo

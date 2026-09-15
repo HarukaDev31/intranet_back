@@ -33,6 +33,7 @@ class SendContabilidadDetraccionesJob implements ShouldQueue
     public function handle(): void
     {
         try {
+            $this->setWhatsappFlujo('contabilidad');
             $cotizacion = Cotizacion::find($this->idCotizacion);
             if (!$cotizacion) {
                 Log::error('SendContabilidadDetraccionesJob: cotización no encontrada', ['id' => $this->idCotizacion]);

@@ -64,6 +64,7 @@ class SendInspectionMediaJob implements ShouldQueue
     public function handle()
     {
         try {
+            $this->setWhatsappFlujo('inspeccion');
             // Establecer la conexión de BD basándose en el dominio
             $this->setDatabaseConnection($this->domain);
 

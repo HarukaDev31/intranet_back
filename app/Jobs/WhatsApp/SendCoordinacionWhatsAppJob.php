@@ -79,6 +79,25 @@ class SendCoordinacionWhatsAppJob implements ShouldQueue
             $batchService->markItemProcessing($this->batchItemId);
         }
 
+        $orgId = isset($this->payload['_organizacion_id']) ? (int) $this->payload['_organizacion_id'] : 0;
+        if ($orgId <= 0 && !empty($this->payload['id_cotizacion'])) {
+            $orgId = app(\App\Services\Organizacion\OrganizacionMensajeriaService::class)
+                ->resolverOrganizacionId(['id_cotizacion' => $this->payload['id_cotizacion']]);
+        }
+        $flujo = isset($this->payload['_flujo']) ? (string) $this->payload['_flujo'] : '';
+        if ($orgId > 0 && !app(\App\Services\Organizacion\OrganizacionMensajeriaService::class)->flujoHabilitado($orgId, $flujo)) {
+            Log::info('SendCoordinacionWhatsAppJob omitido: flujo deshabilitado', [
+                'organizacion_id' => $orgId,
+                'flujo' => $flujo,
+                'template' => $this->payload['template'] ?? null,
+            ]);
+            if ($this->batchItemId !== null) {
+                $batchService->markItemCompleted($this->batchItemId, null);
+            }
+
+            return;
+        }
+
         $sleep = (int) ($this->payload['sleep'] ?? 0);
         if ($sleep > 0) {
             sleep(min($sleep, 120));

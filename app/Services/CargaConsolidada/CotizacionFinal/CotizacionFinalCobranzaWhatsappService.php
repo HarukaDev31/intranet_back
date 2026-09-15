@@ -154,6 +154,17 @@ class CotizacionFinalCobranzaWhatsappService
         if ($ctx === null) {
             return ['status' => false, 'error' => 'Cotización o contenedor no encontrado', 'id_cotizacion' => $idCotizacion];
         }
+        $orgId = app(\App\Services\Organizacion\OrganizacionMensajeriaService::class)
+            ->resolverOrganizacionId(['id_cotizacion' => $idCotizacion]);
+        $this->setWhatsappOrganizacionId($orgId);
+        $this->setWhatsappFlujo('cobranza');
+        if (!app(\App\Services\Organizacion\OrganizacionMensajeriaService::class)->flujoHabilitado($orgId, 'cobranza')) {
+            return [
+                'status' => false,
+                'error' => 'Este envío WhatsApp está deshabilitado para esta organización',
+                'id_cotizacion' => $idCotizacion,
+            ];
+        }
         if ($ctx['phone'] === '') {
             return ['status' => false, 'error' => 'Teléfono inválido', 'id_cotizacion' => $idCotizacion];
         }

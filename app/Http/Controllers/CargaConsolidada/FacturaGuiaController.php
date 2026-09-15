@@ -882,6 +882,7 @@ class FacturaGuiaController extends Controller
     public function sendFactura($idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('factura_guia');
             $cotizacion = Cotizacion::find($idCotizacion);
 
             if (!$cotizacion) {
@@ -1033,6 +1034,7 @@ class FacturaGuiaController extends Controller
     public function sendGuia($idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('factura_guia');
             $cotizacion = Cotizacion::find($idCotizacion);
 
             if (!$cotizacion) {
@@ -1889,6 +1891,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
     public function enviarFormulario(Request $request, $idContenedor)
     {
         try {
+            $this->setWhatsappFlujo('entrega');
             $cotizacionIds = $request->input('cotizacion_ids', []);
 
             if (empty($cotizacionIds)) {
@@ -2098,6 +2101,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
     public function sendComprobantesContabilidad($idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('contabilidad');
             $cotizacion = Cotizacion::find($idCotizacion);
             if (!$cotizacion) {
                 return response()->json(['success' => false, 'error' => 'Cotización no encontrada'], 404);
@@ -2166,6 +2170,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
     public function sendGuiasContabilidad($idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('contabilidad');
             $cotizacion = Cotizacion::find($idCotizacion);
             if (!$cotizacion) {
                 return response()->json(['success' => false, 'error' => 'Cotización no encontrada'], 404);
@@ -2244,6 +2249,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
     public function sendDetraccionesContabilidad($idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('contabilidad');
             $cotizacion = Cotizacion::find($idCotizacion);
             if (!$cotizacion) {
                 return response()->json(['success' => false, 'error' => 'Cotización no encontrada'], 404);
@@ -2309,6 +2315,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
     public function sendFormularioContabilidad($idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('comprobante_form');
             $cotizacion = Cotizacion::with('contenedor')->find($idCotizacion);
             if (!$cotizacion) {
                 return response()->json(['success' => false, 'error' => 'Cotización no encontrada'], 404);

@@ -1428,9 +1428,10 @@ class CotizacionResumenController extends Controller
         }
 
         foreach ($existentes as $existente) {
-            if (!in_array((int) $existente->getAttribute('id'), $idsKeep, true)) {
-                $existente->delete();
+            if (in_array((int) $existente->getAttribute('id'), $idsKeep, true)) {
+                continue;
             }
+            $this->eliminarProveedorResumenSiNoTieneCodigo($existente);
         }
 
         $totalesCosto = $this->sumarCostosRequest($proveedoresPayload);
@@ -1467,6 +1468,33 @@ class CotizacionResumenController extends Controller
                 ->where('id_cotizacion', $idCotizacion)
                 ->update(['id_contenedor' => $idContenedor]);
         }
+    }
+
+    /**
+     * Al reemplazar el archivo en COTIZADO se borran proveedores/ítems sin
+     * code_supplier. Los que ya tienen código no se tocan.
+     *
+     * @param CotizacionProveedor $proveedor
+     */
+    private function eliminarProveedorResumenSiNoTieneCodigo($proveedor)
+    {
+        $code = trim((string) $proveedor->getAttribute('code_supplier'));
+        if ($code !== '') {
+            return;
+        }
+
+        $id = (int) $proveedor->getAttribute('id');
+        $resumenes = CotizacionProveedorResumen::query()->where('id_proveedor', $id)->get();
+        foreach ($resumenes as $resumen) {
+            CotizacionProveedorResumenCosto::query()
+                ->where('id_cotizacion_proveedor_resumen', $resumen->getAttribute('id'))
+                ->delete();
+            $resumen->delete();
+        }
+        DB::table('contenedor_consolidado_cotizacion_proveedores_items')
+            ->where('id_proveedor', $id)
+            ->delete();
+        $proveedor->delete();
     }
 
     /**

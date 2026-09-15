@@ -39,6 +39,7 @@ class SendRecordatorioDatosProveedorJob implements ShouldQueue
     {
         try {
             $this->setDatabaseConnection($this->domain);
+            $this->setWhatsappFlujo('datos_proveedor');
             $cotizacion = Cotizacion::find($this->idCotizacion);
             if (!$cotizacion) {
                 Log::error('Cotización no encontrada para ID: ' . $this->idCotizacion);

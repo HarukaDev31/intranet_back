@@ -7,8 +7,11 @@ use App\Models\Organizacion;
 use App\Models\OrganizacionPortal;
 use App\Models\Pais;
 use App\Models\PaisFlag;
+use App\Services\Organizacion\OrganizacionMensajeriaService;
 use App\Support\Organizacion\OrganizacionPaisesHabilitados;
 use App\Support\Organizacion\OrganizacionPortalUrls;
+use App\Traits\FileTrait;
+use App\Traits\UsesObjectStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -20,6 +23,8 @@ use Illuminate\Support\Facades\Schema;
  */
 class OrganizacionAdminController extends Controller
 {
+    use FileTrait, UsesObjectStorage;
+
     private const ID_ORGANIZACION_ADMIN = 1;
 
     private function autorizarAdmin(): ?\Illuminate\Http\JsonResponse
@@ -86,6 +91,8 @@ class OrganizacionAdminController extends Controller
                 'id_pais'                => 'nullable|integer|exists:pais,ID_Pais',
                 'paises_habilitados'     => 'nullable|array',
                 'paises_habilitados.*'   => 'integer|exists:pais,ID_Pais',
+                'envios_habilitados'     => 'nullable',
+                'rotulado_habilitado'    => 'nullable',
             ]);
 
             $organizacion = Organizacion::create([
@@ -101,6 +108,7 @@ class OrganizacionAdminController extends Controller
                 OrganizacionPaisesHabilitados::sync($organizacion, $payload['paises_habilitados']);
             }
             $this->syncPortal($organizacion, $payload);
+            $this->syncMensajeria($organizacion, $payload);
 
             return response()->json([
                 'success' => true,
@@ -146,6 +154,8 @@ class OrganizacionAdminController extends Controller
                 'id_pais'                => 'nullable|integer|exists:pais,ID_Pais',
                 'paises_habilitados'     => 'nullable|array',
                 'paises_habilitados.*'   => 'integer|exists:pais,ID_Pais',
+                'envios_habilitados'     => 'nullable',
+                'rotulado_habilitado'    => 'nullable',
             ]);
 
             $input = $this->requestPayload($request);
@@ -174,6 +184,7 @@ class OrganizacionAdminController extends Controller
                 OrganizacionPaisesHabilitados::sync($organizacion, $input['paises_habilitados']);
             }
             $this->syncPortal($organizacion, $input);
+            $this->syncMensajeria($organizacion, $input);
 
             return response()->json([
                 'success' => true,
@@ -271,7 +282,7 @@ class OrganizacionAdminController extends Controller
             $paisesNombres[] = $paisHab->getAttribute('No_Pais');
         }
 
-        return [
+        return array_merge([
             'id'                     => $o->getAttribute('ID_Organizacion'),
             'id_empresa'             => $o->getAttribute('ID_Empresa'),
             'empresa'                => $empresa ? $empresa->getAttribute('No_Empresa') : null,
@@ -290,7 +301,46 @@ class OrganizacionAdminController extends Controller
             'drive_folder_id'        => $portal ? $portal->drive_folder_id : null,
             'logo_url'               => $portal ? $portal->logo_url : null,
             'public_key'             => $portal ? $portal->public_key : null,
-        ];
+        ], $this->serializarMensajeria($o));
+    }
+
+    /**
+     * POST /api/panel-acceso/organizaciones/{id}/rotulado-imagen
+     */
+    public function uploadRotuladoImagen(Request $request, $id)
+    {
+        if ($denegado = $this->autorizarAdmin()) {
+            return $denegado;
+        }
+
+        try {
+            $organizacion = Organizacion::find($id);
+            if (!$organizacion) {
+                return response()->json(['success' => false, 'message' => 'Organización no encontrada'], 404);
+            }
+
+            $request->validate([
+                'slot' => 'required|in:paso1,paso2,direccion',
+                'file' => 'required|file|mimes:jpg,jpeg,png,webp,gif|max:5120',
+            ]);
+
+            app(OrganizacionMensajeriaService::class)->storeImagen(
+                (int) $organizacion->getAttribute('ID_Organizacion'),
+                (string) $request->input('slot'),
+                $request->file('file')
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Imagen guardada',
+                'data' => $this->serializar($organizacion->fresh(['empresa', 'portal', 'pais', 'paisFlag', 'paisesHabilitados'])),
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['success' => false, 'message' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            Log::error('OrganizacionAdminController@uploadRotuladoImagen: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error al subir la imagen'], 500);
+        }
     }
 
     private function normalizarIdPaisRequest(Request $request): void
@@ -351,5 +401,33 @@ class OrganizacionAdminController extends Controller
         }
         $portal->save();
         OrganizacionPortalUrls::forgetCache($orgId);
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     */
+    private function syncMensajeria(Organizacion $organizacion, array $input): void
+    {
+        if (
+            !array_key_exists('envios_habilitados', $input)
+            && !array_key_exists('rotulado_habilitado', $input)
+            && !array_key_exists('flujos', $input)
+        ) {
+            return;
+        }
+
+        app(OrganizacionMensajeriaService::class)->syncFlags(
+            (int) $organizacion->getAttribute('ID_Organizacion'),
+            $input
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializarMensajeria(Organizacion $o): array
+    {
+        return app(OrganizacionMensajeriaService::class)
+            ->serializar((int) $o->getAttribute('ID_Organizacion'));
     }
 }

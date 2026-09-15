@@ -32,6 +32,7 @@ class SendReminderPagoWhatsAppJob implements ShouldQueue
         $carga = '';
 
         try {
+            $this->setWhatsappFlujo('reminder_pago');
             $payload = $service->buildPayload($this->idCotizacion);
             if ($payload === null) {
                 Log::warning('SendReminderPagoWhatsAppJob: cotización no encontrada', [

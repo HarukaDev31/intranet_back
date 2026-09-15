@@ -41,6 +41,7 @@ use App\Support\BrandLogoPaths;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\EmbarqueExport;
 use App\Jobs\SendRotuladoJob;
+use App\Services\Organizacion\OrganizacionMensajeriaService;
 use App\Models\CargaConsolidada\DocumentacionFile;
 use App\Models\CargaConsolidada\DocumentacionFolder;
 use App\Models\CargaConsolidada\CotizacionDocumentacion;
@@ -586,6 +587,7 @@ class CotizacionProveedorController extends Controller
             }
 
             // Enviar mensaje de WhatsApp
+            $this->setWhatsappFlujo('datos_proveedor');
             $resultadoWhatsApp = $this->sendMessage(
                 $mensaje,
                 $telefono,
@@ -941,6 +943,7 @@ class CotizacionProveedorController extends Controller
             }
 
             // Enviar mensaje de bienvenida si es necesario
+            $this->setWhatsappFlujo('rotulado');
             if (count($providersHasSended) == 0) {
                 $this->sendWelcome($carga);
             } elseif (count($providersHasSended) > 0 && count($providersHasNoSended) > 0) {
@@ -1016,7 +1019,8 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 $sleepSendMedia += 1;
 
                 $pdfService = app(\App\Services\CargaConsolidada\RotuladoPdfService::class);
-                $htmlContent = $pdfService->buildHtml($cliente, $supplierCode, $carga);
+                $cotizacionPdf = Cotizacion::where('id', $idCotizacion)->first();
+                $htmlContent = $pdfService->buildHtmlForCotizacion($cliente, $supplierCode, $carga, $cotizacionPdf);
 
                 Log::info('HTML procesado para proveedor: ' . $supplierCode);
 
@@ -1143,6 +1147,26 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
     }
 
     /**
+     * @param Cotizacion $cotizacion
+     * @return \Illuminate\Http\JsonResponse|null
+     */
+    private function respuestaRotuladoDeshabilitado($cotizacion)
+    {
+        $orgId = (int) $cotizacion->getAttribute('organizacion_id');
+        if ($orgId <= 0) {
+            $orgId = OrganizacionMensajeriaService::ID_ORGANIZACION_ADMIN;
+        }
+        if (app(OrganizacionMensajeriaService::class)->rotuladoHabilitado($orgId)) {
+            return null;
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Los envíos de rotulado están deshabilitados para esta organización.',
+        ], 403);
+    }
+
+    /**
      * Procesar estado de rotulado usando Job asíncrono
      *
      * @param string $cliente
@@ -1155,7 +1179,20 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
     protected function procesarEstadoRotuladoJob($cliente, $carga, $proveedores, $idCotizacion, $total_movilidad_personal = 0)
     {
         try {
-            $idContenedor = Cotizacion::where('id', $idCotizacion)->first()->id_contenedor;
+            $cotizacion = Cotizacion::where('id', $idCotizacion)->first();
+            if (!$cotizacion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada',
+                ], 404);
+            }
+
+            $bloqueado = $this->respuestaRotuladoDeshabilitado($cotizacion);
+            if ($bloqueado) {
+                return $bloqueado;
+            }
+
+            $idContenedor = $cotizacion->id_contenedor;
             $carga = Contenedor::where('id', $idContenedor)->first()->carga;
 
             // Obtener dominio del frontend
@@ -1276,6 +1313,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 "📦 En caso hubiera variaciones en el cubicaje se cobrará la diferencia en la cotización final.\n\n" .
                 "Apenas haga el pago, envíe por este medio para hacer la reserva.";
 
+            $this->setWhatsappFlujo('cobranza');
             $this->sendMessage($message, 'administracion');
 
             // Enviar imagen de pagos
@@ -1443,6 +1481,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
                     $telefono = preg_replace('/\s+/', '', $telefono);
                     $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
+                    $this->setWhatsappFlujo('arrive_date');
                     $this->sendMessage(
                         $message,
                         $this->phoneNumberId,
@@ -1769,6 +1808,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
     public function sendAlertDifferenceCbmMessage($idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('cbm_alerta');
             Log::info('sendAlertDifferenceCbmMessage: ' . $idCotizacion);
             $cotizacion = Cotizacion::find($idCotizacion);
             $proveedores = CotizacionProveedor::where('id_cotizacion', $idCotizacion)->where('estados_proveedor', '!=', 'NO LOADED')->get();
@@ -2209,6 +2249,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
 
             if ($proveedorsWithFilesSended < 1) {
+                $this->setWhatsappFlujo('cobranza');
                 if ($this->shouldSendReservationMessage($idCotizacion)) {
                     $this->sendReservationMessage($cotizacion, $telefono);
                 }
@@ -2342,6 +2383,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
         ?string $linkInspeccion = null,
         ?int $idProveedor = null
     ) {
+        $this->setWhatsappFlujo('inspeccion');
         $sentFiles = ['images' => 0, 'videos' => 0, 'llegada_enviada' => false];
 
         $totalFiles = count($inspectionFiles['images']) + count($inspectionFiles['videos']);
@@ -2399,6 +2441,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
     private function sendReservationMessage($cotizacion, $telefono)
     {
+        $this->setWhatsappFlujo('cobranza');
         $contenedor = Contenedor::where('id', $cotizacion->id_contenedor)->first();
         if (!$contenedor) {
             return;
@@ -3449,6 +3492,14 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $idContainer = $request->idContainer;
             $idsProveedores = $request->proveedores;
 
+            $cotizacion = Cotizacion::where('id', $idCotizacion)->first();
+            if ($cotizacion) {
+                $bloqueado = $this->respuestaRotuladoDeshabilitado($cotizacion);
+                if ($bloqueado) {
+                    return $bloqueado;
+                }
+            }
+
             Log::info("Iniciando proceso de envío de rotulado", [
                 'id_cotizacion' => $idCotizacion,
                 'id_container' => $idContainer,
@@ -4075,6 +4126,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
             $finalFilePath = $this->storageLocalPath($uploadPath);
             $fileName = 'contrato_' . $cotizacion->cod_contract . '.pdf';
+            $this->setWhatsappFlujo('cotizacion_pdf');
             $this->sendMedia($finalFilePath, 'application/pdf', $message, $telefono, 10, 'ventas', $fileName);
 
             Log::info('Contrato firmado guardado exitosamente', [

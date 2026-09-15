@@ -61,6 +61,7 @@ class SendDeliveryFormBulkJob implements ShouldQueue
 
     public function handle(): void
     {
+        $this->setWhatsappFlujo('entrega');
         foreach ($this->cotizaciones as $cotizacionData) {
             try {
                 $numeroWhatsapp = null;

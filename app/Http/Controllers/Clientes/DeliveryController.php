@@ -753,6 +753,7 @@ class DeliveryController extends Controller
             if (!$phoneNumber) {
                 return;
             }
+            $this->setWhatsappFlujo('entrega');
             $contenedor = Contenedor::find($cotizacion->id_contenedor);
             $carga = $contenedor ? (string) $contenedor->carga : '';
             $meta = CoordinacionWhatsappPayload::deliveryWhatsapp(

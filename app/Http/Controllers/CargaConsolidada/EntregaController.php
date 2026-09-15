@@ -2977,6 +2977,7 @@ class EntregaController extends Controller
                     $numeroWhatsapp = '51' . $numeroWhatsapp;
                 }
                 $numeroWhatsapp = $numeroWhatsapp . '@c.us';
+                $this->setWhatsappFlujo('entrega');
                 $contenedor = Contenedor::find($idContenedor);
                 $carga = $contenedor->carga;
                 $message = "Hola $nombre 👋
@@ -3586,6 +3587,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
     public function sendMessageDelivery(Request $request, $idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('entrega');
             $idCotizacion = (int) $idCotizacion;
             $cotizacion = DB::table('contenedor_consolidado_cotizacion as C')
                 ->leftJoin('consolidado_delivery_form_lima as L', function ($join) {
@@ -3724,6 +3726,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
     public function sendMessageDeliveryBulk(Request $request)
     {
         try {
+            $this->setWhatsappFlujo('entrega');
             $this->validate($request, [
                 'cotizaciones' => 'required_without:cotizacion_ids|array|min:1',
                 'cotizaciones.*.id_cotizacion' => 'required_with:cotizaciones|integer|min:1',
@@ -3838,6 +3841,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
     public function sendRecordatorioFormularioDelivery(Request $request, $idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('entrega');
             $cotizacion = Cotizacion::find($idCotizacion);
             if (!$cotizacion) {
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
@@ -3882,6 +3886,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
     public function sendCobroCotizacionFinalDelivery(Request $request, $idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('cobranza');
             $cotizacion = Cotizacion::find($idCotizacion);
             if (!$cotizacion) {
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
@@ -3920,6 +3925,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
     public function sendCobroDeliveryDelivery(Request $request, $idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('entrega');
             $idCotizacion = (int) $idCotizacion;
             $cotizacion = Cotizacion::find($idCotizacion);
             if (!$cotizacion) {
@@ -4762,6 +4768,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                 $numeroWhatsapp = '51' . $numeroWhatsapp;
             }
             $numeroWhatsapp = $numeroWhatsapp . '@c.us';
+            $this->setWhatsappFlujo('entrega');
 
             $message = "Hola {$row->cliente} 👋\nAdjunto el documento de cargo de entrega firmado correspondiente a su importación del consolidado #{$row->carga}.\n\nMuchas gracias por confiar en Pro Business. ✈️📦";
 

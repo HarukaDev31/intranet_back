@@ -40,6 +40,7 @@ class SendDeliveryConfirmationWhatsAppLimaJob implements ShouldQueue
     public function handle()
     {
         try {
+            $this->setWhatsappFlujo('entrega');
             $deliveryForm = ConsolidadoDeliveryFormLima::with(['cotizacion'])->find($this->deliveryFormId);
             if (!$deliveryForm) {
                 Log::error('Formulario de delivery de Lima no encontrado', ['id' => $this->deliveryFormId]);

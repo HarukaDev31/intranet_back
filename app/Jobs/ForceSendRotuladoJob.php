@@ -10,6 +10,7 @@ use Illuminate\Queue\SerializesModels;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\CotizacionProveedor;
+use App\Services\Organizacion\OrganizacionMensajeriaService;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Traits\WhatsappTrait;
 use App\Traits\DatabaseConnectionTrait;
@@ -49,6 +50,7 @@ class ForceSendRotuladoJob implements ShouldQueue
         try {
             // Establecer la conexión de BD basándose en el dominio
             $this->setDatabaseConnection($this->domain);
+            $this->setWhatsappFlujo('rotulado');
 
             Log::info("Iniciando ForceSendRotuladoJob", [
                 'id_cotizacion' => $this->idCotizacion,
@@ -62,6 +64,21 @@ class ForceSendRotuladoJob implements ShouldQueue
             $cotizacionInfo = Cotizacion::where('id', $this->idCotizacion)->first();
             if (!$cotizacionInfo) {
                 throw new Exception("Cotización no encontrada");
+            }
+
+            $orgId = (int) $cotizacionInfo->getAttribute('organizacion_id');
+            if ($orgId <= 0) {
+                $orgId = OrganizacionMensajeriaService::ID_ORGANIZACION_ADMIN;
+            }
+            $this->setWhatsappOrganizacionId($orgId);
+            $mensajeria = app(OrganizacionMensajeriaService::class);
+            if (!$mensajeria->rotuladoHabilitado($orgId)) {
+                Log::info('ForceSendRotuladoJob omitido: rotulado deshabilitado', [
+                    'organizacion_id' => $orgId,
+                    'id_cotizacion' => $this->idCotizacion,
+                ]);
+                DB::rollBack();
+                return;
             }
 
             $telefono = preg_replace('/\s+/', '', $cotizacionInfo->telefono);
@@ -110,6 +127,24 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 Log::info('Mensaje de nuevo proveedor enviado - procesando proveedores específicos');
             }
 
+            $sleepSendMedia = 7;
+            foreach ([OrganizacionMensajeriaService::IMG_PASO1, OrganizacionMensajeriaService::IMG_PASO2] as $slot) {
+                    $imgPath = $mensajeria->localPathImagen($orgId, $slot);
+                    if (!$imgPath || !is_file($imgPath)) {
+                        continue;
+                    }
+                    $sleepSendMedia += 2;
+                    $this->sendMedia(
+                        $imgPath,
+                        'image/jpeg',
+                        $slot === OrganizacionMensajeriaService::IMG_PASO1 ? 'Paso 1 — rotulado' : 'Paso 2 — rotulado',
+                        $this->phoneNumberId,
+                        $sleepSendMedia,
+                        'consolidado',
+                        basename($imgPath)
+                    );
+            }
+
             // Configurar ZIP
             $zipFileName = storage_path('app/Rotulado.zip');
             $zipDirectory = dirname($zipFileName);
@@ -154,7 +189,6 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $options->set('debugLayoutBlocks', false);
             $options->set('debugLayoutInline', false);
             $options->set('debugLayoutPaddingBox', false);
-            $sleepSendMedia = 7;
 
             $processedProviders = 0;
 
@@ -189,7 +223,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 $sleepSendMedia += 1;
 
                 $pdfService = app(\App\Services\CargaConsolidada\RotuladoPdfService::class);
-                $htmlContent = $pdfService->buildHtml($cliente, $supplierCode, $carga);
+                $htmlContent = $pdfService->buildHtmlForCotizacion($cliente, $supplierCode, $carga, $cotizacionInfo);
 
                 Log::info('HTML procesado para proveedor: ' . $supplierCode);
 
