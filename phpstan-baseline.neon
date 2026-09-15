@@ -4597,12 +4597,6 @@ parameters:
 			path: app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php
 
 		-
-			message: '#^Method App\\Http\\Controllers\\CargaConsolidada\\CotizacionProveedorController\:\:procesarEstadoRotuladoJob\(\) should return Illuminate\\Http\\Response but returns Illuminate\\Http\\JsonResponse\.$#'
-			identifier: return.type
-			count: 2
-			path: app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php
-
-		-
 			message: '#^Method App\\Http\\Controllers\\CargaConsolidada\\CotizacionProveedorController\:\:resolveMediaPath\(\) is unused\.$#'
 			identifier: method.unused
 			count: 1

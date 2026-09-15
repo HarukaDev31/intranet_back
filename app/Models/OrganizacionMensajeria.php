@@ -8,8 +8,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * @property int $id
  * @property int $organizacion_id
- * @property int $envios_habilitados
- * @property int $rotulado_habilitado
+ * @property bool $envios_habilitados
+ * @property bool $rotulado_habilitado
+ * @property string|null $flujos
  * @property string|null $img_rotulado_paso1
  * @property string|null $img_rotulado_paso2
  * @property string|null $img_rotulado_direccion

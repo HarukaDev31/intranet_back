@@ -1173,7 +1173,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
      * @param string $carga
      * @param array $proveedores
      * @param int $idCotizacion
-     * @return \Illuminate\Http\Response
+     * @return \Illuminate\Http\JsonResponse
      * @throws Exception
      */
     protected function procesarEstadoRotuladoJob($cliente, $carga, $proveedores, $idCotizacion, $total_movilidad_personal = 0)

@@ -410,7 +410,7 @@ class OrganizacionMensajeriaService
         }
         try {
             $local = $this->storageLocalPath($uploadPath);
-            if (is_string($local) && is_file($local)) {
+            if ($local !== '' && is_file($local)) {
                 return $local;
             }
         } catch (\Exception $e) {
