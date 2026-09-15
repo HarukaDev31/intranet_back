@@ -146,12 +146,12 @@ class GeneralController extends Controller
         $headersData = [
             'cbm_total_china' => [
                 'value' => number_format((float) ($china->cbm_total_china ?? 0), 2, '.', ''),
-                'label' => '',
+                'label' => 'CBM',
                 'icon' => $flags['china'],
             ],
             'cbm_total' => [
                 'value' => number_format((float) ($totales->cbm_destino ?? 0), 2, '.', ''),
-                'label' => '',
+                'label' => 'CBM',
                 'icon' => $flags['destino'],
             ],
             'qty_clientes' => [
@@ -759,12 +759,12 @@ class GeneralController extends Controller
                 $headersData = [
                     'cbm_total_china' => [
                         'value' => $result->cbm_total_china,
-                        'label' => '',
+                        'label' => 'CBM',
                         'icon' => $paisFlags['china']
                     ],
                     'cbm_total' => [
                         'value' => $result->cbm_total,
-                        'label' => '',
+                        'label' => 'CBM',
                         'icon' => $paisFlags['destino']
                     ],
                     'qty_items' => ['value' => $result->total_qty_items, 'label' => 'Items', 'icon' => 'bi:boxes'],

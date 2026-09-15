@@ -583,8 +583,8 @@ class CotizacionController extends Controller
     }
 
     /**
-     * Headers de Prospectos y Embarcados para socios: CBM China (solo bandera),
-     * CBM destino (solo bandera), Pendiente, IMO, Fob, Total ISD, Logística e Impuestos.
+     * Headers de Prospectos y Embarcados para socios: bandera + "CBM",
+     * Pendiente, IMO, Fob, Total ISD, Logística e Impuestos. Sin nombre de país.
      */
     private function buildSocioHeadersData($headers, array $paisFlags)
     {
@@ -612,12 +612,12 @@ class CotizacionController extends Controller
         return [
             'cbm_total_china' => [
                 'value' => number_format((float) $china, 2, '.', ''),
-                'label' => '',
+                'label' => 'CBM',
                 'icon' => $paisFlags['china'],
             ],
             'cbm_total_peru' => [
                 'value' => number_format((float) $destino, 2, '.', ''),
-                'label' => '',
+                'label' => 'CBM',
                 'icon' => $paisFlags['destino'],
             ],
             'cbm_pendiente' => [
@@ -674,12 +674,12 @@ class CotizacionController extends Controller
         $headersData = [
             'cbm_total_china' => [
                 'value' => $headers ? $headers->cbm_total_china : 0,
-                'label' => '',
+                'label' => 'CBM',
                 'icon' => $paisFlags['china']
             ],
             'cbm_total_peru' => [
                 'value' => $headers ? $headers->cbm_total_peru : 0,
-                'label' => '',
+                'label' => 'CBM',
                 'icon' => $paisFlags['destino']
             ],
             'cbm_total_imo' => [
