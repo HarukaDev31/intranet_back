@@ -151,7 +151,7 @@ foreach ($cotizaciones as $row) {
         'updated_at' => $now,
     ]);
 
-    $code = CodeSupplierHelper::generateWithOrgPrefix($nombreOrg, $row['nombre'], $carga, $suffix);
+    $code = CodeSupplierHelper::generateWithPaisPrefix('Ecuador', $orgId, $row['nombre'], $carga, $suffix, 'EC');
     $suffix++;
 
     DB::table('contenedor_consolidado_cotizacion_proveedores')->insert([

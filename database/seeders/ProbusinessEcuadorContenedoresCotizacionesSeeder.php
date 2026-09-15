@@ -497,11 +497,13 @@ class ProbusinessEcuadorContenedoresCotizacionesSeeder extends Seeder
                     'updated_at' => $now,
                 ];
                 if ($confirmada) {
-                    $row['code_supplier'] = CodeSupplierHelper::generateWithOrgPrefix(
-                        $nombreOrg,
+                    $row['code_supplier'] = CodeSupplierHelper::generateWithPaisPrefix(
+                        'Ecuador',
+                        self::ID_ORGANIZACION,
                         $def['cliente']['nombre'],
                         $carga,
-                        $next
+                        $next,
+                        'EC'
                     );
                     $next++;
                 }

@@ -12,11 +12,13 @@ use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\CotizacionProveedorArchivoIa;
 use App\Models\CargaConsolidada\CotizacionProveedorResumen;
 use App\Models\CargaConsolidada\CotizacionProveedorResumenCosto;
-use App\Models\Organizacion;
+use App\Models\Pais;
+use App\Models\PaisFlag;
 use App\Models\Usuario;
 use App\Services\CalculadoraImportacion\CodeSupplierHelper;
 use App\Services\CargaConsolidada\CustomersHeadersService;
 use App\Services\CargaConsolidada\GeminiService;
+use App\Support\CargaConsolidada\ResumenCostoClasificador;
 use App\Support\Phone\CountryPhoneHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -1154,20 +1156,22 @@ class CotizacionResumenController extends Controller
 
     private function clasificarCosto($concepto, $valor, &$fob, &$logistica, &$impuesto, &$isd)
     {
-        $c = mb_strtolower((string) $concepto);
-        if (preg_match('/\bisd\b/', $c) || strpos($c, 'salida de divisa') !== false) {
+        $tipo = ResumenCostoClasificador::tipo($concepto);
+        if ($tipo === ResumenCostoClasificador::ISD) {
             $isd += $valor;
             return;
         }
-        if (strpos($c, 'mercader') !== false || strpos($c, 'fob') !== false) {
+        if ($tipo === ResumenCostoClasificador::FOB) {
             $fob += $valor;
             return;
         }
-        if (strpos($c, 'impuest') !== false || strpos($c, 'tribut') !== false || strpos($c, 'aduana') !== false) {
+        if ($tipo === ResumenCostoClasificador::IMPUESTO) {
             $impuesto += $valor;
             return;
         }
-        $logistica += $valor;
+        if ($tipo === ResumenCostoClasificador::LOGISTICA) {
+            $logistica += $valor;
+        }
     }
 
     private function sumarCostosRequest(array $proveedores)
@@ -1471,14 +1475,14 @@ class CotizacionResumenController extends Controller
      */
     private function asignarCodeSuppliersResumen(Cotizacion $cotizacion)
     {
-        $org = Organizacion::find($cotizacion->getAttribute('organizacion_id'));
-        $nombreOrg = $org ? (string) $org->getAttribute('No_Organizacion') : '';
+        $orgId = (int) $cotizacion->getAttribute('organizacion_id');
         $contenedor = $cotizacion->getAttribute('id_contenedor')
             ? Contenedor::find($cotizacion->getAttribute('id_contenedor'))
             : null;
         $carga = $contenedor ? $contenedor->getAttribute('carga') : '';
         $nombreCliente = (string) $cotizacion->getAttribute('nombre');
-        $base = CodeSupplierHelper::basePrefixWithOrg($nombreOrg, $nombreCliente, $carga);
+        list($nombrePais, $iso2) = $this->paisCodeSupplierDesdeContenedor($contenedor);
+        $base = CodeSupplierHelper::basePrefixWithPais($nombrePais, $orgId, $nombreCliente, $carga, $iso2);
 
         $proveedores = CotizacionProveedor::query()
             ->where('id_cotizacion', $cotizacion->getAttribute('id'))
@@ -1494,14 +1498,47 @@ class CotizacionResumenController extends Controller
             if ($actual !== '') {
                 continue;
             }
-            $proveedor->code_supplier = CodeSupplierHelper::generateWithOrgPrefix(
-                $nombreOrg,
+            $proveedor->code_supplier = CodeSupplierHelper::generateWithPaisPrefix(
+                $nombrePais,
+                $orgId,
                 $nombreCliente,
                 $carga,
-                $next
+                $next,
+                $iso2
             );
             $proveedor->save();
             $next++;
         }
+    }
+
+    /**
+     * Nombre e ISO-2 del país del consolidado (id_pais → pais_flags / pais).
+     *
+     * @param Contenedor|null $contenedor
+     * @return array{0: string, 1: string}
+     */
+    private function paisCodeSupplierDesdeContenedor($contenedor)
+    {
+        if (!$contenedor) {
+            return ['', ''];
+        }
+        $idPais = (int) $contenedor->getAttribute('id_pais');
+        if ($idPais <= 0) {
+            return ['', ''];
+        }
+
+        $nombre = '';
+        $iso2 = '';
+        $flag = PaisFlag::query()->where('id_pais', $idPais)->first();
+        if ($flag) {
+            $nombre = (string) $flag->getAttribute('nombre');
+            $iso2 = (string) $flag->getAttribute('iso2');
+        }
+        if ($nombre === '') {
+            $pais = Pais::find($idPais);
+            $nombre = $pais ? (string) $pais->getAttribute('No_Pais') : '';
+        }
+
+        return [$nombre, $iso2];
     }
 }

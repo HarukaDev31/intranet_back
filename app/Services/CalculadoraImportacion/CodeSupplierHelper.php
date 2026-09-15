@@ -133,8 +133,81 @@ class CodeSupplierHelper
     }
 
     /**
-     * Primeras 3 letras de la organización (ASCII mayúsculas).
-     * Usado como prefijo del code_supplier en cotizaciones "resumen" (socios).
+     * Primeras 3 letras del país (ASCII). Ecuador → ECU, Argentina → ARG, Perú → PER.
+     *
+     * @param mixed $nombrePais
+     * @param mixed $iso2
+     */
+    public static function paisPrefix($nombrePais = null, $iso2 = null): string
+    {
+        $sanitized = self::sanitize((string) $nombrePais);
+        if ($sanitized !== null) {
+            $letters = preg_replace('/[^A-Z]/', '', $sanitized);
+            if ($letters !== null && strlen($letters) >= 3) {
+                return substr($letters, 0, 3);
+            }
+        }
+
+        $iso = strtoupper((string) preg_replace('/[^A-Z]/', '', (string) $iso2));
+        $map = [
+            'EC' => 'ECU', 'AR' => 'ARG', 'PE' => 'PER', 'CL' => 'CHL', 'MX' => 'MEX',
+            'CO' => 'COL', 'CN' => 'CHN', 'BO' => 'BOL', 'PY' => 'PRY', 'UY' => 'URY',
+            'VE' => 'VEN', 'PA' => 'PAN', 'BR' => 'BRA', 'US' => 'USA', 'ES' => 'ESP',
+        ];
+        if ($iso !== '' && isset($map[$iso])) {
+            return $map[$iso];
+        }
+
+        return $iso !== '' ? str_pad(substr($iso, 0, 3), 3, 'X') : 'PAI';
+    }
+
+    /**
+     * Número de empresa en rotulado: org 2 → 1, org 3 → 2.
+     *
+     * @param mixed $organizacionId
+     */
+    public static function socioEmpresaNumero($organizacionId): int
+    {
+        $n = (int) $organizacionId - 1;
+
+        return $n > 0 ? $n : 0;
+    }
+
+    /**
+     * Prefijo resumen socios: {PAIS3}{orgId-1}-{INICIALES}{CARGA}
+     * Org 2 Ecuador + Juan Perez + B5 → ECU1-JUPE5
+     *
+     * @param mixed $nombrePais
+     * @param mixed $organizacionId
+     * @param mixed $carga
+     * @param mixed $iso2
+     */
+    public static function basePrefixWithPais($nombrePais, $organizacionId, string $nombreCliente, $carga, $iso2 = null): string
+    {
+        $head = self::paisPrefix($nombrePais, $iso2) . self::socioEmpresaNumero($organizacionId);
+        $rest = self::basePrefix($nombreCliente, $carga);
+
+        return $rest !== '' ? ($head . '-' . $rest) : $head;
+    }
+
+    /**
+     * code_supplier resumen: {PAIS3}{orgId-1}-{INICIALES}{CARGA}-{N}
+     * Org 2 Ecuador, Juan Perez, B5 → ECU1-JUPE5-1
+     *
+     * @param mixed $nombrePais
+     * @param mixed $organizacionId
+     * @param mixed $carga
+     * @param mixed $iso2
+     */
+    public static function generateWithPaisPrefix($nombrePais, $organizacionId, string $nombreCliente, $carga, int $index, $iso2 = null): string
+    {
+        $base = self::basePrefixWithPais($nombrePais, $organizacionId, $nombreCliente, $carga, $iso2);
+        $code = self::sanitize($base . '-' . $index);
+
+        return $code ?? ('SUP-' . $index);
+    }
+    /**
+     * Primeras 3 letras de la organización (legacy). El resumen socios usa paisPrefix.
      */
     public static function orgPrefix(?string $nombreOrganizacion): string
     {

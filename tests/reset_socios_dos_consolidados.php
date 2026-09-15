@@ -254,7 +254,7 @@ foreach ([1, 2] as $nCarga) {
         $slots = $dosProveedores ? 2 : 1;
         for ($slot = 1; $slot <= $slots; $slot++) {
             $provLoaded = $loaded && $slot === 1;
-            $code = CodeSupplierHelper::generateWithOrgPrefix($nombreOrg, $cliente, (string) $nCarga, $codeIndex);
+            $code = CodeSupplierHelper::generateWithPaisPrefix('Ecuador', $orgId, $cliente, (string) $nCarga, $codeIndex, 'EC');
             $codeIndex++;
 
             DB::table('contenedor_consolidado_cotizacion_proveedores')->insert([
