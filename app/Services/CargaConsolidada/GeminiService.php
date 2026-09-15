@@ -164,13 +164,13 @@ class GeminiService
             '- cliente.documento: el número de RUC/ID/cédula del cliente. null si no aparece. ' .
             '- cliente.whatsapp: teléfono de contacto del cliente, con código de país si aparece. null si no aparece. ' .
             '- cliente.correo: correo electrónico del cliente. null si no aparece. ' .
-            '- proveedores: un elemento por cada proveedor o grupo de productos con costos propios que encuentres (al menos uno). Si el documento no distingue proveedores, usa un solo elemento con el total del documento. ' .
+            '- proveedores: un elemento por cada ítem o línea de producto (al menos uno). No combines varios ítems en un solo elemento aunque compartan proveedor. Si el documento lista varios productos, genera un elemento por cada uno. ' .
             '- proveedores[].cbm_total: volumen total en CBM/m3 de ese proveedor. null si no aparece. ' .
             '- proveedores[].peso_total: peso total en KG de ese proveedor. null si no aparece. ' .
             '- proveedores[].qty_cajas: cantidad de cajas/bultos de ese proveedor. null si no aparece. ' .
             '- proveedores[].unidades: cantidad de unidades/piezas de ese proveedor. null si no aparece. ' .
             '- proveedores[].incoterm: Incoterm si aparece (FOB, EXW, CIF, DDP, Consolidado, etc.). null si no aparece. ' .
-            '- proveedores[].productos: descripción breve de los productos de ese proveedor (nombres separados por coma). null si no aparece. ' .
+            '- proveedores[].productos: descripción breve de ese ítem (solo ese producto, no juntes varios). null si no aparece. ' .
             '- proveedores[].logistica: total de logística (flete, logística internacional, transferencia, seguro de carga). null si no aparece. ' .
             '- proveedores[].fob: valor FOB o mercadería. null si no aparece. ' .
             '- proveedores[].impuesto: impuestos/tributos/aduana. null si no aparece. ' .
@@ -206,7 +206,8 @@ class GeminiService
         $prompt = 'Analiza este documento de cotización de importación extraído de una hoja de cálculo. ' .
             'Extrae los datos del cliente y de cada proveedor/producto. ' .
             'cliente.nombre, cliente.tipo_documento (RUC o ID), cliente.documento, cliente.whatsapp, cliente.correo. ' .
-            'Por proveedor: cbm_total, peso_total, qty_cajas, unidades, incoterm, productos, ' .
+            'Un elemento en proveedores por cada ítem o línea de producto; no combines varios ítems en uno. ' .
+            'Por ítem: cbm_total, peso_total, qty_cajas, unidades, incoterm, productos (solo ese ítem), ' .
             'logistica (flete/logística internacional), fob (mercadería), impuesto (tributos/aduana), isd (ISD) ' .
             'y costos (concepto + valor). Si un dato no aparece, null. ' .
             "Contenido:\n" . $spreadsheetText;
