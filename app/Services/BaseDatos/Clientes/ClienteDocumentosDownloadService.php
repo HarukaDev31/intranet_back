@@ -204,7 +204,7 @@ class ClienteDocumentosDownloadService
         }
 
         $storage = $this->objectStorage();
-        if (method_exists($storage, 'existsOnS3') && $storage->existsOnS3($uploadPath)) {
+        if ($storage->existsOnS3($uploadPath)) {
             $fromS3 = $this->materializarArchivoDesdeStorage($uploadPath, $originalPath, $tempFiles);
             if ($fromS3 !== null) {
                 return $fromS3;

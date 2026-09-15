@@ -501,10 +501,6 @@ class BackfillViaticosPagosStorageCommand extends Command
 
     private function pathExistsOnS3(string $path): bool
     {
-        if (!method_exists($this->storage, 'existsOnS3')) {
-            return $this->storage->exists($path);
-        }
-
-        return (bool) call_user_func([$this->storage, 'existsOnS3'], $path);
+        return $this->storage->existsOnS3($path);
     }
 }
