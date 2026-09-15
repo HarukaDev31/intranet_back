@@ -21,11 +21,11 @@ class CodeSupplierPaisPrefixTest extends TestCase
         $this->assertSame(2, CodeSupplierHelper::socioEmpresaNumero(3));
         $this->assertSame(
             'ECU1-JUPE5-1',
-            CodeSupplierHelper::generateWithPaisPrefix('Ecuador', 2, 'Juan Perez', 'B5', 1)
+            CodeSupplierHelper::generateWithPaisPrefix('Ecuador', 2, 'Juan Perez', 5, 1)
         );
         $this->assertSame(
             'ARG2-JUPE5-1',
-            CodeSupplierHelper::generateWithPaisPrefix('Argentina', 3, 'Juan Perez', 'B5', 1)
+            CodeSupplierHelper::generateWithPaisPrefix('Argentina', 3, 'Juan Perez', 5, 1)
         );
     }
 }
