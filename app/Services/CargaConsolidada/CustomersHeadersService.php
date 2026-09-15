@@ -53,6 +53,59 @@ class CustomersHeadersService
             ', ['NC'])
             ->first();
 
+        return $this->format($stats);
+    }
+
+    /**
+     * KPIs del listado Cotización Resumen (org del usuario, COTIZADO + CONFIRMADO).
+     *
+     * @param array<int, int> $orgIds
+     * @return array<string, array<string, string>>
+     */
+    public function buildForResumen(array $orgIds, $search = '', $estadoChina = 'todos')
+    {
+        $orgIds = array_values(array_unique(array_map('intval', $orgIds)));
+        if ($orgIds === []) {
+            return $this->empty();
+        }
+
+        $statsQuery = DB::table($this->tableCotizacion . ' as CC')
+            ->leftJoin($this->tableContenedor . ' as CONT', 'CONT.id', '=', 'CC.id_contenedor')
+            ->leftJoin($this->tablePais . ' as P', 'P.ID_Pais', '=', 'CONT.id_pais')
+            ->leftJoin($this->tableProveedor . ' as PR', function ($join) {
+                $join->on('PR.id_cotizacion', '=', 'CC.id')
+                    ->where('PR.modo_cotizacion', '=', 'resumen');
+            })
+            ->whereIn('CC.organizacion_id', $orgIds)
+            ->whereNull('CC.deleted_at')
+            ->whereNull('CC.id_cliente_importacion')
+            ->where(function ($q) {
+                $q->whereIn('CC.estado_resumen', ['COTIZADO', 'CONFIRMADO'])
+                    ->orWhereNull('CC.estado_resumen');
+            });
+        $this->applyFilters($statsQuery, $search, null, $estadoChina, 'PR');
+        $stats = $statsQuery
+            ->selectRaw('
+                COALESCE(SUM(COALESCE(PR.cbm_total, 0) + COALESCE(PR.cbm_imo, 0)), 0) as cbm_warehouse,
+                COUNT(DISTINCT CC.id) as total_customers,
+                COUNT(PR.id) as total_suppliers_code,
+                SUM(CASE WHEN PR.estados_proveedor = ? THEN 1 ELSE 0 END) as total_nc
+            ', ['NC'])
+            ->first();
+
+        return $this->format($stats);
+    }
+
+    /**
+     * @param object|null $stats
+     * @return array<string, array<string, string>>
+     */
+    private function format($stats)
+    {
+        if (!$stats) {
+            return $this->empty();
+        }
+
         return [
             'cbm_warehouse' => [
                 'value' => number_format((float) ($stats->cbm_warehouse ?? 0), 3, '.', ''),

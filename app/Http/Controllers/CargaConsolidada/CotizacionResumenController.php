@@ -370,8 +370,10 @@ class CotizacionResumenController extends Controller
                 ];
             });
 
-            $headers = (new CustomersHeadersService())->build(
-                $orgEfectiva > 0 ? [$orgEfectiva] : []
+            $headers = (new CustomersHeadersService())->buildForResumen(
+                $orgEfectiva > 0 ? [$orgEfectiva] : [],
+                (string) $request->input('search', ''),
+                $request->input('estado_china', 'todos')
             );
 
             return response()->json([
