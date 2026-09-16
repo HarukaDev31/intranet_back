@@ -1651,7 +1651,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             }
             // Estados documentos: Coord 2 vs VB final (*_final) — según usuario autenticado
             $excelConfStatusChangedToRevisado = false;
-            $isCoord2DocsUser = DocumentStatusSync::isCoord2User($user);
+            $isCoord2DocsUser = DocumentStatusSync::usesCoord2Statuses($user);
 
             if ($isCoord2DocsUser) {
                 // Coord 2 solo puede tocar invoice/packing/excel_conf_status
