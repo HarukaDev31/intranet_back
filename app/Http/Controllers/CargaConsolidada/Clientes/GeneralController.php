@@ -16,6 +16,8 @@ use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Services\CargaConsolidada\Clientes\GeneralService;
 use App\Services\CargaConsolidada\Clientes\GeneralExportService;
 use App\Models\CargaConsolidada\CotizacionProveedor;
+use App\Models\CargaConsolidada\CotizacionProveedorItems;
+use App\Models\CargaConsolidada\CotizacionProveedorResumen;
 use App\Traits\WhatsappTrait;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Models\CargaConsolidada\Contenedor;
@@ -854,7 +856,7 @@ class GeneralController extends Controller
     {
         try {
             $proveedores = DB::table('contenedor_consolidado_cotizacion_proveedores')
-                ->select('id', 'code_supplier')
+                ->select('id', 'code_supplier', 'products', 'modo_cotizacion')
                 ->where('id_cotizacion', $idCotizacion)
                 ->orderBy('id', 'asc')
                 ->get();
@@ -887,6 +889,8 @@ class GeneralController extends Controller
                 return [
                     'id' => $prov->id,
                     'code_supplier' => $prov->code_supplier,
+                    'products' => $prov->products,
+                    'modo_cotizacion' => $prov->modo_cotizacion,
                     'items' => $provItems,
                 ];
             })->values();
@@ -1001,32 +1005,46 @@ class GeneralController extends Controller
                     'message' => 'Contenedor no tiene fecha de documentacion maxima'
                 ], 400);
             }
-            // Actualizar tipo_producto por item.id
-            foreach ($proveedores as $prov) {
-                $items = $prov['items'] ?? [];
-                foreach ($items as $item) {
-                    if (!isset($item['id']) || !isset($item['tipo_producto'])) {
-                        continue;
-                    }
-                    DB::table('contenedor_consolidado_cotizacion_proveedores_items')
-                        ->where('id', $item['id'])
-                        ->where('organizacion_id', $container->getAttribute('organizacion_id'))
-                        ->update(['tipo_producto' => $item['tipo_producto']]);
-                }
-            }
-
-            // Automatización módulo Cliente/Seguimiento: al pedir documentos, Invoice/Packing/Excel Conf.
-            // (perfil Daniela) pasan de Pendiente a Solicitado, solo para el proveedor involucrado.
+            $proveedoresJob = [];
             foreach ($proveedores as $prov) {
                 if (!isset($prov['id'])) {
                     continue;
                 }
-                $proveedorModel = CotizacionProveedor::find($prov['id']);
+                $proveedorModel = CotizacionProveedor::where('id', $prov['id'])
+                    ->where('id_cotizacion', $idCotizacion)
+                    ->first();
                 if (!$proveedorModel) {
                     continue;
                 }
+
+                if ((string) $proveedorModel->getAttribute('modo_cotizacion') === 'resumen') {
+                    $proveedoresJob[] = [
+                        'id' => (int) $proveedorModel->id,
+                        'items' => $this->itemsGeneralesParaSolicitud($proveedorModel, $container),
+                    ];
+                } else {
+                    $items = $prov['items'] ?? [];
+                    foreach ($items as $item) {
+                        if (!isset($item['id']) || !isset($item['tipo_producto'])) {
+                            continue;
+                        }
+                        DB::table('contenedor_consolidado_cotizacion_proveedores_items')
+                            ->where('id', $item['id'])
+                            ->where('organizacion_id', $container->getAttribute('organizacion_id'))
+                            ->update(['tipo_producto' => $item['tipo_producto']]);
+                    }
+                    $proveedoresJob[] = $prov;
+                }
+
                 DocumentStatusSync::markSolicitado($proveedorModel);
                 $proveedorModel->save();
+            }
+            $proveedores = $proveedoresJob;
+            if ($proveedores === []) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payload inválido: no hay proveedores válidos para solicitar documentos'
+                ], 422);
             }
 
             $cargoRow = DB::table('carga_consolidada_contenedor')
@@ -1213,4 +1231,57 @@ class GeneralController extends Controller
         }
     }
 
+    /**
+     * Flujo resumen: Excel de confirmación GENERAL por proveedor (sin categoría por ítem).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function itemsGeneralesParaSolicitud(CotizacionProveedor $proveedor, Contenedor $container): array
+    {
+        $existentes = CotizacionProveedorItems::where('id_proveedor', $proveedor->id)
+            ->orderBy('id')
+            ->get();
+
+        if ($existentes->isNotEmpty()) {
+            $items = [];
+            foreach ($existentes as $it) {
+                $it->tipo_producto = 'GENERAL';
+                $it->save();
+                $nombre = trim((string) ($it->initial_name ?? ''));
+                $items[] = [
+                    'id' => (int) $it->id,
+                    'initial_name' => $nombre,
+                    'tipo_producto' => 'GENERAL',
+                    'caracteristicas' => $nombre !== '' ? ['NOMBRE COMERCIAL' => $nombre] : [],
+                ];
+            }
+
+            return $items;
+        }
+
+        $nombre = trim((string) ($proveedor->products ?? ''));
+        if ($nombre === '') {
+            $resumen = CotizacionProveedorResumen::where('id_proveedor', $proveedor->id)->first();
+            $nombre = $resumen ? trim((string) $resumen->getAttribute('producto')) : '';
+        }
+        if ($nombre === '') {
+            $nombre = 'Producto';
+        }
+
+        $item = new CotizacionProveedorItems();
+        $item->id_contenedor = $proveedor->id_contenedor;
+        $item->id_cotizacion = $proveedor->id_cotizacion;
+        $item->id_proveedor = $proveedor->id;
+        $item->initial_name = $nombre;
+        $item->tipo_producto = 'GENERAL';
+        $item->organizacion_id = $container->getAttribute('organizacion_id');
+        $item->save();
+
+        return [[
+            'id' => (int) $item->id,
+            'initial_name' => $nombre,
+            'tipo_producto' => 'GENERAL',
+            'caracteristicas' => ['NOMBRE COMERCIAL' => $nombre],
+        ]];
+    }
 }
