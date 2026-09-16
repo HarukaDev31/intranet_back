@@ -117,23 +117,41 @@ class WhatsappInboxOrgConfigService
     }
 
     /**
-     * Credenciales de envío. Si la org no tiene fila, org 1 cae al .env.
+     * Credenciales de envío.
+     * Org 1: panel solo si está completo; si no, .env.
+     * Socio: sus creds del panel si están completas.
      *
      * @param  int  $organizacionId
      * @return array<string, mixed>
      */
     public function credentials($organizacionId)
     {
+        $organizacionId = (int) $organizacionId;
         $row = $this->findByOrganizacion($organizacionId);
-        if ($row) {
+        if ($this->rowEstaConfigurada($row)) {
             return $this->credentialsFromRow($row);
         }
 
-        if ((int) $organizacionId === Usuario::ID_ORGANIZACION_ADMIN) {
+        if ($organizacionId === Usuario::ID_ORGANIZACION_ADMIN) {
             return $this->credentialsFromEnv();
         }
 
-        return $this->emptyCredentials((int) $organizacionId);
+        return $this->emptyCredentials($organizacionId);
+    }
+
+    /**
+     * @param  WaInboxOrganizacionConfig|null  $row
+     * @return bool
+     */
+    private function rowEstaConfigurada($row)
+    {
+        if (!$row) {
+            return false;
+        }
+        $token = trim((string) $row->access_token);
+        $phone = trim((string) $row->phone_number_id);
+
+        return (bool) $row->enabled && $token !== '' && $phone !== '';
     }
 
     /**
