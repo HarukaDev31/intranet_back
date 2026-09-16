@@ -13,10 +13,9 @@ class SoporteTiSolicitudController extends Controller
     use RespondsSoporteTiJson;
 
     /**
-     * Adjuntos del chat: mismas extensiones que el picker de documentos del front
-     * (PDF, Office, texto, comprimidos e imágenes).
+     * Adjuntos del chat: imágenes, documentos Office/PDF y audio (notas de voz).
      */
-    const CHAT_ADJUNTOS_MIMES = 'jpg,jpeg,png,gif,webp,bmp,pdf,xls,xlsx,html,htm,doc,docx,ppt,pptx,txt,csv,zip,rar,7z';
+    const CHAT_ADJUNTOS_MIMES = 'jpg,jpeg,png,gif,webp,bmp,pdf,xls,xlsx,html,htm,doc,docx,ppt,pptx,txt,csv,zip,rar,7z,mp3,m4a,aac,ogg,opus,wav,webm,3gp';
 
     /** @var SoporteTiService */
     protected $service;
