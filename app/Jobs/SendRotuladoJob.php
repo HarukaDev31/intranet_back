@@ -38,6 +38,11 @@ use Illuminate\Support\Facades\DB;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Services\Organizacion\OrganizacionMensajeriaService;
 
+/**
+ * ABANDONED — no usar. El envío de rotulado vive en ForceSendRotuladoJob.
+ *
+ * @deprecated Usar ForceSendRotuladoJob.
+ */
 class SendRotuladoJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, UsesObjectStorage, WhatsappTrait, DatabaseConnectionTrait, GoogleSheetsHelper, MailTrait;
@@ -107,6 +112,37 @@ class SendRotuladoJob implements ShouldQueue
      * Execute the job.
      */
     public function handle(): void
+    {
+        Log::warning('SendRotuladoJob abandoned: reenviando a ForceSendRotuladoJob', [
+            'id_cotizacion' => $this->idCotizacion,
+        ]);
+        $this->setDatabaseConnection($this->domain);
+        $cotizacion = Cotizacion::where('id', $this->idCotizacion)->first();
+        if (!$cotizacion || empty($cotizacion->id_contenedor)) {
+            return;
+        }
+        $ids = [];
+        foreach ((array) $this->proveedores as $proveedor) {
+            $row = is_object($proveedor) ? (array) $proveedor : $proveedor;
+            if (!empty($row['id'])) {
+                $ids[] = (int) $row['id'];
+            }
+        }
+        if ($ids === []) {
+            return;
+        }
+        ForceSendRotuladoJob::dispatch(
+            $this->idCotizacion,
+            $ids,
+            $cotizacion->id_contenedor,
+            $this->domain
+        )->onQueue('importaciones');
+    }
+
+    /**
+     * @abandoned Cuerpo histórico. handle() ya no lo ejecuta.
+     */
+    private function handleAbandoned(): void
     {
         try {
             // Establecer la conexión de BD basándose en el dominio

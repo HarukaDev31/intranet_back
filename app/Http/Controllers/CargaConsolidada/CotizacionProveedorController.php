@@ -40,7 +40,6 @@ use App\Support\Organizacion\OrganizacionPortalUrls;
 use App\Support\BrandLogoPaths;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\EmbarqueExport;
-use App\Jobs\SendRotuladoJob;
 use App\Services\Organizacion\OrganizacionMensajeriaService;
 use App\Models\CargaConsolidada\DocumentacionFile;
 use App\Models\CargaConsolidada\DocumentacionFolder;
@@ -1198,10 +1197,16 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             // Obtener dominio del frontend
             $domain = WhatsappTrait::getCurrentRequestDomain();
 
-            // Dispatch del Job para procesamiento asíncrono
-            SendRotuladoJob::dispatch($cliente, $carga, $proveedores, $idCotizacion, $total_movilidad_personal, $domain)->onQueue('importaciones');
+            $idsProveedores = [];
+            foreach ((array) $proveedores as $proveedor) {
+                $row = is_object($proveedor) ? (array) $proveedor : $proveedor;
+                if (!empty($row['id'])) {
+                    $idsProveedores[] = (int) $row['id'];
+                }
+            }
+            ForceSendRotuladoJob::dispatch($idCotizacion, $idsProveedores, $idContenedor, $domain)->onQueue('importaciones');
 
-            Log::info('SendRotuladoJob dispatchado exitosamente');
+            Log::info('ForceSendRotuladoJob dispatchado desde send-rotulado (SendRotuladoJob abandoned)');
 
             return response()->json([
                 'success' => true,

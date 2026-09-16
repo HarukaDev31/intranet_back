@@ -11,6 +11,7 @@ use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Services\Organizacion\OrganizacionMensajeriaService;
+use App\Services\WhatsApp\WhatsAppCoordinacionBatchService;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Traits\WhatsappTrait;
 use App\Traits\DatabaseConnectionTrait;
@@ -92,6 +93,25 @@ class ForceSendRotuladoJob implements ShouldQueue
             }
             $carga = $contenedor->carga;
 
+            if (
+                $this->whatsappCoordinacionBatchId === null
+                && $this->shouldRouteCoordinacionToMeta('consolidado')
+                && $this->phoneNumberId
+            ) {
+                $phoneE164 = preg_replace('/[^0-9]/', '', (string) $this->phoneNumberId);
+                $batch = app(WhatsAppCoordinacionBatchService::class)->create('rotulado', [
+                    'id_cotizacion' => $this->idCotizacion,
+                    'cliente' => $cotizacionInfo->nombre,
+                    'carga' => (string) $carga,
+                    'phone_e164' => $phoneE164,
+                    'job_domain' => $this->domain,
+                ]);
+                $this->whatsappCoordinacionBatchId = (int) $batch->id;
+            }
+            if ($this->whatsappCoordinacionBatchId !== null) {
+                $this->setWhatsAppCoordinacionBatchId($this->whatsappCoordinacionBatchId);
+            }
+
             // Procesar plantilla de bienvenida
             $htmlWelcomePath = public_path('assets/templates/Welcome_Consolidado_Template.html');
             if (!file_exists($htmlWelcomePath)) {
@@ -128,30 +148,6 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             }
 
             $sleepSendMedia = 7;
-            $imgPath = $mensajeria->localPathImagenConFallback($orgId, OrganizacionMensajeriaService::IMG_PASO1);
-            if ($imgPath && is_file($imgPath)) {
-                $sleepSendMedia += 2;
-                $pasoCaption = 'Pasos 1 y 2 — rotulado';
-                $this->sendMedia(
-                    $imgPath,
-                    'image/jpeg',
-                    $pasoCaption,
-                    $this->phoneNumberId,
-                    $sleepSendMedia,
-                    'consolidado',
-                    basename($imgPath),
-                    [
-                        'type' => 'legacy_media',
-                        'path' => $imgPath,
-                        'mimeType' => 'image/jpeg',
-                        'caption' => $pasoCaption,
-                        'fileName' => basename($imgPath),
-                        'phone' => $this->phoneNumberId,
-                        'sleep' => $sleepSendMedia,
-                        'chat_preview' => $pasoCaption,
-                    ]
-                );
-            }
 
             // Configurar ZIP
             $zipFileName = storage_path('app/Rotulado.zip');
@@ -290,6 +286,11 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                     );
 
                     $processedProviders++;
+                    if (!empty($proveedorArray['id'])) {
+                        CotizacionProveedor::where('id', $proveedorArray['id'])->update([
+                            'send_rotulado_status' => 'SENDED',
+                        ]);
+                    }
                 } catch (Exception $e) {
                     Log::error('Error procesando proveedor ' . $supplierCode . ': ' . $e->getMessage());
                     continue;
@@ -340,6 +341,14 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             if ($fileSize === false || $fileSize == 0) {
                 Log::error("El archivo ZIP está vacío o no se puede leer");
                 throw new Exception("El archivo ZIP está vacío");
+            }
+
+            if ($this->whatsappCoordinacionBatchId !== null) {
+                $laravelBatchId = $this->dispatchWhatsAppCoordinacionBatch();
+                Log::info('ForceSendRotuladoJob: batch WhatsApp despachado', [
+                    'batch_id' => $this->whatsappCoordinacionBatchId,
+                    'laravel_batch_id' => $laravelBatchId,
+                ]);
             }
 
             DB::commit();
