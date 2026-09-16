@@ -48,6 +48,7 @@ use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
  * @property string|float|int|null $servicios_extra_final
  * @property string|float|int|null $total_pago_delivery
  * @property int|null $qty_item
+ * @property int|null $qty_proveedores
  * @property int|null $id_usuario
  * @property int|null $id_cliente_importacion
  * @property string|null $estado
@@ -148,6 +149,7 @@ class Cotizacion extends Model
         'logistica_final',
         'servicios_extra_final',
         'qty_item',
+        'qty_proveedores',
         'id_cliente_importacion',
         'delivery_form_registered_at',
         'registrado_comprobante_form',
@@ -194,6 +196,7 @@ class Cotizacion extends Model
         'logistica_final' => 'decimal:2',
         'servicios_extra_final' => 'decimal:2',
         'qty_item' => 'integer',
+        'qty_proveedores' => 'integer',
         'delivery_form_registered_at' => 'date',
         'registrado_comprobante_form' => 'boolean',
         'total_pago_delivery' => 'decimal:2',

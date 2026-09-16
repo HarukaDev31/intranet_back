@@ -57,6 +57,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
         Route::get('/{id}', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'show']);
         Route::put('/{id}', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'update']);
         Route::post('/{id}/duplicar', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'duplicar']);
+        Route::post('/{id}/partir', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'partir']);
         Route::put('/{id}/estado', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'updateEstado']);
         Route::delete('/{id}', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'destroy']);
     });

@@ -423,6 +423,7 @@ class CotizacionResumenController extends Controller
             'proveedores.*.costos' => 'nullable|array',
             'proveedores.*.costos.*.concepto' => 'required_with:proveedores.*.costos|string|max:150',
             'proveedores.*.costos.*.valor' => 'required_with:proveedores.*.costos|numeric|min:0',
+            'qty_proveedores' => 'nullable|integer|min:1',
             'descuento' => 'nullable|numeric|min:0',
             'archivo' => 'nullable|array',
             'archivo.path' => 'required_with:archivo|string',
@@ -547,6 +548,7 @@ class CotizacionResumenController extends Controller
                 'impuestos' => $totalesCosto['impuesto'],
                 'tarifa' => $this->tarifaDesdeLogistica($totalesCosto['logistica'], $totalCbmFull),
                 'tarifa_descuento' => $request->input('descuento', 0),
+                'qty_proveedores' => $this->qtyProveedoresDesdeRequest($request),
             ];
             if ($archivo && !empty($archivo['path'])) {
                 $cotizacionUpdate['cotizacion_file_url'] = $archivo['path'];
@@ -609,6 +611,7 @@ class CotizacionResumenController extends Controller
                 'id_contenedor' => $cotizacion->getAttribute('id_contenedor'),
                 'id_usuario' => $cotizacion->getAttribute('id_usuario'),
                 'descuento' => (float) ($cotizacion->getAttribute('tarifa_descuento') ?? 0),
+                'qty_proveedores' => $this->qtyProveedoresGuardado($cotizacion, $proveedores->count()),
                 'tarifa' => (float) ($cotizacion->getAttribute('tarifa') ?? 0),
                 'fob' => (float) ($cotizacion->getAttribute('fob') ?? 0),
                 'isd' => (float) ($cotizacion->getAttribute('isd') ?? 0),
@@ -681,6 +684,7 @@ class CotizacionResumenController extends Controller
             'proveedores.*.incoterm' => 'nullable|string|max:50',
             'proveedores.*.moneda' => 'nullable|string|max:3',
             'proveedores.*.costos' => 'nullable|array',
+            'qty_proveedores' => 'nullable|integer|min:1',
             'descuento' => 'nullable|numeric|min:0',
             'archivo' => 'nullable|array',
             'archivo.path' => 'required_with:archivo|string',
@@ -748,6 +752,7 @@ class CotizacionResumenController extends Controller
                     $totalesCosto['logistica'],
                     $this->cbmFullDeProveedores($request->input('proveedores', []))
                 ),
+                'qty_proveedores' => $this->qtyProveedoresDesdeRequest($request),
             ];
             if ($archivo && !empty($archivo['path'])) {
                 $cotizacionFill['cotizacion_file_url'] = $archivo['path'];
@@ -870,6 +875,129 @@ class CotizacionResumenController extends Controller
             DB::rollBack();
             Log::error('CotizacionResumenController@duplicar: ' . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Error al duplicar la cotización'], 500);
+        }
+    }
+
+    /**
+     * Parte la cotización: clona la cabecera en otro consolidado de la misma org/país
+     * y mueve un subconjunto de proveedores (no todos). Sin pagos ni Excel Drive.
+     * POST /api/carga-consolidada/cotizacion-resumen/{id}/partir
+     */
+    public function partir(Request $request, $id)
+    {
+        $request->validate([
+            'id_contenedor' => 'required|integer',
+            'proveedores' => 'required|array|min:1',
+            'proveedores.*' => 'integer',
+        ]);
+
+        $origen = $this->findResumen($id);
+        if (!$origen) {
+            return response()->json(['success' => false, 'message' => 'Cotización no encontrada'], 404);
+        }
+
+        $idDestino = (int) $request->input('id_contenedor');
+        $idOrigenContenedor = (int) $origen->getAttribute('id_contenedor');
+        if ($idDestino <= 0 || $idDestino === $idOrigenContenedor) {
+            return response()->json(['success' => false, 'message' => 'Elige un consolidado distinto'], 422);
+        }
+
+        $contenedorDestino = Contenedor::find($idDestino);
+        if (!$contenedorDestino) {
+            return response()->json(['success' => false, 'message' => 'Consolidado no encontrado'], 404);
+        }
+        if (!$this->contenedorPerteneceALaOrg($contenedorDestino)) {
+            return response()->json(['success' => false, 'message' => 'El consolidado no pertenece a tu organización'], 403);
+        }
+
+        $contenedorOrigen = $idOrigenContenedor ? Contenedor::find($idOrigenContenedor) : null;
+        $paisOrigen = $contenedorOrigen ? (int) $contenedorOrigen->getAttribute('id_pais') : 0;
+        $paisDestino = (int) $contenedorDestino->getAttribute('id_pais');
+        if ($paisOrigen > 0 && $paisDestino > 0 && $paisOrigen !== $paisDestino) {
+            return response()->json(['success' => false, 'message' => 'Solo puedes partir a un consolidado del mismo país'], 422);
+        }
+
+        $idsMover = array_values(array_unique(array_map('intval', $request->input('proveedores', []))));
+        $proveedores = CotizacionProveedor::query()
+            ->where('id_cotizacion', $id)
+            ->where('modo_cotizacion', 'resumen')
+            ->orderBy('id')
+            ->get();
+        if ($proveedores->count() < 2) {
+            return response()->json(['success' => false, 'message' => 'Se necesitan al menos dos proveedores para partir'], 422);
+        }
+
+        $idsActuales = $proveedores->pluck('id')->map(function ($v) {
+            return (int) $v;
+        })->all();
+        foreach ($idsMover as $idProv) {
+            if (!in_array($idProv, $idsActuales, true)) {
+                return response()->json(['success' => false, 'message' => 'Hay proveedores que no pertenecen a esta cotización'], 422);
+            }
+        }
+        if (count($idsMover) >= count($idsActuales)) {
+            return response()->json(['success' => false, 'message' => 'Debe quedar al menos un proveedor en la cotización original'], 422);
+        }
+
+        $orgId = (int) $contenedorDestino->getAttribute('organizacion_id') ?: $this->orgIdAutenticada();
+
+        DB::beginTransaction();
+        try {
+            $nueva = $origen->replicate();
+            $nueva->uuid = Str::uuid()->toString();
+            $nueva->id_contenedor = $idDestino;
+            $nueva->id_contenedor_pago = null;
+            $nueva->id_contenedor_destino = null;
+            $nueva->organizacion_id = $orgId;
+            $nueva->save();
+
+            foreach ($idsMover as $idProv) {
+                $proveedor = $proveedores->first(function ($p) use ($idProv) {
+                    return (int) $p->getAttribute('id') === $idProv;
+                });
+                if (!$proveedor) {
+                    continue;
+                }
+                $proveedor->id_cotizacion = $nueva->getAttribute('id');
+                $proveedor->id_contenedor = $idDestino;
+                $proveedor->id_contenedor_pago = null;
+                $proveedor->organizacion_id = $orgId;
+                $proveedor->save();
+
+                $resumen = CotizacionProveedorResumen::query()->where('id_proveedor', $idProv)->first();
+                if ($resumen) {
+                    $resumen->id_cotizacion = $nueva->getAttribute('id');
+                    $resumen->id_contenedor = $idDestino;
+                    $resumen->organizacion_id = $orgId;
+                    $resumen->save();
+                }
+
+                CotizacionProveedorArchivoIa::query()
+                    ->where('id_proveedor', $idProv)
+                    ->get()
+                    ->each(function ($archivo) use ($nueva, $idDestino) {
+                        $archivo->id_cotizacion = $nueva->getAttribute('id');
+                        $archivo->id_contenedor = $idDestino;
+                        $archivo->save();
+                    });
+            }
+
+            $this->refrescarTotalesResumen($origen);
+            $this->refrescarTotalesResumen($nueva);
+
+            DB::commit();
+            return response()->json([
+                'success' => true,
+                'message' => 'Cotización partida',
+                'data' => [
+                    'id' => $origen->getAttribute('id'),
+                    'id_nueva' => $nueva->getAttribute('id'),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('CotizacionResumenController@partir: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error al partir la cotización'], 500);
         }
     }
 
@@ -1066,6 +1194,78 @@ class CotizacionResumenController extends Controller
      * @param float $cbm
      * @return float
      */
+    /**
+     * Qty proveedores del wizard: el valor enviado, o el conteo de filas si no vino.
+     *
+     * @param Request $request
+     * @return int
+     */
+    private function qtyProveedoresDesdeRequest(Request $request)
+    {
+        $qty = $request->input('qty_proveedores');
+        if ($qty !== null && $qty !== '') {
+            return max(1, (int) $qty);
+        }
+        $proveedores = $request->input('proveedores', []);
+
+        return max(1, is_array($proveedores) ? count($proveedores) : 0);
+    }
+
+    /**
+     * Qty persistido; si es cotización vieja sin columna, usa el conteo de proveedores.
+     *
+     * @param Cotizacion $cotizacion
+     * @param int $conteoProveedores
+     * @return int
+     */
+    private function qtyProveedoresGuardado(Cotizacion $cotizacion, $conteoProveedores)
+    {
+        $qty = (int) ($cotizacion->getAttribute('qty_proveedores') ?? 0);
+        if ($qty >= 1) {
+            return $qty;
+        }
+
+        return max(0, (int) $conteoProveedores);
+    }
+
+    /**
+     * Recalcula CBM, costos y qty_proveedores después de partir.
+     *
+     * @param Cotizacion $cotizacion
+     * @return void
+     */
+    private function refrescarTotalesResumen(Cotizacion $cotizacion)
+    {
+        $proveedores = CotizacionProveedor::query()
+            ->where('id_cotizacion', $cotizacion->getAttribute('id'))
+            ->where('modo_cotizacion', 'resumen')
+            ->with('resumen.costos')
+            ->get();
+
+        $totales = $this->sumarCostosProveedores($proveedores);
+        $totalCbm = 0.0;
+        $totalCbmImo = 0.0;
+        foreach ($proveedores as $p) {
+            $cbmNormal = (float) ($p->getAttribute('cbm_total') ?? 0);
+            $cbmImo = (float) ($p->getAttribute('cbm_imo') ?? 0);
+            $totalCbm += $cbmNormal + $cbmImo;
+            $totalCbmImo += $cbmImo;
+        }
+
+        $payload = [
+            'volumen' => $totalCbm,
+            'es_imo' => $totalCbmImo > 0,
+            'fob' => $totales['fob'],
+            'isd' => $totales['isd'],
+            'monto' => $totales['logistica'],
+            'impuestos' => $totales['impuesto'],
+            'tarifa' => $this->tarifaDesdeLogistica($totales['logistica'], $totalCbm),
+            'qty_proveedores' => $proveedores->count(),
+        ];
+        $cotizacion->fill($payload);
+        $cotizacion->save();
+    }
+
     private function tarifaDesdeLogistica($logistica, $cbm)
     {
         $cbm = (float) $cbm;

@@ -518,9 +518,14 @@ class ContenedorController extends Controller
                 $isCreate = empty($data['id']);
                 $tcYuan = isset($data['tc_yuan']) ? $data['tc_yuan'] : null;
                 unset($data['tc_yuan']);
-                // Socios (org != 1): no editan TC Yuan. Al crear queda fijo en 15.
+                // Socios (org != 1): no editan TC Yuan ni límite IMO. Al crear quedan fijos en 15.
                 if ($authOrg !== 1) {
                     $tcYuan = $isCreate ? 15 : null;
+                    if ($isCreate) {
+                        $data['limite_cbm_imo'] = 15;
+                    } else {
+                        unset($data['limite_cbm_imo']);
+                    }
                 }
                 // organizacion_id nunca se toma del request (evita que un contenedor
                 // "cambie" de organizacion o se cree en otra distinta a la del usuario).
