@@ -251,15 +251,6 @@ class WhatsappInboxOrgConfigService
         }
 
         $phone = trim((string) ($input['phone_number_id'] ?? $row->phone_number_id ?? ''));
-        if ($phone !== '') {
-            $taken = WaInboxOrganizacionConfig::query()
-                ->where('phone_number_id', $phone)
-                ->where('organizacion_id', '!=', $organizacionId)
-                ->exists();
-            if ($taken) {
-                throw new \InvalidArgumentException('Ese ID de número ya está asignado a otra organización.');
-            }
-        }
 
         $row->enabled = !empty($input['enabled']);
         $row->phone_number_id = $phone !== '' ? $phone : null;
@@ -307,22 +298,37 @@ class WhatsappInboxOrgConfigService
             return;
         }
 
-        $session = WaInboxSession::query()
-            ->where('organizacion_id', (int) $row->organizacion_id)
-            ->first();
-        if (!$session) {
-            $session = WaInboxSession::query()->where('phone_number_id', $phone)->first();
-        }
-        if (!$session) {
-            $session = new WaInboxSession();
+        $orgId = (int) $row->organizacion_id;
+        $byPhone = WaInboxSession::query()->where('phone_number_id', $phone)->first();
+        $byOrg = WaInboxSession::query()->where('organizacion_id', $orgId)->first();
+
+        if ($byPhone) {
+            if ($byOrg && (int) $byOrg->id === (int) $byPhone->id) {
+                $byPhone->display_number = (string) $row->display_number;
+                $byPhone->is_active = (bool) $row->enabled;
+                $byPhone->save();
+            }
+
+            return;
         }
 
-        $session->organizacion_id = (int) $row->organizacion_id;
-        $session->phone_number_id = $phone;
-        $session->display_number = (string) $row->display_number;
-        $session->label = 'WhatsApp';
-        $session->is_active = (bool) $row->enabled;
-        $session->save();
+        if ($byOrg) {
+            $byOrg->phone_number_id = $phone;
+            $byOrg->display_number = (string) $row->display_number;
+            $byOrg->label = 'WhatsApp';
+            $byOrg->is_active = (bool) $row->enabled;
+            $byOrg->save();
+
+            return;
+        }
+
+        WaInboxSession::create([
+            'organizacion_id' => $orgId,
+            'phone_number_id' => $phone,
+            'display_number' => (string) $row->display_number,
+            'label' => 'WhatsApp',
+            'is_active' => (bool) $row->enabled,
+        ]);
     }
 
     /**

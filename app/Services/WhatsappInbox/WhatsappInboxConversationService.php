@@ -35,11 +35,9 @@ class WhatsappInboxConversationService
     public function listConversations(array $params = [])
     {
         $orgId = isset($params['organizacion_id']) ? (int) $params['organizacion_id'] : 0;
-        try {
-            $session = $orgId > 0
-                ? $this->sessionService->ensureSessionForOrganizacion($orgId)
-                : $this->sessionService->ensureDefaultSession();
-        } catch (\RuntimeException $e) {
+        $perPage = max(1, min(100, (int) ($params['per_page'] ?? 30)));
+
+        if ($orgId <= 0) {
             return [
                 'success' => true,
                 'data' => [],
@@ -47,20 +45,19 @@ class WhatsappInboxConversationService
                 'pagination' => [
                     'current_page' => 1,
                     'last_page' => 1,
-                    'per_page' => max(1, min(100, (int) ($params['per_page'] ?? 30))),
+                    'per_page' => $perPage,
                     'total' => 0,
                 ],
             ];
         }
 
-        $perPage = max(1, min(100, (int) ($params['per_page'] ?? 30)));
         $search = trim((string) ($params['search'] ?? ''));
         $filter = trim((string) ($params['filter'] ?? 'todas'));
         $userId = isset($params['auth_user_id']) ? (int) $params['auth_user_id'] : 0;
 
         $query = WaInboxConversation::query()
             ->with('session')
-            ->where('session_id', $session->id)
+            ->where('organizacion_id', $orgId)
             ->orderByDesc('last_message_at')
             ->orderByDesc('id');
 
@@ -88,6 +85,7 @@ class WhatsappInboxConversationService
         return [
             'success' => true,
             'data' => $rows,
+            'configured' => $this->sessionService->isOutboundConfigured($orgId),
             'pagination' => [
                 'current_page' => $paginated->currentPage(),
                 'last_page' => $paginated->lastPage(),
@@ -286,9 +284,9 @@ class WhatsappInboxConversationService
     public function createManualContact(array $params = [])
     {
         $orgId = isset($params['organizacion_id']) ? (int) $params['organizacion_id'] : 0;
-        $session = $orgId > 0
-            ? $this->sessionService->ensureSessionForOrganizacion($orgId)
-            : $this->sessionService->ensureDefaultSession();
+        $session = $this->sessionService->ensureSessionForOutboundOrganizacion(
+            $orgId > 0 ? $orgId : Usuario::ID_ORGANIZACION_ADMIN
+        );
         $phoneE164 = $this->normalizePhoneE164(isset($params['phone']) ? $params['phone'] : '');
         if ($phoneE164 === '' || strlen($phoneE164) < 10 || strlen($phoneE164) > 15) {
             return [
@@ -328,6 +326,10 @@ class WhatsappInboxConversationService
 
         if ($existing) {
             $dirty = false;
+            if ($orgId > 0 && (int) $existing->organizacion_id !== $orgId) {
+                $existing->organizacion_id = $orgId;
+                $dirty = true;
+            }
             if ($contactName !== '' && trim((string) $existing->contact_name) === '') {
                 $existing->contact_name = $contactName;
                 $dirty = true;
@@ -351,6 +353,7 @@ class WhatsappInboxConversationService
 
         $conversation = WaInboxConversation::create([
             'session_id' => $session->id,
+            'organizacion_id' => $orgId > 0 ? $orgId : (int) $session->organizacion_id,
             'wa_contact_id' => null,
             'phone_e164' => $phoneE164,
             'contact_name' => $contactName,
@@ -375,11 +378,13 @@ class WhatsappInboxConversationService
      * @param  string  $phoneE164
      * @param  string|null  $waContactId
      * @param  string|null  $contactName
+     * @param  int  $organizacionId  Org dueña del hilo en el inbox (no necesariamente la de las keys Meta).
      * @return WaInboxConversation
      */
-    public function findOrCreateConversation(WaInboxSession $session, $phoneE164, $waContactId = null, $contactName = null)
+    public function findOrCreateConversation(WaInboxSession $session, $phoneE164, $waContactId = null, $contactName = null, $organizacionId = 0)
     {
         $phoneE164 = $this->normalizePhoneE164($phoneE164);
+        $orgId = (int) $organizacionId;
         $conversation = WaInboxConversation::query()
             ->where('session_id', $session->id)
             ->where('phone_e164', $phoneE164)
@@ -392,6 +397,9 @@ class WhatsappInboxConversationService
             if ($contactName && empty($conversation->contact_name)) {
                 $conversation->contact_name = $contactName;
             }
+            if ($orgId > 0 && (int) $conversation->organizacion_id !== $orgId) {
+                $conversation->organizacion_id = $orgId;
+            }
             $conversation->save();
 
             $this->registerContactDirectory($conversation);
@@ -399,8 +407,13 @@ class WhatsappInboxConversationService
             return $conversation;
         }
 
+        if ($orgId <= 0) {
+            $orgId = (int) $session->organizacion_id;
+        }
+
         $conversation = WaInboxConversation::create([
             'session_id' => $session->id,
+            'organizacion_id' => $orgId > 0 ? $orgId : null,
             'wa_contact_id' => $waContactId,
             'phone_e164' => $phoneE164,
             'contact_name' => $contactName,
@@ -561,6 +574,10 @@ class WhatsappInboxConversationService
      */
     public function organizacionIdOf(WaInboxConversation $conversation)
     {
+        if ((int) $conversation->organizacion_id > 0) {
+            return (int) $conversation->organizacion_id;
+        }
+
         if (!$conversation->relationLoaded('session')) {
             $conversation->load('session');
         }

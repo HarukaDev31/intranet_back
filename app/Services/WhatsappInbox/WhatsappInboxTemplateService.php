@@ -46,6 +46,7 @@ class WhatsappInboxTemplateService
     private $knownImageHeaderTemplates = [
         'pb_consolidado_pagos_img_v1',
         'pb_consolidado_resumen_pago_v1',
+        'pb_rotulado_almacen_china_img_v1',
     ];
 
     /**
@@ -114,6 +115,14 @@ class WhatsappInboxTemplateService
                 'language' => 'es_PE',
                 'text' => "📩 Recordatorio:\n\n{{mensaje}}\n\n🙌",
                 'params' => ['mensaje'],
+            ],
+            [
+                'name' => 'pb_rotulado_almacen_china_img_v1',
+                'label' => 'Rotulado — Dirección almacén China',
+                'language' => 'es_PE',
+                'text' => 'Dile a tu proveedor que envíe la carga a nuestro almacén en China',
+                'params' => [],
+                'header_format' => 'IMAGE',
             ],
             [
                 'name' => 'pb_docs_consideraciones_doc_v1',

@@ -98,8 +98,12 @@ class WhatsappInboxCoordinacionOutboundService
             return $sessionMessageResult;
         }
 
-        $templateRequiresHeader = $this->templateService->templateRequiresHeaderMedia($templateName);
         $rawHeader = isset($payload['header']) && is_array($payload['header']) ? $payload['header'] : null;
+        $payloadHasMediaHeader = $rawHeader !== null
+            && !empty($rawHeader['type'])
+            && (!empty($rawHeader['path']) || !empty($rawHeader['link']));
+        $templateRequiresHeader = $this->templateService->templateRequiresHeaderMedia($templateName)
+            || $payloadHasMediaHeader;
         $header = $templateRequiresHeader
             ? CoordinacionMediaLink::prepareHeader($rawHeader)
             : null;
@@ -130,7 +134,8 @@ class WhatsappInboxCoordinacionOutboundService
             $session,
             $phone,
             null,
-            $contactName
+            $contactName,
+            $this->organizacionIdFromPayload($payload)
         );
 
         $userId = isset($payload['sent_by_user_id']) ? (int) $payload['sent_by_user_id'] : null;
@@ -206,7 +211,8 @@ class WhatsappInboxCoordinacionOutboundService
             $session,
             $phone,
             null,
-            $this->resolveContactName($payload, $phone)
+            $this->resolveContactName($payload, $phone),
+            $this->organizacionIdFromPayload($payload)
         );
 
         $message = $this->messageService->createOutboundPending(
@@ -258,7 +264,8 @@ class WhatsappInboxCoordinacionOutboundService
             $session,
             $phone,
             null,
-            $this->resolveContactName($payload, $phone)
+            $this->resolveContactName($payload, $phone),
+            $this->organizacionIdFromPayload($payload)
         );
 
         $caption = trim((string) ($payload['caption'] ?? ''));
@@ -447,8 +454,10 @@ class WhatsappInboxCoordinacionOutboundService
             'phone' => $phoneE164,
         ];
 
-        if (!empty($payload['_domain'])) {
-            $base['_domain'] = $payload['_domain'];
+        foreach (array('_organizacion_id', 'organizacion_id', '_flujo', '_domain') as $key) {
+            if (!empty($payload[$key])) {
+                $base[$key] = $payload[$key];
+            }
         }
         if (!empty($payload['contact_name'])) {
             $base['contact_name'] = $payload['contact_name'];
@@ -594,6 +603,8 @@ class WhatsappInboxCoordinacionOutboundService
      */
     private function sessionForPayload(array $payload)
     {
-        return $this->sessionService->ensureSessionForOrganizacion($this->outboundOrganizacionId($payload));
+        return $this->sessionService->ensureSessionForOutboundOrganizacion(
+            $this->organizacionIdFromPayload($payload)
+        );
     }
 }

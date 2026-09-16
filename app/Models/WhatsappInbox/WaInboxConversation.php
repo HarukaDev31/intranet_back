@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * @property int $id
  * @property int|null $session_id
+ * @property int|null $organizacion_id
  * @property string|null $phone_e164
  * @property-read WaInboxSession|null $session
  */
@@ -18,6 +19,7 @@ class WaInboxConversation extends Model
 
     protected $fillable = [
         'session_id',
+        'organizacion_id',
         'wa_contact_id',
         'phone_e164',
         'contact_name',

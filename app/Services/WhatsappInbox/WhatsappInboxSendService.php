@@ -341,6 +341,16 @@ class WhatsappInboxSendService
         }
 
         $requiredHeaderFormat = $templateService->getTemplateHeaderFormat($templateName);
+        if ($requiredHeaderFormat === null && is_array($header) && !empty($header['type'])) {
+            $inferred = strtoupper((string) $header['type']);
+            if ($inferred === 'IMAGE') {
+                $requiredHeaderFormat = 'IMAGE';
+            } elseif ($inferred === 'VIDEO') {
+                $requiredHeaderFormat = 'VIDEO';
+            } elseif (in_array($inferred, ['DOCUMENT', 'FILE'], true)) {
+                $requiredHeaderFormat = 'DOCUMENT';
+            }
+        }
 
         WaInboxLog::info('dispatchMetaTemplate.start', [
             'phone_e164' => $phoneE164,
@@ -401,7 +411,7 @@ class WhatsappInboxSendService
         ]);
 
         $orgId = (int) $organizacionId;
-        $creds = $this->orgConfig->credentials($orgId > 0 ? $orgId : 1);
+        $creds = $this->orgConfig->credentialsForOutbound($orgId > 0 ? $orgId : 1);
         $result = WhatsappInboxOutboundRecorder::runWhileSuppressed(function () use (
             $phoneE164,
             $templateName,
@@ -530,15 +540,19 @@ class WhatsappInboxSendService
         $conversation = $message->conversation;
         $orgId = 1;
         if ($conversation) {
-            if (!$conversation->relationLoaded('session')) {
-                $conversation->load('session');
-            }
-            $session = $conversation->session;
-            if ($session && (int) $session->organizacion_id > 0) {
-                $orgId = (int) $session->organizacion_id;
+            if ((int) $conversation->organizacion_id > 0) {
+                $orgId = (int) $conversation->organizacion_id;
+            } else {
+                if (!$conversation->relationLoaded('session')) {
+                    $conversation->load('session');
+                }
+                $session = $conversation->session;
+                if ($session && (int) $session->organizacion_id > 0) {
+                    $orgId = (int) $session->organizacion_id;
+                }
             }
         }
 
-        return $this->orgConfig->credentials($orgId);
+        return $this->orgConfig->credentialsForOutbound($orgId);
     }
 }
