@@ -443,14 +443,11 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 throw new \Exception("Error al cerrar el archivo ZIP");
             }
 
-            // Imagen de dirección (admin: default; socios: la subida en el panel)
-            $direccionPath = $mensajeria->localPathImagen(
+            // Imagen de dirección (socio sin foto → org 1 / jpeg por defecto)
+            $direccionPath = $mensajeria->localPathImagenConFallback(
                 $this->organizacionId,
                 OrganizacionMensajeriaService::IMG_DIRECCION
-            );
-            if (!$direccionPath && $this->organizacionId === OrganizacionMensajeriaService::ID_ORGANIZACION_ADMIN) {
-                $direccionPath = public_path('assets/images/Direccion_27_04_26.jpeg');
-            }
+            )
             if ($direccionPath && is_file($direccionPath)) {
                 $direccionCaption = 'Dile a tu proveedor que envíe la carga a nuestro almacén en China';
                 $this->addCoordinationSection(null, $direccionCaption);
@@ -601,7 +598,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
      */
     private function sendOrgRotuladoPasoImagen($mensajeria, $slot, $label, $sleepSendMedia)
     {
-        $path = $mensajeria->localPathImagen($this->organizacionId, $slot);
+        $path = $mensajeria->localPathImagenConFallback($this->organizacionId, $slot);
         if (!$path || !is_file($path)) {
             Log::info('SendRotuladoJob: sin imagen de ' . $slot . ' para org ' . $this->organizacionId);
             return $sleepSendMedia;
@@ -613,6 +610,20 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
         $mime = $this->mimeFromPath($path);
         $this->addCoordinationSection(null, $caption);
         $this->addCoordinationAttachment($path, $fileName, $mime);
+        $metaPaso = $this->withBatchStep(
+            [
+                'type' => 'legacy_media',
+                'path' => $path,
+                'mimeType' => $mime,
+                'caption' => $caption,
+                'fileName' => $fileName,
+                'phone' => $this->phoneNumberId,
+                'sleep' => $sleepSendMedia,
+                'chat_preview' => $caption,
+            ],
+            'rotulado_pasos_' . $slot,
+            $label
+        );
         $this->sendMedia(
             $path,
             $mime,
@@ -620,7 +631,8 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $this->phoneNumberId,
             $sleepSendMedia,
             'consolidado',
-            $fileName
+            $fileName,
+            $metaPaso
         );
 
         return $sleepSendMedia;

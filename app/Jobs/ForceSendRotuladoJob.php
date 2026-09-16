@@ -128,17 +128,28 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             }
 
             $sleepSendMedia = 7;
-            $imgPath = $mensajeria->localPathImagen($orgId, OrganizacionMensajeriaService::IMG_PASO1);
+            $imgPath = $mensajeria->localPathImagenConFallback($orgId, OrganizacionMensajeriaService::IMG_PASO1);
             if ($imgPath && is_file($imgPath)) {
                 $sleepSendMedia += 2;
+                $pasoCaption = 'Pasos 1 y 2 — rotulado';
                 $this->sendMedia(
                     $imgPath,
                     'image/jpeg',
-                    'Pasos 1 y 2 — rotulado',
+                    $pasoCaption,
                     $this->phoneNumberId,
                     $sleepSendMedia,
                     'consolidado',
-                    basename($imgPath)
+                    basename($imgPath),
+                    [
+                        'type' => 'legacy_media',
+                        'path' => $imgPath,
+                        'mimeType' => 'image/jpeg',
+                        'caption' => $pasoCaption,
+                        'fileName' => basename($imgPath),
+                        'phone' => $this->phoneNumberId,
+                        'sleep' => $sleepSendMedia,
+                        'chat_preview' => $pasoCaption,
+                    ]
                 );
             }
 
@@ -298,20 +309,22 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
             Log::info('ZIP cerrado correctamente');
 
-            // Enviar imagen de dirección
-            $direccionUrl = public_path('assets/images/Direccion_27_04_26.jpeg');
-            $sleepSendMedia += 3;
-            $dirCaption = '🏽Dile a tu proveedor que envíe la carga a nuestro almacén en China';
-            $this->sendMedia(
-                $direccionUrl,
-                'image/jpg',
-                $dirCaption,
-                $this->phoneNumberId,
-                $sleepSendMedia,
-                'consolidado',
-                'Direccion_almacen_China.jpeg',
-                CoordinacionWhatsappPayload::rotuladoAlmacenChinaImg((string) $this->phoneNumberId, $direccionUrl, $dirCaption, $sleepSendMedia)
-            );
+            // Enviar imagen de dirección (socio sin foto → org 1 / jpeg por defecto)
+            $direccionUrl = $mensajeria->localPathImagenConFallback($orgId, OrganizacionMensajeriaService::IMG_DIRECCION);
+            if ($direccionUrl && is_file($direccionUrl)) {
+                $sleepSendMedia += 3;
+                $dirCaption = 'Dile a tu proveedor que envíe la carga a nuestro almacén en China';
+                $this->sendMedia(
+                    $direccionUrl,
+                    'image/jpeg',
+                    $dirCaption,
+                    $this->phoneNumberId,
+                    $sleepSendMedia,
+                    'consolidado',
+                    'Direccion_almacen_China.jpeg',
+                    CoordinacionWhatsappPayload::rotuladoAlmacenChinaImg((string) $this->phoneNumberId, $direccionUrl, $dirCaption, $sleepSendMedia)
+                );
+            }
 
             // Ya no se envía pb_rotulado_datos_proveedor_v1 al pedir rotulado.
 

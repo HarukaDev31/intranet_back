@@ -361,7 +361,7 @@ class WhatsappInboxOrgConfigService
 
         return [
             'organizacion_id' => Usuario::ID_ORGANIZACION_ADMIN,
-            'enabled' => (bool) config('meta_whatsapp.coordinacion_enabled') && $token !== '' && $phone !== '',
+            'enabled' => $token !== '' && $phone !== '',
             'access_token' => $token,
             'phone_number_id' => $phone,
             'app_secret' => (string) config('meta_whatsapp.app_secret'),

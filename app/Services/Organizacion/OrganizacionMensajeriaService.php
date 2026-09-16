@@ -386,10 +386,35 @@ class OrganizacionMensajeriaService
     }
 
     /**
+     * Imagen de la org; si el socio no tiene, la de org 1; dirección: jpeg por defecto.
+     *
      * @param  int  $organizacionId
      * @param  string  $slot
-     * @return string|null Ruta local para sendMedia
+     * @return string|null
      */
+    public function localPathImagenConFallback($organizacionId, $slot)
+    {
+        $path = $this->localPathImagen($organizacionId, $slot);
+        if ($path) {
+            return $path;
+        }
+        $adminId = self::ID_ORGANIZACION_ADMIN;
+        if ((int) $organizacionId !== $adminId) {
+            $path = $this->localPathImagen($adminId, $slot);
+            if ($path) {
+                return $path;
+            }
+        }
+        if ($slot === self::IMG_DIRECCION) {
+            $default = public_path('assets/images/Direccion_27_04_26.jpeg');
+            if (is_file($default)) {
+                return $default;
+            }
+        }
+
+        return null;
+    }
+
     public function localPathImagen($organizacionId, $slot)
     {
         $column = $this->columnForSlot($slot);

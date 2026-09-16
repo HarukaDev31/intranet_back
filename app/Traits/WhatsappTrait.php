@@ -681,8 +681,21 @@ trait WhatsappTrait
 
                     return $this->queueCoordinacionWhatsApp($meta);
                 }
+                if (
+                    is_array($meta)
+                    && (string) ($meta['type'] ?? '') === 'legacy_media'
+                ) {
+                    $meta['phone'] = $meta['phone'] ?? $phoneNumberId;
+                    $meta['sleep'] = $meta['sleep'] ?? $sleep;
+                    $meta['path'] = $meta['path'] ?? $filePath;
+                    $meta['mimeType'] = $meta['mimeType'] ?? $mimeType;
+                    $meta['caption'] = $meta['caption'] ?? $message;
+                    $meta['fileName'] = $meta['fileName'] ?? ($fileName ?? basename($filePath));
+
+                    return $this->queueCoordinacionWhatsApp($meta);
+                }
                 if (config('meta_whatsapp.legacy_fallback', true)) {
-                    return $this->queueCoordinacionWhatsApp([
+                    $legacy = [
                         'type' => 'legacy_media',
                         'path' => $filePath,
                         'mimeType' => $mimeType,
@@ -690,7 +703,17 @@ trait WhatsappTrait
                         'fileName' => $fileName ?? basename($filePath),
                         'phone' => $phoneNumberId,
                         'sleep' => $sleep,
-                    ]);
+                    ];
+                    if (is_array($meta)) {
+                        if (!empty($meta['_batch_step'])) {
+                            $legacy['_batch_step'] = $meta['_batch_step'];
+                        }
+                        if (!empty($meta['_batch_label'])) {
+                            $legacy['_batch_label'] = $meta['_batch_label'];
+                        }
+                    }
+
+                    return $this->queueCoordinacionWhatsApp($legacy);
                 }
             }
 
@@ -925,7 +948,8 @@ trait WhatsappTrait
     }
 
     /**
-     * ¿Enrutar sendMessage/sendMedia de coordinación al job Meta + Bitrix?
+     * ¿Enrutar sendMessage/sendMedia de coordinación al job Meta + inbox?
+     * Socio sin keys propias usa las de org 1 (.env / panel).
      */
     protected function shouldRouteCoordinacionToMeta(string $fromNumber): bool
     {
@@ -933,7 +957,13 @@ trait WhatsappTrait
             return false;
         }
 
-        return app(\App\Services\WhatsappInbox\WhatsappInboxOrgConfigService::class)->isEnabled(1);
+        $orgId = $this->resolveWhatsappOrganizacionId();
+        if ($orgId <= 0) {
+            $orgId = 1;
+        }
+
+        return app(\App\Services\WhatsappInbox\WhatsappInboxOrgConfigService::class)
+            ->isEnabledForOutbound($orgId);
     }
 
     /**
