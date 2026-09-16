@@ -1498,6 +1498,19 @@ class CoordinacionWhatsappPayload
         return self::template($phone, 'pb_proveedor_datos_guardado_completo_v1', [], $bitrixMessage, $sleep);
     }
 
+    public static function retrasoEntrega(
+        string $phone,
+        string $codeSupplier,
+        string $fecha,
+        string $bitrixMessage,
+        int $sleep = 0
+    ): array {
+        return self::template($phone, 'pb_retraso_entrega_v1', [
+            'code_supplier' => $codeSupplier,
+            'fecha' => $fecha,
+        ], $bitrixMessage, $sleep);
+    }
+
     public static function generalCliente(string $phone, string $mensaje, string $bitrixMessage, int $sleep = 0): array
     {
         return self::template($phone, 'pb_general_cliente_v1', [

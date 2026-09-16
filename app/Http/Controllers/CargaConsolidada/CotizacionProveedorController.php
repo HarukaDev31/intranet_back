@@ -1534,10 +1534,11 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                         'December' => 'Diciembre'
                     ];
                     $month = strtr($month, $months);
-                    $date = $day . ' de ' . $month;
+                    $fecha = $day . ' de ' . $month;
+                    $codeSupplier = (string) ($proveedor->code_supplier ?: $supplierCode);
                     $message = 'Hola, hemos contactado a tu proveedor con código ' .
-                        $supplierCode . ' nos comunica que la carga será enviada el ' .
-                        $date . '.';
+                        $codeSupplier . ' nos comunica que la carga será enviada el ' .
+                        $fecha . ',';
                     $cotizacion = Cotizacion::find($idCotizacion);
                     $telefono = $cotizacion->telefono;
 
@@ -1549,7 +1550,12 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                         $this->phoneNumberId,
                         0,
                         'consolidado',
-                        CoordinacionWhatsappPayload::generalCliente((string) $this->phoneNumberId, $message, $message)
+                        CoordinacionWhatsappPayload::retrasoEntrega(
+                            (string) $this->phoneNumberId,
+                            $codeSupplier,
+                            $fecha,
+                            $message
+                        )
                     );
 
                     // Disparar evento de proveedor contactado en China

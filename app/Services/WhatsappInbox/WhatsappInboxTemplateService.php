@@ -71,6 +71,7 @@ class WhatsappInboxTemplateService
         'pb_docs_excel_conf_recibido_v1' => ['consolidado', 'enlace'],
         'pb_docs_recordatorio_proveedor_v1' => ['codigo_proveedor', 'documentos_faltantes'],
         'pb_docs_recordatorio_proveedor_v1_qa' => ['documentos_faltantes'],
+        'pb_retraso_entrega_v1' => ['code_supplier', 'fecha'],
     ];
 
     /**
