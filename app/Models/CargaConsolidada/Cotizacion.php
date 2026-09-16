@@ -41,6 +41,7 @@ use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
  * @property string|float|int|null $impuestos
  * @property string|float|int|null $impuestos_final
  * @property string|float|int|null $tarifa
+ * @property string|float|int|null $tarifa_descuento
  * @property string|float|int|null $tarifa_final
  * @property string|float|int|null $peso
  * @property string|float|int|null $peso_final
@@ -125,6 +126,7 @@ class Cotizacion extends Model
         'isd',
         'impuestos',
         'tarifa',
+        'tarifa_descuento',
         'excel_comercial',
         'excel_confirmacion',
         'vol_selected',
