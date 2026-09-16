@@ -167,6 +167,7 @@ class CotizacionProveedorController extends Controller
 
             $estadoChina = $request->estado_china ?? 'todos';
             $search = $request->search ?? '';
+            $idCotizacion = $request->input('idCotizacion', $request->input('id_cotizacion'));
             // Compatibilidad con ambos nombres de parámetros
             $page = $request->input('page', $request->input('currentPage', 1));
             $perPage = $request->input('limit', $request->input('itemsPerPage', 100));
@@ -185,6 +186,9 @@ class CotizacionProveedorController extends Controller
             if (!empty($search)) {
                 Log::info('search: ' . $search);
                 $query->where('main.nombre', 'LIKE', '%' . $search . '%');
+            }
+            if (!empty($idCotizacion)) {
+                $query->where('main.id', $idCotizacion);
             }
             if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
                 $query->whereExists(function ($sub) use ($request) {
@@ -1168,6 +1172,61 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
     }
 
     /**
+     * Guarda tipo_rotulado elegido en el modal (General = rotulado) antes de encolar el envío.
+     *
+     * @param int $idCotizacion
+     * @param array $proveedores
+     * @return array
+     */
+    private function persistirTipoRotuladoProveedores($idCotizacion, $proveedores)
+    {
+        $tiposValidos = array(
+            'pendiente',
+            'rotulado',
+            'calzado',
+            'ropa',
+            'ropa_interior',
+            'maquinaria',
+            'movilidad_personal',
+        );
+        $idsProveedores = array();
+
+        foreach ((array) $proveedores as $proveedor) {
+            $row = is_object($proveedor) ? (array) $proveedor : $proveedor;
+            if (empty($row['id'])) {
+                continue;
+            }
+
+            $idProveedor = (int) $row['id'];
+            $idsProveedores[] = $idProveedor;
+
+            $tipoRaw = isset($row['tipo_rotulado']) ? $row['tipo_rotulado'] : '';
+            if (is_array($tipoRaw)) {
+                $tipoRaw = isset($tipoRaw['value']) ? $tipoRaw['value'] : '';
+            }
+            $tipo = strtolower(trim(str_replace(' ', '_', (string) $tipoRaw)));
+            if ($tipo === 'general') {
+                $tipo = 'rotulado';
+            }
+            if ($tipo === '' || !in_array($tipo, $tiposValidos, true)) {
+                continue;
+            }
+
+            $model = CotizacionProveedor::where('id', $idProveedor)
+                ->where('id_cotizacion', $idCotizacion)
+                ->first();
+            if (!$model) {
+                continue;
+            }
+
+            $model->tipo_rotulado = $tipo;
+            $model->save();
+        }
+
+        return $idsProveedores;
+    }
+
+    /**
      * Procesar estado de rotulado usando Job asíncrono
      *
      * @param string $cliente
@@ -1188,6 +1247,8 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 ], 404);
             }
 
+            $idsProveedores = $this->persistirTipoRotuladoProveedores($idCotizacion, $proveedores);
+
             $bloqueado = $this->respuestaRotuladoDeshabilitado($cotizacion);
             if ($bloqueado) {
                 return $bloqueado;
@@ -1199,13 +1260,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             // Obtener dominio del frontend
             $domain = WhatsappTrait::getCurrentRequestDomain();
 
-            $idsProveedores = [];
-            foreach ((array) $proveedores as $proveedor) {
-                $row = is_object($proveedor) ? (array) $proveedor : $proveedor;
-                if (!empty($row['id'])) {
-                    $idsProveedores[] = (int) $row['id'];
-                }
-            }
+            $idsProveedores = $this->persistirTipoRotuladoProveedores($idCotizacion, $proveedores);
             ForceSendRotuladoJob::dispatch($idCotizacion, $idsProveedores, $idContenedor, $domain)->onQueue('importaciones');
 
             Log::info('ForceSendRotuladoJob dispatchado desde send-rotulado (SendRotuladoJob abandoned)');
@@ -3784,6 +3839,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
             $estadoChina = $request->estado_china ?? 'todos';
             $search = $request->search ?? '';
+            $idCotizacion = $request->input('idCotizacion', $request->input('id_cotizacion'));
 
             // Usar la misma lógica de filtros que getContenedorCotizacionProveedores
             $query = DB::table('contenedor_consolidado_cotizacion AS main')
@@ -3799,6 +3855,9 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             if (!empty($search)) {
                 Log::info('search: ' . $search);
                 $query->where('main.nombre', 'LIKE', '%' . $search . '%');
+            }
+            if (!empty($idCotizacion)) {
+                $query->where('main.id', $idCotizacion);
             }
 
             if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
