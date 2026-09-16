@@ -20,12 +20,14 @@ class SoporteTiMensajeActualizado implements ShouldBroadcast
     public $chatUuid;
     public $codigo;
     public $mensaje;
+    public $revisadosCount;
 
-    public function __construct(SoporteTiSolicitud $solicitud, array $mensaje)
+    public function __construct(SoporteTiSolicitud $solicitud, array $mensaje, $revisadosCount = null)
     {
         $this->chatUuid = $solicitud->salaChat ? $solicitud->salaChat->chat_uuid : null;
         $this->codigo = $solicitud->codigo;
         $this->mensaje = $mensaje;
+        $this->revisadosCount = $revisadosCount;
     }
 
     public function broadcastOn()
@@ -40,10 +42,15 @@ class SoporteTiMensajeActualizado implements ShouldBroadcast
 
     public function broadcastWith()
     {
-        return array(
+        $payload = array(
             'chat_uuid' => $this->chatUuid,
             'codigo' => $this->codigo,
             'mensaje' => $this->mensaje,
         );
+        if ($this->revisadosCount !== null) {
+            $payload['revisados_count'] = (int) $this->revisadosCount;
+        }
+
+        return $payload;
     }
 }

@@ -2410,6 +2410,7 @@ class SoporteTiService
                         'newest_id' => $newestId,
                         'per_page' => $limit,
                         'total' => null,
+                        'revisados_count' => $this->contarMensajesRevisados($sala->id),
                     ),
                 );
             }
@@ -2716,11 +2717,31 @@ class SoporteTiService
 
         $solicitud = $sala->solicitud;
         $solicitud->setRelation('salaChat', $sala);
+        $revisadosCount = $this->contarMensajesRevisados($sala->id);
 
-        event(new SoporteTiMensajeActualizado($solicitud, $this->mapMensaje($mensaje, null)));
+        event(new SoporteTiMensajeActualizado(
+            $solicitud,
+            $this->mapMensaje($mensaje, null),
+            $revisadosCount
+        ));
         $this->cache->invalidateAfterMensajeWrite($solicitud, $sala->chat_uuid);
 
-        return $this->mapMensaje($mensaje, $user);
+        return array(
+            'mensaje' => $this->mapMensaje($mensaje, $user),
+            'revisados_count' => $revisadosCount,
+        );
+    }
+
+    /**
+     * @param int $salaId
+     * @return int
+     */
+    protected function contarMensajesRevisados($salaId)
+    {
+        return (int) SoporteTiMensaje::where('sala_id', (int) $salaId)
+            ->where('es_sistema', false)
+            ->where('revisado', true)
+            ->count();
     }
 
     /**

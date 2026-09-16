@@ -86,7 +86,8 @@ class SoporteTiChatController extends Controller
 
             return response()->json(array(
                 'success' => true,
-                'data' => $data,
+                'data' => $data['mensaje'],
+                'revisados_count' => $data['revisados_count'],
             ));
         } catch (AuthorizationException $e) {
             return response()->json(
