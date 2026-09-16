@@ -77,7 +77,7 @@ class WhatsappInboxCoordinacionOutboundService
             return ['status' => false, 'error' => 'WhatsApp no está activo para esta organización'];
         }
 
-        $this->templateService->usingOrganizacion($this->organizacionIdFromPayload($payload));
+        $this->templateService->usingOrganizacion($this->outboundOrganizacionId($payload));
 
         $phone = $this->normalizePhoneE164((string) ($payload['phone'] ?? ''));
         if ($phone === '') {
@@ -348,7 +348,7 @@ class WhatsappInboxCoordinacionOutboundService
      */
     private function tryProcessTemplateAsSessionMessage(array $payload)
     {
-        $creds = app(WhatsappInboxOrgConfigService::class)->credentials($this->organizacionIdFromPayload($payload));
+        $creds = app(WhatsappInboxOrgConfigService::class)->credentialsForOutbound($this->organizacionIdFromPayload($payload));
         if (empty($creds['session_when_window_open'])) {
             return null;
         }
@@ -552,8 +552,27 @@ class WhatsappInboxCoordinacionOutboundService
      */
     private function organizacionIdFromPayload(array $payload)
     {
-        if (isset($payload['organizacion_id']) && (int) $payload['organizacion_id'] > 0) {
-            return (int) $payload['organizacion_id'];
+        foreach (array('organizacion_id', '_organizacion_id') as $key) {
+            if (isset($payload[$key]) && (int) $payload[$key] > 0) {
+                return (int) $payload[$key];
+            }
+        }
+
+        return 1;
+    }
+
+    /**
+     * Org cuyas keys Meta se usan (socio si está activo; si no, org 1).
+     *
+     * @param  array<string, mixed>  $payload
+     * @return int
+     */
+    private function outboundOrganizacionId(array $payload)
+    {
+        $orgId = $this->organizacionIdFromPayload($payload);
+        $svc = app(WhatsappInboxOrgConfigService::class);
+        if ($svc->isEnabled($orgId)) {
+            return $orgId;
         }
 
         return 1;
@@ -565,7 +584,8 @@ class WhatsappInboxCoordinacionOutboundService
      */
     private function isEnabledForPayload(array $payload)
     {
-        return app(WhatsappInboxOrgConfigService::class)->isEnabled($this->organizacionIdFromPayload($payload));
+        return app(WhatsappInboxOrgConfigService::class)
+            ->isEnabledForOutbound($this->organizacionIdFromPayload($payload));
     }
 
     /**
@@ -574,6 +594,6 @@ class WhatsappInboxCoordinacionOutboundService
      */
     private function sessionForPayload(array $payload)
     {
-        return $this->sessionService->ensureSessionForOrganizacion($this->organizacionIdFromPayload($payload));
+        return $this->sessionService->ensureSessionForOrganizacion($this->outboundOrganizacionId($payload));
     }
 }

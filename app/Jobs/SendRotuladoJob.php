@@ -156,7 +156,7 @@ class SendRotuladoJob implements ShouldQueue
             // Por ahora se usa la conexión general de coordinación que ya existe.
             if (
                 $this->whatsappCoordinacionBatchId === null
-                && config('meta_whatsapp.coordinacion_enabled')
+                && $this->shouldRouteCoordinacionToMeta('consolidado')
                 && $this->phoneNumberId
             ) {
                 $phoneE164 = preg_replace('/[^0-9]/', '', (string) $this->phoneNumberId);
@@ -234,7 +234,7 @@ class SendRotuladoJob implements ShouldQueue
             if (count($providersHasSended) == 0 || $hasForceSend) {
                 Log::info('Enviando mensaje de bienvenida - no hay proveedores enviados previamente o hay proveedores con force_send');
                 $welcomeText = WhatsappTrait::buildWelcomeRotuladoMessageText($this->carga);
-                if (config('meta_whatsapp.coordinacion_enabled') && $this->phoneNumberId) {
+                if ($this->shouldRouteCoordinacionToMeta('consolidado') && $this->phoneNumberId) {
                     $result = $this->queueCoordinacionWhatsApp(
                         CoordinacionWhatsappPayload::welcomeRotulado($this->phoneNumberId, (string) $this->carga, $welcomeText),
                         'rotulado_bienvenida',
@@ -253,7 +253,7 @@ class SendRotuladoJob implements ShouldQueue
 *Rotulado: 👇🏼*  
 Tienes que indicarle a tu proveedor que las cajas máster 📦 cuenten con un rotulado para 
 identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro almacén.";
-                if (config('meta_whatsapp.coordinacion_enabled') && $this->phoneNumberId) {
+                if ($this->shouldRouteCoordinacionToMeta('consolidado') && $this->phoneNumberId) {
                     $this->queueCoordinacionWhatsApp(
                         CoordinacionWhatsappPayload::rotuladoNuevoProveedor(
                             $this->phoneNumberId,

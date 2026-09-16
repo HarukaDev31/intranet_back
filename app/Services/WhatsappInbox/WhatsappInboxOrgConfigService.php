@@ -146,6 +146,34 @@ class WhatsappInboxOrgConfigService
     }
 
     /**
+     * Envío programático: si el socio no tiene Meta activo, usa el número de org 1.
+     *
+     * @param  int  $organizacionId
+     * @return array<string, mixed>
+     */
+    public function credentialsForOutbound($organizacionId)
+    {
+        $creds = $this->credentials($organizacionId);
+        if (!empty($creds['enabled'])) {
+            return $creds;
+        }
+        if ((int) $organizacionId !== Usuario::ID_ORGANIZACION_ADMIN) {
+            return $this->credentials(Usuario::ID_ORGANIZACION_ADMIN);
+        }
+
+        return $creds;
+    }
+
+    /**
+     * @param  int  $organizacionId
+     * @return bool
+     */
+    public function isEnabledForOutbound($organizacionId)
+    {
+        return !empty($this->credentialsForOutbound($organizacionId)['enabled']);
+    }
+
+    /**
      * @param  \App\Models\Usuario|null  $user
      * @return int
      */
