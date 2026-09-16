@@ -128,21 +128,18 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             }
 
             $sleepSendMedia = 7;
-            foreach ([OrganizacionMensajeriaService::IMG_PASO1, OrganizacionMensajeriaService::IMG_PASO2] as $slot) {
-                    $imgPath = $mensajeria->localPathImagen($orgId, $slot);
-                    if (!$imgPath || !is_file($imgPath)) {
-                        continue;
-                    }
-                    $sleepSendMedia += 2;
-                    $this->sendMedia(
-                        $imgPath,
-                        'image/jpeg',
-                        $slot === OrganizacionMensajeriaService::IMG_PASO1 ? 'Paso 1 — rotulado' : 'Paso 2 — rotulado',
-                        $this->phoneNumberId,
-                        $sleepSendMedia,
-                        'consolidado',
-                        basename($imgPath)
-                    );
+            $imgPath = $mensajeria->localPathImagen($orgId, OrganizacionMensajeriaService::IMG_PASO1);
+            if ($imgPath && is_file($imgPath)) {
+                $sleepSendMedia += 2;
+                $this->sendMedia(
+                    $imgPath,
+                    'image/jpeg',
+                    'Pasos 1 y 2 — rotulado',
+                    $this->phoneNumberId,
+                    $sleepSendMedia,
+                    'consolidado',
+                    basename($imgPath)
+                );
             }
 
             // Configurar ZIP

@@ -273,13 +273,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $sleepSendMedia = $this->sendOrgRotuladoPasoImagen(
                 $mensajeria,
                 OrganizacionMensajeriaService::IMG_PASO1,
-                'Paso 1 — rotulado',
-                $sleepSendMedia
-            );
-            $sleepSendMedia = $this->sendOrgRotuladoPasoImagen(
-                $mensajeria,
-                OrganizacionMensajeriaService::IMG_PASO2,
-                'Paso 2 — rotulado',
+                'Pasos 1 y 2 — rotulado',
                 $sleepSendMedia
             );
 

@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Schema;
  * Mapa de envíos del rotulado (API redis o Meta):
  * - welcomeV2 / pb_welcome_rotulado_v1 — bienvenida
  * - messageV2 — texto (nuevo proveedor)
- * - mediaV2 — fotos paso 1 y 2 (antes fijas en welcomeV2)
+ * - mediaV2 — una foto con los pasos 1 y 2 (antes fijas en welcomeV2)
  * - mediaV2 / pb_rotulado_pdf_producto_v1 — PDF paso 3 (etiqueta consolidado)
  * - mediaV2 / pb_rotulado_almacen_china_img_v1 — imagen de dirección del almacén
  * - PDFs extra por tipo (calzado, ropa, etc.)
