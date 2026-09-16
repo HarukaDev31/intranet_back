@@ -764,7 +764,7 @@ class CotizacionController extends Controller
         $roleAllowedMap = [
             Usuario::ROL_COTIZADOR => ['cbm_vendido', 'cbm_pendiente', 'cbm_embarcado', 'qty_items', 'cbm_total_peru', 'cbm_total_china','cbm_total_imo'],
             Usuario::ROL_SOCIO => ['cbm_total_china', 'cbm_total_peru', 'cbm_pendiente', 'cbm_total_imo', 'total_fob', 'total_isd', 'total_logistica', 'total_impuestos'],
-            Usuario::ROL_ALMACEN_CHINA => ['cbm_total_china', 'cbm_total_peru', 'qty_items'],
+            Usuario::ROL_ALMACEN_CHINA => ['cbm_total_china', 'cbm_total_peru'],
             Usuario::ROL_ADMINISTRACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
             Usuario::ROL_COORDINACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
             Usuario::ROL_CONTABILIDAD => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado', 'total_diferencia_logistica'],
