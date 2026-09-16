@@ -1501,53 +1501,40 @@ Le estaré informando cualquier avance 🫡.";
     public function getVendedoresDropdown(Request $request)
     {
         try {
-            $fechaInicio = $request->input('fecha_inicio');
-            $fechaFin = $request->input('fecha_fin');
-            $idContenedor = $request->input('id_contenedor');
-
             $authUser = auth()->user();
             $orgIdsPermitidas = $authUser ? $authUser->organizacionesPermitidas() : [];
 
-            $query = DB::table('usuario as u')
+            // Lista = usuarios Cotizador de la org (alta en Panel / "Crear vendedor").
+            // Las cotizaciones no crean ni ocultan vendedores.
+            $vendedores = DB::table('usuario as u')
                 ->select([
                     'u.ID_Usuario as id',
                     'u.No_Nombres_Apellidos as nombre',
-                    'g.No_Grupo as role',
                     DB::raw('COUNT(DISTINCT cc.id) as total_cotizaciones'),
-                    DB::raw('COALESCE(SUM(cccp.cbm_total), 0) as volumen_total')
-                ])//join grupo
+                    DB::raw('COALESCE(SUM(cccp.cbm_total), 0) as volumen_total'),
+                ])
                 ->join('grupo as g', 'u.ID_Grupo', '=', 'g.ID_Grupo')
-                ->join('contenedor_consolidado_cotizacion as cc', 'u.ID_Usuario', '=', 'cc.id_usuario','left')
-                ->join('contenedor_consolidado_cotizacion_proveedores as cccp', 'cc.id', '=', 'cccp.id_cotizacion','left')
-                ->join('carga_consolidada_contenedor as cont', 'cc.id_contenedor', '=', 'cont.id','left')
-                ->whereNull('cc.deleted_at')
-                ->whereIn('u.ID_Organizacion', $orgIdsPermitidas)
-                ->groupBy('u.ID_Usuario', 'u.No_Nombres_Apellidos', 'g.No_Grupo');
-
-            if ($fechaInicio && $fechaFin) {
-                $query->whereBetween('cont.fecha_zarpe', [$fechaInicio, $fechaFin]);
-            }
-
-            if ($idContenedor) {
-                $query->where('cc.id_contenedor', $idContenedor);
-            }
-            //not returns row with nombre  contains Danitza Leonardo y frank
-            $query->whereNotIn('u.No_Nombres_Apellidos', ['Danitza', 'Leonardo', 'Frank Oviedo','Importaciones']);
-           
-            $vendedores = $query->get()
-                ->filter(function($item) {
-                    // Only return items where role is COTIZADOR
-                    return $item->role == Usuario::ROL_COTIZADOR;
+                ->leftJoin('contenedor_consolidado_cotizacion as cc', function ($join) {
+                    $join->on('u.ID_Usuario', '=', 'cc.id_usuario')
+                        ->whereNull('cc.deleted_at');
                 })
-                ->map(function($item) {
+                ->leftJoin('contenedor_consolidado_cotizacion_proveedores as cccp', 'cc.id', '=', 'cccp.id_cotizacion')
+                ->whereIn('u.ID_Organizacion', $orgIdsPermitidas)
+                ->where('g.No_Grupo', Usuario::ROL_COTIZADOR)
+                ->where('u.Nu_Estado', 1)
+                ->whereNotIn('u.No_Nombres_Apellidos', ['Danitza', 'Leonardo', 'Frank Oviedo', 'Importaciones'])
+                ->groupBy('u.ID_Usuario', 'u.No_Nombres_Apellidos')
+                ->orderBy('u.No_Nombres_Apellidos')
+                ->get()
+                ->map(function ($item) {
                     return [
                         'value' => $item->id,
                         'label' => $item->nombre,
                         'total_cotizaciones' => $item->total_cotizaciones,
-                        'volumen_total' => round($item->volumen_total, 2)
+                        'volumen_total' => round($item->volumen_total, 2),
                     ];
                 })
-                ->values(); // Reindex as array of objects
+                ->values();
 
             return response()->json([
                 'success' => true,
