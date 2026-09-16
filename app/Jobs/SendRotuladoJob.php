@@ -141,6 +141,7 @@ class SendRotuladoJob implements ShouldQueue
 
     /**
      * @abandoned Cuerpo histórico. handle() ya no lo ejecuta.
+     * @phpstan-ignore method.unused
      */
     private function handleAbandoned(): void
     {

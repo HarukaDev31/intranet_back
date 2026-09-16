@@ -7741,6 +7741,12 @@ parameters:
 			path: app/Jobs/SendRotuladoJob.php
 
 		-
+			message: '#^Method App\\Jobs\\SendRotuladoJob\:\:handleAbandoned\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: app/Jobs/SendRotuladoJob.php
+
+		-
 			message: '#^Method App\\Jobs\\SendRotuladoJob\:\:getLastRowNumber\(\) is unused\.$#'
 			identifier: method.unused
 			count: 1
