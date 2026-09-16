@@ -554,7 +554,7 @@ class Cotizacion extends Model
      */
     public function proveedores()
     {
-        return $this->hasMany(CotizacionProveedor::class, 'id_cotizacion');
+        return $this->hasMany(CotizacionProveedor::class, 'id_cotizacion')->orderBy('id');
     }
 
     /**

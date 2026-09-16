@@ -279,6 +279,7 @@ class CotizacionProveedorController extends Controller
                         'send_rotulado_status',
                         'tipo_rotulado'
                     ])
+                    ->orderBy('id')
                     ->get()
                     ->toArray();
 
@@ -404,6 +405,7 @@ class CotizacionProveedorController extends Controller
                     'arrive_date',
                     'send_rotulado_status'
                 ])
+                ->orderBy('id')
                 ->get()
                 ->toArray();
 
@@ -3869,6 +3871,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                         'arrive_date_china',
                         'send_rotulado_status'
                     ])
+                    ->orderBy('id')
                     ->get()
                     ->toArray();
 
