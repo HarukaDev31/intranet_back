@@ -18,6 +18,7 @@ use App\Models\Usuario;
 use App\Services\CalculadoraImportacion\CodeSupplierHelper;
 use App\Services\CargaConsolidada\CustomersHeadersService;
 use App\Services\CargaConsolidada\GeminiService;
+use App\Support\CargaConsolidada\ResumenClienteCampos;
 use App\Support\CargaConsolidada\ResumenCostoClasificador;
 use App\Support\Phone\CountryPhoneHelper;
 use Illuminate\Http\Request;
@@ -190,12 +191,12 @@ class CotizacionResumenController extends Controller
             'success' => true,
             'data' => $rows->map(function ($c) {
                 $tel = (string) $c->getAttribute('telefono');
-                $nombre = (string) $c->getAttribute('nombre');
+                $nombre = ResumenClienteCampos::textoONulo($c->getAttribute('nombre')) ?: '';
                 return [
                     'id' => (int) $c->getAttribute('id'),
-                    'nombre' => $nombre,
-                    'documento' => $c->getAttribute('documento'),
-                    'correo' => $c->getAttribute('correo'),
+                    'nombre' => $nombre !== '' ? $nombre : null,
+                    'documento' => ResumenClienteCampos::documentoIdentidad($c->getAttribute('documento'), $tel),
+                    'correo' => ResumenClienteCampos::correo($c->getAttribute('correo')),
                     'telefono' => $tel,
                     'label' => $nombre !== '' ? ($tel . ' · ' . $nombre) : $tel,
                     'value' => $tel,
@@ -314,13 +315,15 @@ class CotizacionResumenController extends Controller
                 $archivo = optional($archivosPorCotizacion->get($c->getAttribute('id'), collect())->first());
                 $carga = optional($contenedor)->getAttribute('carga');
 
+                $clienteVista = $this->clienteResumenParaVista($c);
+
                 return [
                     'id' => $c->getAttribute('id'),
                     'fecha' => $c->getAttribute('fecha'),
-                    'nombre' => $c->getAttribute('nombre'),
-                    'documento' => $c->getAttribute('documento'),
-                    'telefono' => $c->getAttribute('telefono'),
-                    'correo' => $c->getAttribute('correo'),
+                    'nombre' => $clienteVista['nombre'],
+                    'documento' => $clienteVista['documento'],
+                    'telefono' => $clienteVista['whatsapp'],
+                    'correo' => $clienteVista['correo'],
                     'estado' => $c->getAttribute('estado_resumen') ?: 'COTIZADO',
                     'id_contenedor' => $c->getAttribute('id_contenedor'),
                     'contenedor' => $carga,
@@ -444,7 +447,7 @@ class CotizacionResumenController extends Controller
 
         DB::beginTransaction();
         try {
-            $cliente = $request->input('cliente');
+            $cliente = ResumenClienteCampos::sanitizar((array) $request->input('cliente', []), true);
             $totalesCosto = $this->sumarCostosRequest($request->input('proveedores', []));
             $orgId = (int) $contenedor->getAttribute('organizacion_id') ?: $this->orgIdEfectiva($request);
             $clienteExistente = $this->resolverClienteDeLaOrg($cliente, $orgId);
@@ -617,14 +620,7 @@ class CotizacionResumenController extends Controller
                 'isd' => (float) ($cotizacion->getAttribute('isd') ?? 0),
                 'logistica' => (float) ($cotizacion->getAttribute('monto') ?? 0),
                 'impuesto' => (float) ($cotizacion->getAttribute('impuestos') ?? 0),
-                'cliente' => [
-                    'id' => $cotizacion->getAttribute('id_cliente'),
-                    'nombre' => $cotizacion->getAttribute('nombre'),
-                    'tipo_documento' => $this->tipoDocumentoCliente($cotizacion->getAttribute('documento')),
-                    'documento' => $cotizacion->getAttribute('documento'),
-                    'whatsapp' => $cotizacion->getAttribute('telefono'),
-                    'correo' => $cotizacion->getAttribute('correo'),
-                ],
+                'cliente' => $this->clienteResumenParaVista($cotizacion, true),
                 'archivo' => $archivo ? [
                     'path' => $archivo->getAttribute('archivo_path'),
                     'nombre_original' => $archivo->getAttribute('archivo_nombre_original'),
@@ -715,7 +711,7 @@ class CotizacionResumenController extends Controller
 
         DB::beginTransaction();
         try {
-            $cliente = $request->input('cliente');
+            $cliente = ResumenClienteCampos::sanitizar((array) $request->input('cliente', []), true);
             $totalesCosto = $this->sumarCostosRequest($request->input('proveedores', []));
             $orgId = (int) $cotizacion->getAttribute('organizacion_id') ?: $this->orgIdAutenticada();
             $clienteExistente = $this->resolverClienteDeLaOrg($cliente, $orgId);
@@ -1506,10 +1502,23 @@ class CotizacionResumenController extends Controller
         return $esResumen ? $cotizacion : null;
     }
 
-    private function tipoDocumentoCliente($documento)
+    /**
+     * @param  Cotizacion  $cotizacion
+     * @param  bool  $conId
+     * @return array<string, mixed>
+     */
+    private function clienteResumenParaVista($cotizacion, $conId = false)
     {
-        $doc = preg_replace('/\D/', '', (string) $documento);
-        return strlen((string) $doc) >= 11 ? 'RUC' : 'ID';
+        $s = ResumenClienteCampos::sanitizar([
+            'nombre' => $cotizacion->getAttribute('nombre'),
+            'documento' => $cotizacion->getAttribute('documento'),
+            'whatsapp' => $cotizacion->getAttribute('telefono'),
+            'correo' => $cotizacion->getAttribute('correo'),
+        ]);
+        if ($conId) {
+            $s['id'] = $cotizacion->getAttribute('id_cliente');
+        }
+        return $s;
     }
 
     /**

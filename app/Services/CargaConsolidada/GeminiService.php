@@ -2,6 +2,7 @@
 
 namespace App\Services\CargaConsolidada;
 
+use App\Support\CargaConsolidada\ResumenClienteCampos;
 use App\Support\CargaConsolidada\ResumenCostoClasificador;
 use Illuminate\Support\Facades\Log;
 
@@ -162,9 +163,9 @@ class GeminiService
             'Reglas: ' .
             '- cliente.nombre: nombre o razón social del cliente/destinatario. null si no aparece. ' .
             '- cliente.tipo_documento: "RUC" si el identificador del CLIENTE tiene formato de RUC (11 dígitos), "ID" solo si es DNI/cédula del cliente. ' .
-            '- cliente.documento: SOLO DNI (8 dígitos), cédula o RUC (11 dígitos) del CLIENTE/destinatario. NUNCA uses el N° de cotización, N° de boleta, N° de factura, código interno, ID de usuario, ID de la boleta, ni el RUC de la empresa emisora. Si no hay DNI/RUC/cédula claro del cliente, null. ' .
-            '- cliente.whatsapp: teléfono de contacto del cliente, con código de país si aparece. null si no aparece. ' .
-            '- cliente.correo: correo electrónico del cliente. null si no aparece. ' .
+            '- cliente.documento: SOLO DNI (8 dígitos), cédula o RUC (11 dígitos) del CLIENTE/destinatario. NUNCA uses el teléfono, WhatsApp, N° de cotización, N° de boleta, N° de factura, código interno, ID de usuario, ID de la boleta, ni el RUC de la empresa emisora. Si no hay DNI/RUC/cédula claro del cliente, null (JSON null, no el texto "null"). ' .
+            '- cliente.whatsapp: teléfono de contacto del cliente, con código de país si aparece. Nunca lo pongas en documento. Si no aparece, null. ' .
+            '- cliente.correo: correo electrónico real del cliente (debe llevar @). Si no aparece, null. Nunca escribas la palabra null. ' .
             '- proveedores: un elemento por cada ítem o línea de producto (al menos uno). No combines varios ítems en un solo elemento aunque compartan proveedor. Si el documento lista varios productos, genera un elemento por cada uno. ' .
             '- proveedores[].cbm_total: volumen total en CBM/m3 de ese proveedor. null si no aparece. ' .
             '- proveedores[].peso_total: peso total en KG de ese proveedor. null si no aparece. ' .
@@ -205,7 +206,7 @@ class GeminiService
     {
         $prompt = 'Analiza este documento de cotización de importación extraído de una hoja de cálculo. ' .
             'Extrae los datos del cliente y de cada proveedor/producto. ' .
-            'cliente.nombre, cliente.tipo_documento (RUC o ID), cliente.documento (SOLO DNI/cédula/RUC del cliente, nunca N° de boleta/cotización ni ID de usuario), cliente.whatsapp, cliente.correo. ' .
+            'cliente.nombre, cliente.tipo_documento (RUC o ID), cliente.documento (SOLO DNI/cédula/RUC del cliente, nunca teléfono ni N° de boleta/cotización ni ID de usuario), cliente.whatsapp (teléfono, no en documento), cliente.correo (email real o JSON null, nunca el texto "null"). ' .
             'Un elemento en proveedores por cada ítem o línea de producto; no combines varios ítems en uno. ' .
             'Por ítem: cbm_total, peso_total, qty_cajas, unidades, incoterm, productos (solo ese ítem). ' .
             'logistica es SOLO Servicio de importación (no flete ni seguro). fob, impuesto, isd y costos son totales del DOCUMENTO: ponlos SOLO en el primer ítem; en los demás null / array vacío. No los copies en cada línea. ' .
@@ -264,7 +265,7 @@ class GeminiService
         }
 
         $proveedores = $this->deduplicarCostosDocumento(array_values($proveedores));
-        $cliente = $this->sanitizarClienteExtraido(
+        $cliente = ResumenClienteCampos::sanitizar(
             isset($extracted['cliente']) && is_array($extracted['cliente']) ? $extracted['cliente'] : []
         );
 
@@ -281,64 +282,6 @@ class GeminiService
                 'proveedores' => array_values($proveedores),
             ],
         ];
-    }
-
-    /**
-     * El N° de boleta/cotización no es el DNI del cliente ni el id del vendedor.
-     *
-     * @param  array<string, mixed>  $cliente
-     * @return array<string, mixed>
-     */
-    private function sanitizarClienteExtraido(array $cliente)
-    {
-        unset($cliente['id'], $cliente['id_usuario'], $cliente['usuario_id']);
-
-        $documento = $this->documentoIdentidadCliente(
-            isset($cliente['documento']) ? $cliente['documento'] : null
-        );
-        $cliente['documento'] = $documento;
-        if ($documento === null) {
-            $cliente['tipo_documento'] = null;
-        } elseif (strlen(preg_replace('/\D/', '', $documento)) >= 11) {
-            $cliente['tipo_documento'] = 'RUC';
-        } else {
-            $cliente['tipo_documento'] = 'ID';
-        }
-
-        return $cliente;
-    }
-
-    /**
-     * @param  mixed  $raw
-     * @return string|null
-     */
-    private function documentoIdentidadCliente($raw)
-    {
-        $texto = trim((string) $raw);
-        if ($texto === '') {
-            return null;
-        }
-
-        if (preg_match('/cotiz|boleta|factura|proforma|n[uú]mero\s*de\s*doc/i', $texto)) {
-            return null;
-        }
-
-        $digitos = preg_replace('/\D+/', '', $texto);
-        if ($digitos === '') {
-            return null;
-        }
-
-        $rucsEmisor = ['20612452432', '206124524321'];
-        if (in_array($digitos, $rucsEmisor, true)) {
-            return null;
-        }
-
-        $len = strlen($digitos);
-        if ($len < 6 || $len > 13) {
-            return null;
-        }
-
-        return $digitos;
     }
 
     /**
