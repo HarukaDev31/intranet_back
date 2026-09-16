@@ -6,6 +6,17 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
+/**
+ * @property int $id
+ * @property int|null $id_contenedor
+ * @property int|null $id_cotizacion
+ * @property int|null $id_proveedor
+ * @property int|null $organizacion_id
+ * @property string|null $initial_name
+ * @property string|null $final_name
+ * @property string|null $tipo_producto
+ * @property array<string, mixed>|null $caracteristicas
+ */
 class CotizacionProveedorItems extends Model
 {
     use HasFactory;

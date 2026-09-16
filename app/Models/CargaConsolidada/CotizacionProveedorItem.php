@@ -6,6 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
+/**
+ * @property int $id
+ * @property int|null $id_contenedor
+ * @property int|null $id_cotizacion
+ * @property int|null $id_proveedor
+ * @property int|null $organizacion_id
+ * @property string|null $tipo_producto
+ */
 class CotizacionProveedorItem extends Model
 {
     use SincronizaOrganizacionId;
