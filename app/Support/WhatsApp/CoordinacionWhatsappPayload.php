@@ -478,7 +478,7 @@ class CoordinacionWhatsappPayload
     private static function rebuildExcelConfirmacionLinkForProveedor(int $idProveedor): ?string
     {
         $proveedor = CotizacionProveedor::query()
-            ->with(['cotizacion:id,uuid'])
+            ->with(['cotizacion:id,uuid,organizacion_id'])
             ->find($idProveedor);
 
         if ($proveedor === null) {
@@ -494,8 +494,28 @@ class CoordinacionWhatsappPayload
         return self::buildExcelConfirmacionUrl(
             $uuid,
             null,
-            OrganizacionPortalUrls::orgIdFromParent($proveedor->cotizacion)
+            OrganizacionPortalUrls::orgIdFromParent($proveedor)
         );
+    }
+
+    /**
+     * @param  array<int, int>  $proveedorIds
+     * @return int|null
+     */
+    private static function orgIdFromExcelRecordatorio(array $proveedorIds)
+    {
+        foreach ($proveedorIds as $idProveedor) {
+            $id = (int) $idProveedor;
+            if ($id <= 0) {
+                continue;
+            }
+            $orgId = (int) CotizacionProveedor::where('id', $id)->value('organizacion_id');
+            if ($orgId > 0) {
+                return $orgId;
+            }
+        }
+
+        return null;
     }
 
     public static function resolveExcelConfirmacionIntranetLink(int $idProveedor): ?string
@@ -894,7 +914,8 @@ class CoordinacionWhatsappPayload
             $linkWeb = $uuid !== ''
                 ? self::buildExcelConfirmacionUrl(
                     $uuid,
-                    count($agg['excel_codes']) === 1 ? $agg['excel_codes'][0] : null
+                    count($agg['excel_codes']) === 1 ? $agg['excel_codes'][0] : null,
+                    self::orgIdFromExcelRecordatorio($agg['excel_ids'])
                 )
                 : $empty;
 

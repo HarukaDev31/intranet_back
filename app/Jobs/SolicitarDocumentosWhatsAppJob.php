@@ -61,7 +61,7 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
             $this->setWhatsappFlujo('documentos');
 
             $cot = DB::table('contenedor_consolidado_cotizacion')
-                ->select('id_contenedor', 'telefono', 'nombre', 'uuid')
+                ->select('id_contenedor', 'telefono', 'nombre', 'uuid', 'organizacion_id')
                 ->where('id', $this->idCotizacion)
                 ->whereNull('deleted_at')
                 ->first();
@@ -142,11 +142,15 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
             }
 
             $driveLink = null;
+            $orgId = (int) ($cot->organizacion_id ?? 0);
+            if ($orgId <= 0) {
+                $orgId = OrganizacionPortalUrls::orgIdFromParent($contenedor);
+            }
             $formLink = $cotizacionUuid !== ''
                 ? CoordinacionWhatsappPayload::buildExcelConfirmacionUrl(
                     $cotizacionUuid,
                     null,
-                    OrganizacionPortalUrls::orgIdFromParent($cot)
+                    $orgId
                 )
                 : '';
             $idProveedorRef = isset($proveedorModels[0]) ? (int) $proveedorModels[0]->id : null;
