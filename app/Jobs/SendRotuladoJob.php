@@ -447,7 +447,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $direccionPath = $mensajeria->localPathImagenConFallback(
                 $this->organizacionId,
                 OrganizacionMensajeriaService::IMG_DIRECCION
-            )
+            );
             if ($direccionPath && is_file($direccionPath)) {
                 $direccionCaption = 'Dile a tu proveedor que envíe la carga a nuestro almacén en China';
                 $this->addCoordinationSection(null, $direccionCaption);
