@@ -3,6 +3,7 @@
 namespace App\Support\CargaConsolidada;
 
 use App\Models\CargaConsolidada\CotizacionProveedor;
+use App\Models\Usuario;
 
 /**
  * Coord 2 (Daniela) → invoice/packing/excel_conf_status.
@@ -30,6 +31,24 @@ class DocumentStatusSync
     public static function isCoord2User($user)
     {
         return self::matchesEmailPrefix($user, self::COORD2_EMAIL);
+    }
+
+    /**
+     * Coord 2 y Jefe Importación usan invoice/packing/excel_conf_status (no *_final).
+     *
+     * @param  mixed  $user
+     */
+    public static function usesCoord2Statuses($user)
+    {
+        if (self::isCoord2User($user)) {
+            return true;
+        }
+
+        if (is_object($user) && method_exists($user, 'getNombreGrupo')) {
+            return $user->getNombreGrupo() === Usuario::ROL_JEFE_IMPORTACION;
+        }
+
+        return false;
     }
 
     /**
