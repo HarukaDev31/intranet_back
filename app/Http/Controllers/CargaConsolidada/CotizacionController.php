@@ -174,7 +174,7 @@ class CotizacionController extends Controller
             'SELECT
                 COALESCE(SUM(CASE WHEN cc.estado_cotizador = ? THEN cccp.cbm_total_china ELSE 0 END), 0) AS cbm_total_china,
                 COALESCE(SUM(cccp.cbm_total_china), 0) AS cbm_total_china_all,
-                COALESCE(SUM(cccp.cbm_imo), 0) AS cbm_imo_proveedores,
+                COALESCE(SUM(CASE WHEN cc.estado_cotizador = ? THEN cccp.cbm_imo ELSE 0 END), 0) AS cbm_imo_proveedores,
                 COALESCE(SUM(
                     CASE
                         WHEN cccp.estados_proveedor = ? AND cc.id_usuario = ?
@@ -187,7 +187,7 @@ class CotizacionController extends Controller
                 ON cc.id = cccp.id_cotizacion
                 AND cc.deleted_at IS NULL
             WHERE cccp.id_contenedor = ?',
-            ['CONFIRMADO', 'LOADED', $userId, $idContenedor]
+            ['CONFIRMADO', 'CONFIRMADO', 'LOADED', $userId, $idContenedor]
         );
 
         $pagos = DB::selectOne(

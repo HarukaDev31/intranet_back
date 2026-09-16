@@ -438,7 +438,8 @@ class ContenedorController extends Controller
 
     /**
      * CBM IMO del listado: org 1 usa calculadora (es_imo + proveedores);
-     * el resto suma cbm_imo de proveedores resumen (más calculadora si hubiera).
+     * el resto suma cbm_imo de proveedores resumen de cotizaciones CONFIRMADO
+     * (más calculadora si hubiera).
      *
      * @param  array<int, int>  $pageIds
      * @param  array<int, int>  $orgByContenedor
@@ -467,6 +468,7 @@ class ContenedorController extends Controller
             ->join('contenedor_consolidado_cotizacion as cc', 'cc.id', '=', 'cccp.id_cotizacion')
             ->whereIn('cccp.id_contenedor', $pageIds)
             ->whereNull('cc.deleted_at')
+            ->where('cc.estado_cotizador', 'CONFIRMADO')
             ->groupBy('cccp.id_contenedor')
             ->selectRaw('cccp.id_contenedor, COALESCE(SUM(cccp.cbm_imo), 0) as cbm_imo')
             ->pluck('cbm_imo', 'id_contenedor');
