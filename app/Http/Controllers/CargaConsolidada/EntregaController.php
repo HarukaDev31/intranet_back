@@ -823,16 +823,7 @@ class EntregaController extends Controller
         $data = $query->orderByRaw('(SELECT MAX(cccp.id) FROM ' . $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' cccp WHERE cccp.id_cotizacion = CC.id AND cccp.id_concept = ' . $this->CONCEPT_PAGO_DELIVERY . ') IS NULL ASC, (SELECT MAX(cccp.id) FROM ' . $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' cccp WHERE cccp.id_cotizacion = CC.id AND cccp.id_concept = ' . $this->CONCEPT_PAGO_DELIVERY . ') DESC, CC.id DESC')->paginate($perPage, ['*'], 'page', $page);
 
         // Mapa de códigos de origen (misma lógica que ClienteService::transformarDatosClientes)
-        $sourceMap = [
-            0 => 'No especificado',
-            1 => 'TikTok',
-            2 => 'Facebook',
-            3 => 'Instagram',
-            4 => 'YouTube',
-            5 => 'Familiares/Amigos',
-            6 => 'Otros',
-            8 => 'Otros'
-        ];
+        $sourceMap = \App\Support\Register\ComoEnteroCatalog::labels();
 
         // Agregar fotos de conformidad, total por fila y origen (no_como_entero / no_otros_como_entero_empresa desde users por documento/correo/telefono)
         $items = $data->items();
@@ -874,7 +865,7 @@ class EntregaController extends Controller
             $origen = null;
             if (!is_null($primaryCode) && $primaryCode !== '') {
                 $codeInt = (int) $primaryCode;
-                if (($codeInt === 6 || $codeInt === 8) && !empty($noOtrosVal)) {
+                if (\App\Support\Register\ComoEnteroCatalog::requiresOtrosText($codeInt) && !empty($noOtrosVal)) {
                     $origen = $noOtrosVal;
                 } elseif (isset($sourceMap[$codeInt])) {
                     $origen = $sourceMap[$codeInt];
@@ -994,16 +985,7 @@ class EntregaController extends Controller
 
         $items = $query->orderBy('CC.id', 'asc')->get();
 
-        $sourceMap = [
-            0 => 'No especificado',
-            1 => 'TikTok',
-            2 => 'Facebook',
-            3 => 'Instagram',
-            4 => 'YouTube',
-            5 => 'Familiares/Amigos',
-            6 => 'Otros',
-            8 => 'Otros',
-        ];
+        $sourceMap = \App\Support\Register\ComoEnteroCatalog::labels();
 
         foreach ($items as $row) {
             $noComoEntero = null;
@@ -1037,7 +1019,7 @@ class EntregaController extends Controller
             $origen = null;
             if ($primaryCode !== null && $primaryCode !== '') {
                 $codeInt = (int) $primaryCode;
-                if (($codeInt === 6 || $codeInt === 8) && !empty($noOtrosVal)) {
+                if (\App\Support\Register\ComoEnteroCatalog::requiresOtrosText($codeInt) && !empty($noOtrosVal)) {
                     $origen = $noOtrosVal;
                 } elseif (isset($sourceMap[$codeInt])) {
                     $origen = $sourceMap[$codeInt];

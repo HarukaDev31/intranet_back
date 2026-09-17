@@ -1507,6 +1507,12 @@ class AuthController extends Controller
                 'no_otros_como_entero_empresa' => $validatedData['no_otros_como_entero_empresa'] ?? null,
                 'pais_id' => $validatedData['pais_id'] ?? null,
             ];
+            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'tipo_documento')) {
+                $userPayload['tipo_documento'] = $validatedData['tipo_documento'] ?? 'DNI';
+            }
+            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'whatsapp_prefix')) {
+                $userPayload['whatsapp_prefix'] = $validatedData['whatsapp_prefix'] ?? null;
+            }
             if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'organizacion_id')) {
                 $orgId = (int) $request->attributes->get('organizacion_id', 0);
                 if ($orgId <= 0) {

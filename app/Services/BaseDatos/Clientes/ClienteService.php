@@ -313,21 +313,13 @@ class ClienteService
             }
 
             // Map numeric codes to labels. If code is 6 or 8, prefer the 'otros' free-text field.
-            $sourceMap = [
-                0 => 'No especificado',
-                1 => 'TikTok',
-                2 => 'Facebook',
-                3 => 'Instagram',
-                4 => 'YouTube',
-                5 => 'Familiares/Amigos',
-                6 => 'Otros'
-            ];
+            $sourceMap = \App\Support\Register\ComoEnteroCatalog::labels();
 
             $no_como_entero_final = null;
             if (!is_null($primaryCode) && $primaryCode !== '') {
                 $codeInt = (int) $primaryCode;
                 // If code indicates 'Otros' (6 or 8) and we don't yet have the free-text, try to resolve entidad now
-                if (($codeInt === 6 || $codeInt === 8) && empty($no_otros_como_entero)) {
+                if (\App\Support\Register\ComoEnteroCatalog::requiresOtrosText($codeInt) && empty($no_otros_como_entero)) {
                     try {
                         if (!isset($ent) && method_exists($cliente, 'resolveEntidad')) {
                             $ent = $cliente->resolveEntidad();
@@ -340,7 +332,7 @@ class ClienteService
                     }
                 }
 
-                if (($codeInt === 6 || $codeInt === 8) && !empty($no_otros_como_entero)) {
+                if (\App\Support\Register\ComoEnteroCatalog::requiresOtrosText($codeInt) && !empty($no_otros_como_entero)) {
                     $no_como_entero_final = $no_otros_como_entero;
                 } elseif (isset($sourceMap[$codeInt])) {
                     $no_como_entero_final = $sourceMap[$codeInt];
@@ -901,20 +893,11 @@ class ClienteService
         }
         $no_otros_val = $no_otros_val ?? $nuOtrosComoEnteroEmpresa ?? null;
 
-        $sourceMap = [
-            0 => 'No especificado',
-            1 => 'TikTok',
-            2 => 'Facebook',
-            3 => 'Instagram',
-            4 => 'YouTube',
-            5 => 'Familiares/Amigos',
-            6 => 'Otros',
-            8 => 'Otros'
-        ];
+        $sourceMap = \App\Support\Register\ComoEnteroCatalog::labels();
         $origen = null;
         if ($primaryCode !== null && $primaryCode !== '') {
             $codeInt = (int) $primaryCode;
-            if (($codeInt === 6 || $codeInt === 8) && !empty($no_otros_val)) {
+            if (\App\Support\Register\ComoEnteroCatalog::requiresOtrosText($codeInt) && !empty($no_otros_val)) {
                 $origen = $no_otros_val;
             } elseif (isset($sourceMap[$codeInt])) {
                 $origen = $sourceMap[$codeInt];
@@ -1093,22 +1076,13 @@ class ClienteService
                 // ignore
             }
 
-            $sourceMap = [
-                0 => 'No especificado',
-                1 => 'TikTok',
-                2 => 'Facebook',
-                3 => 'Instagram',
-                4 => 'YouTube',
-                5 => 'Familiares/Amigos',
-                6 => 'Otros',
-                8 => 'Otros'
-            ];
+            $sourceMap = \App\Support\Register\ComoEnteroCatalog::labels();
 
             $no_como_entero_final = null;
             if (!is_null($primaryCode) && $primaryCode !== '') {
                 $codeInt = (int) $primaryCode;
                 // If code indicates 'Otros' (6 or 8) and we don't yet have the free-text, try to resolve entidad now
-                if (($codeInt === 6 || $codeInt === 8) && empty($no_otros_val)) {
+                if (\App\Support\Register\ComoEnteroCatalog::requiresOtrosText($codeInt) && empty($no_otros_val)) {
                     try {
                         if (!isset($ent) && method_exists($cliente, 'resolveEntidad')) {
                             $ent = $cliente->resolveEntidad();
@@ -1121,7 +1095,7 @@ class ClienteService
                     }
                 }
 
-                if (($codeInt === 6 || $codeInt === 8) && !empty($no_otros_val)) {
+                if (\App\Support\Register\ComoEnteroCatalog::requiresOtrosText($codeInt) && !empty($no_otros_val)) {
                     $no_como_entero_final = $no_otros_val;
                 } elseif (isset($sourceMap[$codeInt])) {
                     $no_como_entero_final = $sourceMap[$codeInt];
