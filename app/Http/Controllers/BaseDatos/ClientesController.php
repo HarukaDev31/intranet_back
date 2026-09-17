@@ -386,11 +386,15 @@ class ClientesController extends Controller
     public function estadisticas(): JsonResponse
     {
         try {
-            $result = $this->clienteService->obtenerEstadisticas();
+            $data = $this->clienteCacheService->rememberStats(function () {
+                $result = $this->clienteService->obtenerEstadisticas();
+
+                return $result['data'] ?? [];
+            });
 
             return response()->json([
                 'success' => true,
-                'data' => $result['data'],
+                'data' => $data,
                 'message' => 'Estadísticas obtenidas exitosamente'
             ]);
         } catch (\Exception $e) {

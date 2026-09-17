@@ -9,14 +9,19 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use App\Models\Notificacion;
 use App\Models\Usuario;
+use App\Services\NotificacionCacheService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
 class NotificacionController extends Controller
 {
-    public function __construct()
+    /** @var NotificacionCacheService */
+    private $notificacionCache;
+
+    public function __construct(NotificacionCacheService $notificacionCache)
     {
         $this->middleware('auth:api');
+        $this->notificacionCache = $notificacionCache;
     }
 
     /**
@@ -84,6 +89,9 @@ class NotificacionController extends Controller
     {
         try {
             $usuario = Auth::user();
+            $usuario->loadMissing('grupo');
+            $page = (int) $request->get('page', 1);
+            $perPage = (int) $request->get('per_page', 15);
 
             $filtros = [
                 'modulo' => $request->get('modulo'),
@@ -91,95 +99,81 @@ class NotificacionController extends Controller
                 'prioridad_minima' => $request->get('prioridad_minima')
             ];
 
-            // Solo agregar no_leidas si viene explícitamente en el request
             if ($request->has('no_leidas')) {
                 $filtros['no_leidas'] = $request->boolean('no_leidas');
             }
 
-            // Filtrar valores null
             $filtros = array_filter($filtros, function ($value) {
                 return $value !== null;
             });
 
-            $notificaciones = Notificacion::paraUsuario($usuario, $filtros)
-                ->with(['creador', 'usuarioDestinatario'])
-                ->paginate($request->get('per_page', 15));
+            $payload = $this->notificacionCache->rememberIndex((int) $usuario->ID_Usuario, [
+                'filtros' => $filtros,
+                'page' => $page,
+                'per_page' => $perPage,
+            ], function () use ($usuario, $filtros, $perPage) {
+                $notificaciones = Notificacion::paraUsuario($usuario, $filtros)
+                    ->with(['creador', 'usuarioDestinatario'])
+                    ->paginate($perPage);
 
-            // Log de notificaciones después de paginar
-            Log::info('Notificaciones después de paginar', [
-                'total' => $notificaciones->total(),
-                'count' => $notificaciones->count(),
-                'current_page' => $notificaciones->currentPage(),
-                'notificaciones_ids' => $notificaciones->pluck('id')->toArray()
-            ]);
+                $filtrosParaConteo = $filtros;
+                unset($filtrosParaConteo['no_leidas']);
 
-            // Calcular conteos totales (siempre sin filtro de no_leidas para reflejar el total real)
-            // Mantener otros filtros (módulo, tipo, prioridad) si existen
-            $filtrosParaConteo = $filtros;
-            unset($filtrosParaConteo['no_leidas']); // Remover filtro de no_leidas para conteos totales
-            
-            $conteoTotal = Notificacion::paraUsuario($usuario, $filtrosParaConteo)->count();
-            $conteoNoLeidas = Notificacion::paraUsuario($usuario, array_merge($filtrosParaConteo, ['no_leidas' => true]))->count();
-            $conteoLeidas = Notificacion::paraUsuario($usuario, array_merge($filtrosParaConteo, ['no_leidas' => false]))->count();
+                $idsPagina = $notificaciones->getCollection()->pluck('id');
+                $estadosPorNotificacion = $idsPagina->isEmpty()
+                    ? collect()
+                    : DB::table('notificacion_usuario')
+                        ->where('usuario_id', $usuario->ID_Usuario)
+                        ->whereIn('notificacion_id', $idsPagina)
+                        ->get()
+                        ->keyBy('notificacion_id');
 
-            $conteos = [
-                'total' => $conteoTotal,
-                'no_leidas' => $conteoNoLeidas,
-                'leidas' => $conteoLeidas
-            ];
+                $rol = $usuario->grupo ? $usuario->grupo->No_Grupo : 'default';
+                $notificaciones->getCollection()->transform(function ($notificacion) use ($rol, $estadosPorNotificacion) {
+                    $textoPersonalizado = $notificacion->getTextoParaRol($rol);
+                    $estadoUsuario = $estadosPorNotificacion->get($notificacion->id);
 
-
-            // Transformar las notificaciones para incluir información específica del usuario
-            $notificaciones->getCollection()->transform(function ($notificacion) use ($usuario) {
-                $textoPersonalizado = $notificacion->getTextoParaRol(
-                    $usuario->grupo ? $usuario->grupo->No_Grupo : 'default'
-                );
-
-                // Verificar si fue leída por el usuario actual
-                $estadoUsuario = $notificacion->usuarios()
-                    ->where('usuario_id', $usuario->ID_Usuario)
-                    ->first();
+                    return [
+                        'id' => $notificacion->id,
+                        'titulo' => $textoPersonalizado['titulo'],
+                        'mensaje' => $textoPersonalizado['mensaje'],
+                        'descripcion' => $textoPersonalizado['descripcion'],
+                        'modulo' => $notificacion->modulo,
+                        'navigate_to' => $notificacion->navigate_to,
+                        'navigate_params' => $notificacion->navigate_params,
+                        'tipo' => $notificacion->tipo,
+                        'icono' => $notificacion->icono,
+                        'prioridad' => $notificacion->prioridad,
+                        'referencia_tipo' => $notificacion->referencia_tipo,
+                        'referencia_id' => $notificacion->referencia_id,
+                        'fecha_creacion' => $notificacion->created_at?->toIso8601String(),
+                        'fecha_expiracion' => $notificacion->fecha_expiracion?->toIso8601String(),
+                        'creador' => $notificacion->creador ? [
+                            'id' => $notificacion->creador->ID_Usuario,
+                            'nombre' => $notificacion->creador->No_Usuario
+                        ] : null,
+                        'estado_usuario' => [
+                            'leida' => $estadoUsuario ? (bool) $estadoUsuario->leida : false,
+                            'fecha_lectura' => $estadoUsuario ? $estadoUsuario->fecha_lectura : null,
+                            'archivada' => $estadoUsuario ? (bool) $estadoUsuario->archivada : false,
+                            'fecha_archivado' => $estadoUsuario ? $estadoUsuario->fecha_archivado : null
+                        ]
+                    ];
+                });
 
                 return [
-                    'id' => $notificacion->id,
-                    'titulo' => $textoPersonalizado['titulo'],
-                    'mensaje' => $textoPersonalizado['mensaje'],
-                    'descripcion' => $textoPersonalizado['descripcion'],
-                    'modulo' => $notificacion->modulo,
-                    'navigate_to' => $notificacion->navigate_to,
-                    'navigate_params' => $notificacion->navigate_params,
-                    'tipo' => $notificacion->tipo,
-                    'icono' => $notificacion->icono,
-                    'prioridad' => $notificacion->prioridad,
-                    'referencia_tipo' => $notificacion->referencia_tipo,
-                    'referencia_id' => $notificacion->referencia_id,
-                    'fecha_creacion' => $notificacion->created_at,
-                    'fecha_expiracion' => $notificacion->fecha_expiracion,
-                    'creador' => $notificacion->creador ? [
-                        'id' => $notificacion->creador->ID_Usuario,
-                        'nombre' => $notificacion->creador->No_Usuario
-                    ] : null,
-                    'estado_usuario' => [
-                        'leida' => $estadoUsuario ? $estadoUsuario->pivot->leida : false,
-                        'fecha_lectura' => $estadoUsuario ? $estadoUsuario->pivot->fecha_lectura : null,
-                        'archivada' => $estadoUsuario ? $estadoUsuario->pivot->archivada : false,
-                        'fecha_archivado' => $estadoUsuario ? $estadoUsuario->pivot->fecha_archivado : null
-                    ]
+                    'success' => true,
+                    'data' => $notificaciones->toArray(),
+                    'conteos' => [
+                        'total' => Notificacion::paraUsuario($usuario, $filtrosParaConteo)->count(),
+                        'no_leidas' => Notificacion::paraUsuario($usuario, array_merge($filtrosParaConteo, ['no_leidas' => true]))->count(),
+                        'leidas' => Notificacion::paraUsuario($usuario, array_merge($filtrosParaConteo, ['no_leidas' => false]))->count(),
+                    ],
+                    'message' => 'Notificaciones obtenidas exitosamente',
                 ];
             });
 
-            $response = [
-                'success' => true,
-                'data' => $notificaciones,
-                'message' => 'Notificaciones obtenidas exitosamente'
-            ];
-
-            // Agregar conteos si están disponibles
-            if ($conteos !== null) {
-                $response['conteos'] = $conteos;
-            }
-
-            return response()->json($response);
+            return response()->json($payload);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -207,14 +201,15 @@ class NotificacionController extends Controller
         try {
             $usuario = Auth::user();
 
-            $conteo = Notificacion::paraUsuario($usuario, ['no_leidas' => true])
-                ->count();
+            $payload = $this->notificacionCache->rememberConteo((int) $usuario->ID_Usuario, function () use ($usuario) {
+                return [
+                    'total_no_leidas' => Notificacion::paraUsuario($usuario, ['no_leidas' => true])->count(),
+                ];
+            });
 
             return response()->json([
                 'success' => true,
-                'data' => [
-                    'total_no_leidas' => $conteo
-                ]
+                'data' => $payload
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -246,6 +241,7 @@ class NotificacionController extends Controller
             $notificacion = Notificacion::findOrFail($id);
 
             $notificacion->marcarComoLeida($usuario->ID_Usuario);
+            $this->notificacionCache->invalidateForUser((int) $usuario->ID_Usuario);
 
             return response()->json([
                 'success' => true,
@@ -282,8 +278,8 @@ class NotificacionController extends Controller
     public function marcarMultiplesComoLeidas(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'notificacion_ids' => 'required|array|max:500',
-            'notificacion_ids.*' => 'integer'
+            'notificacion_ids' => 'required|array',
+            'notificacion_ids.*' => 'integer',
         ]);
 
         if ($validator->fails()) {
@@ -301,6 +297,7 @@ class NotificacionController extends Controller
                 $request->get('notificacion_ids'),
                 $usuario->ID_Usuario
             );
+            $this->notificacionCache->invalidateForUser((int) $usuario->ID_Usuario);
 
             return response()->json([
                 'success' => true,
@@ -336,6 +333,7 @@ class NotificacionController extends Controller
             $notificacion = Notificacion::findOrFail($id);
 
             $notificacion->archivar($usuario->ID_Usuario);
+            $this->notificacionCache->invalidateForUser((int) $usuario->ID_Usuario);
 
             return response()->json([
                 'success' => true,

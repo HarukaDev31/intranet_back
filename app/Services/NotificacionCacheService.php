@@ -1,54 +1,64 @@
 <?php
 
-namespace App\Services\BaseDatos\Clientes;
+namespace App\Services;
 
-use App\Models\BaseDatos\Clientes\Cliente;
 use App\Support\Cache\CachePayloadNormalizer;
 use Illuminate\Cache\TaggableStore;
 use Illuminate\Support\Facades\Cache;
 
-class ClienteCacheService
+class NotificacionCacheService
 {
-    private const VERSION = 'v3';
-    private const TAG = 'base-datos-clientes';
+    private const VERSION = 'v1';
+    private const TAG = 'notificaciones';
 
-    public function rememberIndex(array $params, callable $resolver): array
+    public function rememberIndex(int $usuarioId, array $params, callable $resolver): array
     {
-        $key = $this->key('index:' . md5(json_encode($this->stableParams($params))));
-        return $this->rememberTagged($key, now()->addMinutes(3), $resolver);
+        $key = $this->key('index:' . $usuarioId . ':' . md5((string) json_encode($this->stableParams($params))));
+
+        return $this->rememberTagged($key, now()->addSeconds(60), $resolver, $this->userTag($usuarioId));
     }
 
-    public function rememberShow(int $id, callable $resolver): array
+    public function rememberConteo(int $usuarioId, callable $resolver): array
     {
-        $key = $this->key("show:{$id}");
-        return $this->rememberTagged($key, now()->addMinutes(1), $resolver);
+        $key = $this->key('conteo:' . $usuarioId);
+
+        return $this->rememberTagged($key, now()->addSeconds(30), $resolver, $this->userTag($usuarioId));
     }
 
-    public function rememberStats(callable $resolver): array
+    public function invalidateForUser(int $usuarioId): void
     {
-        $key = $this->key('stats');
-        return $this->rememberTagged($key, now()->addMinutes(5), $resolver);
-    }
+        Cache::forget($this->key('conteo:' . $usuarioId));
 
-    public function invalidateAfterWrite(?Cliente $cliente = null): void
-    {
-        if ($cliente) {
-            Cache::forget($this->key("show:{$cliente->id}"));
+        $store = Cache::getStore();
+        if ($store instanceof TaggableStore) {
+            Cache::tags([$this->userTag($usuarioId)])->flush();
         }
+    }
 
+    public function invalidateAll(): void
+    {
         $this->flushTag();
+    }
+
+    private function userTag(int $usuarioId): string
+    {
+        return self::TAG . ':user:' . $usuarioId;
     }
 
     private function key(string $suffix): string
     {
-        return 'clientes:' . self::VERSION . ':' . $suffix;
+        return 'notificaciones:' . self::VERSION . ':' . $suffix;
     }
 
-    private function rememberTagged(string $key, $ttl, callable $resolver): array
+    private function rememberTagged(string $key, $ttl, callable $resolver, ?string $extraTag = null): array
     {
         $store = Cache::getStore();
         if ($store instanceof TaggableStore) {
-            $tags = Cache::tags([self::TAG]);
+            $tagNames = [self::TAG];
+            if ($extraTag) {
+                $tagNames[] = $extraTag;
+            }
+            $tags = Cache::tags($tagNames);
             $cached = $tags->get($key);
             if (is_array($cached) && ! CachePayloadNormalizer::containsUnsafeCachedValue($cached)) {
                 return $cached;
@@ -92,6 +102,7 @@ class ClienteCacheService
                 $params[$k] = $this->stableParams($v);
             }
         }
+
         return $params;
     }
 }
