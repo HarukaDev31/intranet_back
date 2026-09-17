@@ -31,6 +31,7 @@ use Dompdf\Options;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Traits\FileTrait;
 use App\Traits\UsesObjectStorage;
+use App\Services\CargaConsolidada\CotizacionFinal\FechaMaximaPagoGuard;
 use App\Services\CargaConsolidada\CotizacionFinal\ReminderPagoWhatsappService;
 use App\Services\CargaConsolidada\CotizacionFinal\PlantillaFinalBatchService;
 use App\Services\CargaConsolidada\CotizacionFinal\TarifaTipoClienteCalculator;
@@ -150,17 +151,32 @@ class CotizacionFinalController extends Controller
 
             $perPage = $request->input('per_page', 10);
             $data = $query->paginate($perPage);
+            $items = $data->items();
+            $cotizacionIds = collect($items)->pluck('id_cotizacion')->filter()->unique()->values();
+
+            $pagosPorCotizacion = collect();
+            $comprobantesPorCotizacion = collect();
+            if ($cotizacionIds->isNotEmpty()) {
+                $pagosPorCotizacion = DB::table($this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' as P')
+                    ->leftJoin($this->table_pagos_concept . ' as C', 'P.id_concept', '=', 'C.id')
+                    ->whereIn('P.id_cotizacion', $cotizacionIds)
+                    ->select('P.id', 'P.id_cotizacion', 'P.monto', 'P.voucher_url', 'P.payment_date', 'P.banco', 'P.created_at', 'P.status', 'C.name as concept_name')
+                    ->orderBy('P.id', 'asc')
+                    ->get()
+                    ->groupBy('id_cotizacion');
+
+                $comprobantesPorCotizacion = DB::table('consolidado_comprobante_forms')
+                    ->whereIn('id_cotizacion', $cotizacionIds)
+                    ->get()
+                    ->unique('id_cotizacion')
+                    ->keyBy('id_cotizacion');
+            }
 
             $transformedData = [];
             $index = 1;
 
-            foreach ($data->items() as $row) {
-                $pagos = DB::table($this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' as P')
-                    ->leftJoin($this->table_pagos_concept . ' as C', 'P.id_concept', '=', 'C.id')
-                    ->where('P.id_cotizacion', $row->id_cotizacion)
-                    ->select('P.id', 'P.monto', 'P.voucher_url', 'P.payment_date', 'P.banco', 'P.created_at', 'P.status', 'C.name as concept_name')
-                    ->orderBy('P.id', 'asc')
-                    ->get();
+            foreach ($items as $row) {
+                $pagos = collect($pagosPorCotizacion->get($row->id_cotizacion, []));
 
                 $pagos->transform(function ($p) {
                     if (isset($p->voucher_url) && $p->voucher_url) {
@@ -187,9 +203,7 @@ class CotizacionFinalController extends Controller
                 }
 
                 // T. Entrega para contabilidad: desde consolidado_comprobante_forms (ComprobanteForm)
-                $comprobanteForm = DB::table('consolidado_comprobante_forms')
-                    ->where('id_cotizacion', $row->id_cotizacion)
-                    ->first();
+                $comprobanteForm = $comprobantesPorCotizacion->get($row->id_cotizacion);
                 $tipoEntrega = $comprobanteForm && !empty($comprobanteForm->destino_entrega)
                     ? trim($comprobanteForm->destino_entrega)
                     : null;
@@ -1171,6 +1185,11 @@ class CotizacionFinalController extends Controller
                 ], 404);
             }
 
+            $blocked = $this->jsonIfMissingFechaMaximaPago((int) $request->idCotizacion);
+            if ($blocked) {
+                return $blocked;
+            }
+
             $cotizacion->estado_cotizacion_final = $request->estado;
             $cotizacion->save();
 
@@ -1239,6 +1258,11 @@ class CotizacionFinalController extends Controller
                 ], 422);
             }
 
+            $blocked = $this->jsonIfMissingFechaMaximaPago($idCotizacion);
+            if ($blocked) {
+                return $blocked;
+            }
+
             $cotizacion = Cotizacion::find($idCotizacion);
             if (!$cotizacion) {
                 return response()->json([
@@ -1283,6 +1307,11 @@ class CotizacionFinalController extends Controller
     public function previewReminderPago($idCotizacion)
     {
         try {
+            $blocked = $this->jsonIfMissingFechaMaximaPago((int) $idCotizacion);
+            if ($blocked) {
+                return $blocked;
+            }
+
             $result = app(ReminderPagoWhatsappService::class)->preview((int) $idCotizacion);
             if (empty($result['success'])) {
                 return response()->json([
@@ -1305,6 +1334,11 @@ class CotizacionFinalController extends Controller
     public function sendReminderPago(Request $request, $idCotizacion)
     {
         try {
+            $blocked = $this->jsonIfMissingFechaMaximaPago((int) $idCotizacion);
+            if ($blocked) {
+                return $blocked;
+            }
+
             $preview = app(ReminderPagoWhatsappService::class)->preview((int) $idCotizacion);
             if (empty($preview['success'])) {
                 return response()->json([
@@ -1324,6 +1358,74 @@ class CotizacionFinalController extends Controller
             Log::error('Error en sendReminderPago: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return response()->json(['message' => 'Error al enviar recordatorio: ' . $e->getMessage(), 'success' => false], 500);
         }
+    }
+
+    /**
+     * Define la fecha máxima de pago del contenedor (cotización final).
+     */
+    public function updateFechaMaximaPago(Request $request, $idContenedor)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            if ($user) {
+                $rol = trim((string) $user->getNombreGrupo());
+                $allowed = $rol === Usuario::ROL_COORDINACION
+                    || Usuario::rolEquivaleJefeImportacion($rol);
+                if (!$allowed) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No autorizado para definir la fecha máxima de pago',
+                    ], 403);
+                }
+            }
+
+            $this->validate($request, [
+                'fecha_maxima_pago' => 'required|date_format:Y-m-d',
+            ]);
+
+            $contenedor = Contenedor::find($idContenedor);
+            if (!$contenedor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no encontrado',
+                ], 404);
+            }
+
+            $contenedor->fecha_maxima_pago = $request->input('fecha_maxima_pago');
+            $contenedor->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Fecha máxima de pago actualizada',
+                'data' => [
+                    'fecha_maxima_pago' => FechaMaximaPagoGuard::toIso($contenedor->fecha_maxima_pago),
+                ],
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $ve) {
+            return response()->json(['success' => false, 'message' => $ve->getMessage()], 422);
+        } catch (\Exception $e) {
+            Log::error('Error en updateFechaMaximaPago: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar la fecha máxima de pago: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    private function jsonIfMissingFechaMaximaPago($idCotizacion)
+    {
+        $result = FechaMaximaPagoGuard::forCotizacion((int) $idCotizacion);
+        if (!empty($result['ok'])) {
+            return null;
+        }
+
+        $status = !empty($result['not_found']) ? 404 : 422;
+
+        return response()->json([
+            'success' => false,
+            'message' => $result['message'] ?? FechaMaximaPagoGuard::MESSAGE,
+            'code' => FechaMaximaPagoGuard::CODE,
+        ], $status);
     }
 
     /**
@@ -2661,7 +2763,7 @@ class CotizacionFinalController extends Controller
 
             // Obtener bl_file_url, lista_empaque_file_url, carga y f_puerto del contenedor
             $result2 = DB::table($this->table)
-                ->select('bl_file_url', 'lista_embarque_url', 'carga', 'fecha_arribo', 'f_puerto')
+                ->select('bl_file_url', 'lista_embarque_url', 'carga', 'fecha_arribo', 'f_puerto', 'fecha_maxima_pago')
                 ->where('id', $idContenedor)
                 ->first();
 
@@ -2706,6 +2808,7 @@ class CotizacionFinalController extends Controller
                     'carga' => $result2->carga ?? '',
                     //fecha_arribo is null use f_puerto
                     'f_puerto' => $result2->fecha_arribo ? \Carbon\Carbon::parse($result2->fecha_arribo)->format('d/m/Y') : ($result2->f_puerto ? \Carbon\Carbon::parse($result2->f_puerto)->format('d/m/Y') : null),
+                    'fecha_maxima_pago' => FechaMaximaPagoGuard::toIso($result2->fecha_maxima_pago ?? null),
                 ]);
             }
 
@@ -2753,6 +2856,7 @@ class CotizacionFinalController extends Controller
                     'data' => $dataHeaders,
                     'carga' => $result2->carga ?? '',
                     'f_puerto' => $result2->fecha_arribo ? \Carbon\Carbon::parse($result2->fecha_arribo)->format('d/m/Y') : ($result2->f_puerto ? \Carbon\Carbon::parse($result2->f_puerto)->format('d/m/Y') : null),
+                    'fecha_maxima_pago' => FechaMaximaPagoGuard::toIso($result2->fecha_maxima_pago ?? null),
                 ]);
             } else {
                 return response()->json([
@@ -2767,6 +2871,7 @@ class CotizacionFinalController extends Controller
                     ],
                     'carga' => '',
                     'f_puerto' => $result2->fecha_arribo ? \Carbon\Carbon::parse($result2->fecha_arribo)->format('d/m/Y') : ($result2->f_puerto ? \Carbon\Carbon::parse($result2->f_puerto)->format('d/m/Y') : null),
+                    'fecha_maxima_pago' => FechaMaximaPagoGuard::toIso($result2->fecha_maxima_pago ?? null),
                 ]);
             }
         } catch (\Exception $e) {

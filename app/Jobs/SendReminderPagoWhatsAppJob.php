@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Events\ReminderPagoWhatsAppFinished;
+use App\Services\CargaConsolidada\CotizacionFinal\FechaMaximaPagoGuard;
 use App\Services\CargaConsolidada\CotizacionFinal\ReminderPagoWhatsappService;
 use App\Traits\WhatsappTrait;
 use Illuminate\Bus\Queueable;
@@ -49,6 +50,14 @@ class SendReminderPagoWhatsAppJob implements ShouldQueue
                     'cotizacion_id' => $this->idCotizacion,
                 ]);
                 $this->notifyContabilidad(false, 'El cliente no tiene un teléfono válido', $cliente, $carga);
+                return;
+            }
+
+            if (empty($payload['has_fecha_maxima_pago'])) {
+                Log::warning('SendReminderPagoWhatsAppJob: fecha máxima de pago no definida', [
+                    'cotizacion_id' => $this->idCotizacion,
+                ]);
+                $this->notifyContabilidad(false, FechaMaximaPagoGuard::MESSAGE, $cliente, $carga);
                 return;
             }
 
