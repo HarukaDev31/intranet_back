@@ -20,7 +20,7 @@ class CustomersHeadersService
      * @param array<int, int> $orgIds
      * @return array<string, array<string, string>>
      */
-    public function build(array $orgIds, $search = '', $idPais = null, $estadoChina = 'todos')
+    public function build(array $orgIds, $search = '', $idPais = null, $estadoChina = 'todos', $fechaInicio = null, $fechaFin = null)
     {
         $orgIds = array_values(array_unique(array_map('intval', $orgIds)));
         if ($orgIds === []) {
@@ -43,7 +43,7 @@ class CustomersHeadersService
             'CONT',
             $this->tableProveedor
         );
-        $this->applyFilters($statsQuery, $search, $idPais, $estadoChina, 'PR');
+        $this->applyFilters($statsQuery, $search, $idPais, $estadoChina, 'PR', $fechaInicio, $fechaFin);
         $stats = $statsQuery
             ->selectRaw('
                 COALESCE(SUM(PR.cbm_total), 0) as cbm_warehouse,
@@ -97,6 +97,37 @@ class CustomersHeadersService
     }
 
     /**
+     * KPIs de un consolidado para el rol almacén (vista Customers / Por embarcar).
+     *
+     * @param int $idContenedor
+     * @return array<string, array<string, string>>
+     */
+    public function buildForContenedor($idContenedor)
+    {
+        $idContenedor = (int) $idContenedor;
+        if ($idContenedor <= 0) {
+            return $this->empty();
+        }
+
+        $statsQuery = DB::table($this->tableCotizacion . ' as CC')
+            ->leftJoin($this->tableProveedor . ' as PR', 'PR.id_cotizacion', '=', 'CC.id')
+            ->where('CC.id_contenedor', $idContenedor)
+            ->whereNull('CC.deleted_at')
+            ->whereNull('CC.id_cliente_importacion');
+        ClientesVisibility::applyConfirmadoParaBd($statsQuery, 'CC');
+        $stats = $statsQuery
+            ->selectRaw('
+                COALESCE(SUM(PR.cbm_total), 0) as cbm_warehouse,
+                COUNT(DISTINCT CC.id) as total_customers,
+                COUNT(PR.id) as total_suppliers_code,
+                SUM(CASE WHEN PR.estados_proveedor = ? THEN 1 ELSE 0 END) as total_nc
+            ', ['NC'])
+            ->first();
+
+        return $this->format($stats);
+    }
+
+    /**
      * @param object|null $stats
      * @return array<string, array<string, string>>
      */
@@ -109,7 +140,7 @@ class CustomersHeadersService
         return [
             'cbm_warehouse' => [
                 'value' => number_format((float) ($stats->cbm_warehouse ?? 0), 3, '.', ''),
-                'label' => 'CBM warehouse',
+                'label' => 'CBM Warehouse',
                 'icon' => 'i-heroicons-cube',
             ],
             'total_customers' => [
@@ -136,7 +167,7 @@ class CustomersHeadersService
     public function empty()
     {
         return [
-            'cbm_warehouse' => ['value' => '0.000', 'label' => 'CBM warehouse', 'icon' => 'i-heroicons-cube'],
+            'cbm_warehouse' => ['value' => '0.000', 'label' => 'CBM Warehouse', 'icon' => 'i-heroicons-cube'],
             'total_customers' => ['value' => '0', 'label' => 'Total customers', 'icon' => 'i-heroicons-users'],
             'total_suppliers_code' => ['value' => '0', 'label' => 'Total suppliers code', 'icon' => 'i-heroicons-tag'],
             'total_nc' => ['value' => '0', 'label' => 'Total NC', 'icon' => 'i-heroicons-exclamation-triangle'],
@@ -149,9 +180,11 @@ class CustomersHeadersService
      * @param mixed $idPais
      * @param mixed $estadoChina
      * @param string|null $proveedorEstadoAlias
+     * @param mixed $fechaInicio
+     * @param mixed $fechaFin
      * @return void
      */
-    public function applyFilters($query, $search, $idPais, $estadoChina, $proveedorEstadoAlias = null)
+    public function applyFilters($query, $search, $idPais, $estadoChina, $proveedorEstadoAlias = null, $fechaInicio = null, $fechaFin = null)
     {
         if ($search !== '') {
             $like = '%' . $search . '%';
@@ -192,6 +225,15 @@ class CustomersHeadersService
                 });
             }
         }
+
+        $desde = $this->dateFilter($fechaInicio);
+        $hasta = $this->dateFilter($fechaFin);
+        if ($desde) {
+            $query->whereDate('CONT.f_inicio', '>=', $desde);
+        }
+        if ($hasta) {
+            $query->whereDate('CONT.f_inicio', '<=', $hasta);
+        }
     }
 
     /**
@@ -222,5 +264,22 @@ class CustomersHeadersService
         }
 
         return in_array(strtolower(trim((string) $scalar)), ['todos', 'todas', 'all', 'todo'], true);
+    }
+
+    /**
+     * @param mixed $value
+     * @return string|null
+     */
+    private function dateFilter($value)
+    {
+        $scalar = trim((string) $this->scalarFilter($value));
+        if ($scalar === '' || $this->isFilterAll($scalar)) {
+            return null;
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $scalar)) {
+            return null;
+        }
+
+        return $scalar;
     }
 }

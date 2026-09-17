@@ -221,6 +221,37 @@ class ContenedorController extends Controller
             }
         }
 
+        $empresasDisponibles = [];
+        $seenEmpresas = [];
+        $empresasQuery = clone $query;
+        $empresasQuery->getQuery()->orders = null;
+        $nombresEmpresa = $empresasQuery
+            ->without(['pais', 'tcYuan', 'paisFlag', 'organizacion'])
+            ->whereNotNull('empresa')
+            ->where('empresa', '!=', '')
+            ->where('empresa', '!=', '1')
+            ->select('empresa')
+            ->distinct()
+            ->orderBy('empresa')
+            ->pluck('empresa');
+        foreach ($nombresEmpresa as $nombre) {
+            $trimmed = trim((string) $nombre);
+            if ($trimmed === '' || $trimmed === '1') {
+                continue;
+            }
+            $key = mb_strtolower($trimmed);
+            if (isset($seenEmpresas[$key])) {
+                continue;
+            }
+            $seenEmpresas[$key] = true;
+            $empresasDisponibles[] = $trimmed;
+        }
+
+        $empresaFiltro = $request->input('empresa', $request->input('company'));
+        if ($empresaFiltro !== null && $empresaFiltro !== '' && strtolower((string) $empresaFiltro) !== 'todos') {
+            $query->whereRaw('LOWER(TRIM(empresa)) = ?', [mb_strtolower(trim((string) $empresaFiltro))]);
+        }
+
         if ($authOrg > 0) {
             $query->orderByRaw('CASE WHEN organizacion_id = ? THEN 0 ELSE 1 END', [$authOrg]);
         }
@@ -361,6 +392,7 @@ class ContenedorController extends Controller
             'filters' => [
                 'anios' => $aniosDisponibles,
                 'organizaciones' => $organizacionesFiltro,
+                'empresas' => $empresasDisponibles,
             ],
         ];
     }

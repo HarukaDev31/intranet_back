@@ -21,14 +21,12 @@ class HomeStatsService
             return $this->vacio($conDesglosePais);
         }
 
-        // Socio: CBM / clientes / códigos / consolidados solo de contenedores
-        // completados por China. Warehouse sigue sumando lo que está en almacén.
-        $soloCompletadosChina = !$conDesglosePais;
-
-        $cbm = $this->sumarPorPais($orgIds, 'cbm', $soloCompletadosChina);
-        $clientes = $this->sumarPorPais($orgIds, 'clientes', $soloCompletadosChina);
-        $codigos = $this->sumarPorPais($orgIds, 'codigos', $soloCompletadosChina);
-        $contenedores = $this->sumarPorPais($orgIds, 'contenedores', $soloCompletadosChina);
+        // CBM / clientes / códigos / contenedores: cargas LOADED
+        // y contenedores con estado_china COMPLETADO (Almacén y socio).
+        $cbm = $this->sumarPorPais($orgIds, 'cbm', true);
+        $clientes = $this->sumarPorPais($orgIds, 'clientes', true);
+        $codigos = $this->sumarPorPais($orgIds, 'codigos', true);
+        $contenedores = $this->sumarPorPais($orgIds, 'contenedores', true);
 
         $cards = [
             $this->card('cbm', $cbm, $conDesglosePais),
@@ -100,6 +98,7 @@ class HomeStatsService
             $query->join('contenedor_consolidado_cotizacion_proveedores as p', 'p.id_contenedor', '=', 'cont.id')
                 ->join('contenedor_consolidado_cotizacion as cc', 'cc.id', '=', 'p.id_cotizacion')
                 ->whereNull('cc.deleted_at')
+                ->where('p.estados_proveedor', 'LOADED')
                 ->whereNotNull('p.code_supplier')
                 ->where('p.code_supplier', '!=', '')
                 ->selectRaw('UPPER(TRIM(COALESCE(pa.No_Pais, "SIN PAIS"))) as country')

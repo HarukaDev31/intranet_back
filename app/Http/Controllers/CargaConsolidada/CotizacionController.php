@@ -14,6 +14,7 @@ use App\Models\CargaConsolidada\CotizacionProveedorArchivoIa;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
 use App\Services\CargaConsolidada\CotizacionService;
+use App\Services\CargaConsolidada\CustomersHeadersService;
 use App\Services\CargaConsolidada\CotizacionExportService;
 use App\Services\CargaConsolidada\ThirdPartyCotizacionExportCacheService;
 use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveService;
@@ -759,6 +760,23 @@ class CotizacionController extends Controller
                 'label' => 'Antiguo',
                 'icon' => 'i-heroicons-user',
             ];
+        }
+
+        if ($usergroup === Usuario::ROL_ALMACEN_CHINA) {
+            $headersData = app(CustomersHeadersService::class)->buildForContenedor($idContenedor);
+
+            return response()->json([
+                'success' => true,
+                'data' => $headersData,
+                'data_pagos' => [],
+                'f_cierre' => $contenedor->fecha_cierre ?? $contenedor->f_cierre,
+                'carga' => $contenedor->carga,
+                'lista_embarque_url' => $this->cdnStorageUrl($contenedor->lista_embarque_url),
+                'excel_seguimiento_drive' => $this->excelSeguimientoDrivePayload($idContenedor, $user),
+                'url_clientes' => OrganizacionPortalUrls::urlClientes(
+                    OrganizacionPortalUrls::orgIdFromParent($contenedor)
+                ),
+            ]);
         }
 
         $roleAllowedMap = [

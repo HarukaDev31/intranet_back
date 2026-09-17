@@ -54,9 +54,11 @@ class CustomersController extends Controller
             $search = trim((string) $request->input('search', ''));
             $idPais = $request->input('id_pais', $request->input('pais'));
             $estadoChina = $request->input('estado_china', 'todos');
+            $fechaInicio = $request->input('fecha_inicio', $request->input('start_date'));
+            $fechaFin = $request->input('fecha_fin', $request->input('end_date'));
 
             $baseQuery = $this->baseCustomersQuery($orgIds);
-            $this->applyCustomersFilters($baseQuery, $search, $idPais, $estadoChina);
+            $this->applyCustomersFilters($baseQuery, $search, $idPais, $estadoChina, null, $fechaInicio, $fechaFin);
 
             $pageQuery = clone $baseQuery;
             $cotizacionesPage = $pageQuery
@@ -68,7 +70,7 @@ class CustomersController extends Controller
             $items = collect($cotizacionesPage->items());
             $ids = $items->pluck('id')->all();
 
-            $headers = $this->buildHeaders($orgIds, $search, $idPais, $estadoChina);
+            $headers = $this->buildHeaders($orgIds, $search, $idPais, $estadoChina, $fechaInicio, $fechaFin);
             $paises = $this->buildPaises($orgIds);
 
             if (empty($ids)) {
@@ -247,17 +249,19 @@ class CustomersController extends Controller
      * @param string $search
      * @param mixed $idPais
      * @param mixed $estadoChina
-     * @param string|null $proveedorEstadoAlias si viene, filtra el join de proveedores
+     * @param string|null $proveedorEstadoAlias
+     * @param mixed $fechaInicio
+     * @param mixed $fechaFin
      * @return void
      */
-    private function applyCustomersFilters($query, $search, $idPais, $estadoChina, $proveedorEstadoAlias = null)
+    private function applyCustomersFilters($query, $search, $idPais, $estadoChina, $proveedorEstadoAlias = null, $fechaInicio = null, $fechaFin = null)
     {
-        (new CustomersHeadersService())->applyFilters($query, $search, $idPais, $estadoChina, $proveedorEstadoAlias);
+        (new CustomersHeadersService())->applyFilters($query, $search, $idPais, $estadoChina, $proveedorEstadoAlias, $fechaInicio, $fechaFin);
     }
 
-    private function buildHeaders($orgIds, $search = '', $idPais = null, $estadoChina = 'todos')
+    private function buildHeaders($orgIds, $search = '', $idPais = null, $estadoChina = 'todos', $fechaInicio = null, $fechaFin = null)
     {
-        return (new CustomersHeadersService())->build($orgIds, $search, $idPais, $estadoChina);
+        return (new CustomersHeadersService())->build($orgIds, $search, $idPais, $estadoChina, $fechaInicio, $fechaFin);
     }
 
     private function buildPaises($orgIds)
