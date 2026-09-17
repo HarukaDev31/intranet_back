@@ -28,6 +28,7 @@ use App\Models\CargaConsolidada\Cotizacion;
 use App\Traits\FileTrait;
 use App\Traits\UsesObjectStorage;
 use App\Support\Menu\PedidosCursoMenuFilter;
+use App\Services\Auth\AuthMenuCacheService;
 
 class AuthController extends Controller
 {
@@ -125,7 +126,7 @@ class AuthController extends Controller
                         $usuario->load(['grupo', 'empresa', 'organizacion']);
 
                         // Obtener menús del usuario
-                        $menus = $this->obtenerMenusUsuario($usuario);
+                        $menus = $this->obtenerMenusUsuarioCacheados($usuario);
                         // Preparar información del grupo
                         $grupoInfo = null;
                         if ($usuario->grupo) {
@@ -1051,6 +1052,13 @@ class AuthController extends Controller
      * @param \App\Models\Usuario $usuario
      * @return array
      */
+    private function obtenerMenusUsuarioCacheados($usuario)
+    {
+        return app(AuthMenuCacheService::class)->rememberInterno($usuario, function () use ($usuario) {
+            return $this->obtenerMenusUsuario($usuario);
+        });
+    }
+
     private function obtenerMenusUsuario($usuario)
     {
         try {
@@ -1311,6 +1319,13 @@ class AuthController extends Controller
      * @param \App\Models\User $user
      * @return array
      */
+    private function obtenerMenusUsuarioExternoCacheados($user)
+    {
+        return app(AuthMenuCacheService::class)->rememberExterno((int) $user->id, function () use ($user) {
+            return $this->obtenerMenusUsuarioExterno($user);
+        });
+    }
+
     private function obtenerMenusUsuarioExterno($user)
     {
         try {
@@ -1530,7 +1545,7 @@ class AuthController extends Controller
             $this->asignarMenusUsuario($user->id);
 
             // Obtener menús del usuario externo
-            $menus = $this->obtenerMenusUsuarioExterno($user);
+            $menus = $this->obtenerMenusUsuarioExternoCacheados($user);
 
             try {
                 Mail::to($user['email'])->send(
@@ -1671,7 +1686,7 @@ class AuthController extends Controller
                 $token = JWTAuth::fromUser($user);
 
                 // Obtener menús del usuario externo
-                $menus = $this->obtenerMenusUsuarioExterno($user);
+                $menus = $this->obtenerMenusUsuarioExternoCacheados($user);
 
                 // Cargar la relación con userBusiness
                 $user->load('userBusiness');
@@ -1763,7 +1778,7 @@ class AuthController extends Controller
             }
 
             // Obtener menús del usuario externo
-            $menus = $this->obtenerMenusUsuarioExterno($user);
+            $menus = $this->obtenerMenusUsuarioExternoCacheados($user);
 
             // Cargar la relación con userBusiness y relaciones de ubicación, incluyendo pais
             $user->load(['userBusiness', 'departamento', 'distrito', 'provincia', 'pais']);

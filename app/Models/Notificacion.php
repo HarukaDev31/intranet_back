@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Builder;
+use App\Services\NotificacionCacheService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
@@ -64,6 +65,16 @@ class Notificacion extends Model
     const PRIORIDAD_BAJA = 1;
     const PRIORIDAD_MEDIA = 3;
     const PRIORIDAD_ALTA = 5;
+
+    protected static function booted(): void
+    {
+        static::saved(function () {
+            app(NotificacionCacheService::class)->invalidateAll();
+        });
+        static::deleted(function () {
+            app(NotificacionCacheService::class)->invalidateAll();
+        });
+    }
 
     /**
      * Relación con el usuario que creó la notificación

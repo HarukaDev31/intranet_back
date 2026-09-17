@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\PanelAcceso;
 
 use App\Http\Controllers\Controller;
+use App\Services\Auth\AuthMenuCacheService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -190,6 +191,7 @@ class MenuAccesoController extends Controller
             }
 
             DB::commit();
+            app(AuthMenuCacheService::class)->invalidateAll();
 
             Log::info('menu_acceso.guardar_permisos.fin', [
                 'id_empresa' => (int) $request->id_empresa,

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\PanelAcceso;
 
 use App\Http\Controllers\Controller;
+use App\Services\Auth\AuthMenuCacheService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -117,6 +118,8 @@ class MenuCatalogoController extends Controller
                 'No_Menu_China'   => '',
             ]);
 
+            app(AuthMenuCacheService::class)->invalidateAll();
+
             return response()->json(['success' => true, 'message' => 'Menú creado exitosamente', 'data' => ['id' => $id]]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json(['success' => false, 'message' => $e->errors()], 422);
@@ -167,6 +170,8 @@ class MenuCatalogoController extends Controller
                 'show_father'     => $request->boolean('show_father') ? 1 : 0,
             ]);
 
+            app(AuthMenuCacheService::class)->invalidateAll();
+
             return response()->json(['success' => true, 'message' => 'Menú actualizado exitosamente']);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json(['success' => false, 'message' => $e->errors()], 422);
@@ -194,6 +199,8 @@ class MenuCatalogoController extends Controller
                 // 2. Eliminar el menú
                 DB::table('menu')->where('ID_Menu', $id)->delete();
             });
+
+            app(AuthMenuCacheService::class)->invalidateAll();
 
             return response()->json(['success' => true, 'message' => 'Menú eliminado y desasignado de todos los roles']);
         } catch (\Exception $e) {
