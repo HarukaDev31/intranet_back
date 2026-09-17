@@ -377,7 +377,7 @@ class CotizacionFinalCobranzaWhatsappService
             ->where('id', $cotizacion->id_contenedor)
             ->first();
 
-        if (!$contenedor) {
+        if (!$contenedor instanceof Contenedor) {
             return null;
         }
 

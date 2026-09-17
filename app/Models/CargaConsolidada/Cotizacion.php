@@ -11,6 +11,10 @@ use App\Models\CargaConsolidada\Comprobante;
 use App\Models\CargaConsolidada\Detraccion;
 use App\Models\CargaConsolidada\ReasonDeleteCotizacion;
 
+/**
+ * @property int $id
+ * @property int|null $id_contenedor
+ */
 class Cotizacion extends Model
 {
     use HasFactory;

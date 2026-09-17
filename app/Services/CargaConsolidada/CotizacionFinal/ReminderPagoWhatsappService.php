@@ -44,7 +44,7 @@ class ReminderPagoWhatsappService
     }
 
     /**
-     * @return array{nombre:string,phone:string,phone_id:string,carga:string,message:string,has_excel:bool,excel_url:?string}|null
+     * @return array{nombre:string,phone:string,phone_id:string,carga:string,message:string,has_excel:bool,excel_url:?string,has_fecha_maxima_pago:bool,fecha_maxima_pago:?string}|null
      */
     public function buildPayload(int $idCotizacion): ?array
     {

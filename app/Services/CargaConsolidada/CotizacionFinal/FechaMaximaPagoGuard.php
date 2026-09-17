@@ -66,8 +66,8 @@ class FechaMaximaPagoGuard
      */
     public static function forCotizacion(int $idCotizacion): array
     {
-        $cotizacion = Cotizacion::find($idCotizacion);
-        if (!$cotizacion) {
+        $cotizacion = Cotizacion::query()->whereKey($idCotizacion)->first();
+        if (!$cotizacion instanceof Cotizacion) {
             return [
                 'ok' => false,
                 'not_found' => true,
@@ -85,9 +85,10 @@ class FechaMaximaPagoGuard
     {
         $contenedor = Contenedor::query()
             ->select('id', 'fecha_maxima_pago', 'carga')
-            ->find($idContenedor);
+            ->whereKey($idContenedor)
+            ->first();
 
-        if (!$contenedor) {
+        if (!$contenedor instanceof Contenedor) {
             return [
                 'ok' => false,
                 'not_found' => true,

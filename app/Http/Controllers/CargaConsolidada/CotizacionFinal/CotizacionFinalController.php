@@ -1383,8 +1383,8 @@ class CotizacionFinalController extends Controller
                 'fecha_maxima_pago' => 'required|date_format:Y-m-d',
             ]);
 
-            $contenedor = Contenedor::find($idContenedor);
-            if (!$contenedor) {
+            $contenedor = Contenedor::query()->whereKey((int) $idContenedor)->first();
+            if (!$contenedor instanceof Contenedor) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Contenedor no encontrado',

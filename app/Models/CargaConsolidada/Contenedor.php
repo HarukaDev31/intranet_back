@@ -7,6 +7,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Models\Pais;
 
+/**
+ * @property int $id
+ * @property \Carbon\Carbon|null $fecha_maxima_pago
+ * @property string|null $carga
+ */
 class Contenedor extends Model
 {
     use HasFactory;
