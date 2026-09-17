@@ -39,6 +39,7 @@ use App\Support\CargaConsolidada\CargaLabel;
  * @property \Illuminate\Support\Carbon|null $fecha_arribo
  * @property \Illuminate\Support\Carbon|null $fecha_declaracion
  * @property \Illuminate\Support\Carbon|null $fecha_levante
+ * @property \Illuminate\Support\Carbon|null $fecha_maxima_pago
  * @property string|float|int|null $valor_fob
  * @property string|float|int|null $valor_flete
  * @property string|float|int|null $costo_destino
