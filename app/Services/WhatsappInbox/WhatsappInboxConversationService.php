@@ -82,6 +82,27 @@ class WhatsappInboxConversationService
             $rows[] = $this->formatConversation($conv);
         }
 
+        $includeId = isset($params['include_id']) ? (int) $params['include_id'] : 0;
+        if ($includeId > 0) {
+            $found = false;
+            foreach ($rows as $row) {
+                if ((int) $row['id'] === $includeId) {
+                    $found = true;
+                    break;
+                }
+            }
+            if (!$found) {
+                $extra = WaInboxConversation::query()
+                    ->with('session')
+                    ->where('organizacion_id', $orgId)
+                    ->where('id', $includeId)
+                    ->first();
+                if ($extra) {
+                    $rows[] = $this->formatConversation($extra);
+                }
+            }
+        }
+
         return [
             'success' => true,
             'data' => $rows,
@@ -114,9 +135,7 @@ class WhatsappInboxConversationService
         }
 
         $initials = $this->initials($name);
-        $timeLabel = $conversation->last_message_at
-            ? Carbon::parse($conversation->last_message_at)->format('H:i')
-            : '';
+        $timeLabel = $this->formatLastMessageTimeLabel($conversation->last_message_at);
 
         return [
             'id' => (int) $conversation->id,
@@ -613,6 +632,27 @@ class WhatsappInboxConversationService
         }
 
         return $digits;
+    }
+
+    /**
+     * @param  mixed  $lastMessageAt
+     * @return string
+     */
+    private function formatLastMessageTimeLabel($lastMessageAt)
+    {
+        if (!$lastMessageAt) {
+            return '';
+        }
+
+        $at = Carbon::parse($lastMessageAt);
+        if ($at->isSameDay(Carbon::today())) {
+            return $at->format('H:i');
+        }
+        if ($at->isSameDay(Carbon::yesterday())) {
+            return 'Ayer';
+        }
+
+        return $at->format('d/m');
     }
 
     private function formatPhoneDisplay($phoneE164)
