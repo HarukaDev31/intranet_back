@@ -238,13 +238,13 @@ class CotizacionProveedorController extends Controller
             // Ejecutar consulta con paginación
             $data = $query->paginate($perPage, ['*'], 'page', $page);
             $estadoChina = $request->estado_china;
+            $items = $data->items();
+            $cotizacionIds = collect($items)->pluck('id')->filter()->unique()->values();
 
-
-            // Procesar datos para el frontend
-            $dataProcessed = collect($data->items())->map(function ($item) use ($user, $estadoChina, $rol, $search) {
-                // Obtener proveedores por separado para garantizar que siempre sea un array
-                $proveedoresQuery = DB::table('contenedor_consolidado_cotizacion_proveedores')
-                    ->where('id_cotizacion', $item->id)
+            $proveedoresPorCotizacion = collect();
+            if ($cotizacionIds->isNotEmpty()) {
+                $proveedoresPorCotizacion = DB::table('contenedor_consolidado_cotizacion_proveedores')
+                    ->whereIn('id_cotizacion', $cotizacionIds)
                     ->select([
                         'id',
                         'qty_box',
@@ -268,7 +268,14 @@ class CotizacionProveedorController extends Controller
                         'tipo_rotulado'
                     ])
                     ->get()
-                    ->toArray();
+                    ->groupBy('id_cotizacion');
+            }
+
+            // Procesar datos para el frontend
+            $dataProcessed = collect($items)->map(function ($item) use ($user, $estadoChina, $rol, $search, $proveedoresPorCotizacion) {
+                $proveedoresQuery = ($proveedoresPorCotizacion->get($item->id) ?? collect())
+                    ->values()
+                    ->all();
 
                 // Convertir a array asociativo y agregar id_proveedor
                 $proveedores = array_map(function ($proveedor) {
@@ -3586,12 +3593,13 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $cotizacionDestino->uuid = $uuid;
             $cotizacionDestino->id_contenedor = $idContainerDestino;
             $cotizacionDestino->save();
-            foreach ($proveedores as $proveedor) {
-                $proveedor = CotizacionProveedor::find($proveedor);
-                $proveedor->id_cotizacion = $cotizacionDestino->id;
-                $proveedor->id_contenedor = $idContainerDestino;
-                $proveedor->id_contenedor_pago = $idContainerPagoDestino;
-                $proveedor->save();
+            $proveedorIds = collect($proveedores)->map(fn ($id) => (int) $id)->filter()->unique()->values();
+            if ($proveedorIds->isNotEmpty()) {
+                CotizacionProveedor::whereIn('id', $proveedorIds)->update([
+                    'id_cotizacion' => $cotizacionDestino->id,
+                    'id_contenedor' => $idContainerDestino,
+                    'id_contenedor_pago' => $idContainerPagoDestino,
+                ]);
             }
             Log::info("Iniciando proceso de envío de movimiento", [
                 'id_container' => $idContainer,

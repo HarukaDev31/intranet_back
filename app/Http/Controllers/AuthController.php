@@ -1278,40 +1278,18 @@ class AuthController extends Controller
                     return (int) ($m->ID_Menu ?? 0);
                 }, array_slice($arrMenuPadre, 0, 25))),
             ]);
-            // Obtener hijos para cada menú padre
-            foreach ($arrMenuPadre as $rowPadre) {
-                $sqlHijos = "SELECT {$selectDistinct}
+            $sqlHijosMenu = "SELECT {$selectDistinct}
                             MNU.*,
                             (SELECT COUNT(*) FROM menu WHERE ID_Padre = MNU.ID_Menu AND Nu_Activo = 0) AS Nu_Cantidad_Menu_Hijos
                             FROM menu AS MNU
                             JOIN menu_acceso AS MNUACCESS ON (MNU.ID_Menu = MNUACCESS.ID_Menu)
                             JOIN grupo_usuario AS GRPUSR ON (GRPUSR.ID_Grupo_Usuario = MNUACCESS.ID_Grupo_Usuario)
-                            WHERE MNU.ID_Padre = ?
+                            WHERE MNU.ID_Padre IN (__PADRE_IDS__)
                             AND MNU.Nu_Activo = 0
                             {$whereIdGrupo}
                             ORDER BY MNU.Nu_Orden";
 
-                $rowPadre->Hijos = DB::select($sqlHijos, [$rowPadre->ID_Menu]);
-
-                // Obtener sub-hijos para cada hijo
-                foreach ($rowPadre->Hijos as $rowSubHijos) {
-                    if ($rowSubHijos->Nu_Cantidad_Menu_Hijos > 0) {
-                        $sqlSubHijos = "SELECT {$selectDistinct}
-                                       MNU.*
-                                       FROM menu AS MNU
-                                       JOIN menu_acceso AS MNUACCESS ON (MNU.ID_Menu = MNUACCESS.ID_Menu)
-                                       JOIN grupo_usuario AS GRPUSR ON (GRPUSR.ID_Grupo_Usuario = MNUACCESS.ID_Grupo_Usuario)
-                                       WHERE MNU.ID_Padre = ?
-                                       AND MNU.Nu_Activo = 0
-                                       {$whereIdGrupo}
-                                       ORDER BY MNU.Nu_Orden";
-
-                        $rowSubHijos->SubHijos = DB::select($sqlSubHijos, [$rowSubHijos->ID_Menu]);
-                    } else {
-                        $rowSubHijos->SubHijos = [];
-                    }
-                }
-            }
+            $arrMenuPadre = $this->hidratarArbolMenu($arrMenuPadre, $sqlHijosMenu);
 
             // Pedidos de Curso en rol Cotizador: solo jefe de ventas.
             $arrMenuPadre = PedidosCursoMenuFilter::apply(
@@ -1354,41 +1332,19 @@ class AuthController extends Controller
             // Convertir a array y ordenar por Nu_Orden
             $arrMenuPadre = collect($arrMenuPadre)->sortBy('Nu_Orden')->values()->toArray();
 
-            // Obtener hijos para cada menú padre
-            foreach ($arrMenuPadre as $rowPadre) {
-                $sqlHijos = "
-                    SELECT DISTINCT
-                        MNU.*,
-                        (SELECT COUNT(*) FROM menu_user WHERE ID_Padre = MNU.ID_Menu AND Nu_Activo = 0) AS Nu_Cantidad_Menu_Hijos
-                    FROM menu_user AS MNU
-                    JOIN menu_user_access AS MNUACCESS ON (MNU.ID_Menu = MNUACCESS.ID_Menu)
-                    WHERE MNU.ID_Padre = ?
-                    AND MNU.Nu_Activo = 0
-                    AND MNUACCESS.user_id = ?
-                    ORDER BY MNU.Nu_Orden
-                ";
+            $sqlHijosMenu = "
+                SELECT DISTINCT
+                    MNU.*,
+                    (SELECT COUNT(*) FROM menu_user WHERE ID_Padre = MNU.ID_Menu AND Nu_Activo = 0) AS Nu_Cantidad_Menu_Hijos
+                FROM menu_user AS MNU
+                JOIN menu_user_access AS MNUACCESS ON (MNU.ID_Menu = MNUACCESS.ID_Menu)
+                WHERE MNU.ID_Padre IN (__PADRE_IDS__)
+                AND MNU.Nu_Activo = 0
+                AND MNUACCESS.user_id = ?
+                ORDER BY MNU.Nu_Orden
+            ";
 
-                $rowPadre->Hijos = DB::select($sqlHijos, [$rowPadre->ID_Menu, $userId]);
-
-                // Obtener sub-hijos para cada hijo
-                foreach ($rowPadre->Hijos as $rowSubHijos) {
-                    if ($rowSubHijos->Nu_Cantidad_Menu_Hijos > 0) {
-                        $sqlSubHijos = "
-                            SELECT DISTINCT MNU.*
-                            FROM menu_user AS MNU
-                            JOIN menu_user_access AS MNUACCESS ON (MNU.ID_Menu = MNUACCESS.ID_Menu)
-                            WHERE MNU.ID_Padre = ?
-                            AND MNU.Nu_Activo = 0
-                            AND MNUACCESS.user_id = ?
-                            ORDER BY MNU.Nu_Orden
-                        ";
-
-                        $rowSubHijos->SubHijos = DB::select($sqlSubHijos, [$rowSubHijos->ID_Menu, $userId]);
-                    } else {
-                        $rowSubHijos->SubHijos = [];
-                    }
-                }
-            }
+            $arrMenuPadre = $this->hidratarArbolMenu($arrMenuPadre, $sqlHijosMenu, [$userId]);
 
             return $arrMenuPadre;
         } catch (\Exception $e) {
@@ -1396,6 +1352,73 @@ class AuthController extends Controller
             // En caso de error, devolver array vacío
             return [];
         }
+    }
+
+    /**
+     * Carga hijos y sub-hijos de menú en 1–2 queries y arma el árbol en memoria.
+     *
+     * @param  object[]  $padres
+     * @param  array<int, mixed>  $extraBindings
+     * @return object[]
+     */
+    private function hidratarArbolMenu(array $padres, string $sqlChildrenTemplate, array $extraBindings = []): array
+    {
+        if ($padres === []) {
+            return $padres;
+        }
+
+        $padreIds = array_values(array_unique(array_filter(array_map(function ($menu) {
+            return (int) ($menu->ID_Menu ?? 0);
+        }, $padres))));
+
+        if ($padreIds === []) {
+            return $padres;
+        }
+
+        $hijosPorPadre = $this->selectMenusAgrupadosPorPadre($sqlChildrenTemplate, $padreIds, $extraBindings);
+
+        $hijoIds = [];
+        foreach ($hijosPorPadre as $hijos) {
+            foreach ($hijos as $hijo) {
+                if ((int) ($hijo->Nu_Cantidad_Menu_Hijos ?? 0) > 0) {
+                    $hijoIds[] = (int) $hijo->ID_Menu;
+                }
+            }
+        }
+        $hijoIds = array_values(array_unique($hijoIds));
+
+        $subHijosPorPadre = $hijoIds === []
+            ? []
+            : $this->selectMenusAgrupadosPorPadre($sqlChildrenTemplate, $hijoIds, $extraBindings);
+
+        foreach ($padres as $padre) {
+            $hijos = $hijosPorPadre[(int) $padre->ID_Menu] ?? [];
+            foreach ($hijos as $hijo) {
+                $hijo->SubHijos = $subHijosPorPadre[(int) $hijo->ID_Menu] ?? [];
+            }
+            $padre->Hijos = $hijos;
+        }
+
+        return $padres;
+    }
+
+    /**
+     * @param  array<int, int>  $padreIds
+     * @param  array<int, mixed>  $extraBindings
+     * @return array<int, object[]>
+     */
+    private function selectMenusAgrupadosPorPadre(string $sqlTemplate, array $padreIds, array $extraBindings = []): array
+    {
+        $placeholders = implode(',', array_fill(0, count($padreIds), '?'));
+        $sql = str_replace('__PADRE_IDS__', $placeholders, $sqlTemplate);
+        $rows = DB::select($sql, array_merge($padreIds, $extraBindings));
+
+        $grouped = [];
+        foreach ($rows as $row) {
+            $grouped[(int) $row->ID_Padre][] = $row;
+        }
+
+        return $grouped;
     }
 
     /**

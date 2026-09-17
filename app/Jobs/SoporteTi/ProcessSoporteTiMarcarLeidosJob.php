@@ -69,6 +69,7 @@ class ProcessSoporteTiMarcarLeidosJob implements ShouldQueue
             ->get()
             ->keyBy('id');
 
+        $idsElegibles = array();
         foreach ($this->mensajeIds as $mensajeId) {
             /** @var SoporteTiMensaje|null $mensaje */
             $mensaje = $mensajes->get($mensajeId);
@@ -82,13 +83,33 @@ class ProcessSoporteTiMarcarLeidosJob implements ShouldQueue
                 continue;
             }
 
-            SoporteTiMensajeLectura::firstOrCreate(
-                array(
-                    'mensaje_id' => (int) $mensaje->id,
-                    'usuario_id' => $this->lectorUsuarioId,
-                ),
-                array('leido_en' => $now)
-            );
+            $idsElegibles[] = (int) $mensaje->id;
+        }
+
+        $idsElegibles = array_values(array_unique($idsElegibles));
+        if (!empty($idsElegibles)) {
+            $yaLeidos = SoporteTiMensajeLectura::where('usuario_id', $this->lectorUsuarioId)
+                ->whereIn('mensaje_id', $idsElegibles)
+                ->pluck('mensaje_id')
+                ->map(function ($id) {
+                    return (int) $id;
+                })
+                ->all();
+
+            $nuevos = array_values(array_diff($idsElegibles, $yaLeidos));
+            if (!empty($nuevos)) {
+                $filas = array_map(function ($mensajeId) use ($now) {
+                    return array(
+                        'mensaje_id' => $mensajeId,
+                        'usuario_id' => $this->lectorUsuarioId,
+                        'leido_en' => $now,
+                    );
+                }, $nuevos);
+
+                collect($filas)->chunk(100)->each(function ($chunk) {
+                    SoporteTiMensajeLectura::insert($chunk->all());
+                });
+            }
         }
 
         $service->asegurarMiembroSalaPublico($salaId, $this->lectorUsuarioId, 'participante');

@@ -432,35 +432,48 @@ class PagosController extends Controller
                 ->where('id_cotizacion', $idCotizacion)
                 ->get();
 
-            foreach ($proveedores as $proveedor) {
-                // Obtener el registro más reciente (actual) del tracking.
-                $trackingActual = DB::table($trackingTable)
-                    ->where('id_proveedor', $proveedor->id)
-                    ->where('id_cotizacion', $idCotizacion)
-                    ->orderBy('created_at', 'desc')
-                    ->orderBy('id', 'desc')
-                    ->first();
+            $proveedorIds = $proveedores->pluck('id')->filter()->values();
+            if ($proveedorIds->isEmpty()) {
+                DB::commit();
+                return;
+            }
 
-                if (!$trackingActual) {
+            $trackingsPorProveedor = DB::table($trackingTable)
+                ->where('id_cotizacion', $idCotizacion)
+                ->whereIn('id_proveedor', $proveedorIds)
+                ->orderBy('created_at', 'desc')
+                ->orderBy('id', 'desc')
+                ->get()
+                ->groupBy('id_proveedor');
+
+            $cases = [];
+            $idsToUpdate = [];
+            foreach ($proveedores as $proveedor) {
+                $historial = collect($trackingsPorProveedor->get($proveedor->id, []))->values();
+                if ($historial->isEmpty()) {
                     Log::warning("No se encontró tracking actual para proveedor {$proveedor->id}");
                     continue;
                 }
 
-                // Obtener estado anterior desde la tabla de tracking.
-                $estadoAnterior = DB::table($trackingTable)
-                    ->where('id_proveedor', $proveedor->id)
-                    ->where('id_cotizacion', $idCotizacion)
-                    ->where('id', '<', $trackingActual->id)
-                    ->orderBy('created_at', 'desc')
-                    ->orderBy('id', 'desc')
-                    ->first();
-
+                $trackingActual = $historial->first();
+                $estadoAnterior = $historial->first(function ($row) use ($trackingActual) {
+                    return $row->id < $trackingActual->id;
+                });
                 $estadoPrevio = $estadoAnterior ? $estadoAnterior->estado : null;
+                $estadoSql = $estadoPrevio === null
+                    ? 'NULL'
+                    : "'" . str_replace("'", "''", (string) $estadoPrevio) . "'";
 
-                // Actualizar proveedores. El trigger genera la nueva entrada de tracking.
+                $idsToUpdate[] = (int) $proveedor->id;
+                $cases[] = 'WHEN ' . (int) $proveedor->id . ' THEN ' . $estadoSql;
+            }
+
+            if ($idsToUpdate !== []) {
                 DB::table('contenedor_consolidado_cotizacion_proveedores')
-                    ->where('id', $proveedor->id)
-                    ->update(['estados' => $estadoPrevio]);
+                    ->whereIn('id', $idsToUpdate)
+                    ->update([
+                        'estados' => DB::raw('CASE id ' . implode(' ', $cases) . ' END'),
+                    ]);
             }
 
             DB::commit();

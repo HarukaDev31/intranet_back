@@ -282,8 +282,8 @@ class NotificacionController extends Controller
     public function marcarMultiplesComoLeidas(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'notificacion_ids' => 'required|array',
-            'notificacion_ids.*' => 'integer|exists:notificaciones,id'
+            'notificacion_ids' => 'required|array|max:500',
+            'notificacion_ids.*' => 'integer'
         ]);
 
         if ($validator->fails()) {
@@ -296,14 +296,11 @@ class NotificacionController extends Controller
 
         try {
             $usuario = Auth::user();
-            $notificacionIds = $request->get('notificacion_ids');
 
-            foreach ($notificacionIds as $notificacionId) {
-                $notificacion = Notificacion::find($notificacionId);
-                if ($notificacion) {
-                    $notificacion->marcarComoLeida($usuario->ID_Usuario);
-                }
-            }
+            Notificacion::marcarMultiplesComoLeidas(
+                $request->get('notificacion_ids'),
+                $usuario->ID_Usuario
+            );
 
             return response()->json([
                 'success' => true,

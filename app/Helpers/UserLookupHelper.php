@@ -48,4 +48,103 @@ class UserLookupHelper
 
         return $userQuery->first();
     }
+
+    /**
+     * Resuelve varios contactos en una query y los re-asocia en PHP.
+     *
+     * @param  array<int|string, array{correo:?string,telefono:?string,documento:?string}>  $contacts
+     * @return array<int|string, object|null>
+     */
+    public static function findUsersIndexedByContact(array $contacts): array
+    {
+        $result = [];
+        foreach ($contacts as $key => $_) {
+            $result[$key] = null;
+        }
+
+        $correos = [];
+        $documentos = [];
+        $variantes = [];
+        foreach ($contacts as $contact) {
+            if (!empty($contact['correo'])) {
+                $correos[] = $contact['correo'];
+            }
+            if (!empty($contact['documento'])) {
+                $documentos[] = $contact['documento'];
+            }
+            if (!empty($contact['telefono'])) {
+                foreach (CountryPhoneHelper::searchVariants($contact['telefono']) as $variante) {
+                    if ($variante !== '') {
+                        $variantes[$variante] = true;
+                    }
+                }
+            }
+        }
+
+        $correos = array_values(array_unique($correos));
+        $documentos = array_values(array_unique($documentos));
+        $variantes = array_keys($variantes);
+
+        if ($correos === [] && $documentos === [] && $variantes === []) {
+            return $result;
+        }
+
+        $users = DB::table('users')->where(function ($q) use ($correos, $documentos, $variantes) {
+            if ($correos !== []) {
+                $q->orWhereIn('email', $correos);
+            }
+            if ($documentos !== []) {
+                $q->orWhereIn('dni', $documentos);
+            }
+            if ($variantes !== []) {
+                $normalized = 'REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(whatsapp, " ", ""), "-", ""), "(", ""), ")", ""), "+", "")';
+                $normalizedPhone = 'REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, " ", ""), "-", ""), "(", ""), ")", ""), "+", "")';
+                $q->orWhere(function ($q2) use ($normalized, $normalizedPhone, $variantes) {
+                    foreach ($variantes as $variante) {
+                        $q2->orWhereRaw("{$normalized} LIKE ?", ['%' . $variante . '%'])
+                            ->orWhereRaw("{$normalizedPhone} LIKE ?", ['%' . $variante . '%']);
+                    }
+                });
+            }
+        })->get();
+
+        foreach ($contacts as $key => $contact) {
+            foreach ($users as $user) {
+                if (self::userMatchesContact($user, $contact)) {
+                    $result[$key] = $user;
+                    break;
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    private static function userMatchesContact(object $user, array $contact): bool
+    {
+        if (!empty($contact['correo']) && strcasecmp((string) ($user->email ?? ''), (string) $contact['correo']) === 0) {
+            return true;
+        }
+        if (!empty($contact['documento']) && (string) ($user->dni ?? '') === (string) $contact['documento']) {
+            return true;
+        }
+        if (empty($contact['telefono'])) {
+            return false;
+        }
+
+        $variantes = CountryPhoneHelper::searchVariants($contact['telefono']);
+        if ($variantes === []) {
+            return false;
+        }
+
+        $whatsapp = preg_replace('/\D+/', '', (string) ($user->whatsapp ?? ''));
+        $phone = preg_replace('/\D+/', '', (string) ($user->phone ?? ''));
+        foreach ($variantes as $variante) {
+            if ($variante !== '' && (str_contains($whatsapp, $variante) || str_contains($phone, $variante))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

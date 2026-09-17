@@ -823,104 +823,9 @@ class EntregaController extends Controller
         $perPage = (int) $request->input('itemsPerPage', 100);
         $data = $query->orderByRaw('(SELECT MAX(cccp.id) FROM ' . $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' cccp WHERE cccp.id_cotizacion = CC.id AND cccp.id_concept = ' . $this->CONCEPT_PAGO_DELIVERY . ') IS NULL ASC, (SELECT MAX(cccp.id) FROM ' . $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' cccp WHERE cccp.id_cotizacion = CC.id AND cccp.id_concept = ' . $this->CONCEPT_PAGO_DELIVERY . ') DESC, CC.id DESC')->paginate($perPage, ['*'], 'page', $page);
 
-        // Mapa de códigos de origen (misma lógica que ClienteService::transformarDatosClientes)
-        $sourceMap = [
-            0 => 'No especificado',
-            1 => 'TikTok',
-            2 => 'Facebook',
-            3 => 'Instagram',
-            4 => 'YouTube',
-            5 => 'Familiares/Amigos',
-            6 => 'Otros',
-            8 => 'Otros'
-        ];
-
-        // Agregar fotos de conformidad, total por fila y origen (no_como_entero / no_otros_como_entero_empresa desde users por documento/correo/telefono)
         $items = $data->items();
-        foreach ($items as $row) {
-            $row->conformidad = [];
-            $row->conformidad_count = 0;
-
-            // Resolver users (cliente externo): solo por contacto de la fila, nunca por CC.id_usuario (interno).
-            $noComoEntero = null;
-            $noOtrosComoEnteroEmpresa = null;
-            $user = null;
-            try {
-                $user = \App\Helpers\UserLookupHelper::findUserByContact(
-                    $row->correo ?? null,
-                    $row->telefono ?? null,
-                    $row->documento ?? null
-                );
-                if ($user) {
-                    $noComoEntero = $user->no_como_entero ?? null;
-                    $noOtrosComoEnteroEmpresa = $user->no_otros_como_entero_empresa ?? null;
-                }
-            } catch (\Exception $e) {
-                Log::warning('getClientesEntrega: error vinculando user por documento/correo/telefono para cotización ' . $row->id . ' - ' . $e->getMessage());
-            }
-
-            // T. Entrega: si el SQL no definió type_form, último destino en usuario_datos_facturacion por id del users resuelto
-            $tfRaw = $row->type_form;
-            $hasTf = ($tfRaw === 0 || $tfRaw === 1 || $tfRaw === '0' || $tfRaw === '1');
-            if (!$hasTf) {
-                $fromUdf = UsuarioDatosFacturacionHelper::getLatestTypeFormForUser($user);
-                if ($fromUdf !== null) {
-                    $row->type_form = $fromUdf;
-                }
-            }
-
-            // Calcular origen según lógica de ClienteService
-            $primaryCode = $noComoEntero ?? null;
-            $noOtrosVal = $noOtrosComoEnteroEmpresa ?? null;
-            $origen = null;
-            if (!is_null($primaryCode) && $primaryCode !== '') {
-                $codeInt = (int) $primaryCode;
-                if (($codeInt === 6 || $codeInt === 8) && !empty($noOtrosVal)) {
-                    $origen = $noOtrosVal;
-                } elseif (isset($sourceMap[$codeInt])) {
-                    $origen = $sourceMap[$codeInt];
-                } else {
-                    $origen = $primaryCode;
-                }
-            }
-            $row->origen = $origen;
-            $row->no_como_entero = $noComoEntero;
-            $row->no_otros_como_entero_empresa = $noOtrosComoEnteroEmpresa;
-
-            $typeForm = isset($row->type_form) ? (int)$row->type_form : null;
-            if ($typeForm !== null) {
-                // type_form: 0 = Provincia, 1 = Lima
-                $tableName = $typeForm === 1
-                    ? 'consolidado_delivery_form_lima_conformidad'
-                    : 'consolidado_delivery_form_province_conformidad';
-
-                // Obtener total y hasta 2 últimas fotos
-                $total = DB::table($tableName)
-                    ->where('id_cotizacion', $row->id)
-                    ->where('id_contenedor', $row->id_contenedor)
-                    ->count();
-                $photos = DB::table($tableName)
-                    ->select('id', 'file_path', 'file_type', 'file_size', 'file_original_name', 'created_at')
-                    ->where('id_cotizacion', $row->id)
-                    ->where('id_contenedor', $row->id_contenedor)
-                    ->orderByDesc('created_at')
-                    ->limit(2)
-                    ->get();
-
-                $row->conformidad = $photos->map(function ($p) {
-                    return [
-                        'id' => (int)$p->id,
-                        'file_path' => $p->file_path,
-                        'file_url' => $this->generateImageUrl($p->file_path),
-                        'file_type' => $p->file_type,
-                        'file_size' => $p->file_size ? (int)$p->file_size : null,
-                        'file_original_name' => $p->file_original_name,
-                        'created_at' => $p->created_at,
-                    ];
-                })->toArray();
-                $row->conformidad_count = $total;
-            }
-        }
+        $this->attachOrigenYTypeFormDesdeUsers($items);
+        $this->attachConformidadFotos($items);
 
         return response()->json([
             'data' => $data->items(),
@@ -994,60 +899,7 @@ class EntregaController extends Controller
         }
 
         $items = $query->orderBy('CC.id', 'asc')->get();
-
-        $sourceMap = [
-            0 => 'No especificado',
-            1 => 'TikTok',
-            2 => 'Facebook',
-            3 => 'Instagram',
-            4 => 'YouTube',
-            5 => 'Familiares/Amigos',
-            6 => 'Otros',
-            8 => 'Otros',
-        ];
-
-        foreach ($items as $row) {
-            $noComoEntero = null;
-            $noOtrosComoEnteroEmpresa = null;
-            $user = null;
-            try {
-                $user = \App\Helpers\UserLookupHelper::findUserByContact(
-                    $row->correo ?? null,
-                    $row->telefono ?? null,
-                    $row->documento ?? null
-                );
-                if ($user) {
-                    $noComoEntero = $user->no_como_entero ?? null;
-                    $noOtrosComoEnteroEmpresa = $user->no_otros_como_entero_empresa ?? null;
-                }
-            } catch (\Exception $e) {
-                Log::warning('exportClientesEntregaExcel: error vinculando user para cotización ' . $row->id . ' - ' . $e->getMessage());
-            }
-
-            $tfRaw = $row->type_form;
-            $hasTf = ($tfRaw === 0 || $tfRaw === 1 || $tfRaw === '0' || $tfRaw === '1');
-            if (!$hasTf) {
-                $fromUdf = UsuarioDatosFacturacionHelper::getLatestTypeFormForUser($user);
-                if ($fromUdf !== null) {
-                    $row->type_form = $fromUdf;
-                }
-            }
-
-            $primaryCode = $noComoEntero ?? null;
-            $noOtrosVal = $noOtrosComoEnteroEmpresa ?? null;
-            $origen = null;
-            if ($primaryCode !== null && $primaryCode !== '') {
-                $codeInt = (int) $primaryCode;
-                if (($codeInt === 6 || $codeInt === 8) && !empty($noOtrosVal)) {
-                    $origen = $noOtrosVal;
-                } elseif (isset($sourceMap[$codeInt])) {
-                    $origen = $sourceMap[$codeInt];
-                } else {
-                    $origen = $primaryCode;
-                }
-            }
-            $row->origen = $origen;
-        }
+        $this->attachOrigenYTypeFormDesdeUsers($items);
 
         $filename = 'clientes-entrega-' . $idContenedor . '-' . date('Y-m-d-His') . '.xlsx';
         return Excel::download(new ClientesEntregaExport($items), $filename, \Maatwebsite\Excel\Excel::XLSX);
@@ -1294,46 +1146,8 @@ class EntregaController extends Controller
 
         $data = $query->paginate($perPage, ['*'], 'page', $page);
 
-        // Agregar fotos de conformidad (hasta 2) y el total por cada fila
         $items = $data->items();
-        foreach ($items as $row) {
-            $row->conformidad = [];
-            $row->conformidad_count = 0;
-            $typeForm = isset($row->type_form) ? (int)$row->type_form : null;
-            if ($typeForm !== null) {
-                // type_form: 0 = Provincia, 1 = Lima
-                $tableName = $typeForm === 1
-                    ? 'consolidado_delivery_form_lima_conformidad'
-                    : 'consolidado_delivery_form_province_conformidad';
-
-                // Obtener total y hasta 2 últimas fotos
-                $total = DB::table($tableName)
-                    ->where('id_cotizacion', $row->id)
-                    ->where('id_contenedor', $row->id_contenedor)
-                    ->count();
-                $photos = DB::table($tableName)
-                    ->select('id', 'file_path', 'file_type', 'file_size', 'file_original_name', 'created_at')
-                    ->where('id_cotizacion', $row->id)
-                    ->where('id_contenedor', $row->id_contenedor)
-                    ->orderByDesc('created_at')
-                    ->limit(2)
-                    ->get();
-
-                $row->conformidad = $photos->map(function ($p) {
-                    return [
-                        'id' => (int)$p->id,
-                        'file_path' => $p->file_path,
-                        'file_url' => $this->generateImageUrl($p->file_path),
-                        'file_type' => $p->file_type,
-                        'file_size' => $p->file_size ? (int)$p->file_size : null,
-                        'file_original_name' => $p->file_original_name,
-                        'created_at' => $p->created_at,
-                    ];
-                })->toArray();
-                
-                $row->conformidad_count = $total;
-            }
-        }
+        $this->attachConformidadFotos($items);
 
         // Calcular estadísticas de headers
         // Subconsulta para sumar bultos de proveedores embarcados (no importados) por cotización
@@ -1676,46 +1490,8 @@ class EntregaController extends Controller
 
         $data = $query->paginate($perPage, ['*'], 'page', $page);
 
-        // Agregar fotos de conformidad (hasta 2) y el total por cada fila
         $items = $data->items();
-        foreach ($items as $row) {
-            $row->conformidad = [];
-            $row->conformidad_count = 0;
-            $typeForm = isset($row->type_form) ? (int)$row->type_form : null;
-            if ($typeForm !== null) {
-                // type_form: 0 = Provincia, 1 = Lima
-                $tableName = $typeForm === 1
-                    ? 'consolidado_delivery_form_lima_conformidad'
-                    : 'consolidado_delivery_form_province_conformidad';
-
-                // Obtener total y hasta 2 últimas fotos
-                $total = DB::table($tableName)
-                    ->where('id_cotizacion', $row->id)
-                    ->where('id_contenedor', $row->id_contenedor)
-                    ->count();
-                $photos = DB::table($tableName)
-                    ->select('id', 'file_path', 'file_type', 'file_size', 'file_original_name', 'created_at')
-                    ->where('id_cotizacion', $row->id)
-                    ->where('id_contenedor', $row->id_contenedor)
-                    ->orderByDesc('created_at')
-                    ->limit(2)
-                    ->get();
-
-                $row->conformidad = $photos->map(function ($p) {
-                    return [
-                        'id' => (int)$p->id,
-                        'file_path' => $p->file_path,
-                        'file_url' => $this->generateImageUrl($p->file_path),
-                        'file_type' => $p->file_type,
-                        'file_size' => $p->file_size ? (int)$p->file_size : null,
-                        'file_original_name' => $p->file_original_name,
-                        'created_at' => $p->created_at,
-                    ];
-                })->toArray();
-                
-                $row->conformidad_count = $total;
-            }
-        }
+        $this->attachConformidadFotos($items);
 
         // Calcular estadísticas de headers
         // Subconsulta para sumar bultos de proveedores embarcados (no importados) por cotización
@@ -4804,6 +4580,146 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                 'success' => false,
                 'message' => 'Error al guardar la firma: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * @param  iterable<int, object>  $items
+     */
+    private function attachOrigenYTypeFormDesdeUsers($items): void
+    {
+        $items = is_array($items) ? $items : iterator_to_array($items);
+        if ($items === []) {
+            return;
+        }
+
+        $contacts = [];
+        foreach ($items as $idx => $row) {
+            $contacts[$idx] = [
+                'correo' => $row->correo ?? null,
+                'telefono' => $row->telefono ?? null,
+                'documento' => $row->documento ?? null,
+            ];
+        }
+
+        $users = \App\Helpers\UserLookupHelper::findUsersIndexedByContact($contacts);
+        $userIds = [];
+        foreach ($users as $user) {
+            if ($user && !empty($user->id)) {
+                $userIds[] = (int) $user->id;
+            }
+        }
+        $typeForms = UsuarioDatosFacturacionHelper::getLatestTypeFormForUserIds($userIds);
+        $sourceMap = [
+            0 => 'No especificado',
+            1 => 'TikTok',
+            2 => 'Facebook',
+            3 => 'Instagram',
+            4 => 'YouTube',
+            5 => 'Familiares/Amigos',
+            6 => 'Otros',
+            8 => 'Otros',
+        ];
+
+        foreach ($items as $idx => $row) {
+            $user = $users[$idx] ?? null;
+            $noComoEntero = $user ? ($user->no_como_entero ?? null) : null;
+            $noOtrosComoEnteroEmpresa = $user ? ($user->no_otros_como_entero_empresa ?? null) : null;
+
+            $tfRaw = $row->type_form ?? null;
+            $hasTf = ($tfRaw === 0 || $tfRaw === 1 || $tfRaw === '0' || $tfRaw === '1');
+            if (!$hasTf && $user && !empty($user->id)) {
+                $fromUdf = $typeForms[(int) $user->id] ?? null;
+                if ($fromUdf !== null) {
+                    $row->type_form = $fromUdf;
+                }
+            }
+
+            $origen = null;
+            if ($noComoEntero !== null && $noComoEntero !== '') {
+                $codeInt = (int) $noComoEntero;
+                if (($codeInt === 6 || $codeInt === 8) && !empty($noOtrosComoEnteroEmpresa)) {
+                    $origen = $noOtrosComoEnteroEmpresa;
+                } elseif (isset($sourceMap[$codeInt])) {
+                    $origen = $sourceMap[$codeInt];
+                } else {
+                    $origen = $noComoEntero;
+                }
+            }
+            $row->origen = $origen;
+            $row->no_como_entero = $noComoEntero;
+            $row->no_otros_como_entero_empresa = $noOtrosComoEnteroEmpresa;
+        }
+    }
+
+    /**
+     * @param  iterable<int, object>  $items
+     */
+    private function attachConformidadFotos($items): void
+    {
+        $items = is_array($items) ? $items : iterator_to_array($items);
+        $lima = [];
+        $provincia = [];
+        foreach ($items as $idx => $row) {
+            $row->conformidad = $row->conformidad ?? [];
+            $row->conformidad_count = $row->conformidad_count ?? 0;
+            $typeForm = isset($row->type_form) ? (int) $row->type_form : null;
+            if ($typeForm === 1) {
+                $lima[] = $idx;
+            } elseif ($typeForm === 0) {
+                $provincia[] = $idx;
+            }
+        }
+
+        $this->fillConformidadForIndexes($items, $lima, 'consolidado_delivery_form_lima_conformidad');
+        $this->fillConformidadForIndexes($items, $provincia, 'consolidado_delivery_form_province_conformidad');
+    }
+
+    /**
+     * @param  array<int, object>  $items
+     * @param  array<int, int>  $indexes
+     */
+    private function fillConformidadForIndexes(array $items, array $indexes, string $tableName): void
+    {
+        if ($indexes === []) {
+            return;
+        }
+
+        $cotizacionIds = [];
+        $contenedorIds = [];
+        foreach ($indexes as $idx) {
+            $cotizacionIds[] = (int) $items[$idx]->id;
+            $contenedorIds[] = (int) $items[$idx]->id_contenedor;
+        }
+
+        $photos = DB::table($tableName)
+            ->select('id', 'id_cotizacion', 'id_contenedor', 'file_path', 'file_type', 'file_size', 'file_original_name', 'created_at')
+            ->whereIn('id_cotizacion', array_values(array_unique($cotizacionIds)))
+            ->whereIn('id_contenedor', array_values(array_unique($contenedorIds)))
+            ->orderByDesc('created_at')
+            ->get();
+
+        $grouped = [];
+        foreach ($photos as $photo) {
+            $key = $photo->id_cotizacion . ':' . $photo->id_contenedor;
+            $grouped[$key][] = $photo;
+        }
+
+        foreach ($indexes as $idx) {
+            $row = $items[$idx];
+            $all = $grouped[$row->id . ':' . $row->id_contenedor] ?? [];
+            $row->conformidad_count = count($all);
+            $row->conformidad = array_map(function ($p) {
+                return [
+                    'id' => (int) $p->id,
+                    'file_path' => $p->file_path,
+                    'file_url' => $this->generateImageUrl($p->file_path),
+                    'file_type' => $p->file_type,
+                    'file_size' => $p->file_size ? (int) $p->file_size : null,
+                    'file_original_name' => $p->file_original_name,
+                    'created_at' => $p->created_at,
+                ];
+            }, array_slice($all, 0, 2));
         }
     }
 }

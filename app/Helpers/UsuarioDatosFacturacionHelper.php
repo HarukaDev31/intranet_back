@@ -68,4 +68,32 @@ class UsuarioDatosFacturacionHelper
 
         return self::getLatestTypeFormForUserId((int) $user->id);
     }
+
+    /**
+     * @param  array<int, int>  $userIds
+     * @return array<int, int|null>
+     */
+    public static function getLatestTypeFormForUserIds(array $userIds): array
+    {
+        $userIds = array_values(array_unique(array_filter(array_map('intval', $userIds))));
+        if ($userIds === []) {
+            return [];
+        }
+
+        $rows = UsuarioDatosFacturacion::query()
+            ->whereIn('id_user', $userIds)
+            ->whereIn('destino', ['Lima', 'Provincia'])
+            ->orderByDesc('id')
+            ->get(['id', 'id_user', 'destino']);
+
+        $map = [];
+        foreach ($rows as $row) {
+            $uid = (int) $row->id_user;
+            if (!array_key_exists($uid, $map)) {
+                $map[$uid] = self::destinoToTypeForm($row->destino);
+            }
+        }
+
+        return $map;
+    }
 }
