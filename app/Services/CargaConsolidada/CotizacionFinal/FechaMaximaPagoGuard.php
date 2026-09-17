@@ -75,7 +75,7 @@ class FechaMaximaPagoGuard
             ];
         }
 
-        return self::forContenedorId((int) $cotizacion->id_contenedor);
+        return self::forContenedorId((int) $cotizacion->getAttribute('id_contenedor'));
     }
 
     /**
@@ -96,7 +96,7 @@ class FechaMaximaPagoGuard
             ];
         }
 
-        $fecha = self::toCarbon($contenedor->fecha_maxima_pago);
+        $fecha = self::toCarbon($contenedor->getAttribute('fecha_maxima_pago'));
         if ($fecha === null) {
             return [
                 'ok' => false,

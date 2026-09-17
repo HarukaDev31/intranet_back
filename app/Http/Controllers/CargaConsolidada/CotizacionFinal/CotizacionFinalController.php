@@ -1391,14 +1391,14 @@ class CotizacionFinalController extends Controller
                 ], 404);
             }
 
-            $contenedor->fecha_maxima_pago = $request->input('fecha_maxima_pago');
+            $contenedor->setAttribute('fecha_maxima_pago', $request->input('fecha_maxima_pago'));
             $contenedor->save();
 
             return response()->json([
                 'success' => true,
                 'message' => 'Fecha máxima de pago actualizada',
                 'data' => [
-                    'fecha_maxima_pago' => FechaMaximaPagoGuard::toIso($contenedor->fecha_maxima_pago),
+                    'fecha_maxima_pago' => FechaMaximaPagoGuard::toIso($contenedor->getAttribute('fecha_maxima_pago')),
                 ],
             ]);
         } catch (\Illuminate\Validation\ValidationException $ve) {
