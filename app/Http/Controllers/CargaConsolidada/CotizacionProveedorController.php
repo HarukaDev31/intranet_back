@@ -2525,9 +2525,10 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             return;
         }
 
-        $fechaCierre = $this->formatFechaCierre($contenedor->f_cierre);
-        $anioContenedor = $contenedor->f_cierre
-            ? Carbon::parse($contenedor->f_cierre)->year
+        $fechaCierreRaw = $contenedor->getAttribute('f_cierre');
+        $fechaCierre = $this->formatFechaCierre($fechaCierreRaw);
+        $anioContenedor = $fechaCierreRaw
+            ? Carbon::parse($fechaCierreRaw)->year
             : Carbon::now()->year;
 
         // Calcular suma de pagos del concepto LOGISTICA para esta cotización

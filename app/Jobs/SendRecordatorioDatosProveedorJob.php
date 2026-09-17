@@ -52,9 +52,9 @@ class SendRecordatorioDatosProveedorJob implements ShouldQueue
 
             $proveedores = CotizacionProveedor::whereIn('id', $this->proveedores)->get();
             foreach ($proveedores as $proveedor) {
-                $listaProveedores .= "Nombre del vendedor: " . $proveedor->supplier . "\n";
-                $listaProveedores .= "Número o WeChat: " . $proveedor->supplier_phone . "\n";
-                $listaProveedores .= "Codigo proveedor: " . $proveedor->code_supplier . "\n";
+                $listaProveedores .= "Nombre del vendedor: " . $proveedor->getAttribute('supplier') . "\n";
+                $listaProveedores .= "Número o WeChat: " . $proveedor->getAttribute('supplier_phone') . "\n";
+                $listaProveedores .= "Codigo proveedor: " . $proveedor->getAttribute('code_supplier') . "\n";
                 $listaProveedores .= "----------------------------------------------------------\n";
             }
 

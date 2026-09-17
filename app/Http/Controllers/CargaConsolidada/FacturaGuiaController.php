@@ -1904,8 +1904,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
             );
             $enviados = [];
             $errores  = [];
-            $cotizaciones = Cotizacion::with('contenedor')
-                ->whereIn('id', $cotizacionIds)
+            $cotizaciones = Cotizacion::whereIn('id', $cotizacionIds)
                 ->get()
                 ->keyBy('id');
 
@@ -1916,9 +1915,10 @@ Cualquier duda nos escribe.  ¡Gracias! */
                     continue;
                 }
 
-                $telefono = preg_replace('/\D+/', '', $cotizacion->telefono);
+                $nombre = $cotizacion->getAttribute('nombre');
+                $telefono = preg_replace('/\D+/', '', (string) $cotizacion->getAttribute('telefono'));
                 if (empty($telefono)) {
-                    $errores[] = ['id' => $idCotizacion, 'nombre' => $cotizacion->nombre, 'error' => 'Sin teléfono'];
+                    $errores[] = ['id' => $idCotizacion, 'nombre' => $nombre, 'error' => 'Sin teléfono'];
                     continue;
                 }
 
@@ -1935,9 +1935,9 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 $result = $this->sendMessage($message, $numeroWhatsapp, 0, 'administracion');
 
                 if ($result && isset($result['status']) && $result['status']) {
-                    $enviados[] = ['id' => $idCotizacion, 'nombre' => $cotizacion->nombre];
+                    $enviados[] = ['id' => $idCotizacion, 'nombre' => $nombre];
                 } else {
-                    $errores[] = ['id' => $idCotizacion, 'nombre' => $cotizacion->nombre, 'error' => 'Error al enviar WhatsApp'];
+                    $errores[] = ['id' => $idCotizacion, 'nombre' => $nombre, 'error' => 'Error al enviar WhatsApp'];
                 }
             }
 
