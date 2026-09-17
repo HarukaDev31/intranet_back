@@ -67,6 +67,13 @@ class CotizacionFinalCobranzaWhatsappService
                 'templates' => [],
             ];
         }
+        if (!FechaMaximaPagoGuard::isSet($ctx['fecha_maxima_pago'] ?? null)) {
+            return [
+                'success' => false,
+                'error' => FechaMaximaPagoGuard::MESSAGE,
+                'templates' => [],
+            ];
+        }
 
         $previews = [
             self::TEMPLATE_COTIZACION_FINAL => $this->buildCotizacionFinalPreviewText($ctx),
@@ -153,6 +160,9 @@ class CotizacionFinalCobranzaWhatsappService
         $ctx = $this->buildSendContext($idCotizacion);
         if ($ctx === null) {
             return ['status' => false, 'error' => 'Cotización o contenedor no encontrado', 'id_cotizacion' => $idCotizacion];
+        }
+        if (!FechaMaximaPagoGuard::isSet($ctx['fecha_maxima_pago'] ?? null)) {
+            return ['status' => false, 'error' => FechaMaximaPagoGuard::MESSAGE, 'id_cotizacion' => $idCotizacion];
         }
         $orgId = app(\App\Services\Organizacion\OrganizacionMensajeriaService::class)
             ->resolverOrganizacionId(['id_cotizacion' => $idCotizacion]);
@@ -374,7 +384,7 @@ class CotizacionFinalCobranzaWhatsappService
         }
 
         $contenedor = Contenedor::query()
-            ->select('fecha_arribo', 'f_puerto', 'carga')
+            ->select('fecha_arribo', 'f_puerto', 'carga', 'fecha_maxima_pago')
             ->where('id', $cotizacion->id_contenedor)
             ->first();
 
@@ -391,7 +401,7 @@ class CotizacionFinalCobranzaWhatsappService
         $total = $logisticaFinal + $impuestosFinal + $serviciosExtraFinal;
         $totalPagos = (float) ($cotizacion->total_pagos ?? 0);
         $phoneDigits = $this->normalizePhoneDigits((string) ($cotizacion->telefono ?? ''));
-        $ultimoDiaPago = $this->formatUltimoDiaPago($contenedor->fecha_arribo, $contenedor->f_puerto);
+        $ultimoDiaPago = FechaMaximaPagoGuard::toDisplay($contenedor->fecha_maxima_pago) ?: 'Por confirmar';
 
         return [
             'id_cotizacion' => $idCotizacion,
@@ -399,6 +409,7 @@ class CotizacionFinalCobranzaWhatsappService
             'nombre' => (string) ($cotizacion->nombre ?? ''),
             'carga' => (string) $contenedor->carga,
             'fecha_arribo' => $contenedor->fecha_arribo,
+            'fecha_maxima_pago' => FechaMaximaPagoGuard::toIso($contenedor->fecha_maxima_pago),
             'ultimo_dia_pago' => $ultimoDiaPago,
             'logistica_final' => $logisticaFinal,
             'impuestos_final' => $impuestosFinal,

@@ -5,8 +5,8 @@ namespace App\Services\CargaConsolidada\CotizacionFinal;
 use App\Jobs\SendReminderPagoWhatsAppJob;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Traits\FileTrait;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use App\Services\CargaConsolidada\CotizacionFinal\FechaMaximaPagoGuard;
 
 class ReminderPagoWhatsappService
 {
@@ -24,6 +24,9 @@ class ReminderPagoWhatsappService
         if ($payload['phone'] === '') {
             return ['success' => false, 'message' => 'El cliente no tiene un teléfono válido'];
         }
+        if (empty($payload['has_fecha_maxima_pago'])) {
+            return ['success' => false, 'message' => FechaMaximaPagoGuard::MESSAGE];
+        }
 
         return [
             'success' => true,
@@ -35,6 +38,7 @@ class ReminderPagoWhatsappService
                 'message' => $payload['message'],
                 'has_excel' => $payload['has_excel'],
                 'excel_url' => $payload['excel_url'],
+                'fecha_maxima_pago' => $payload['fecha_maxima_pago'],
             ],
         ];
     }
@@ -73,12 +77,12 @@ class ReminderPagoWhatsappService
             return null;
         }
 
-        $contenedor = Contenedor::select('carga', 'fecha_arribo')
+        $contenedor = Contenedor::select('carga', 'fecha_arribo', 'fecha_maxima_pago')
             ->where('id', $cotizacion->id_contenedor)
             ->first();
 
         $carga = $contenedor ? (string) $contenedor->carga : 'N/A';
-        $fechaArribo = $contenedor ? $contenedor->fecha_arribo : null;
+        $fechaMaximaPago = $contenedor ? $contenedor->fecha_maxima_pago : null;
         $recargos=(float) ($cotizacion->recargos ?? 0);
         $logisticaFinal = (float) ($cotizacion->logistica_final ?? 0);
         $impuestosFinal = (float) ($cotizacion->impuestos_final ?? 0);
@@ -99,7 +103,7 @@ class ReminderPagoWhatsappService
             . "✅ Cotización final: $" . number_format($totalCotizacion, 2, '.', '') . "\n"
             . "✅ Adelanto: $" . number_format($totalPagos, 2, '.', '') . "\n"
             . "✅ *Pendiente de pago: $" . number_format($pendiente, 2, '.', '') . "*\n"
-            . $this->formatUltimoDiaPagoLine($fechaArribo)
+            . $this->formatUltimoDiaPagoLine($fechaMaximaPago)
             . "\nPor favor debe enviar el comprobante de pago a la brevedad.";
 
         $phone = $this->normalizePhone((string) ($cotizacion->telefono ?? ''));
@@ -113,26 +117,29 @@ class ReminderPagoWhatsappService
             'message' => $message,
             'has_excel' => $excelUrl !== null && $excelUrl !== '',
             'excel_url' => $excelUrl,
+            'has_fecha_maxima_pago' => FechaMaximaPagoGuard::isSet($fechaMaximaPago),
+            'fecha_maxima_pago' => FechaMaximaPagoGuard::toIso($fechaMaximaPago),
         ];
     }
 
     public function enqueue(int $idCotizacion, int $sleep = 0): void
     {
+        $guard = FechaMaximaPagoGuard::forCotizacion($idCotizacion);
+        if (empty($guard['ok'])) {
+            throw new \RuntimeException($guard['message'] ?? FechaMaximaPagoGuard::MESSAGE);
+        }
+
         SendReminderPagoWhatsAppJob::dispatch($idCotizacion, $sleep);
     }
 
-    public function formatUltimoDiaPagoLine(?string $fechaArribo): string
+    public function formatUltimoDiaPagoLine($fechaMaximaPago): string
     {
-        if ($fechaArribo === null || trim($fechaArribo) === '') {
+        $formatted = FechaMaximaPagoGuard::toDisplay($fechaMaximaPago);
+        if ($formatted === null) {
             return '';
         }
 
-        $tz = 'America/Lima';
-        $hoy = Carbon::now($tz)->startOfDay();
-        $limite = Carbon::parse($fechaArribo, $tz)->startOfDay();
-        $fechaMostrar = $hoy->greaterThan($limite) ? $hoy : $limite;
-
-        return 'Último día de pago: ' . $fechaMostrar->format('d/m/Y') . "\n";
+        return 'Último día de pago: ' . $formatted . "\n";
     }
 
     public function normalizePhone(string $rawTelefono): string
