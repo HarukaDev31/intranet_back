@@ -177,6 +177,13 @@ class WhatsappInboxTemplateService
                 'header_format' => 'IMAGE',
             ],
             [
+                'name' => 'pb_retraso_entrega_v1',
+                'label' => 'Proveedor — Retraso / fecha de envío',
+                'language' => 'es_PE',
+                'text' => 'Hola, hemos contactado a tu proveedor con código {{code_supplier}} nos comunica que la carga será enviada el {{fecha}},',
+                'params' => ['code_supplier', 'fecha'],
+            ],
+            [
                 'name' => 'pb_consolidado_cotizacion_final_v1',
                 'label' => 'Consolidado — Cotización final',
                 'language' => 'es_PE',

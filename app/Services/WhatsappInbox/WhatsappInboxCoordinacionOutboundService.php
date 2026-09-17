@@ -355,6 +355,10 @@ class WhatsappInboxCoordinacionOutboundService
      */
     private function tryProcessTemplateAsSessionMessage(array $payload)
     {
+        if (!empty($payload['_force_template'])) {
+            return null;
+        }
+
         $creds = app(WhatsappInboxOrgConfigService::class)->credentialsForOutbound($this->organizacionIdFromPayload($payload));
         if (empty($creds['session_when_window_open'])) {
             return null;

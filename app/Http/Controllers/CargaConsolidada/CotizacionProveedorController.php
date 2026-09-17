@@ -1544,18 +1544,21 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
                     $telefono = preg_replace('/\s+/', '', $telefono);
                     $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
+                    if (!empty($cotizacion->organizacion_id)) {
+                        $this->setWhatsappOrganizacionId($cotizacion->organizacion_id);
+                    }
                     $this->setWhatsappFlujo('arrive_date');
-                    $this->sendMessage(
-                        $message,
-                        $this->phoneNumberId,
-                        0,
-                        'consolidado',
-                        CoordinacionWhatsappPayload::retrasoEntrega(
-                            (string) $this->phoneNumberId,
-                            $codeSupplier,
-                            $fecha,
-                            $message
-                        )
+                    $payloadRetraso = CoordinacionWhatsappPayload::retrasoEntrega(
+                        (string) $this->phoneNumberId,
+                        $codeSupplier,
+                        $fecha,
+                        $message
+                    );
+                    $payloadRetraso['id_cotizacion'] = (int) $idCotizacion;
+                    $this->queueCoordinacionWhatsApp(
+                        $payloadRetraso,
+                        'retraso_entrega',
+                        'Aviso retraso entrega — ' . $codeSupplier
                     );
 
                     // Disparar evento de proveedor contactado en China

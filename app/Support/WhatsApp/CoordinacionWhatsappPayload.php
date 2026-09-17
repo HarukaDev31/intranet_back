@@ -1505,10 +1505,13 @@ class CoordinacionWhatsappPayload
         string $bitrixMessage,
         int $sleep = 0
     ): array {
-        return self::template($phone, 'pb_retraso_entrega_v1', [
+        $payload = self::template($phone, 'pb_retraso_entrega_v1', [
             'code_supplier' => $codeSupplier,
             'fecha' => $fecha,
         ], $bitrixMessage, $sleep);
+        $payload['_force_template'] = true;
+
+        return $payload;
     }
 
     public static function generalCliente(string $phone, string $mensaje, string $bitrixMessage, int $sleep = 0): array
