@@ -38,13 +38,12 @@ class ReminderPagoWhatsappService
                 'message' => $payload['message'],
                 'has_excel' => $payload['has_excel'],
                 'excel_url' => $payload['excel_url'],
-                'fecha_maxima_pago' => $payload['fecha_maxima_pago'],
             ],
         ];
     }
 
     /**
-     * @return array{nombre:string,phone:string,phone_id:string,carga:string,message:string,has_excel:bool,excel_url:?string,has_fecha_maxima_pago:bool,fecha_maxima_pago:?string}|null
+     * @return array{nombre:string,phone:string,phone_id:string,carga:string,message:string,has_excel:bool,excel_url:?string,has_fecha_maxima_pago:bool}|null
      */
     public function buildPayload(int $idCotizacion): ?array
     {
@@ -82,7 +81,7 @@ class ReminderPagoWhatsappService
             ->first();
 
         $carga = $contenedor ? (string) $contenedor->carga : 'N/A';
-        $fechaMaximaPago = $contenedor ? $contenedor->fecha_maxima_pago : null;
+        $fechaMaximaPago = $contenedor ? $contenedor->getAttribute('fecha_maxima_pago') : null;
         $recargos=(float) ($cotizacion->recargos ?? 0);
         $logisticaFinal = (float) ($cotizacion->logistica_final ?? 0);
         $impuestosFinal = (float) ($cotizacion->impuestos_final ?? 0);
@@ -118,7 +117,6 @@ class ReminderPagoWhatsappService
             'has_excel' => $excelUrl !== null && $excelUrl !== '',
             'excel_url' => $excelUrl,
             'has_fecha_maxima_pago' => FechaMaximaPagoGuard::isSet($fechaMaximaPago),
-            'fecha_maxima_pago' => FechaMaximaPagoGuard::toIso($fechaMaximaPago),
         ];
     }
 
