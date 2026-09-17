@@ -71,40 +71,33 @@ class ClienteService
     {
         try {
             $totalClientes = Cliente::count();
-
-            // Contar por categoría
-            $clientes = Cliente::all();
             $categorias = [
                 'Cliente' => 0,
                 'Recurrente' => 0,
                 'Premium' => 0
             ];
-
-            foreach ($clientes as $cliente) {
-                $primerServicio = $cliente->primer_servicio;
-                if ($primerServicio) {
-                    $categoria = $primerServicio['categoria'];
-                    if (isset($categorias[$categoria])) {
-                        $categorias[$categoria]++;
-                    }
-                }
-            }
-
-            // Contar por servicio
             $servicios = [
                 'Curso' => 0,
                 'Consolidado' => 0
             ];
 
-            foreach ($clientes as $cliente) {
-                $primerServicio = $cliente->primer_servicio;
-                if ($primerServicio) {
-                    $servicio = $primerServicio['servicio'];
-                    if (isset($servicios[$servicio])) {
-                        $servicios[$servicio]++;
+            Cliente::query()->select('id')->orderBy('id')->chunkById(500, function ($chunk) use (&$categorias, &$servicios) {
+                $serviciosPorCliente = $this->obtenerServiciosEnLote($chunk->pluck('id')->all());
+                foreach ($chunk as $cliente) {
+                    $lista = $serviciosPorCliente[$cliente->id] ?? [];
+                    if ($lista === []) {
+                        continue;
+                    }
+                    $categoria = $this->determinarCategoriaCliente($lista);
+                    if (isset($categorias[$categoria])) {
+                        $categorias[$categoria]++;
+                    }
+                    $tipo = $lista[0]['servicio'] ?? null;
+                    if ($tipo && isset($servicios[$tipo])) {
+                        $servicios[$tipo]++;
                     }
                 }
-            }
+            });
 
             return [
                 'data' => [
@@ -494,8 +487,9 @@ class ClienteService
                 ->limit(10)
                 ->get();
 
-            $clientes->transform(function ($cliente) {
-                $primerServicio = $cliente->primer_servicio;
+            $serviciosPorCliente = $this->obtenerServiciosEnLote($clientes->pluck('id')->all());
+            $clientes->transform(function ($cliente) use ($serviciosPorCliente) {
+                $primerServicio = $this->primerServicioDesdeLote($serviciosPorCliente[$cliente->id] ?? []);
 
                 return [
                     'id' => $cliente->id,
@@ -529,9 +523,11 @@ class ClienteService
                 ->paginate(15);
 
             // Transformar los datos de clientes
+            $items = $clientes->items();
+            $serviciosPorCliente = $this->obtenerServiciosEnLote(collect($items)->pluck('id')->all());
             $clientesData = [];
-            foreach ($clientes->items() as $cliente) {
-                $primerServicio = $cliente->primer_servicio;
+            foreach ($items as $cliente) {
+                $primerServicio = $this->primerServicioDesdeLote($serviciosPorCliente[$cliente->id] ?? []);
 
                 $clientesData[] = [
                     'id' => $cliente->id,
@@ -913,13 +909,242 @@ class ClienteService
     }
 
     /**
+     * Primer servicio + categoría a partir de servicios ya cargados en lote.
+     */
+    private function primerServicioDesdeLote(array $servicios): ?array
+    {
+        if ($servicios === []) {
+            return null;
+        }
+
+        $first = $servicios[0];
+        return [
+            'servicio' => $first['servicio'] ?? null,
+            'fecha' => $first['fecha'] ?? null,
+            'categoria' => $this->determinarCategoriaCliente($servicios),
+            'detalle' => $first['detalle'] ?? null,
+            'carga' => $first['carga'] ?? null,
+        ];
+    }
+
+    /**
+     * @param  iterable  $clientes
+     * @return array<int, object>
+     */
+    private function resolverEntidadesPorClientes($clientes): array
+    {
+        $telefonos = [];
+        $telefonosClean = [];
+        $documentos = [];
+        $correos = [];
+        foreach ($clientes as $cliente) {
+            if (!empty($cliente->telefono)) {
+                $telefonos[] = $cliente->telefono;
+                $clean = preg_replace('/[^0-9]/', '', $cliente->telefono);
+                if ($clean !== '') {
+                    $telefonosClean[] = $clean;
+                }
+            }
+            if (!empty($cliente->documento)) {
+                $documentos[] = $cliente->documento;
+            }
+            if (!empty($cliente->correo)) {
+                $correos[] = $cliente->correo;
+            }
+        }
+
+        $telefonos = array_values(array_unique($telefonos));
+        $telefonosClean = array_values(array_unique($telefonosClean));
+        $documentos = array_values(array_unique($documentos));
+        $correos = array_values(array_unique($correos));
+
+        if ($telefonos === [] && $documentos === [] && $correos === []) {
+            return [];
+        }
+
+        $rows = DB::table('entidad as e')
+            ->leftJoin('provincia as p', 'p.ID_Provincia', '=', 'e.ID_Provincia')
+            ->where(function ($q) use ($telefonos, $telefonosClean, $documentos, $correos) {
+                if ($telefonos !== []) {
+                    $q->orWhereIn('e.Nu_Celular_Entidad', $telefonos);
+                }
+                foreach ($telefonosClean as $clean) {
+                    $q->orWhereRaw('REPLACE(REPLACE(TRIM(e.Nu_Celular_Entidad), " ", ""), "-", "") LIKE ?', ['%' . $clean . '%']);
+                }
+                if ($documentos !== []) {
+                    $q->orWhereIn('e.Nu_Documento_Identidad', $documentos);
+                }
+                if ($correos !== []) {
+                    $q->orWhere(function ($q2) use ($correos) {
+                        $q2->whereNotNull('e.Txt_Email_Entidad')
+                            ->where('e.Txt_Email_Entidad', '!=', '')
+                            ->whereIn('e.Txt_Email_Entidad', $correos);
+                    });
+                }
+            })
+            ->select('e.*', 'p.No_Provincia')
+            ->get();
+
+        $map = [];
+        foreach ($clientes as $cliente) {
+            $telClean = !empty($cliente->telefono) ? preg_replace('/[^0-9]/', '', $cliente->telefono) : '';
+            foreach ($rows as $ent) {
+                $match = false;
+                if (!empty($cliente->telefono) && (string) $ent->Nu_Celular_Entidad === (string) $cliente->telefono) {
+                    $match = true;
+                }
+                if (!$match && $telClean !== '') {
+                    $entClean = preg_replace('/[^0-9]/', '', (string) ($ent->Nu_Celular_Entidad ?? ''));
+                    if ($entClean !== '' && str_contains($entClean, $telClean)) {
+                        $match = true;
+                    }
+                }
+                if (!$match && !empty($cliente->documento) && (string) $ent->Nu_Documento_Identidad === (string) $cliente->documento) {
+                    $match = true;
+                }
+                if (!$match && !empty($cliente->correo) && (string) $ent->Txt_Email_Entidad === (string) $cliente->correo) {
+                    $match = true;
+                }
+                if ($match) {
+                    $map[$cliente->id] = $ent;
+                    break;
+                }
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param  array<int, int>  $clienteIds
+     * @return array<int, object>
+     */
+    private function primerPedidoCursoPorClienteIds(array $clienteIds): array
+    {
+        if ($clienteIds === []) {
+            return [];
+        }
+
+        $rows = DB::table('pedido_curso as pc')
+            ->join('entidad as e', 'pc.ID_Entidad', '=', 'e.ID_Entidad')
+            ->where('pc.Nu_Estado', 2)
+            ->whereIn('pc.id_cliente', $clienteIds)
+            ->select('pc.id_cliente', 'e.ID_Provincia', 'e.Nu_Como_Entero_Empresa', 'e.Fe_Registro')
+            ->orderBy('e.Fe_Registro', 'asc')
+            ->get();
+
+        $map = [];
+        foreach ($rows as $row) {
+            if (!isset($map[$row->id_cliente])) {
+                $map[$row->id_cliente] = $row;
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param  array<int, int>  $clienteIds
+     * @return array<int, \App\Models\Usuario|null>
+     */
+    private function usuariosPrimeraCotizacionPorClienteIds(array $clienteIds): array
+    {
+        if ($clienteIds === []) {
+            return [];
+        }
+
+        $query = DB::table('contenedor_consolidado_cotizacion as ccc')
+            ->whereIn('ccc.id_cliente', $clienteIds)
+            ->whereNotNull('ccc.estado_cliente')
+            ->whereNull('ccc.deleted_at')
+            ->where('ccc.estado_cotizador', 'CONFIRMADO')
+            ->orderBy('ccc.fecha', 'asc')
+            ->select('ccc.id_cliente', 'ccc.id_usuario');
+
+        $firstUserId = [];
+        foreach ($query->get() as $row) {
+            if (!isset($firstUserId[$row->id_cliente])) {
+                $firstUserId[$row->id_cliente] = $row->id_usuario;
+            }
+        }
+
+        $userIds = array_values(array_filter($firstUserId));
+        $usuarios = $userIds === []
+            ? collect()
+            : Usuario::whereIn('ID_Usuario', $userIds)->get()->keyBy('ID_Usuario');
+
+        $map = [];
+        foreach ($firstUserId as $clienteId => $userId) {
+            $map[$clienteId] = $usuarios->get($userId);
+        }
+
+        return $map;
+    }
+
+    /**
      * Transformar datos de clientes para la respuesta
      */
     private function transformarDatosClientes($clientes, $serviciosPorCliente)
     {
         $datosTransformados = [];
-        
-        foreach ($clientes as $cliente) {
+        $clientesList = collect($clientes)->values();
+        $entidadesPorCliente = $this->resolverEntidadesPorClientes($clientesList);
+
+        $cursoIds = [];
+        $consolidadoIds = [];
+        $contacts = [];
+        foreach ($clientesList as $cliente) {
+            $tipo = strtolower((string) (($serviciosPorCliente[$cliente->id][0]['servicio'] ?? '')));
+            if ($tipo === 'curso') {
+                $cursoIds[] = $cliente->id;
+            } elseif ($tipo === 'consolidado') {
+                $consolidadoIds[] = $cliente->id;
+            }
+            $contacts[$cliente->id] = [
+                'correo' => $cliente->correo ?? null,
+                'telefono' => $cliente->telefono ?? null,
+                'documento' => $cliente->documento ?? null,
+            ];
+        }
+
+        $pedidosPorCliente = $this->primerPedidoCursoPorClienteIds($cursoIds);
+        $usuariosCotizacion = $this->usuariosPrimeraCotizacionPorClienteIds($consolidadoIds);
+        $usersPorCliente = \App\Helpers\UserLookupHelper::findUsersIndexedByContact($contacts);
+
+        $provinciaIds = [];
+        foreach ($entidadesPorCliente as $ent) {
+            if (!empty($ent->ID_Provincia)) {
+                $provinciaIds[] = $ent->ID_Provincia;
+            }
+        }
+        foreach ($pedidosPorCliente as $pedido) {
+            if (!empty($pedido->ID_Provincia)) {
+                $provinciaIds[] = $pedido->ID_Provincia;
+            }
+        }
+        foreach ($usuariosCotizacion as $usuario) {
+            if (!$usuario) {
+                continue;
+            }
+            $pid = $usuario->ID_Provincia ?? ($usuario->provincia_id ?? null);
+            if ($pid) {
+                $provinciaIds[] = $pid;
+            }
+        }
+        foreach ($usersPorCliente as $user) {
+            if (!$user) {
+                continue;
+            }
+            $pid = $user->provincia_id ?? ($user->idcity ?? null);
+            if ($pid) {
+                $provinciaIds[] = $pid;
+            }
+        }
+        $provincias = $provinciaIds === []
+            ? collect()
+            : Provincia::whereIn('ID_Provincia', array_values(array_unique($provinciaIds)))->get()->keyBy('ID_Provincia');
+
+        foreach ($clientesList as $cliente) {
             $servicios = $serviciosPorCliente[$cliente->id] ?? [];
             $categoria = $this->determinarCategoriaCliente($servicios);
             $primerServicio = !empty($servicios) ? $servicios[0] : null;
@@ -927,132 +1152,60 @@ class ClienteService
             if ($primerServicio === null) {
                 continue;
             }
-            // intentar resolver provincia por entidad para cada cliente (si aplica)
             $provinciaName = null;
+            $nuComoEnteroEmpresa = null;
+            $nuOtrosComoEnteroEmpresa = null;
+            $ent = $entidadesPorCliente[$cliente->id] ?? null;
+            $servicioNombre = $primerServicio['servicio'] ?? null;
+
             try {
-                $provinciaName = null;
-                $nuComoEnteroEmpresa = null;
-                $nuOtrosComoEnteroEmpresa = null;
-                $userRecord = null;
-                $primer = $cliente->primer_servicio;
-                $servicioNombre = $primer['servicio'] ?? null;
+                if ($ent) {
+                    $provinciaName = $ent->No_Provincia ?? null;
+                    if (isset($ent->Nu_Como_Entero_Empresa)) {
+                        $nuComoEnteroEmpresa = $ent->Nu_Como_Entero_Empresa;
+                    }
+                }
 
                 if ($servicioNombre && strtolower($servicioNombre) === 'curso') {
-                    // Curso: entidad -> pedido_curso
-                    if (method_exists($cliente, 'resolveEntidad')) {
-                        $ent = $cliente->resolveEntidad();
-                        if ($ent) {
-                            $provinciaName = $ent->provincia->No_Provincia ?? null;
-                            if (isset($ent->Nu_Como_Entero_Empresa)) {
-                                $nuComoEnteroEmpresa = $ent->Nu_Como_Entero_Empresa;
+                    if (!$provinciaName) {
+                        $pedido = $pedidosPorCliente[$cliente->id] ?? null;
+                        if ($pedido) {
+                            if (!empty($pedido->ID_Provincia)) {
+                                $prov = $provincias->get($pedido->ID_Provincia);
+                                $provinciaName = $prov ? $prov->No_Provincia : null;
+                            }
+                            if (isset($pedido->Nu_Como_Entero_Empresa)) {
+                                $nuComoEnteroEmpresa = $pedido->Nu_Como_Entero_Empresa;
+                            }
+                        }
+                    }
+                } elseif ($servicioNombre && strtolower($servicioNombre) === 'consolidado') {
+                    if (!$provinciaName) {
+                        $usuario = $usuariosCotizacion[$cliente->id] ?? null;
+                        if ($usuario) {
+                            $usuarioProvinciaId = $usuario->ID_Provincia ?? ($usuario->provincia_id ?? null);
+                            if ($usuarioProvinciaId) {
+                                $prov = $provincias->get($usuarioProvinciaId);
+                                $provinciaName = $prov ? $prov->No_Provincia : null;
                             }
                         }
                     }
 
-                    if (!$provinciaName) {
-                        try {
-                            $pedido = DB::table('pedido_curso as pc')
-                                ->join('entidad as e', 'pc.ID_Entidad', '=', 'e.ID_Entidad')
-                                ->where('pc.Nu_Estado', 2)
-                                ->where('pc.id_cliente', $cliente->id)
-                                ->select('e.ID_Provincia', 'e.Nu_Como_Entero_Empresa')
-                                ->orderBy('e.Fe_Registro', 'asc')
-                                ->first();
-
-                            if ($pedido) {
-                                if (isset($pedido->ID_Provincia)) {
-                                    $prov = Provincia::find($pedido->ID_Provincia);
+                    if (!$provinciaName || empty($nuComoEnteroEmpresa)) {
+                        $user = $usersPorCliente[$cliente->id] ?? null;
+                        if ($user) {
+                            if (!$provinciaName) {
+                                $userProvinciaId = $user->provincia_id ?? ($user->idcity ?? null);
+                                if ($userProvinciaId) {
+                                    $prov = $provincias->get($userProvinciaId);
                                     $provinciaName = $prov ? $prov->No_Provincia : null;
                                 }
-                                if (isset($pedido->Nu_Como_Entero_Empresa)) {
-                                    $nuComoEnteroEmpresa = $pedido->Nu_Como_Entero_Empresa;
-                                }
                             }
-                        } catch (\Exception $e) {
-                            Log::warning('transformarDatosClientes: error consultando pedido_curso para cliente ' . $cliente->id . ' - ' . $e->getMessage());
-                        }
-                    }
-
-                } elseif ($servicioNombre && strtolower($servicioNombre) === 'consolidado') {
-                    // Consolidado: entidad -> cotizacion->usuario
-                    if (method_exists($cliente, 'resolveEntidad')) {
-                        $ent = $cliente->resolveEntidad();
-                        if ($ent) {
-                            $provinciaName = $ent->provincia->No_Provincia ?? null;
-                            if (isset($ent->Nu_Como_Entero_Empresa)) {
-                                $nuComoEnteroEmpresa = $ent->Nu_Como_Entero_Empresa;
+                            if (empty($nuComoEnteroEmpresa) && isset($user->no_como_entero)) {
+                                $nuComoEnteroEmpresa = $user->no_como_entero;
                             }
-                        }
-                    }
-
-                    if (!$provinciaName) {
-                        try {
-                            $cotizacionQuery = DB::table('contenedor_consolidado_cotizacion as CC')
-                                ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
-                                ->whereIn('CC.organizacion_id', $this->organizacionIdsUsuarioActual())
-                                ->whereNull('CC.deleted_at')
-                                ->whereNotNull('CC.estado_cliente');
-                            ClientesVisibility::applyConfirmadoParaBd($cotizacionQuery, 'CC');
-                            ClientesVisibility::applyMatchCliente($cotizacionQuery, $cliente, 'CC');
-
-                            $cotizacion = $cotizacionQuery->select('CC.*')
-                                ->orderBy('CC.fecha', 'asc')
-                                ->orderByRaw('CAST(C.carga AS UNSIGNED)')
-                                ->first();
-
-                            if ($cotizacion && isset($cotizacion->id_usuario)) {
-                                $usuario = Usuario::find($cotizacion->id_usuario);
-                                if ($usuario) {
-                                    $usuarioProvinciaId = $usuario->ID_Provincia ?? ($usuario->provincia_id ?? null);
-                                    if ($usuarioProvinciaId) {
-                                        $prov = Provincia::find($usuarioProvinciaId);
-                                        $provinciaName = $prov ? $prov->No_Provincia : null;
-                                    }
-                                }
-                            }
-                        } catch (\Exception $e) {
-                            Log::warning('transformarDatosClientes: error resolviendo provincia desde cotizacion/usuario para cliente ' . $cliente->id . ' - ' . $e->getMessage());
-                        }
-                    }
-
-                    // 3) users table (último fallback para consolidado si aún no hay provincia o campos empresa)
-                    if (!$provinciaName || empty($nuComoEnteroEmpresa)) {
-                        try {
-                            $user = \App\Helpers\UserLookupHelper::findUserByContact(
-                                $cliente->correo ?? null,
-                                $cliente->telefono ?? null,
-                                $cliente->documento ?? null
-                            );
-                            if ($user) {
-                                $userRecord = $user;
-                                if (!$provinciaName) {
-                                    $userProvinciaId = $user->provincia_id ?? ($user->idcity ?? null);
-                                    if ($userProvinciaId) {
-                                        $prov = Provincia::find($userProvinciaId);
-                                        $provinciaName = $prov ? $prov->No_Provincia : null;
-                                    }
-                                }
-                                if (empty($nuComoEnteroEmpresa) && isset($user->no_como_entero)) {
-                                    $nuComoEnteroEmpresa = $user->no_como_entero;
-                                }
-                                if (empty($nuOtrosComoEnteroEmpresa) && isset($user->no_otros_como_entero_empresa)) {
-                                    $nuOtrosComoEnteroEmpresa = $user->no_otros_como_entero_empresa;
-                                }
-                                Log::info('transformarDatosClientes: nuComoEnteroEmpresa: ' . $nuComoEnteroEmpresa);
-                                Log::info('transformarDatosClientes: nuOtrosComoEnteroEmpresa: ' . $nuOtrosComoEnteroEmpresa);
-                            }
-                        } catch (\Exception $e) {
-                            Log::warning('transformarDatosClientes: error resolviendo provincia/campos empresa desde users para cliente ' . $cliente->id . ' - ' . $e->getMessage());
-                        }
-                    }
-                } else {
-                    // fallback general: entidad
-                    if (method_exists($cliente, 'resolveEntidad')) {
-                        $ent = $cliente->resolveEntidad();
-                        if ($ent) {
-                            $provinciaName = $ent->provincia->No_Provincia ?? null;
-                            if (isset($ent->Nu_Como_Entero_Empresa)) {
-                                $nuComoEnteroEmpresa = $ent->Nu_Como_Entero_Empresa;
+                            if (empty($nuOtrosComoEnteroEmpresa) && isset($user->no_otros_como_entero_empresa)) {
+                                $nuOtrosComoEnteroEmpresa = $user->no_otros_como_entero_empresa;
                             }
                         }
                     }
@@ -1081,18 +1234,8 @@ class ClienteService
             $no_como_entero_final = null;
             if (!is_null($primaryCode) && $primaryCode !== '') {
                 $codeInt = (int) $primaryCode;
-                // If code indicates 'Otros' (6 or 8) and we don't yet have the free-text, try to resolve entidad now
-                if (\App\Support\Register\ComoEnteroCatalog::requiresOtrosText($codeInt) && empty($no_otros_val)) {
-                    try {
-                        if (!isset($ent) && method_exists($cliente, 'resolveEntidad')) {
-                            $ent = $cliente->resolveEntidad();
-                        }
-                        if (isset($ent) && !empty($ent->No_Otros_Como_Entero_Empresa)) {
-                            $no_otros_val = $ent->No_Otros_Como_Entero_Empresa;
-                        }
-                    } catch (\Exception $e) {
-                        // ignore
-                    }
+                if (\App\Support\Register\ComoEnteroCatalog::requiresOtrosText($codeInt) && empty($no_otros_val) && $ent && !empty($ent->No_Otros_Como_Entero_Empresa)) {
+                    $no_otros_val = $ent->No_Otros_Como_Entero_Empresa;
                 }
 
                 if (\App\Support\Register\ComoEnteroCatalog::requiresOtrosText($codeInt) && !empty($no_otros_val)) {

@@ -1904,9 +1904,13 @@ Cualquier duda nos escribe.  ¡Gracias! */
             );
             $enviados = [];
             $errores  = [];
+            $cotizaciones = Cotizacion::with('contenedor')
+                ->whereIn('id', $cotizacionIds)
+                ->get()
+                ->keyBy('id');
 
             foreach ($cotizacionIds as $idCotizacion) {
-                $cotizacion = Cotizacion::find($idCotizacion);
+                $cotizacion = $cotizaciones->get($idCotizacion);
                 if (!$cotizacion) {
                     $errores[] = ['id' => $idCotizacion, 'error' => 'Cotización no encontrada'];
                     continue;
@@ -1923,7 +1927,6 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 }
                 $numeroWhatsapp = $telefono . '@c.us';
 
-                $cotizacion->loadMissing('contenedor');
                 $datosFacturacion = $this->getDatosFacturacionParaMensaje($cotizacion);
                 $message = $datosFacturacion
                     ? $this->buildMensajeFormularioAntiguo($cotizacion, $datosFacturacion)

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
@@ -208,6 +209,47 @@ class Notificacion extends Model
                 'updated_at' => now()
             ]
         ]);
+    }
+
+    /**
+     * Marcar varias notificaciones como leídas para un usuario (upsert por chunks).
+     */
+    public static function marcarMultiplesComoLeidas(array $notificacionIds, int $usuarioId, int $chunkSize = 100): void
+    {
+        $ids = collect($notificacionIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return;
+        }
+
+        $now = now();
+
+        $ids->chunk($chunkSize)->each(function ($chunk) use ($usuarioId, $now) {
+            $existentes = static::whereIn('id', $chunk)->pluck('id');
+
+            if ($existentes->isEmpty()) {
+                return;
+            }
+
+            $filas = $existentes->map(fn ($id) => [
+                'notificacion_id' => $id,
+                'usuario_id' => $usuarioId,
+                'leida' => true,
+                'fecha_lectura' => $now,
+                'updated_at' => $now,
+                'created_at' => $now,
+            ])->all();
+
+            DB::table('notificacion_usuario')->upsert(
+                $filas,
+                ['notificacion_id', 'usuario_id'],
+                ['leida', 'fecha_lectura', 'updated_at']
+            );
+        });
     }
 
     /**

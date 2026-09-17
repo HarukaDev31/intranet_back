@@ -1033,7 +1033,7 @@ class CalendarActivityController extends Controller
         if ($roleGroupId === null) {
             return response()->json(['success' => false, 'message' => 'El usuario no tiene grupo de calendario asignado'], 400);
         }
-        $request->validate(['ids' => 'required|array', 'ids.*' => 'integer|exists:calendar_activities,id']);
+        $request->validate(['ids' => 'required|array', 'ids.*' => 'integer']);
         $ids = $request->input('ids');
         $countInGroup = CalendarActivity::whereIn('id', $ids)->where('role_group_id', $roleGroupId)->count();
         if ($countInGroup !== count($ids)) {
@@ -1062,18 +1062,25 @@ class CalendarActivityController extends Controller
 
         $request->validate([
             'ids' => 'required|array|min:1',
-            'ids.*' => 'integer|exists:calendar_events,id',
+            'ids.*' => 'integer',
         ]);
 
-        $ids = $request->input('ids', []);
+        $ids = array_values(array_map('intval', $request->input('ids', [])));
 
         try {
             DB::transaction(function () use ($ids) {
-                $order = 1;
-                foreach ($ids as $id) {
-                    CalendarEvent::where('id', (int) $id)->update(['display_order' => $order]);
-                    $order++;
+                if ($ids === []) {
+                    return;
                 }
+
+                $cases = [];
+                foreach ($ids as $index => $id) {
+                    $cases[] = 'WHEN ' . $id . ' THEN ' . ($index + 1);
+                }
+
+                CalendarEvent::whereIn('id', $ids)->update([
+                    'display_order' => DB::raw('CASE id ' . implode(' ', $cases) . ' END'),
+                ]);
             });
 
             return response()->json(['success' => true, 'message' => 'Actividades reordenadas correctamente']);

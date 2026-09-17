@@ -5,6 +5,7 @@ namespace App\Services\Calendar;
 use App\Models\Calendar\CalendarActivity;
 use App\Models\Calendar\CalendarEvent;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class CalendarActivityService
 {
@@ -78,9 +79,21 @@ class CalendarActivityService
      */
     public function reorderActivities(array $orderedIds, int $roleGroupId): void
     {
-        foreach ($orderedIds as $index => $id) {
-            CalendarActivity::where('id', $id)->where('role_group_id', $roleGroupId)->update(['orden' => $index + 1]);
+        $orderedIds = array_values(array_map('intval', $orderedIds));
+        if ($orderedIds === []) {
+            return;
         }
+
+        $cases = [];
+        foreach ($orderedIds as $index => $id) {
+            $cases[] = 'WHEN ' . $id . ' THEN ' . ($index + 1);
+        }
+
+        CalendarActivity::whereIn('id', $orderedIds)
+            ->where('role_group_id', $roleGroupId)
+            ->update([
+                'orden' => DB::raw('CASE id ' . implode(' ', $cases) . ' END'),
+            ]);
     }
 
     /**

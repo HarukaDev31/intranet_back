@@ -50,15 +50,12 @@ class SendRecordatorioDatosProveedorJob implements ShouldQueue
             $nombreCliente = $cotizacion->nombre;
             $listaProveedores = '';
 
-            foreach ($this->proveedores as $proveedorId) {
-                $proveedor = CotizacionProveedor::find($proveedorId);
-
-                if ($proveedor) {
-                    $listaProveedores .= "Nombre del vendedor: " . $proveedor->supplier . "\n";
-                    $listaProveedores .= "Número o WeChat: " . $proveedor->supplier_phone . "\n";
-                    $listaProveedores .= "Codigo proveedor: " . $proveedor->code_supplier . "\n";
-                    $listaProveedores .= "----------------------------------------------------------\n";
-                }
+            $proveedores = CotizacionProveedor::whereIn('id', $this->proveedores)->get();
+            foreach ($proveedores as $proveedor) {
+                $listaProveedores .= "Nombre del vendedor: " . $proveedor->supplier . "\n";
+                $listaProveedores .= "Número o WeChat: " . $proveedor->supplier_phone . "\n";
+                $listaProveedores .= "Codigo proveedor: " . $proveedor->code_supplier . "\n";
+                $listaProveedores .= "----------------------------------------------------------\n";
             }
 
             $bitrix = "Hola {$nombreCliente} necesitamos los datos de tu proveedor para que nuestro equipo de China se encargue de recibir tu carga.\n\n"
