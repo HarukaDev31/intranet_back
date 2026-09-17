@@ -866,7 +866,7 @@ class GeneralController extends Controller
                     'message' => 'Contenedor no encontrado'
                 ], 404);
             }
-            if ($validateMaxDate && !$container->fecha_documentacion_max) {
+            if ($validateMaxDate && !$container->getAttribute('fecha_documentacion_max')) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Contenedor no tiene fecha de documentacion maxima'

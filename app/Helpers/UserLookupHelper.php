@@ -73,10 +73,8 @@ class UserLookupHelper
                 $documentos[] = $contact['documento'];
             }
             if (!empty($contact['telefono'])) {
-                foreach (CountryPhoneHelper::searchVariants($contact['telefono']) as $variante) {
-                    if ($variante !== '') {
-                        $variantes[$variante] = true;
-                    }
+                foreach (self::phoneSearchVariants($contact['telefono']) as $variante) {
+                    $variantes[$variante] = true;
                 }
             }
         }
@@ -132,7 +130,7 @@ class UserLookupHelper
             return false;
         }
 
-        $variantes = CountryPhoneHelper::searchVariants($contact['telefono']);
+        $variantes = self::phoneSearchVariants($contact['telefono']);
         if ($variantes === []) {
             return false;
         }
@@ -146,5 +144,30 @@ class UserLookupHelper
         }
 
         return false;
+    }
+
+    /**
+     * Variantes de teléfono alineadas con findUserByContact (dígitos y sin prefijo 51).
+     *
+     * @return array<int, string>
+     */
+    private static function phoneSearchVariants(?string $telefono): array
+    {
+        if ($telefono === null || $telefono === '') {
+            return [];
+        }
+
+        $telefonoLimpio = preg_replace('/[^0-9]/', '', $telefono);
+        if ($telefonoLimpio === '') {
+            return [];
+        }
+
+        $variantes = [$telefonoLimpio];
+        $sin51 = preg_replace('/^51/', '', $telefonoLimpio);
+        if ($sin51 !== '' && $sin51 !== $telefonoLimpio) {
+            $variantes[] = $sin51;
+        }
+
+        return $variantes;
     }
 }

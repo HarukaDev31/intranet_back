@@ -88,9 +88,9 @@ class UsuarioDatosFacturacionHelper
 
         $map = [];
         foreach ($rows as $row) {
-            $uid = (int) $row->id_user;
+            $uid = (int) $row->getAttribute('id_user');
             if (!array_key_exists($uid, $map)) {
-                $map[$uid] = self::destinoToTypeForm($row->destino);
+                $map[$uid] = self::destinoToTypeForm($row->getAttribute('destino'));
             }
         }
 
