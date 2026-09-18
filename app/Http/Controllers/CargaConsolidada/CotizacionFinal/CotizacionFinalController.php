@@ -2708,7 +2708,7 @@ class CotizacionFinalController extends Controller
 
                     // Subconsulta para total_logistica
                     DB::raw('(
-                        SELECT COALESCE(SUM(logistica_final+recargos_descuentos_final), 0) 
+                        SELECT COALESCE(SUM(IFNULL(logistica_final, 0) + IFNULL(recargos_descuentos_final, 0)), 0) 
                         FROM ' . $this->table_contenedor_cotizacion . ' 
                         WHERE id IN (
                             SELECT DISTINCT id_cotizacion 
@@ -2720,7 +2720,7 @@ class CotizacionFinalController extends Controller
 
                     // Subconsulta para total_impuestos
                     DB::raw('(
-                        SELECT COALESCE(SUM(impuestos_final), 0)
+                        SELECT COALESCE(SUM(IFNULL(impuestos_final, 0)), 0)
                         FROM ' . $this->table_contenedor_cotizacion . '
                         WHERE id IN (
                             SELECT DISTINCT id_cotizacion
@@ -2732,7 +2732,7 @@ class CotizacionFinalController extends Controller
 
                     // Suma de fob_final
                     DB::raw('(
-                        SELECT COALESCE(SUM(fob_final), 0)
+                        SELECT COALESCE(SUM(IFNULL(fob_final, 0)), 0)
                         FROM ' . $this->table_contenedor_cotizacion . '
                         WHERE id IN (
                             SELECT DISTINCT id_cotizacion
@@ -2744,7 +2744,7 @@ class CotizacionFinalController extends Controller
 
                     // Total vendido logistica + impuestos
                     DB::raw('(
-                        SELECT COALESCE(SUM(logistica_final + impuestos_final+recargos_descuentos_final), 0)
+                        SELECT COALESCE(SUM(IFNULL(logistica_final, 0) + IFNULL(impuestos_final, 0) + IFNULL(recargos_descuentos_final, 0)), 0)
                         FROM ' . $this->table_contenedor_cotizacion . '
                         WHERE id IN (
                             SELECT DISTINCT id_cotizacion
