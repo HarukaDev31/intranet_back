@@ -1015,6 +1015,7 @@ class ContenedorController extends Controller
         try {
             $user = JWTAuth::user();
             $role = $user->getNombreGrupo();
+            $authOrg = (int) $user->getAttribute('ID_Organizacion');
             // Si el token es Jefe Importación y la petición envía "role" (query), usar ese rol para decidir qué pasos devolver
             // El role puede venir separado por coma (ej. "Coordinación,Documentacion"), se toma el primer rol válido
             if (Usuario::rolEquivaleJefeImportacion($role) && $request->filled('role')) {
@@ -1077,7 +1078,11 @@ class ContenedorController extends Controller
                     break;
                 default:
                     // Roles no mapeados: solo pasos COTIZADOR.
-                    $query->where('tipo', 'COTIZADOR');
+                    if ($authOrg !== Usuario::ID_ORGANIZACION_ADMIN) {
+                        $query->where('tipo', 'COTIZADOR')->limit($request->boolean('completado') ? 3 : 2);
+                    } else {
+                        $query->where('tipo', 'COTIZADOR');
+                    }
                     break;
             }
             }
