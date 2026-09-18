@@ -26,9 +26,13 @@ class ResumenCostoClasificadorTest extends TestCase
         $this->assertSame(ResumenCostoClasificador::IMPUESTO, ResumenCostoClasificador::tipo('Tributos e Impuestos Aduaneros'));
         $this->assertSame(ResumenCostoClasificador::LOGISTICA, ResumenCostoClasificador::tipo('Servicio de importación'));
         $this->assertSame(ResumenCostoClasificador::LOGISTICA, ResumenCostoClasificador::tipo('Servicios de Importacion'));
+        $this->assertSame(ResumenCostoClasificador::LOGISTICA, ResumenCostoClasificador::tipo('Logística Internacional'));
+        $this->assertSame(ResumenCostoClasificador::LOGISTICA, ResumenCostoClasificador::tipo('Logistica internacional'));
+        $this->assertSame(ResumenCostoClasificador::LOGISTICA, ResumenCostoClasificador::tipo('Logística'));
+        $this->assertSame(ResumenCostoClasificador::LOGISTICA, ResumenCostoClasificador::tipo('Logistics'));
+        $this->assertSame(ResumenCostoClasificador::LOGISTICA, ResumenCostoClasificador::tipo('Servicio de logística marítima'));
         $this->assertSame(ResumenCostoClasificador::OTRO, ResumenCostoClasificador::tipo('Flete'));
         $this->assertSame(ResumenCostoClasificador::OTRO, ResumenCostoClasificador::tipo('Transferencia'));
-        $this->assertSame(ResumenCostoClasificador::OTRO, ResumenCostoClasificador::tipo('Logística Internacional'));
         $this->assertSame(ResumenCostoClasificador::OTRO, ResumenCostoClasificador::tipo('Seguro'));
     }
 }

@@ -306,8 +306,13 @@ class CotizacionResumenController extends Controller
                     $logistica = $totalesCosto['logistica'];
                     $impuesto = $totalesCosto['impuesto'];
                     $isd = $totalesCosto['isd'];
-                } elseif ($isd <= 0) {
-                    $isd = $totalesCosto['isd'];
+                } else {
+                    if ($logistica <= 0) {
+                        $logistica = $totalesCosto['logistica'];
+                    }
+                    if ($isd <= 0) {
+                        $isd = $totalesCosto['isd'];
+                    }
                 }
                 $totalInversion = $proveedores->sum(fn ($p) => (float) (optional($p->getRelation('resumen'))->getAttribute('inversion_total') ?? 0));
                 $contenedor = $contenedores->get($c->getAttribute('id_contenedor'));
