@@ -162,13 +162,15 @@ class CustomersHeadersService
         ClientesVisibility::applyConfirmadoParaBd($cbmPaisQuery, 'CC');
         $cbmPais = (float) $cbmPaisQuery->selectRaw('COALESCE(SUM(' . $this->sqlCbmFull('PR') . '), 0) as total')->value('total');
 
-        return [
+        $headers = [
             'cbm_pais' => [
                 'value' => number_format($cbmPais, 3, '.', ''),
                 'label' => 'CBM',
                 'icon' => 'fluent:box-32-filled',
             ],
         ] + $this->format($stats);
+
+        return $this->insertCbmDateHeaders($headers, $idContenedor);
     }
 
     /**
@@ -479,6 +481,131 @@ class CustomersHeadersService
     private function sqlCbmFull($alias = 'PR')
     {
         return '(COALESCE(' . $alias . '.cbm_total, 0) + COALESCE(' . $alias . '.cbm_imo, 0))';
+    }
+
+    /**
+     * Inserta las fechas proyectadas a 60 y 65 CBM justo después de CBM Warehouse.
+     *
+     * @param array<string, array<string, mixed>> $headers
+     * @param int $idContenedor
+     * @return array<string, array<string, mixed>>
+     */
+    private function insertCbmDateHeaders(array $headers, $idContenedor)
+    {
+        $proy = $this->fechasProyeccionCbm($idContenedor);
+        $out = [];
+        $inserted = false;
+        foreach ($headers as $key => $header) {
+            $out[$key] = $header;
+            if ($key === 'cbm_warehouse') {
+                $out['fecha_cbm_60'] = $this->headerFechaCbm(60, $proy['fecha_60']);
+                $out['fecha_cbm_65'] = $this->headerFechaCbm(65, $proy['fecha_65']);
+                $inserted = true;
+            }
+        }
+        if (!$inserted) {
+            $out['fecha_cbm_60'] = $this->headerFechaCbm(60, $proy['fecha_60']);
+            $out['fecha_cbm_65'] = $this->headerFechaCbm(65, $proy['fecha_65']);
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param int $umbral
+     * @param string|null $fechaIso
+     * @return array<string, string>
+     */
+    private function headerFechaCbm($umbral, $fechaIso)
+    {
+        $value = '—';
+        if ($fechaIso) {
+            $ts = strtotime($fechaIso);
+            if ($ts) {
+                $value = date('d/m/Y', $ts);
+            }
+        }
+
+        return [
+            'value' => $value,
+            'label' => ((int) $umbral) . ' CBM date',
+            'icon' => 'heroicons:calendar-days',
+            'hint' => 'Arrive Date projection',
+        ];
+    }
+
+    /**
+     * Proyección por Arrive Date China: primer día en que el CBM acumulado
+     * llega a 60 y a 65.
+     *
+     * @param int $idContenedor
+     * @return array{fecha_60: string|null, fecha_65: string|null}
+     */
+    private function fechasProyeccionCbm($idContenedor)
+    {
+        $query = DB::table($this->tableCotizacion . ' as CC')
+            ->join($this->tableProveedor . ' as PR', 'PR.id_cotizacion', '=', 'CC.id')
+            ->where('CC.id_contenedor', (int) $idContenedor)
+            ->whereNull('CC.deleted_at')
+            ->whereNull('CC.id_cliente_importacion');
+        ClientesVisibility::applyConfirmadoParaBd($query, 'CC');
+        $rows = $query
+            ->select([
+                'PR.cbm_total',
+                'PR.cbm_imo',
+                'PR.cbm_total_china',
+                'PR.arrive_date_china',
+            ])
+            ->get();
+
+        $sinFecha = 0.0;
+        $items = [];
+        foreach ($rows as $row) {
+            $china = (float) ($row->cbm_total_china ?? 0);
+            $quoted = (float) ($row->cbm_total ?? 0) + (float) ($row->cbm_imo ?? 0);
+            $cbm = $china > 0 ? $china : $quoted;
+            if ($cbm <= 0) {
+                continue;
+            }
+            $fecha = trim((string) ($row->arrive_date_china ?? ''));
+            if ($fecha === '' || strpos($fecha, '0000-00-00') === 0) {
+                $sinFecha += $cbm;
+                continue;
+            }
+            $items[] = [
+                'fecha' => substr($fecha, 0, 10),
+                'cbm' => $cbm,
+            ];
+        }
+
+        usort($items, function ($a, $b) {
+            return strcmp($a['fecha'], $b['fecha']);
+        });
+
+        $cum = $sinFecha;
+        $fecha60 = null;
+        $fecha65 = null;
+        $i = 0;
+        $n = count($items);
+        while ($i < $n) {
+            $day = $items[$i]['fecha'];
+            while ($i < $n && $items[$i]['fecha'] === $day) {
+                $cum += $items[$i]['cbm'];
+                $i++;
+            }
+            if ($fecha60 === null && $cum >= 60) {
+                $fecha60 = $day;
+            }
+            if ($fecha65 === null && $cum >= 65) {
+                $fecha65 = $day;
+                break;
+            }
+        }
+
+        return [
+            'fecha_60' => $fecha60,
+            'fecha_65' => $fecha65,
+        ];
     }
 
     /**
