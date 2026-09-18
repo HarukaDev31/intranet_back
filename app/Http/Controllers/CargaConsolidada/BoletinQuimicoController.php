@@ -304,6 +304,13 @@ class BoletinQuimicoController extends Controller
 
         try {
             $idContenedor = (int) $request->id_contenedor;
+
+            // La regla "exists:" valida contra la tabla cruda, sin el scope de
+            // organizacion de Eloquent -- se revalida aqui explicitamente.
+            if (!Contenedor::where('id', $idContenedor)->exists()) {
+                return response()->json(['success' => false, 'message' => 'Contenedor no encontrado'], 404);
+            }
+
             $items = $request->input('items', []);
             $saved = [];
 

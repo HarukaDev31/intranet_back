@@ -4,10 +4,18 @@ namespace App\Models\CargaConsolidada;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
 class CotizacionProveedorItemExcelConf extends Model
 {
+    use SincronizaOrganizacionId;
+
     protected $table = 'contenedor_consolidado_cotizacion_proveedores_items_excel_conf';
+
+    protected static function organizacionRelacion(): string
+    {
+        return 'proveedor';
+    }
 
     protected $fillable = [
         'id_cotizacion',

@@ -7,6 +7,7 @@ use App\Services\WhatsApp\WhatsAppCoordinacionBatchService;
 use App\Support\WhatsApp\CoordinacionMediaLink;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Support\WhatsApp\WhatsappEnvironmentPhone;
+use App\Services\Organizacion\OrganizacionMensajeriaService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 
@@ -14,8 +15,139 @@ trait WhatsappTrait
 {
     private $phoneNumberId = null;
 
+    /** @var int|null */
+    protected $whatsappOrganizacionId = null;
+
+    /** @var string|null */
+    protected $whatsappFlujo = null;
+
     /** @var int|null Batch activo (rotulado u otros flujos Meta). */
     protected $whatsappCoordinacionBatchId = null;
+
+    public function setWhatsappOrganizacionId($id): void
+    {
+        $this->whatsappOrganizacionId = $id !== null && $id !== '' ? (int) $id : null;
+    }
+
+    public function setWhatsappFlujo($flujo): void
+    {
+        $this->whatsappFlujo = $flujo !== null && $flujo !== '' ? (string) $flujo : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $extraHints
+     * @return array{status: bool, skipped: bool, response: array}|null
+     */
+    protected function skipWhatsAppIfDisabled(array $extraHints = array())
+    {
+        $hints = array_merge($this->whatsappOrganizacionHints(), $extraHints);
+        $orgId = app(OrganizacionMensajeriaService::class)->resolverOrganizacionId($hints);
+        $this->whatsappOrganizacionId = $orgId;
+        $flujo = '';
+        if (!empty($extraHints['flujo'])) {
+            $flujo = (string) $extraHints['flujo'];
+        } elseif ($this->whatsappFlujo) {
+            $flujo = (string) $this->whatsappFlujo;
+        }
+
+        if (app(OrganizacionMensajeriaService::class)->flujoHabilitado($orgId, $flujo)) {
+            return null;
+        }
+
+        Log::info('WhatsApp omitido: flujo deshabilitado para la organización', [
+            'organizacion_id' => $orgId,
+            'flujo' => $flujo,
+            'hints' => $hints,
+        ]);
+
+        return [
+            'status' => false,
+            'skipped' => true,
+            'response' => ['error' => 'Este envío WhatsApp está deshabilitado para esta organización'],
+        ];
+    }
+
+    /**
+     * Org del cliente/cotización (no la del operador admin), para el switch de envíos.
+     *
+     * @return int
+     */
+    protected function resolveWhatsappOrganizacionId()
+    {
+        $hints = $this->whatsappOrganizacionHints();
+
+        return app(OrganizacionMensajeriaService::class)->resolverOrganizacionId($hints);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function whatsappOrganizacionHints()
+    {
+        $hints = array();
+        if ($this->whatsappOrganizacionId !== null && (int) $this->whatsappOrganizacionId > 0) {
+            $hints['organizacion_id'] = (int) $this->whatsappOrganizacionId;
+        }
+
+        $propMap = array(
+            'idCotizacion' => 'id_cotizacion',
+            'id_cotizacion' => 'id_cotizacion',
+            'idContainer' => 'id_contenedor',
+            'idContenedor' => 'id_contenedor',
+            'id_container' => 'id_contenedor',
+            'id_contenedor' => 'id_contenedor',
+            'deliveryFormId' => 'delivery_form_id',
+            'delivery_form_id' => 'delivery_form_id',
+        );
+        foreach ($propMap as $prop => $hintKey) {
+            if (!property_exists($this, $prop)) {
+                continue;
+            }
+            $value = $this->{$prop};
+            if ($value !== null && $value !== '' && (int) $value > 0) {
+                $hints[$hintKey] = (int) $value;
+            }
+        }
+
+        if (property_exists($this, 'cotizacionInfo') && is_object($this->cotizacionInfo)) {
+            $org = (int) $this->cotizacionInfo->getAttribute('organizacion_id');
+            if ($org > 0) {
+                $hints['organizacion_id'] = $org;
+            }
+            $idCot = (int) $this->cotizacionInfo->getAttribute('id');
+            if ($idCot > 0) {
+                $hints['id_cotizacion'] = $idCot;
+            }
+        }
+
+        try {
+            $request = request();
+            if ($request) {
+                foreach (array('idCotizacion', 'id_cotizacion', 'idContainer', 'idContenedor', 'id_contenedor', 'id_container') as $key) {
+                    $raw = $request->input($key);
+                    if ($raw === null || $raw === '') {
+                        $raw = $request->route($key);
+                    }
+                    if ($raw !== null && $raw !== '' && (int) $raw > 0) {
+                        if (stripos($key, 'cotiz') !== false) {
+                            $hints['id_cotizacion'] = (int) $raw;
+                        } else {
+                            $hints['id_contenedor'] = (int) $raw;
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // Jobs sin request.
+        }
+
+        $user = auth()->user();
+        if ($user) {
+            $hints['auth_organizacion_id'] = (int) $user->getAttribute('ID_Organizacion');
+        }
+
+        return $hints;
+    }
 
     public function setWhatsAppCoordinacionBatchId(?int $batchId): void
     {
@@ -189,6 +321,15 @@ trait WhatsappTrait
 
     private function _callApi($endpoint, $data)
     {
+        $extra = array();
+        if (!empty($data['phoneNumberId'])) {
+            $extra['phone'] = $data['phoneNumberId'];
+        }
+        $skipped = $this->skipWhatsAppIfDisabled($extra);
+        if ($skipped !== null) {
+            return $skipped;
+        }
+
         try {
             $url = 'https://redis.probusiness.pe/api/whatsapp' . $endpoint;
 
@@ -297,6 +438,11 @@ trait WhatsappTrait
     {
         $phoneNumberId = $this->resolvePhoneNumberForWhatsApp($phoneNumberId ? $phoneNumberId : $this->phoneNumberId);
 
+        $skipped = $this->skipWhatsAppIfDisabled(array('phone' => $phoneNumberId));
+        if ($skipped !== null) {
+            return $skipped;
+        }
+
         if ($this->shouldRouteCoordinacionToMeta('consolidado') && $phoneNumberId) {
             $welcomeText = self::buildWelcomeRotuladoMessageText($carga);
 
@@ -319,6 +465,11 @@ trait WhatsappTrait
     {
         try {
             $phoneNumberId = $this->resolvePhoneNumberForWhatsApp($phoneNumberId ? $phoneNumberId : $this->phoneNumberId);
+
+            $skipped = $this->skipWhatsAppIfDisabled(array('phone' => $phoneNumberId));
+            if ($skipped !== null) {
+                return $skipped;
+            }
 
             if ($this->shouldRouteCoordinacionToMeta('consolidado')) {
                 return $this->sendMedia(
@@ -402,6 +553,11 @@ trait WhatsappTrait
     public function sendMessage($message, $phoneNumberId = null, $sleep = 0, $fromNumber = 'consolidado', $meta = null, $mentioned = null): array
     {
         $phoneNumberId = $this->resolvePhoneNumberForWhatsApp($phoneNumberId ? $phoneNumberId : $this->phoneNumberId);
+
+        $skipped = $this->skipWhatsAppIfDisabled(array('phone' => $phoneNumberId));
+        if ($skipped !== null) {
+            return $skipped;
+        }
 
         if ($this->shouldRouteCoordinacionToMeta($fromNumber)) {
             if (is_array($meta) && !empty($meta['template'])) {
@@ -494,6 +650,11 @@ trait WhatsappTrait
         try {
             $phoneNumberId = $this->resolvePhoneNumberForWhatsApp($phoneNumberId ? $phoneNumberId : $this->phoneNumberId);
 
+            $skipped = $this->skipWhatsAppIfDisabled(array('phone' => $phoneNumberId));
+            if ($skipped !== null) {
+                return $skipped;
+            }
+
             if ($this->shouldRouteCoordinacionToMeta($fromNumber)) {
                 if (is_array($meta) && !empty($meta['template'])) {
                     $meta['phone'] = $meta['phone'] ?? $phoneNumberId;
@@ -520,8 +681,21 @@ trait WhatsappTrait
 
                     return $this->queueCoordinacionWhatsApp($meta);
                 }
+                if (
+                    is_array($meta)
+                    && (string) ($meta['type'] ?? '') === 'legacy_media'
+                ) {
+                    $meta['phone'] = $meta['phone'] ?? $phoneNumberId;
+                    $meta['sleep'] = $meta['sleep'] ?? $sleep;
+                    $meta['path'] = $meta['path'] ?? $filePath;
+                    $meta['mimeType'] = $meta['mimeType'] ?? $mimeType;
+                    $meta['caption'] = $meta['caption'] ?? $message;
+                    $meta['fileName'] = $meta['fileName'] ?? ($fileName ?? basename($filePath));
+
+                    return $this->queueCoordinacionWhatsApp($meta);
+                }
                 if (config('meta_whatsapp.legacy_fallback', true)) {
-                    return $this->queueCoordinacionWhatsApp([
+                    $legacy = [
                         'type' => 'legacy_media',
                         'path' => $filePath,
                         'mimeType' => $mimeType,
@@ -529,7 +703,17 @@ trait WhatsappTrait
                         'fileName' => $fileName ?? basename($filePath),
                         'phone' => $phoneNumberId,
                         'sleep' => $sleep,
-                    ]);
+                    ];
+                    if (is_array($meta)) {
+                        if (!empty($meta['_batch_step'])) {
+                            $legacy['_batch_step'] = $meta['_batch_step'];
+                        }
+                        if (!empty($meta['_batch_label'])) {
+                            $legacy['_batch_label'] = $meta['_batch_label'];
+                        }
+                    }
+
+                    return $this->queueCoordinacionWhatsApp($legacy);
                 }
             }
 
@@ -764,7 +948,8 @@ trait WhatsappTrait
     }
 
     /**
-     * ¿Enrutar sendMessage/sendMedia de coordinación al job Meta + Bitrix?
+     * ¿Enrutar sendMessage/sendMedia de coordinación al job Meta + inbox?
+     * Socio sin keys propias usa las de org 1 (.env / panel).
      */
     protected function shouldRouteCoordinacionToMeta(string $fromNumber): bool
     {
@@ -772,7 +957,13 @@ trait WhatsappTrait
             return false;
         }
 
-        return (bool) config('meta_whatsapp.coordinacion_enabled', false);
+        $orgId = $this->resolveWhatsappOrganizacionId();
+        if ($orgId <= 0) {
+            $orgId = 1;
+        }
+
+        return app(\App\Services\WhatsappInbox\WhatsappInboxOrgConfigService::class)
+            ->isEnabledForOutbound($orgId);
     }
 
     /**
@@ -786,6 +977,16 @@ trait WhatsappTrait
      */
     public function queueCoordinacionWhatsApp(array $payload, ?string $stepKey = null, ?string $label = null): array
     {
+        $skipped = $this->skipWhatsAppIfDisabled(array(
+            'phone' => $payload['phone'] ?? null,
+            'id_cotizacion' => $payload['id_cotizacion'] ?? null,
+            'organizacion_id' => $payload['_organizacion_id'] ?? null,
+            'flujo' => $payload['_flujo'] ?? $this->whatsappFlujo,
+        ));
+        if ($skipped !== null) {
+            return $skipped;
+        }
+
         if (isset($payload['_batch_step'], $payload['_batch_label'])) {
             $stepKey = (string) $payload['_batch_step'];
             $label = (string) $payload['_batch_label'];
@@ -806,6 +1007,14 @@ trait WhatsappTrait
             ];
         }
         $payload = $materialized;
+
+        $orgId = $this->resolveWhatsappOrganizacionId();
+        if ($orgId > 0) {
+            $payload['_organizacion_id'] = $orgId;
+        }
+        if ($this->whatsappFlujo) {
+            $payload['_flujo'] = $this->whatsappFlujo;
+        }
 
         if (empty($payload['_domain'])) {
             if (property_exists($this, 'domain') && !empty($this->domain)) {

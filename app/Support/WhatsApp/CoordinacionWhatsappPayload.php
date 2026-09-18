@@ -3,6 +3,7 @@
 namespace App\Support\WhatsApp;
 
 use App\Models\CargaConsolidada\CotizacionProveedor;
+use App\Support\Organizacion\OrganizacionPortalUrls;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -39,24 +40,23 @@ class CoordinacionWhatsappPayload
     private const DOCS_RECORDATORIO_PROVEEDOR = 'pb_docs_recordatorio_proveedor_v1';
 
     /**
-     * Base del formulario web Excel de confirmación (APP_URL_EXCEL_CONFIRMACION o APP_URL_CLIENTES).
+     * Base del formulario web Excel de confirmación (portal de la org o fallback .env).
+     *
+     * @param  mixed  $organizacionId
      */
-    public static function excelConfirmacionBaseUrl(): string
+    public static function excelConfirmacionBaseUrl($organizacionId = null): string
     {
-        $base = rtrim(trim((string) config('app.url_excel_confirmacion', '')), '/');
-        if ($base !== '') {
-            return $base;
-        }
-
-        return rtrim(trim((string) config('app.url_clientes', '')), '/');
+        return OrganizacionPortalUrls::urlExcelConfirmacion($organizacionId);
     }
 
     /**
      * URL del formulario web de Excel de confirmación (corrige http:/ → http://).
+     *
+     * @param  mixed  $organizacionId
      */
-    public static function buildExcelConfirmacionUrl(string $uuid, ?string $codeSupplier = null): string
+    public static function buildExcelConfirmacionUrl(string $uuid, ?string $codeSupplier = null, $organizacionId = null): string
     {
-        $base = self::excelConfirmacionBaseUrl();
+        $base = self::excelConfirmacionBaseUrl($organizacionId);
         if ($base === '') {
             return self::normalizeExternalUrl(ltrim($uuid, '/'));
         }
@@ -72,10 +72,12 @@ class CoordinacionWhatsappPayload
 
     /**
      * URL del formulario datos proveedor (corrige http:/ → http://).
+     *
+     * @param  mixed  $organizacionId
      */
-    public static function buildDatosProveedorUrl(string $uuid): string
+    public static function buildDatosProveedorUrl(string $uuid, $organizacionId = null): string
     {
-        $base = rtrim(trim((string) env('APP_URL_DATOS_PROVEEDOR', '')), '/');
+        $base = OrganizacionPortalUrls::urlDatosProveedor($organizacionId);
         if ($base === '') {
             return self::normalizeExternalUrl(ltrim($uuid, '/'));
         }
@@ -476,7 +478,7 @@ class CoordinacionWhatsappPayload
     private static function rebuildExcelConfirmacionLinkForProveedor(int $idProveedor): ?string
     {
         $proveedor = CotizacionProveedor::query()
-            ->with(['cotizacion:id,uuid'])
+            ->with(['cotizacion:id,uuid,organizacion_id'])
             ->find($idProveedor);
 
         if ($proveedor === null) {
@@ -489,7 +491,31 @@ class CoordinacionWhatsappPayload
         }
 
         // Link de intranet a nivel cotización (todos los proveedores en el mismo formulario).
-        return self::buildExcelConfirmacionUrl($uuid);
+        return self::buildExcelConfirmacionUrl(
+            $uuid,
+            null,
+            OrganizacionPortalUrls::orgIdFromParent($proveedor)
+        );
+    }
+
+    /**
+     * @param  array<int, int>  $proveedorIds
+     * @return int|null
+     */
+    private static function orgIdFromExcelRecordatorio(array $proveedorIds)
+    {
+        foreach ($proveedorIds as $idProveedor) {
+            $id = (int) $idProveedor;
+            if ($id <= 0) {
+                continue;
+            }
+            $orgId = (int) CotizacionProveedor::where('id', $id)->value('organizacion_id');
+            if ($orgId > 0) {
+                return $orgId;
+            }
+        }
+
+        return null;
     }
 
     public static function resolveExcelConfirmacionIntranetLink(int $idProveedor): ?string
@@ -888,7 +914,8 @@ class CoordinacionWhatsappPayload
             $linkWeb = $uuid !== ''
                 ? self::buildExcelConfirmacionUrl(
                     $uuid,
-                    count($agg['excel_codes']) === 1 ? $agg['excel_codes'][0] : null
+                    count($agg['excel_codes']) === 1 ? $agg['excel_codes'][0] : null,
+                    self::orgIdFromExcelRecordatorio($agg['excel_ids'])
                 )
                 : $empty;
 
@@ -1469,6 +1496,22 @@ class CoordinacionWhatsappPayload
         int $sleep = 0
     ): array {
         return self::template($phone, 'pb_proveedor_datos_guardado_completo_v1', [], $bitrixMessage, $sleep);
+    }
+
+    public static function retrasoEntrega(
+        string $phone,
+        string $codeSupplier,
+        string $fecha,
+        string $bitrixMessage,
+        int $sleep = 0
+    ): array {
+        $payload = self::template($phone, 'pb_retraso_entrega_v1', [
+            'code_supplier' => $codeSupplier,
+            'fecha' => $fecha,
+        ], $bitrixMessage, $sleep);
+        $payload['_force_template'] = true;
+
+        return $payload;
     }
 
     public static function generalCliente(string $phone, string $mensaje, string $bitrixMessage, int $sleep = 0): array

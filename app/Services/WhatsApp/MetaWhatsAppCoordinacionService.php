@@ -100,8 +100,10 @@ class MetaWhatsAppCoordinacionService
             }
         }
 
-        $phoneNumberId = (string) config('meta_whatsapp.phone_number_id');
-        $version = (string) config('meta_whatsapp.graph_api_version', 'v19.0');
+        $orgId = isset($inboxContext['organizacion_id']) ? (int) $inboxContext['organizacion_id'] : 1;
+        $creds = app(\App\Services\WhatsappInbox\WhatsappInboxOrgConfigService::class)->credentials($orgId);
+        $phoneNumberId = (string) $creds['phone_number_id'];
+        $version = (string) ($creds['graph_api_version'] ?: 'v19.0');
         $url = "https://graph.facebook.com/{$version}/{$phoneNumberId}/messages";
 
         $components = [];
@@ -157,7 +159,7 @@ class MetaWhatsAppCoordinacionService
         ]);
 
         $response = Http::timeout(60)
-            ->withToken((string) config('meta_whatsapp.access_token'))
+            ->withToken((string) $creds['access_token'])
             ->acceptJson()
             ->asJson()
             ->post($url, $body);

@@ -4,9 +4,14 @@ namespace App\Models\BaseDatos\Clientes;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\Entidad;
+use App\Models\Usuario;
+use App\Models\CargaConsolidada\Scopes\OrganizacionScope;
+use App\Support\CargaConsolidada\CargaLabel;
+use App\Support\CargaConsolidada\ClientesVisibility;
 
 class Cliente extends Model
 {
@@ -21,12 +26,30 @@ class Cliente extends Model
         'telefono',
         'fecha',
         'id_cliente_importacion',
+        'organizacion_id',
         'id'
     ];
 
     protected $casts = [
         'fecha' => 'date',
     ];
+
+    protected static function booted()
+    {
+        static::addGlobalScope(new OrganizacionScope());
+
+        static::creating(function ($model) {
+            if ($model->organizacion_id !== null) {
+                return;
+            }
+            $usuario = Auth::guard('api')->user();
+            if ($usuario instanceof Usuario && $usuario->getAttribute('ID_Organizacion')) {
+                $model->organizacion_id = (int) $usuario->getAttribute('ID_Organizacion');
+                return;
+            }
+            $model->organizacion_id = 1;
+        });
+    }
 
     /**
      * Intentar resolver la entidad asociada al cliente mediante heurística
@@ -106,49 +129,50 @@ class Cliente extends Model
         }
 
         // Buscar en contenedor_consolidado_cotizacion
+        $usuarioActual = Auth::guard('api')->user();
+        $organizacionIds = $usuarioActual instanceof Usuario ? $usuarioActual->organizacionesPermitidas() : [];
+
         $cotizacion = DB::table('contenedor_consolidado_cotizacion')
             ->join('carga_consolidada_contenedor', 'contenedor_consolidado_cotizacion.id_contenedor', '=', 'carga_consolidada_contenedor.id')
+            ->whereIn('contenedor_consolidado_cotizacion.organizacion_id', $organizacionIds)
             ->whereNotNull('estado_cliente')
-            ->whereNull('contenedor_consolidado_cotizacion.deleted_at')
-            ->where('estado_cotizador', 'CONFIRMADO')
-            ->where(function ($query) {
-                // Validar que el teléfono no sea nulo o vacío antes de procesar
-                if (!empty($this->telefono) && $this->telefono !== null) {
-                    $telefonoLimpio = preg_replace('/[^0-9]/', '', $this->telefono);
-                    $query->where('telefono', 'LIKE', "%{$telefonoLimpio}%")
-                        ->orWhere('telefono', 'LIKE', "%" . str_replace(' ', '', $telefonoLimpio) . "%")
-                        ->orWhere('telefono', 'LIKE', "%51 {$telefonoLimpio}%")
-                        ->orWhere('telefono', 'LIKE', "%51" . str_replace(' ', '', $telefonoLimpio) . "%")
-                        ->orWhere('telefono', 'LIKE', "%51 " . str_replace(' ', '', $telefonoLimpio) . "%");
-                }
-                
-                // Validar que el documento no sea nulo o vacío antes de procesar
-                if (!empty($this->documento) && $this->documento !== null) {
-                    $query->orWhere('documento', $this->documento);
-                }
-                
-                // Validar que el correo no sea nulo o vacío antes de procesar
-                if (!empty($this->correo) && $this->correo !== null) {
-                    $query->orWhere(function($q) {
-                        $q->whereNotNull('correo')
-                          ->where('correo', '!=', '')
-                          ->where('correo', $this->correo);
-                    });
-                }
-            })
+            ->whereNull('contenedor_consolidado_cotizacion.deleted_at');
+        ClientesVisibility::applyConfirmadoParaBd($cotizacion, '');
+        ClientesVisibility::applyMatchCliente($cotizacion, $this);
+        $cotizacion = $cotizacion
             ->orderBy('fecha', 'asc')
             ->orderByRaw('CAST(carga_consolidada_contenedor.carga AS UNSIGNED)')
+            ->select(
+                'contenedor_consolidado_cotizacion.fecha',
+                'carga_consolidada_contenedor.carga as carga_contenedor'
+            )
             ->first();
 
         if ($cotizacion) {
+            $carga = $cotizacion->carga_contenedor ?? '';
             return [
                 'servicio' => 'Consolidado',
+                'detalle' => self::detalleCarga($carga, $cotizacion->fecha),
+                'carga' => $carga,
                 'fecha' => $cotizacion->fecha,
                 'categoria' => $this->determinarCategoria($cotizacion->fecha)
             ];
         }
 
         return null;
+    }
+
+    /**
+     * Número de consolidado para BD clientes: 6-2026. Sin prefijo de país.
+     *
+     * @param mixed $carga
+     * @param mixed $fecha
+     * @param mixed $iso2 Ignorado.
+     * @return string
+     */
+    public static function detalleCarga($carga, $fecha = null, $iso2 = null)
+    {
+        return CargaLabel::format($carga, $fecha);
     }
 
     /**
@@ -208,65 +232,36 @@ class Cliente extends Model
         }
 
         // Buscar en contenedor_consolidado_cotizacion
+        $usuarioActualServicios = Auth::guard('api')->user();
+        $organizacionIdsServicios = $usuarioActualServicios instanceof Usuario ? $usuarioActualServicios->organizacionesPermitidas() : [];
+
         $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
             ->join('carga_consolidada_contenedor', 'contenedor_consolidado_cotizacion.id_contenedor', '=', 'carga_consolidada_contenedor.id')
+            ->whereIn('contenedor_consolidado_cotizacion.organizacion_id', $organizacionIdsServicios)
             ->whereNotNull('contenedor_consolidado_cotizacion.estado_cliente')
-            ->whereNull('contenedor_consolidado_cotizacion.deleted_at')
-            ->where('contenedor_consolidado_cotizacion.estado_cotizador', 'CONFIRMADO')
-            //has one provider at least
-            ->where(function ($query) {
-                Log::info('Telefono: ' . $this->telefono);
-                if (!empty($this->telefono) && $this->telefono !== null) {
-                    $telefonoLimpio = preg_replace('/[^0-9]/', '', $this->telefono);
-                    
-                    // Remover el código de país "51" si existe al inicio
-                    $telefonoSinCodigo = preg_replace('/^51/', '', $telefonoLimpio);
-                    
-                    // Buscar por teléfono completo o sin código de país
-                    $query->where(function($q) use ($telefonoLimpio, $telefonoSinCodigo) {
-                        $q->where(DB::raw('REPLACE(REPLACE(telefono, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%")
-                          ->orWhere(DB::raw('REPLACE(REPLACE(telefono, " ", ""), "-", "")'), 'LIKE', "%{$telefonoSinCodigo}%");
-                    });
-                }
-                
-                // Validar que el documento no sea nulo o vacío antes de procesar
-                if (!empty($this->documento) && $this->documento !== null) {
-                    $query->orWhere(function($q) {
-                        $q->whereNotNull('documento')
-                          ->where('documento', '!=', '')
-                          ->where('documento', $this->documento);
-                    });
-                }
-                
-                // Validar que el correo no sea nulo o vacío antes de procesar
-                if (!empty($this->correo) && $this->correo !== null) {
-                    $query->orWhere(function($q) {
-                        $q->whereNotNull('correo')
-                          ->where('correo', '!=', '')
-                          ->where('correo', $this->correo);
-                    });
-                }
-            })
-       
+            ->whereNull('contenedor_consolidado_cotizacion.deleted_at');
+        ClientesVisibility::applyConfirmadoParaBd($cotizaciones, 'contenedor_consolidado_cotizacion');
+        ClientesVisibility::applyMatchCliente($cotizaciones, $this);
+        $cotizaciones = $cotizaciones
             ->orderBy('fecha', 'asc')
             ->orderByRaw('CAST(carga_consolidada_contenedor.carga AS UNSIGNED)')
             ->select(
-                'contenedor_consolidado_cotizacion.*', 
-                'carga_consolidada_contenedor.carga', 
+                'contenedor_consolidado_cotizacion.*',
+                'carga_consolidada_contenedor.carga as carga_contenedor',
                 'carga_consolidada_contenedor.empresa',
                 'carga_consolidada_contenedor.id as id_contenedor'
             )
             ->get();
 
         foreach ($cotizaciones as $cotizacion) {
-            $anioCarga = (int) $cotizacion->carga . '-' . (int) date('Y', strtotime($cotizacion->fecha));
+            $carga = $cotizacion->carga_contenedor ?? $cotizacion->carga ?? '';
             $servicios[] = [
                 'id' => $cotizacion->id,
                 'monto' => $cotizacion->monto,
                 'is_imported' => $cotizacion->id_cliente_importacion ? 1 : 0,
                 'servicio' => 'Consolidado',
-                'detalle' => $anioCarga,
-                'carga' => $cotizacion->carga,
+                'detalle' => self::detalleCarga($carga, $cotizacion->fecha),
+                'carga' => $carga,
                 'empresa' => $cotizacion->empresa,
                 'fecha' => $cotizacion->fecha,
                 'categoria' => $this->determinarCategoria($cotizacion->fecha)
@@ -354,32 +349,17 @@ class Cliente extends Model
         }
 
         // Buscar en contenedor_consolidado_cotizacion
+        $usuarioActualSinCategoria = Auth::guard('api')->user();
+        $organizacionIdsSinCategoria = $usuarioActualSinCategoria instanceof Usuario ? $usuarioActualSinCategoria->organizacionesPermitidas() : [];
+
         $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
             ->join('carga_consolidada_contenedor', 'contenedor_consolidado_cotizacion.id_contenedor', '=', 'carga_consolidada_contenedor.id')
+            ->whereIn('contenedor_consolidado_cotizacion.organizacion_id', $organizacionIdsSinCategoria)
             ->whereNotNull('estado_cliente')
-            ->whereNull('contenedor_consolidado_cotizacion.deleted_at')
-            ->where('estado_cotizador', 'CONFIRMADO')
-            ->where(function ($query) {
-                // Validar que el teléfono no sea nulo o vacío antes de procesar
-                if (!empty($this->telefono) && $this->telefono !== null) {
-                    $query->where(DB::raw('REPLACE(TRIM(telefono), " ", "")'), 'LIKE', "%{$this->telefono}%");
-                }
-                
-                // Validar que el documento no sea nulo o vacío antes de procesar
-                if (!empty($this->documento) && $this->documento !== null) {
-                    $query->orWhere('documento', $this->documento);
-                }
-                
-                // Validar que el correo no sea nulo o vacío antes de procesar
-                if (!empty($this->correo) && $this->correo !== null) {
-                    $query->orWhere(function($q) {
-                        $q->whereNotNull('correo')
-                          ->where('correo', '!=', '')
-                          ->where('correo', $this->correo);
-                    });
-                }
-            })
-            ->where('id_cliente', $this->id)
+            ->whereNull('contenedor_consolidado_cotizacion.deleted_at');
+        ClientesVisibility::applyConfirmadoParaBd($cotizaciones, '');
+        ClientesVisibility::applyMatchCliente($cotizaciones, $this);
+        $cotizaciones = $cotizaciones
             ->orderBy('fecha', 'asc')
             ->orderByRaw('CAST(carga_consolidada_contenedor.carga AS UNSIGNED)')
             ->get();
@@ -507,8 +487,8 @@ class Cliente extends Model
             return $query->whereIn('id', function ($subQuery) {
                 $subQuery->select('id_cliente')
                     ->from('contenedor_consolidado_cotizacion')
-                    ->where('estado_cotizador', 'CONFIRMADO')
                     ->whereNotNull('id_cliente');
+                ClientesVisibility::applyConfirmadoParaBd($subQuery, '');
             });
         }
 
@@ -532,8 +512,9 @@ class Cliente extends Model
                           OR (e.Txt_Email_Entidad IS NOT NULL AND e.Txt_Email_Entidad != \'\' AND e.Txt_Email_Entidad = clientes.correo))
                     ) +
                     (SELECT COUNT(*) FROM contenedor_consolidado_cotizacion 
-                     WHERE estado_cotizador = "CONFIRMADO" 
-                     AND (REPLACE(TRIM(telefono), " ", "") = REPLACE(TRIM(clientes.telefono), " ", "") 
+                     WHERE (estado_cotizador = "CONFIRMADO" OR estado_resumen = "CONFIRMADO")
+                     AND (id_cliente = clientes.id
+                          OR REPLACE(TRIM(telefono), " ", "") = REPLACE(TRIM(clientes.telefono), " ", "") 
                           OR (documento IS NOT NULL AND documento != \'\' AND documento = clientes.documento)
                           OR (correo IS NOT NULL AND correo != \'\' AND correo = clientes.correo))
                     ) = 1
@@ -562,8 +543,9 @@ class Cliente extends Model
                         
                         SELECT fecha as fecha_servicio
                         FROM contenedor_consolidado_cotizacion 
-                        WHERE estado_cotizador = "CONFIRMADO" 
-                        AND (REPLACE(TRIM(telefono), " ", "") = REPLACE(TRIM(clientes.telefono), " ", "") 
+                        WHERE (estado_cotizador = "CONFIRMADO" OR estado_resumen = "CONFIRMADO")
+                        AND (id_cliente = clientes.id
+                             OR REPLACE(TRIM(telefono), " ", "") = REPLACE(TRIM(clientes.telefono), " ", "") 
                              OR documento = clientes.documento 
                              OR (correo IS NOT NULL AND correo != \'\' AND correo = clientes.correo))
                     ) servicios_combinados
@@ -604,8 +586,9 @@ class Cliente extends Model
                     
                     SELECT 1
                     FROM contenedor_consolidado_cotizacion 
-                    WHERE estado_cotizador = "CONFIRMADO" 
-                    AND (REPLACE(TRIM(telefono), " ", "") = REPLACE(TRIM(clientes.telefono), " ", "") 
+                    WHERE (estado_cotizador = "CONFIRMADO" OR estado_resumen = "CONFIRMADO")
+                    AND (id_cliente = clientes.id
+                         OR REPLACE(TRIM(telefono), " ", "") = REPLACE(TRIM(clientes.telefono), " ", "") 
                          OR documento = clientes.documento 
                          OR correo = clientes.correo)
                 ) servicios_combinados

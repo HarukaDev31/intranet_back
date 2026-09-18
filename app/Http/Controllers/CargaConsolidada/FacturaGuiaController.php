@@ -25,6 +25,7 @@ use App\Models\UsuarioDatosFacturacion;
 use App\Helpers\ComprobanteFormResolverHelper;
 use App\Helpers\UserLookupHelper;
 use App\Exports\FacturaGuiaClientesFacturacionExport;
+use App\Support\Organizacion\OrganizacionPortalUrls;
 use Maatwebsite\Excel\Facades\Excel;
 
 class FacturaGuiaController extends Controller
@@ -380,6 +381,10 @@ class FacturaGuiaController extends Controller
             if (!$idCotizacion || !$file || !$file->isValid()) {
                 return response()->json(['success' => false, 'message' => 'idCotizacion y file son requeridos'], 400);
             }
+            $cotizacion = Cotizacion::find($idCotizacion);
+            if (!$cotizacion) {
+                return response()->json(['success' => false, 'message' => 'Cotización no encontrada'], 404);
+            }
             $originalName = $file->getClientOriginalName();
             $fileSize     = $file->getSize();
             $mimeType     = $file->getMimeType();
@@ -388,11 +393,8 @@ class FacturaGuiaController extends Controller
             $storedPath = $this->objectStorage()->storeUploadedFile($file, 'cargaconsolidada/guiaremision/' . $idCotizacion, $storedName);
 
             // legacy: mantener último archivo en la cotización (compatibilidad)
-            $cotizacion = Cotizacion::find($idCotizacion);
-            if ($cotizacion) {
-                $cotizacion->guia_remision_url = $storedName;
-                $cotizacion->save();
-            }
+            $cotizacion->guia_remision_url = $storedName;
+            $cotizacion->save();
 
             // nuevo: guardar item en tabla de guías
             $guia = GuiaRemision::create([
@@ -434,6 +436,9 @@ class FacturaGuiaController extends Controller
 
             if (!$idCotizacion || empty($files) || !is_array($files)) {
                 return response()->json(['success' => false, 'message' => 'idCotizacion y files[] son requeridos'], 400);
+            }
+            if (!Cotizacion::where('id', $idCotizacion)->exists()) {
+                return response()->json(['success' => false, 'message' => 'Cotización no encontrada'], 404);
             }
 
             $created = [];
@@ -877,6 +882,7 @@ class FacturaGuiaController extends Controller
     public function sendFactura($idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('factura_guia');
             $cotizacion = Cotizacion::find($idCotizacion);
 
             if (!$cotizacion) {
@@ -1028,6 +1034,7 @@ class FacturaGuiaController extends Controller
     public function sendGuia($idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('factura_guia');
             $cotizacion = Cotizacion::find($idCotizacion);
 
             if (!$cotizacion) {
@@ -1884,13 +1891,17 @@ Cualquier duda nos escribe.  ¡Gracias! */
     public function enviarFormulario(Request $request, $idContenedor)
     {
         try {
+            $this->setWhatsappFlujo('entrega');
             $cotizacionIds = $request->input('cotizacion_ids', []);
 
             if (empty($cotizacionIds)) {
                 return response()->json(['success' => false, 'message' => 'Debe seleccionar al menos un cliente'], 400);
             }
 
-            $clientesUrlBase = config('app.url_clientes');
+            $contenedor = Contenedor::query()->whereKey($idContenedor)->first();
+            $clientesUrlBase = OrganizacionPortalUrls::urlClientes(
+                OrganizacionPortalUrls::orgIdFromParent($contenedor)
+            );
             $enviados = [];
             $errores  = [];
             $cotizaciones = Cotizacion::whereIn('id', $cotizacionIds)
@@ -2093,6 +2104,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
     public function sendComprobantesContabilidad($idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('contabilidad');
             $cotizacion = Cotizacion::find($idCotizacion);
             if (!$cotizacion) {
                 return response()->json(['success' => false, 'error' => 'Cotización no encontrada'], 404);
@@ -2161,6 +2173,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
     public function sendGuiasContabilidad($idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('contabilidad');
             $cotizacion = Cotizacion::find($idCotizacion);
             if (!$cotizacion) {
                 return response()->json(['success' => false, 'error' => 'Cotización no encontrada'], 404);
@@ -2239,6 +2252,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
     public function sendDetraccionesContabilidad($idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('contabilidad');
             $cotizacion = Cotizacion::find($idCotizacion);
             if (!$cotizacion) {
                 return response()->json(['success' => false, 'error' => 'Cotización no encontrada'], 404);
@@ -2304,6 +2318,7 @@ Cualquier duda nos escribe.  ¡Gracias! */
     public function sendFormularioContabilidad($idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('comprobante_form');
             $cotizacion = Cotizacion::with('contenedor')->find($idCotizacion);
             if (!$cotizacion) {
                 return response()->json(['success' => false, 'error' => 'Cotización no encontrada'], 404);
@@ -2319,7 +2334,9 @@ Cualquier duda nos escribe.  ¡Gracias! */
             $numeroWhatsapp = $telefono . '@c.us';
 
             $idContenedor = $cotizacion->id_contenedor;
-            $clientesUrlBase = config('app.url_clientes');
+            $clientesUrlBase = OrganizacionPortalUrls::urlClientes(
+                OrganizacionPortalUrls::orgIdFromParent($cotizacion)
+            );
             $datosFacturacion = $this->getDatosFacturacionParaMensaje($cotizacion);
             $message = $datosFacturacion
                 ? $this->buildMensajeFormularioAntiguo($cotizacion, $datosFacturacion)

@@ -4,10 +4,12 @@ namespace App\Models\CargaConsolidada;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
 class CotizacionDocumentacion extends Model
 {
     use HasFactory;
+    use SincronizaOrganizacionId;
 
     /**
      * La tabla asociada al modelo.
@@ -16,6 +18,11 @@ class CotizacionDocumentacion extends Model
      */
     protected $table = 'contenedor_consolidado_cotizacion_documentacion';
     public $timestamps = false;
+
+    protected static function organizacionRelacion(): string
+    {
+        return 'cotizacion';
+    }
 
     /**
      * Los atributos que son asignables masivamente.

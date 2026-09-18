@@ -19,12 +19,17 @@ class WhatsappInboxSendService
     /** @var WhatsappInboxMessageService */
     protected $messageService;
 
+    /** @var WhatsappInboxOrgConfigService */
+    protected $orgConfig;
+
     public function __construct(
         MetaWhatsAppCoordinacionService $metaService,
-        WhatsappInboxMessageService $messageService
+        WhatsappInboxMessageService $messageService,
+        WhatsappInboxOrgConfigService $orgConfig
     ) {
         $this->metaService = $metaService;
         $this->messageService = $messageService;
+        $this->orgConfig = $orgConfig;
     }
 
     /**
@@ -69,13 +74,14 @@ class WhatsappInboxSendService
                 && isset($message->template_params['_header']),
         ]);
 
+        $creds = $this->credentialsForMessage($message);
         if ($message->message_type === 'template') {
-            $result = $this->sendTemplateMessage($message, $phone);
+            $result = $this->sendTemplateMessage($message, $phone, $creds);
         } elseif (in_array($message->message_type, ['image', 'video', 'document', 'audio'], true)) {
-            $result = $this->sendMediaMessage($message, $phone);
+            $result = $this->sendMediaMessage($message, $phone, $creds);
         } else {
             $contextId = $this->extractReplyContextId($message);
-            $result = $this->sendTextMessage($phone, (string) $message->body, $contextId);
+            $result = $this->sendTextMessage($phone, (string) $message->body, $contextId, $creds);
         }
 
         if (!empty($result['success'])) {
@@ -121,23 +127,24 @@ class WhatsappInboxSendService
      * @param  string|null  $replyToMetaMessageId
      * @return array{success: bool, response?: mixed, error?: string}
      */
-    private function sendTextMessage($phoneE164, $text, $replyToMetaMessageId = null)
+    private function sendTextMessage($phoneE164, $text, $replyToMetaMessageId = null, array $creds = null)
     {
-        if (!config('meta_whatsapp.coordinacion_enabled')) {
+        $creds = $creds ?: $this->orgConfig->credentials(1);
+        if (empty($creds['enabled'])) {
             WaInboxLog::warning('sendText.coordinacion_disabled', ['phone_e164' => $phoneE164]);
 
-            return ['success' => false, 'error' => 'Meta coordinación deshabilitado'];
+            return ['success' => false, 'error' => 'WhatsApp no está activo para esta organización'];
         }
 
-        $token = (string) config('meta_whatsapp.access_token');
+        $token = (string) $creds['access_token'];
         if ($token === '') {
             WaInboxLog::error('sendText.missing_token', ['phone_e164' => $phoneE164]);
 
-            return ['success' => false, 'error' => 'META_WHATSAPP_ACCESS_TOKEN no configurado'];
+            return ['success' => false, 'error' => 'Falta el token de acceso de WhatsApp'];
         }
 
-        $phoneNumberId = (string) config('meta_whatsapp.phone_number_id');
-        $version = (string) config('meta_whatsapp.graph_api_version', 'v19.0');
+        $phoneNumberId = (string) $creds['phone_number_id'];
+        $version = (string) ($creds['graph_api_version'] ?: 'v19.0');
         $url = "https://graph.facebook.com/{$version}/{$phoneNumberId}/messages";
 
         $payload = [
@@ -184,7 +191,7 @@ class WhatsappInboxSendService
      * @param  string  $phoneE164
      * @return array{success: bool, response?: mixed, error?: string}
      */
-    private function sendMediaMessage(WaInboxMessage $message, $phoneE164)
+    private function sendMediaMessage(WaInboxMessage $message, $phoneE164, array $creds = null)
     {
         $link = CoordinacionMediaLink::urlForMetaSend($message->media_url);
         if ($link === null || $link === '') {
@@ -196,17 +203,18 @@ class WhatsappInboxSendService
         $filename = $this->extractMediaFilename($message);
         $contextId = $this->extractReplyContextId($message);
 
-        if (!config('meta_whatsapp.coordinacion_enabled')) {
-            return ['success' => false, 'error' => 'Meta coordinación deshabilitado'];
+        $creds = $creds ?: $this->credentialsForMessage($message);
+        if (empty($creds['enabled'])) {
+            return ['success' => false, 'error' => 'WhatsApp no está activo para esta organización'];
         }
 
-        $token = (string) config('meta_whatsapp.access_token');
+        $token = (string) $creds['access_token'];
         if ($token === '') {
-            return ['success' => false, 'error' => 'META_WHATSAPP_ACCESS_TOKEN no configurado'];
+            return ['success' => false, 'error' => 'Falta el token de acceso de WhatsApp'];
         }
 
-        $phoneNumberId = (string) config('meta_whatsapp.phone_number_id');
-        $version = (string) config('meta_whatsapp.graph_api_version', 'v19.0');
+        $phoneNumberId = (string) $creds['phone_number_id'];
+        $version = (string) ($creds['graph_api_version'] ?: 'v19.0');
         $url = "https://graph.facebook.com/{$version}/{$phoneNumberId}/messages";
 
         $payload = [
@@ -316,7 +324,7 @@ class WhatsappInboxSendService
      * @param  array<string, mixed>  $templateParams
      * @return array{success: bool, meta_message_id?: string|null, error?: string, response?: mixed}
      */
-    public function dispatchMetaTemplate($phoneE164, $templateName, array $templateParams)
+    public function dispatchMetaTemplate($phoneE164, $templateName, array $templateParams, $organizacionId = 0)
     {
         $header = isset($templateParams['_header']) && is_array($templateParams['_header'])
             ? $templateParams['_header']
@@ -333,6 +341,16 @@ class WhatsappInboxSendService
         }
 
         $requiredHeaderFormat = $templateService->getTemplateHeaderFormat($templateName);
+        if ($requiredHeaderFormat === null && is_array($header) && !empty($header['type'])) {
+            $inferred = strtoupper((string) $header['type']);
+            if ($inferred === 'IMAGE') {
+                $requiredHeaderFormat = 'IMAGE';
+            } elseif ($inferred === 'VIDEO') {
+                $requiredHeaderFormat = 'VIDEO';
+            } elseif (in_array($inferred, ['DOCUMENT', 'FILE'], true)) {
+                $requiredHeaderFormat = 'DOCUMENT';
+            }
+        }
 
         WaInboxLog::info('dispatchMetaTemplate.start', [
             'phone_e164' => $phoneE164,
@@ -392,20 +410,24 @@ class WhatsappInboxSendService
             'header_type' => is_array($header) && isset($header['type']) ? $header['type'] : null,
         ]);
 
+        $orgId = (int) $organizacionId;
+        $creds = $this->orgConfig->credentialsForOutbound($orgId > 0 ? $orgId : 1);
         $result = WhatsappInboxOutboundRecorder::runWhileSuppressed(function () use (
             $phoneE164,
             $templateName,
             $bodyParams,
             $header,
-            $requiredHeaderFormat
+            $requiredHeaderFormat,
+            $creds
         ) {
             return $this->metaService->sendMetaTemplate(
                 $phoneE164,
                 $templateName,
-                (string) config('meta_whatsapp.default_language', 'es_PE'),
+                (string) ($creds['default_language'] ?: 'es_PE'),
                 $bodyParams,
                 $header,
-                $requiredHeaderFormat !== null
+                $requiredHeaderFormat !== null,
+                ['organizacion_id' => (int) $creds['organizacion_id']]
             );
         });
 
@@ -451,12 +473,18 @@ class WhatsappInboxSendService
      * @param  string  $phoneE164
      * @return array{success: bool, response?: mixed, error?: string}
      */
-    private function sendTemplateMessage(WaInboxMessage $message, $phoneE164)
+    private function sendTemplateMessage(WaInboxMessage $message, $phoneE164, array $creds = null)
     {
         $templateName = (string) $message->template_name;
         $params = is_array($message->template_params) ? $message->template_params : [];
+        $creds = $creds ?: $this->credentialsForMessage($message);
 
-        $result = $this->dispatchMetaTemplate($phoneE164, $templateName, $params);
+        $result = $this->dispatchMetaTemplate(
+            $phoneE164,
+            $templateName,
+            $params,
+            (int) $creds['organizacion_id']
+        );
 
         if (!empty($result['success'])) {
             return [
@@ -501,5 +529,30 @@ class WhatsappInboxSendService
     private function formatMetaError($httpStatus, $json)
     {
         return WaInboxMetaError::userMessage($httpStatus, $json);
+    }
+
+    /**
+     * @param  WaInboxMessage  $message
+     * @return array<string, mixed>
+     */
+    private function credentialsForMessage(WaInboxMessage $message)
+    {
+        $conversation = $message->conversation;
+        $orgId = 1;
+        if ($conversation) {
+            if ((int) $conversation->organizacion_id > 0) {
+                $orgId = (int) $conversation->organizacion_id;
+            } else {
+                if (!$conversation->relationLoaded('session')) {
+                    $conversation->load('session');
+                }
+                $session = $conversation->session;
+                if ($session && (int) $session->organizacion_id > 0) {
+                    $orgId = (int) $session->organizacion_id;
+                }
+            }
+        }
+
+        return $this->orgConfig->credentialsForOutbound($orgId);
     }
 }

@@ -3,9 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Tymon\JWTAuth\Contracts\JWTSubject;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 
+/**
+ * @property-read Grupo|null $grupo
+ */
 class Usuario extends Authenticatable implements JWTSubject
 {
     protected $table = 'usuario';
@@ -25,6 +29,19 @@ class Usuario extends Authenticatable implements JWTSubject
     const ROL_PM = 'PM';
     const ROL_FINANZAS = 'Finanzas';
     const ROL_RRHH = 'RRHH';
+    const ROL_SOCIO = 'Socio';
+    const ROL_GERENTE_GENERAL = 'GERENTE GENERAL';
+    const ID_ORGANIZACION_ADMIN = 1;
+
+    /**
+     * Roles que operan fisicamente para todas las organizaciones a la vez
+     * (ej. el almacen de China recibe carga de cualquier organizacion) y por
+     * eso necesitan ver y editar datos cross-org, sin depender de filas en
+     * grupo_usuario por cada organizacion nueva que se cree.
+     */
+    const ROLES_VISIBILIDAD_GLOBAL = [
+        self::ROL_ALMACEN_CHINA,
+    ];
     protected $fillable = [
         'No_Usuario',
         'No_Password',
@@ -51,6 +68,9 @@ class Usuario extends Authenticatable implements JWTSubject
         'No_Password',
     ];
     const ID_JEFE_VENTAS = 28791;
+
+    /** @var array<int, int>|null Memo en memoria de organizacionesPermitidas() para este request. */
+    private $organizacionesPermitidasMemo = null;
 
     /**
      * Get the identifier that will be stored in the subject claim of the JWT.
@@ -89,9 +109,73 @@ class Usuario extends Authenticatable implements JWTSubject
     }
 
     /**
+     * IDs de organización a las que el usuario tiene acceso, resueltos en vivo
+     * desde grupo_usuario (un usuario puede tener una fila por organización).
+     * No se cachea en el token: si le quitan acceso a una organización, se
+     * corta en la siguiente request. Se memoiza solo en memoria de este
+     * request para no repetir la query dentro del mismo ciclo.
+     *
+     * @return array<int, int>
+     */
+    public function organizacionesPermitidas(): array
+    {
+        if ($this->organizacionesPermitidasMemo !== null) {
+            return $this->organizacionesPermitidasMemo;
+        }
+
+        if (in_array($this->getNombreGrupo(), self::ROLES_VISIBILIDAD_GLOBAL, true)
+            || $this->puedeVerContenedoresDeOtrasOrgs()
+        ) {
+            return $this->organizacionesPermitidasMemo = Organizacion::query()
+                ->where('Nu_Estado', 1)
+                ->pluck('ID_Organizacion')
+                ->map(fn ($id) => (int) $id)
+                ->values()
+                ->all();
+        }
+
+        $ids = GrupoUsuario::query()
+            ->where('ID_Usuario', $this->getKey())
+            ->whereNotNull('ID_Organizacion')
+            ->distinct()
+            ->pluck('ID_Organizacion')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+
+        $idOrganizacionPropia = $this->getAttribute('ID_Organizacion');
+        if ($ids === [] && $idOrganizacionPropia !== null) {
+            $ids = [(int) $idOrganizacionPropia];
+        }
+
+        return $this->organizacionesPermitidasMemo = $ids;
+    }
+
+    /**
+     * Coordinación / Documentación / Jefe de org 1 ven contenedores de socios.
+     * El mismo rol en org ≠ 1 solo ve la suya.
+     */
+    public function puedeVerContenedoresDeOtrasOrgs(): bool
+    {
+        if ((int) $this->getAttribute('ID_Organizacion') !== self::ID_ORGANIZACION_ADMIN) {
+            return false;
+        }
+
+        $rol = $this->getNombreGrupo();
+        if (self::rolEquivaleJefeImportacion($rol)) {
+            return true;
+        }
+
+        return in_array($rol, [
+            self::ROL_COORDINACION,
+            self::ROL_DOCUMENTACION,
+        ], true);
+    }
+
+    /**
      * Relación directa con Grupo
      */
-    public function grupo()
+    public function grupo(): BelongsTo
     {
         return $this->belongsTo(Grupo::class, 'ID_Grupo', 'ID_Grupo');
     }
@@ -231,31 +315,39 @@ class Usuario extends Authenticatable implements JWTSubject
         return trim((string) $this->getNombreGrupo()) === self::ROL_RRHH;
     }
 
-    public static function rolesConAccesoWhatsappInbox()
-    {
-        return array_values(array_unique(array_merge(
-            [
-                self::ROL_COORDINACION,
-                self::ROL_CONTABILIDAD,
-                self::ROL_ADMINISTRACION,
-            ],
-            self::rolesEquivalentesJefeImportacion()
-        )));
-    }
-
     /**
+     * El inbox se abre por menú en la intranet. API y canal WS solo exigen sesión.
+     *
      * @return bool
      */
     public function puedeAccederWhatsappInbox()
     {
-        if (!$this->grupo) {
+        return $this->getKey() !== null;
+    }
+
+    /**
+     * Org 1: Gerencia General / GERENCIA (root). Resto: Socio.
+     *
+     * @return bool
+     */
+    public function puedeConfigurarWhatsappInbox()
+    {
+        if ($this->getKey() === null) {
             return false;
         }
 
-        return in_array(
-            trim((string) $this->grupo->No_Grupo),
-            self::rolesConAccesoWhatsappInbox(),
-            true
-        );
+        $orgId = (int) $this->getAttribute('ID_Organizacion');
+        $grupo = trim((string) $this->getNombreGrupo());
+        $usuario = strtolower(trim((string) $this->No_Usuario));
+
+        if ($orgId === self::ID_ORGANIZACION_ADMIN) {
+            if ($usuario === 'root') {
+                return true;
+            }
+
+            return in_array($grupo, [self::ROL_GERENCIA, self::ROL_GERENTE_GENERAL], true);
+        }
+
+        return $grupo === self::ROL_SOCIO;
     }
 }

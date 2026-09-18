@@ -21,6 +21,8 @@ use App\Http\Controllers\CargaConsolidada\Clientes\PagosController as ClientesPa
 use App\Http\Controllers\CargaConsolidada\EntregaController;
 use App\Http\Controllers\CargaConsolidada\ExcelConfirmacionCoordinacionController;
 use App\Http\Controllers\CargaConsolidada\InspeccionadosController;
+use App\Http\Controllers\CargaConsolidada\CustomersController;
+use App\Http\Controllers\CargaConsolidada\HomeStatsController;
 use App\Http\Controllers\CargaConsolidada\BoletinQuimicoController;
 use App\Http\Controllers\Clientes\ComprobanteFormController;
 use App\Http\Controllers\Commons\Google\SheetController;
@@ -34,7 +36,7 @@ use App\Http\Controllers\Commons\Google\SheetController;
 |
 */
 
-Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'carga-consolidada.cache']], function () {
+Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'carga-consolidada.organizacion', 'carga-consolidada.cache']], function () {
     
     // Commons
     Route::prefix('commons')->group(function () {
@@ -45,6 +47,22 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
         Route::post('/force-send-move', [CotizacionProveedorController::class, 'forceSendMove']);
         Route::post('/force-send-recordatorio-datos-proveedor', [CotizacionProveedorController::class, 'forceSendRecordatorioDatosProveedor']);
     });
+
+    // Cotizacion "resumen" (sin items, documento leido por IA)
+    Route::prefix('cotizacion-resumen')->group(function () {
+        Route::post('/extraer-documento', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'extraerDocumento']);
+        Route::get('/clientes', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'searchClientes']);
+        Route::get('/', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'store']);
+        Route::get('/{id}', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'update']);
+        Route::post('/{id}/duplicar', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'duplicar']);
+        Route::post('/{id}/partir', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'partir']);
+        Route::put('/{id}/estado', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'updateEstado']);
+        Route::delete('/{id}', [App\Http\Controllers\CargaConsolidada\CotizacionResumenController::class, 'destroy']);
+    });
+
+    Route::get('home-stats', [HomeStatsController::class, 'index']);
 
     // Dashboard ventas
     Route::prefix('dashboard-ventas')->group(function () {
@@ -63,6 +81,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
         Route::get('valid-containers', [ContenedorController::class, 'getValidContainers']);
         Route::get('valid-containers-documentacion', [ContenedorController::class, 'getValidContainersDocumentacion']);
         Route::get('empresas', [ContenedorController::class, 'getEmpresasCreadas']);
+        Route::get('paises', [ContenedorController::class, 'getPaisesHabilitados']);
         Route::get('cargas-disponibles', [ContenedorController::class, 'getCargasDisponibles']);
         Route::get('cargas-disponibles-dropdown', [ContenedorController::class, 'getCargasDisponiblesDropdown']);
         Route::get('tc-yuan-global', [ContenedorController::class, 'getTcYuanGlobal']);
@@ -369,6 +388,9 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
 
     // Inspeccionados (vista global Contabilidad)
     Route::get('inspeccionados', [InspeccionadosController::class, 'index']);
+
+    // Customers global (Almacén China)
+    Route::get('customers', [CustomersController::class, 'index']);
 
     // Boletín químico
     Route::group(['prefix' => 'boletin-quimico'], function () {

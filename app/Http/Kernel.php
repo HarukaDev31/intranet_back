@@ -77,5 +77,7 @@ class Kernel extends HttpKernel
         'role.copiloto_wa' => \App\Http\Middleware\EnsureCopilotoWaAccess::class,
         'third_party.token_access' => \App\Http\Middleware\ThirdPartyTokenAccess::class,
         'carga-consolidada.cache' => \App\Http\Middleware\CargaConsolidadaHttpCache::class,
+        'carga-consolidada.organizacion' => \App\Http\Middleware\CargaConsolidada\EnsureOrganizacionAccess::class,
+        'org.key' => \App\Http\Middleware\RequireOrgKey::class,
     ];
 }

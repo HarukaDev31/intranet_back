@@ -4,7 +4,13 @@ namespace App\Models\WhatsappInbox;
 
 use App\Models\Concerns\TruncatesFailedReason;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property int|null $conversation_id
+ * @property-read WaInboxConversation|null $conversation
+ */
 class WaInboxMessage extends Model
 {
     use TruncatesFailedReason;
@@ -32,7 +38,7 @@ class WaInboxMessage extends Model
         'sent_at' => 'datetime',
     ];
 
-    public function conversation()
+    public function conversation(): BelongsTo
     {
         return $this->belongsTo(WaInboxConversation::class, 'conversation_id');
     }

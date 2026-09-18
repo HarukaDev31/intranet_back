@@ -19,6 +19,7 @@ use App\Models\CalculadoraTarifasConsolidado;
 use App\Services\CalculadoraImportacion\CalculadoraImportacionExcelService;
 use App\Services\CalculadoraImportacion\CalculadoraTarifaService;
 use App\Services\CalculadoraImportacion\CodeSupplierHelper;
+use App\Support\Phone\CountryPhoneHelper;
 use App\Support\Storage\StoragePathSanitizer;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -165,7 +166,9 @@ class CalculadoraImportacionService
                 'ruc_cliente' => $tipoDocumento === 'RUC' ? ($data['clienteInfo']['ruc'] ?? null) : null,
                 'razon_social' => $tipoDocumento === 'RUC' ? ($data['clienteInfo']['empresa'] ?? $data['clienteInfo']['razonSocial'] ?? null) : null,
                 'correo_cliente' => $data['clienteInfo']['correo'] ?: null,
-                'whatsapp_cliente' => is_array($data['clienteInfo']['whatsapp']) ? ($data['clienteInfo']['whatsapp']['value'] ?? null) : ($data['clienteInfo']['whatsapp'] ?? null),
+                'whatsapp_cliente' => $this->whatsappConPrefijoOrg(
+                    is_array($data['clienteInfo']['whatsapp']) ? ($data['clienteInfo']['whatsapp']['value'] ?? null) : ($data['clienteInfo']['whatsapp'] ?? null)
+                ),
                 'tipo_cliente' => $data['clienteInfo']['tipoCliente'],
                 'origen_marketing' => $this->normalizeOrigenMarketing($data['clienteInfo']['origen_marketing'] ?? null),
                 'tipo_cotizacion' => $tipoCotizacion,
@@ -341,7 +344,9 @@ class CalculadoraImportacionService
                 'ruc_cliente' => $tipoDocumento === 'RUC' ? ($data['clienteInfo']['ruc'] ?? null) : null,
                 'razon_social' => $tipoDocumento === 'RUC' ? ($data['clienteInfo']['empresa'] ?? $data['clienteInfo']['razonSocial'] ?? null) : null,
                 'correo_cliente' => $data['clienteInfo']['correo'] ?: null,
-                'whatsapp_cliente' => is_array($data['clienteInfo']['whatsapp']) ? ($data['clienteInfo']['whatsapp']['value'] ?? null) : ($data['clienteInfo']['whatsapp'] ?? null),
+                'whatsapp_cliente' => $this->whatsappConPrefijoOrg(
+                    is_array($data['clienteInfo']['whatsapp']) ? ($data['clienteInfo']['whatsapp']['value'] ?? null) : ($data['clienteInfo']['whatsapp'] ?? null)
+                ),
                 'tipo_cliente' => $data['clienteInfo']['tipoCliente'],
                 'origen_marketing' => array_key_exists('origen_marketing', $data['clienteInfo'] ?? [])
                     ? $this->normalizeOrigenMarketing($data['clienteInfo']['origen_marketing'] ?? null)
@@ -773,12 +778,31 @@ class CalculadoraImportacionService
     }
 
     /**
+     * Si el WhatsApp no trae código de país, antepone el de la organización.
+     *
+     * @param mixed $whatsapp
+     * @return string|null
+     */
+    private function whatsappConPrefijoOrg($whatsapp)
+    {
+        if ($whatsapp === null || $whatsapp === '') {
+            return $whatsapp;
+        }
+        $orgId = auth()->user() ? (int) auth()->user()->getAttribute('ID_Organizacion') : 0;
+        $full = CountryPhoneHelper::ensureCountryCode($whatsapp, CountryPhoneHelper::codeForOrganizacionId($orgId));
+
+        return $full !== '' ? $full : $whatsapp;
+    }
+
+    /**
      * Buscar o crear cliente basado en la información proporcionada (DNI o RUC)
      */
     private function buscarOcrearCliente(array $clienteInfo): ?Cliente
     {
         $tipoDocumento = $clienteInfo['tipoDocumento'] ?? 'DNI';
-        $whatsapp = is_array($clienteInfo['whatsapp'] ?? null) ? ($clienteInfo['whatsapp']['value'] ?? $clienteInfo['whatsapp']) : ($clienteInfo['whatsapp'] ?? null);
+        $whatsapp = $this->whatsappConPrefijoOrg(
+            is_array($clienteInfo['whatsapp'] ?? null) ? ($clienteInfo['whatsapp']['value'] ?? $clienteInfo['whatsapp']) : ($clienteInfo['whatsapp'] ?? null)
+        );
 
         if ($tipoDocumento === 'RUC') {
             $ruc = trim($clienteInfo['ruc'] ?? '');

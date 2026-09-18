@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Models\Usuario;
+use App\Support\CargaConsolidada\ClientesVisibility;
 
 class GeneralService
 {
@@ -33,8 +34,8 @@ class GeneralService
             ->where('CC.id_contenedor', $idContenedor)
             ->whereNull('CC.deleted_at')
             ->whereNotNull('CC.estado_cliente')
-            ->whereNull('CC.id_cliente_importacion')
-            ->where('CC.estado_cotizador', 'CONFIRMADO');
+            ->whereNull('CC.id_cliente_importacion');
+        ClientesVisibility::applyConfirmadoParaBd($query, 'CC');
 
         // Aplicar filtros adicionales si se proporcionan
         if ($request->has('search')) {

@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
             AuthSeeder::class,
             CalculadoraImportacionSeeder::class,
             WebCursoPlanSeeder::class,
+            ProbusinessEcuadorContenedoresCotizacionesSeeder::class,
         ]);
     }
 }

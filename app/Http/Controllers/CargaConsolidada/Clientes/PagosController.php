@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Usuario;
 use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
+use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\CargaConsolidada\Pago;
 use App\Models\Notificacion;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\DB;
@@ -229,6 +231,13 @@ class PagosController extends Controller
                 'banco' => 'required|string|max:255'
             ]);
 
+            if (!Cotizacion::where('id', $request->idCotizacion)->where('id_contenedor', $request->idContenedor)->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada'
+                ], 404);
+            }
+
             // Autenticar usuario
             $user = JWTAuth::parseToken()->authenticate();
 
@@ -346,6 +355,10 @@ class PagosController extends Controller
     public function delete($id)
     {
         try {
+            if (!Pago::find($id)) {
+                return response()->json(['success' => false, 'message' => 'Pago no encontrado'], 404);
+            }
+
             // Buscar el pago antes de eliminar para obtener id_cotizacion y ruta de voucher
             $pago = DB::table($this->table_contenedor_consolidado_cotizacion_coordinacion_pagos)->where('id', $id)->first();
             if (! $pago) {

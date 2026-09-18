@@ -5,7 +5,7 @@ use App\Http\Controllers\Clientes\DeliveryController;
 use App\Http\Controllers\CargaConsolidada\EntregaController;
 
 // Rutas protegidas para usuarios externos de importaciones
-Route::group(['prefix' => 'clientes/delivery', 'middleware' => 'jwt.external'], function () {
+Route::group(['prefix' => 'clientes/delivery', 'middleware' => ['org.key', 'jwt.external']], function () {
     Route::get('/usuario-datos-facturacion', [DeliveryController::class, 'getUsuarioDatosFacturacion']);
     Route::post('/solicitar-notificacion-horarios-lima', [DeliveryController::class, 'solicitarNotificacionHorariosLima']);
     Route::get('/agencies', [DeliveryController::class, 'getAgencies']);

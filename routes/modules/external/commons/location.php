@@ -3,8 +3,8 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Clientes\Commons\LocationController;
 
-// Rutas protegidas para usuarios externos de importaciones
-Route::group(['prefix' => 'clientes/ubicacion' ], function () {
+// Ubicación portal clientes — requieren X-Org-Key
+Route::group(['prefix' => 'clientes/ubicacion', 'middleware' => 'org.key'], function () {
     Route::get('/paises', [LocationController::class, 'getPaises']);
     //get department 
     Route::get('/departamentos', [LocationController::class, 'getDepartamentos']);

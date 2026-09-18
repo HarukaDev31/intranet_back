@@ -61,6 +61,7 @@ class SendConstanciaCurso implements ShouldQueue
         $pdfPath = null;
 
         try {
+            $this->setWhatsappFlujo('curso');
             if (! $this->pedidoCurso) {
                 Log::error('El pedido de curso no está definido', [
                     'phoneNumberId' => $this->phoneNumberId,

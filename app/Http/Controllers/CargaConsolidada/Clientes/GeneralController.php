@@ -16,12 +16,16 @@ use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Services\CargaConsolidada\Clientes\GeneralService;
 use App\Services\CargaConsolidada\Clientes\GeneralExportService;
 use App\Models\CargaConsolidada\CotizacionProveedor;
+use App\Models\CargaConsolidada\CotizacionProveedorItems;
+use App\Models\CargaConsolidada\CotizacionProveedorResumen;
 use App\Traits\WhatsappTrait;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
+use App\Models\PaisFlag;
 use App\Jobs\SolicitarDocumentosWhatsAppJob;
 use App\Support\CargaConsolidada\DocumentStatusSync;
+use App\Support\CargaConsolidada\ClientesVisibility;
 
 class GeneralController extends Controller
 {
@@ -60,13 +64,136 @@ class GeneralController extends Controller
      */
     private function addCurrencyFormatting(array $headers)
     {
-        $keysToFormat = ['total_logistica', 'total_logistica_pagado', 'total_fob', 'total_impuestos'];
+        $keysToFormat = ['total_logistica', 'total_logistica_pagado', 'total_fob', 'total_isd', 'total_impuestos'];
         foreach ($headers as $k => $item) {
             if (is_array($item) && array_key_exists('value', $item) && in_array($k, $keysToFormat)) {
                 $headers[$k]['value'] = $this->formatCurrency($item['value']);
             }
         }
         return $headers;
+    }
+
+    private function esUsuarioSocio($user)
+    {
+        if (!$user) {
+            return false;
+        }
+        return $user->getNombreGrupo() === Usuario::ROL_SOCIO
+            || (int) $user->getAttribute('ID_Organizacion') !== 1;
+    }
+
+    private function resolveContenedorHeaderFlags($contenedor)
+    {
+        $flagChina = PaisFlag::urlForIso('cn') ?: PaisFlag::flagCdnUrl('cn');
+        $flagDestino = null;
+        $nombreDestino = 'Destino';
+        if ($contenedor && $contenedor->id_pais) {
+            $flagDestino = PaisFlag::urlForPaisId($contenedor->id_pais);
+        }
+        if ($contenedor && $contenedor->pais && $contenedor->pais->No_Pais) {
+            $nombreDestino = function_exists('mb_convert_case')
+                ? mb_convert_case(mb_strtolower($contenedor->pais->No_Pais, 'UTF-8'), MB_CASE_TITLE, 'UTF-8')
+                : ucwords(strtolower($contenedor->pais->No_Pais));
+            if (!$flagDestino) {
+                $iso = PaisFlag::isoDesdeNombre($nombreDestino);
+                $flagDestino = $iso ? PaisFlag::urlForIso($iso) : null;
+            }
+        }
+        if (!$flagDestino) {
+            $flagDestino = 'mage:box-3d';
+        }
+
+        return [
+            'china' => $flagChina,
+            'destino' => $flagDestino,
+            'nombre_destino' => $nombreDestino,
+        ];
+    }
+
+    private function buildSocioClientesHeaders($idContenedor)
+    {
+        $contenedor = Contenedor::with('pais')->find((int) $idContenedor);
+        $flags = $this->resolveContenedorHeaderFlags($contenedor);
+
+        $totales = DB::table('contenedor_consolidado_cotizacion as cc')
+            ->selectRaw('
+                COUNT(DISTINCT cc.id) as qty_clientes,
+                COALESCE(SUM(cc.volumen), 0) as cbm_destino,
+                COALESCE(SUM(cc.qty_item), 0) as qty_items,
+                COALESCE(SUM(cc.fob), 0) as total_fob,
+                COALESCE(SUM(cc.isd), 0) as total_isd,
+                COALESCE(SUM(cc.monto), 0) as total_logistica,
+                COALESCE(SUM(cc.impuestos), 0) as total_impuestos
+            ')
+            ->where('cc.id_contenedor', $idContenedor)
+            ->whereNull('cc.deleted_at')
+            ->whereNull('cc.id_cliente_importacion')
+            ->whereExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('contenedor_consolidado_cotizacion_proveedores as cccp')
+                    ->whereColumn('cccp.id_cotizacion', 'cc.id');
+            });
+        $contenedorCerrado = $contenedor && $contenedor->estado_china === Contenedor::ESTADOS_CHINA['COMPLETADO'];
+        ClientesVisibility::applyListado($totales, 'cc', true, $contenedorCerrado);
+        $totales = $totales->first();
+
+        $china = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
+            ->join('contenedor_consolidado_cotizacion as cc', 'cc.id', '=', 'cccp.id_cotizacion')
+            ->where('cccp.id_contenedor', $idContenedor)
+            ->whereNull('cc.deleted_at')
+            ->whereNull('cc.id_cliente_importacion');
+        ClientesVisibility::applyListado($china, 'cc', true, $contenedorCerrado);
+        $china = $china->selectRaw('COALESCE(SUM(cccp.cbm_total_china), 0) as cbm_total_china')->first();
+
+        $headersData = [
+            'cbm_total_china' => [
+                'value' => number_format((float) ($china->cbm_total_china ?? 0), 2, '.', ''),
+                'label' => 'CBM',
+                'icon' => $flags['china'],
+            ],
+            'cbm_total' => [
+                'value' => number_format((float) ($totales->cbm_destino ?? 0), 2, '.', ''),
+                'label' => 'CBM',
+                'icon' => $flags['destino'],
+            ],
+            'qty_clientes' => [
+                'value' => (int) ($totales->qty_clientes ?? 0),
+                'label' => 'Qty clientes',
+                'icon' => 'i-heroicons-users',
+            ],
+            'qty_items' => [
+                'value' => (int) ($totales->qty_items ?? 0),
+                'label' => 'Qty items',
+                'icon' => 'bi:boxes',
+            ],
+            'total_fob' => [
+                'value' => $totales->total_fob ?? 0,
+                'label' => 'Fob',
+                'icon' => 'cryptocurrency-color:soc',
+            ],
+            'total_isd' => [
+                'value' => $totales->total_isd ?? 0,
+                'label' => 'Total ISD',
+                'icon' => 'cryptocurrency-color:soc',
+            ],
+            'total_logistica' => [
+                'value' => $totales->total_logistica ?? 0,
+                'label' => 'Logística',
+                'icon' => 'cryptocurrency-color:soc',
+            ],
+            'total_impuestos' => [
+                'value' => $totales->total_impuestos ?? 0,
+                'label' => 'Impuestos',
+                'icon' => 'cryptocurrency-color:soc',
+            ],
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $this->addCurrencyFormatting($headersData),
+            'carga' => $contenedor ? $contenedor->carga : '',
+            'fecha_documentacion_max' => $contenedor ? ($contenedor->fecha_documentacion_max ?? '') : '',
+        ]);
     }
 
     /**
@@ -114,18 +241,14 @@ class GeneralController extends Controller
             ->where('CC.id_contenedor', $idContenedor)
             ->whereNull('CC.deleted_at')
             ->whereNull('CC.id_cliente_importacion')
-            ->where('CC.estado_cotizador', 'CONFIRMADO')
             ->whereExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('contenedor_consolidado_cotizacion_proveedores')
                     ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'CC.id');
             });
 
-        // Mientras el contenedor no haya completado la recepción en China, se listan
-        // todas las cotizaciones; al llegar a COMPLETADO se exige estado_cliente definido.
-        if (Contenedor::where('id', $idContenedor)->value('estado_china') === Contenedor::ESTADOS_CHINA['COMPLETADO']) {
-            $query->whereNotNull('CC.estado_cliente');
-        }
+        $contenedorCerrado = Contenedor::where('id', $idContenedor)->value('estado_china') === Contenedor::ESTADOS_CHINA['COMPLETADO'];
+        ClientesVisibility::applyListado($query, 'CC', $this->esUsuarioSocio($user), $contenedorCerrado);
         // Aplicar filtro de estado si se proporciona
         $page = $request->input('currentPage', 1);
         $perPage = $request->input('itemsPerPage', 10);
@@ -229,17 +352,19 @@ class GeneralController extends Controller
         }
 
         // Obtener proveedores relacionados en una sola consulta y agrupar por id_cotizacion
+        $esSocio = $this->esUsuarioSocio($user);
         $rolesConProveedores = array_merge(
             [
                 Usuario::ROL_DOCUMENTACION,
                 Usuario::ROL_COORDINACION,
                 Usuario::ROL_ADMINISTRACION,
                 Usuario::ROL_CONTABILIDAD,
+                Usuario::ROL_SOCIO,
             ],
             Usuario::rolesEquivalentesJefeImportacion()
         );
         $proveedores = collect();
-        if (!empty($ids) && $user && in_array($user->getNombreGrupo(), $rolesConProveedores, true)) {
+        if (!empty($ids) && $user && ($esSocio || in_array($user->getNombreGrupo(), $rolesConProveedores, true))) {
             $proveedores = DB::table('contenedor_consolidado_cotizacion_proveedores')
                 ->whereIn('id_cotizacion', $ids)
                 ->where('id_contenedor', $idContenedor)
@@ -269,7 +394,7 @@ class GeneralController extends Controller
 
         // Mapear cotizaciones devolviendo todas las columnas originales
         // y, si el usuario es Documentacion, añadir el array 'proveedores' por cotización
-        $dataTransformed = collect($cotizaciones)->map(function ($cot) use ($proveedores, $user, $estadoPermisoPorCotizacion, $idTramitePorCotizacion) {
+        $dataTransformed = collect($cotizaciones)->map(function ($cot) use ($proveedores, $user, $estadoPermisoPorCotizacion, $idTramitePorCotizacion, $esSocio) {
             // Convertir el objeto a array para mantener todos los campos originales
             $itemArr = (array) $cot;
 
@@ -290,12 +415,13 @@ class GeneralController extends Controller
             $itemArr['id_tramite'] = $idCotizacion !== null ? ($idTramitePorCotizacion[$idCotizacion] ?? null) : null;
 
             // Si el usuario es Documentacion, incluir proveedores completos (id, code_supplier, archivos y estados)
-            if ($user && in_array($user->getNombreGrupo(), array_merge([
+            if ($user && ($esSocio || in_array($user->getNombreGrupo(), array_merge([
                 Usuario::ROL_DOCUMENTACION,
                 Usuario::ROL_COORDINACION,
                 Usuario::ROL_ADMINISTRACION,
                 Usuario::ROL_CONTABILIDAD,
-            ], Usuario::rolesEquivalentesJefeImportacion()), true) && $proveedores) {
+                Usuario::ROL_SOCIO,
+            ], Usuario::rolesEquivalentesJefeImportacion()), true)) && $proveedores) {
                 // clave usada en groupBy es id_cotizacion
                 $cotKey = $cot->id_cotizacion ?? $cot->id ?? null;
                 if ($cotKey !== null && (is_array($proveedores) ? isset($proveedores[$cotKey]) : $proveedores->has($cotKey))) {
@@ -433,8 +559,7 @@ class GeneralController extends Controller
         $estado = $request->estado_cliente;
         Log::info('id', ['id' => $id]);
         Log::info('estado', ['estado' => $estado]);
-        $cotizacion = DB::table($this->table_contenedor_cotizacion)
-            ->where('id', $id)
+        $cotizacion = Cotizacion::where('id', $id)
             ->update(['estado_cliente' => $estado]);
         if ($cotizacion) {
             return response()->json([
@@ -469,9 +594,9 @@ class GeneralController extends Controller
             ])
             ->where('id_contenedor', $idContenedor)
             ->whereNotNull('estado_cliente')
-            ->where('estado_cotizador', 'CONFIRMADO')
-            ->whereNull('id_cliente_importacion')
-            ->first();
+            ->whereNull('id_cliente_importacion');
+        ClientesVisibility::applyConfirmadoParaBd($headers, '');
+        $headers = $headers->first();
         // Attach formatted totals alongside numeric values
         if ($headers) {
             $headers->total_logistica_formatted = $this->formatCurrency($headers->total_logistica ?? 0);
@@ -499,6 +624,11 @@ class GeneralController extends Controller
     {
         try {
             $user = JWTAuth::parseToken()->authenticate();
+            if ($this->esUsuarioSocio($user)) {
+                return $this->buildSocioClientesHeaders($idContenedor);
+            }
+            $contenedor = Contenedor::with('pais')->find((int) $idContenedor);
+            $paisFlags = $this->resolveContenedorHeaderFlags($contenedor);
             // Consulta principal con múltiples subconsultas
             $result = DB::table($this->table_contenedor_cotizacion_proveedores . ' as cccp')
                 ->select([
@@ -625,18 +755,19 @@ class GeneralController extends Controller
                     Usuario::ROL_DOCUMENTACION => [null],
                     Usuario::ROL_JEFE_IMPORTACION => ['cbm_total_china', 'cbm_total', 'total_logistica', 'total_logistica_pagado', 'qty_items', 'total_fob', 'total_impuestos'],
                     Usuario::ROL_COORDINADOR_GENERAL => ['cbm_total_china', 'cbm_total', 'total_logistica', 'total_logistica_pagado', 'qty_items', 'total_fob', 'total_impuestos'],
+                    Usuario::ROL_SOCIO => ['cbm_total_china', 'cbm_total', 'qty_clientes', 'qty_items', 'total_fob', 'total_logistica', 'total_impuestos'],
                 ];
                 $userIdCheck = $user->getNombreGrupo();
                 $headersData = [
                     'cbm_total_china' => [
                         'value' => $result->cbm_total_china,
-                        'label' => '',
-                        'icon' => 'https://upload.wikimedia.org/wikipedia/commons/f/fa/Flag_of_the_People%27s_Republic_of_China.svg'
+                        'label' => 'CBM',
+                        'icon' => $paisFlags['china']
                     ],
                     'cbm_total' => [
                         'value' => $result->cbm_total,
-                        'label' => '',
-                        'icon' => 'https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg'
+                        'label' => 'CBM',
+                        'icon' => $paisFlags['destino']
                     ],
                     'qty_items' => ['value' => $result->total_qty_items, 'label' => 'Items', 'icon' => 'bi:boxes'],
                     /*cbm_total_pendiente' => ['value' => $result->cbm_total_pendiente ?? 0, 'label' => 'CBM Total Pendiente', 'icon' => 'i-heroicons-currency-dollar'],*/
@@ -725,7 +856,7 @@ class GeneralController extends Controller
     {
         try {
             $proveedores = DB::table('contenedor_consolidado_cotizacion_proveedores')
-                ->select('id', 'code_supplier')
+                ->select('id', 'code_supplier', 'products', 'modo_cotizacion')
                 ->where('id_cotizacion', $idCotizacion)
                 ->orderBy('id', 'asc')
                 ->get();
@@ -758,6 +889,8 @@ class GeneralController extends Controller
                 return [
                     'id' => $prov->id,
                     'code_supplier' => $prov->code_supplier,
+                    'products' => $prov->products,
+                    'modo_cotizacion' => $prov->modo_cotizacion,
                     'items' => $provItems,
                 ];
             })->values();
@@ -872,31 +1005,46 @@ class GeneralController extends Controller
                     'message' => 'Contenedor no tiene fecha de documentacion maxima'
                 ], 400);
             }
-            // Actualizar tipo_producto por item.id
-            foreach ($proveedores as $prov) {
-                $items = $prov['items'] ?? [];
-                foreach ($items as $item) {
-                    if (!isset($item['id']) || !isset($item['tipo_producto'])) {
-                        continue;
-                    }
-                    DB::table('contenedor_consolidado_cotizacion_proveedores_items')
-                        ->where('id', $item['id'])
-                        ->update(['tipo_producto' => $item['tipo_producto']]);
-                }
-            }
-
-            // Automatización módulo Cliente/Seguimiento: al pedir documentos, Invoice/Packing/Excel Conf.
-            // (perfil Daniela) pasan de Pendiente a Solicitado, solo para el proveedor involucrado.
+            $proveedoresJob = [];
             foreach ($proveedores as $prov) {
                 if (!isset($prov['id'])) {
                     continue;
                 }
-                $proveedorModel = CotizacionProveedor::find($prov['id']);
+                $proveedorModel = CotizacionProveedor::where('id', $prov['id'])
+                    ->where('id_cotizacion', $idCotizacion)
+                    ->first();
                 if (!$proveedorModel) {
                     continue;
                 }
+
+                if ((string) $proveedorModel->getAttribute('modo_cotizacion') === 'resumen') {
+                    $proveedoresJob[] = [
+                        'id' => (int) $proveedorModel->id,
+                        'items' => $this->itemsGeneralesParaSolicitud($proveedorModel, $container),
+                    ];
+                } else {
+                    $items = $prov['items'] ?? [];
+                    foreach ($items as $item) {
+                        if (!isset($item['id']) || !isset($item['tipo_producto'])) {
+                            continue;
+                        }
+                        DB::table('contenedor_consolidado_cotizacion_proveedores_items')
+                            ->where('id', $item['id'])
+                            ->where('organizacion_id', $container->getAttribute('organizacion_id'))
+                            ->update(['tipo_producto' => $item['tipo_producto']]);
+                    }
+                    $proveedoresJob[] = $prov;
+                }
+
                 DocumentStatusSync::markSolicitado($proveedorModel);
                 $proveedorModel->save();
+            }
+            $proveedores = $proveedoresJob;
+            if ($proveedores === []) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payload inválido: no hay proveedores válidos para solicitar documentos'
+                ], 422);
             }
 
             $cargoRow = DB::table('carga_consolidada_contenedor')
@@ -958,11 +1106,7 @@ class GeneralController extends Controller
             }
 
             // Obtener información de la cotización
-            $cot = DB::table('contenedor_consolidado_cotizacion')
-                ->select('id', 'nombre', 'telefono', 'id_contenedor', 'uuid')
-                ->where('id', $idCotizacion)
-                ->whereNull('deleted_at')
-                ->first();
+            $cot = Cotizacion::find($idCotizacion);
 
             if (!$cot) {
                 return response()->json([
@@ -971,14 +1115,14 @@ class GeneralController extends Controller
                 ], 404);
             }
 
-            $nombreCliente = $cot->nombre;
-            $telefono = $cot->telefono;
+            $nombreCliente = $cot->getAttribute('nombre');
+            $telefono = $cot->getAttribute('telefono');
             $telefono = preg_replace('/\s+/', '', $telefono);
             $telefono = $telefono ? $telefono . '@c.us' : '';
             $uuidCotizacion = trim((string) ($cot->uuid ?? ''));
 
             $cargaRaw = DB::table('carga_consolidada_contenedor')
-                ->where('id', $cot->id_contenedor)
+                ->where('id', $cot->getAttribute('id_contenedor'))
                 ->value('carga');
             $cargaCode = is_numeric($cargaRaw)
                 ? str_pad((string) $cargaRaw, 2, '0', STR_PAD_LEFT)
@@ -1024,6 +1168,7 @@ class GeneralController extends Controller
                 );
 
                 $phoneDigits = preg_replace('/\D+/', '', (string) $telefono);
+                $this->setWhatsappFlujo('documentos');
                 $laravelBatchId = $this->runWhatsAppCoordinacionBatch('docs_recordatorio', [
                     'id_cotizacion' => $cot->id ?? null,
                     'cliente' => $nombreCliente,
@@ -1086,4 +1231,57 @@ class GeneralController extends Controller
         }
     }
 
+    /**
+     * Flujo resumen: Excel de confirmación GENERAL por proveedor (sin categoría por ítem).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function itemsGeneralesParaSolicitud(CotizacionProveedor $proveedor, Contenedor $container): array
+    {
+        $existentes = CotizacionProveedorItems::where('id_proveedor', $proveedor->id)
+            ->orderBy('id')
+            ->get();
+
+        if ($existentes->isNotEmpty()) {
+            $items = [];
+            foreach ($existentes as $it) {
+                $it->tipo_producto = 'GENERAL';
+                $it->save();
+                $nombre = trim((string) ($it->initial_name ?? ''));
+                $items[] = [
+                    'id' => (int) $it->id,
+                    'initial_name' => $nombre,
+                    'tipo_producto' => 'GENERAL',
+                    'caracteristicas' => $nombre !== '' ? ['NOMBRE COMERCIAL' => $nombre] : [],
+                ];
+            }
+
+            return $items;
+        }
+
+        $nombre = trim((string) ($proveedor->products ?? ''));
+        if ($nombre === '') {
+            $resumen = CotizacionProveedorResumen::where('id_proveedor', $proveedor->id)->first();
+            $nombre = $resumen ? trim((string) $resumen->getAttribute('producto')) : '';
+        }
+        if ($nombre === '') {
+            $nombre = 'Producto';
+        }
+
+        $item = new CotizacionProveedorItems();
+        $item->id_contenedor = $proveedor->id_contenedor;
+        $item->id_cotizacion = $proveedor->id_cotizacion;
+        $item->id_proveedor = $proveedor->id;
+        $item->initial_name = $nombre;
+        $item->tipo_producto = 'GENERAL';
+        $item->organizacion_id = $container->getAttribute('organizacion_id');
+        $item->save();
+
+        return [[
+            'id' => (int) $item->id,
+            'initial_name' => $nombre,
+            'tipo_producto' => 'GENERAL',
+            'caracteristicas' => ['NOMBRE COMERCIAL' => $nombre],
+        ]];
+    }
 }

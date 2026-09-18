@@ -58,6 +58,7 @@ class SendSoporteTiWhatsappGrupoJob implements ShouldQueue
      */
     public function handle()
     {
+        $this->setWhatsappFlujo('soporte_ti');
         $appEnv = app()->environment();
         $enabled = (bool) config('soporte-ti.whatsapp_enabled', true);
         $groupId = trim((string) config('soporte-ti.whatsapp_group_id', ''));

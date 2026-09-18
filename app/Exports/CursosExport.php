@@ -101,18 +101,7 @@ class CursosExport implements FromCollection, WithHeadings, WithMapping, WithSty
 
     private function getRedSocialLabel($redSocial)
     {
-        $redesSociales = [
-            1 => 'TikTok',
-            2 => 'Facebook',
-            3 => 'Instagram',
-            4 => 'YouTube',
-            5 => 'Familiares/Amigos',
-            6 => 'LinkedIn',
-            7 => 'Google',
-            8 => 'Otros'
-        ];
-
-        return $redesSociales[$redSocial] ?? 'No especificado';
+        return \App\Support\Register\ComoEnteroCatalog::label($redSocial) ?? 'No especificado';
     }
 
     public function columnWidths(): array

@@ -2,12 +2,13 @@
 
 namespace App\Helpers;
 
+use App\Support\Phone\CountryPhoneHelper;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Helper para buscar un usuario en la tabla users por correo, teléfono o documento.
  * Usa la misma lógica en todos los puntos que necesitan vincular filas (cotización, cliente, etc.)
- * con el usuario: email exacto, teléfono normalizado (whatsapp/phone) con y sin prefijo 51, o DNI.
+ * con el usuario: email exacto, teléfono (internacional/nacional vía CountryPhoneHelper), o DNI.
  */
 class UserLookupHelper
 {
@@ -30,16 +31,17 @@ class UserLookupHelper
                 $q->orWhere('email', $correo);
             }
             if (!empty($telefono)) {
-                $telefonoLimpio = preg_replace('/[^0-9]/', '', $telefono);
-                $telefonoSin51 = preg_replace('/^51/', '', $telefonoLimpio);
+                $variantes = CountryPhoneHelper::searchVariants($telefono);
                 $normalized = 'REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(whatsapp, " ", ""), "-", ""), "(", ""), ")", ""), "+", "")';
                 $normalizedPhone = 'REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, " ", ""), "-", ""), "(", ""), ")", ""), "+", "")';
-                $q->orWhereRaw("({$normalized} LIKE ? OR {$normalized} LIKE ? OR {$normalizedPhone} LIKE ? OR {$normalizedPhone} LIKE ?)", [
-                    "%{$telefonoLimpio}%",
-                    "%{$telefonoSin51}%",
-                    "%{$telefonoLimpio}%",
-                    "%{$telefonoSin51}%"
-                ]);
+                if ($variantes !== []) {
+                    $q->orWhere(function ($q2) use ($normalized, $normalizedPhone, $variantes) {
+                        foreach ($variantes as $variante) {
+                            $q2->orWhereRaw("{$normalized} LIKE ?", ['%' . $variante . '%'])
+                                ->orWhereRaw("{$normalizedPhone} LIKE ?", ['%' . $variante . '%']);
+                        }
+                    });
+                }
             }
             if (!empty($documento)) {
                 $q->orWhere('dni', $documento);

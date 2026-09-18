@@ -71,6 +71,7 @@ class NotifyArriveDateToday extends Command
                 $mensaje = "Hola 👋 {$clienteNombre} la carga de tu proveedor {$providerCode} aun no llega a nuestro almacen de China, ¿tienes alguna noticia por parte de tu proveedor?";
                 $telefonoFmt = $this->formatPhoneNumber($telefono);
 
+                $controller->setWhatsappFlujo('arrive_date');
                 $resultado = $controller->sendMessage(
                     $mensaje,
                     $telefonoFmt,

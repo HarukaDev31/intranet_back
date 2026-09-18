@@ -50,6 +50,7 @@ class SendDeliveryConfirmationWhatsAppProvinceJob implements ShouldQueue
         try {
             // Establecer la conexión de BD basándose en el dominio
             $this->setDatabaseConnection($this->domain);
+            $this->setWhatsappFlujo('entrega');
             // Obtener el formulario de delivery con las relaciones necesarias
             $deliveryForm = ConsolidadoDeliveryFormProvince::with([
                 'cotizacion',

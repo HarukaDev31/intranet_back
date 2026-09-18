@@ -9,10 +9,12 @@ use App\Models\Departamento;
 use App\Models\Provincia;
 use App\Models\Distrito;
 use App\Models\DeliveryAgency;
+use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
 class ConsolidadoDeliveryFormProvince extends Model
 {
     use HasFactory;
+    use SincronizaOrganizacionId;
 
     /**
      * La tabla asociada al modelo.
@@ -20,6 +22,11 @@ class ConsolidadoDeliveryFormProvince extends Model
      * @var string
      */
     protected $table = 'consolidado_delivery_form_province';
+
+    protected static function organizacionRelacion(): string
+    {
+        return 'contenedor';
+    }
 
     /**
      * Los atributos que son asignables masivamente.

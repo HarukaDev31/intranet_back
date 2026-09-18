@@ -30,13 +30,6 @@ class EnsureWhatsappInboxAccess
             ], 401);
         }
 
-        if (!$user->puedeAccederWhatsappInbox()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Acceso restringido al WhatsApp Inbox',
-            ], 403);
-        }
-
         return $next($request);
     }
 }

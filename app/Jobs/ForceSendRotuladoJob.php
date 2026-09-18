@@ -10,6 +10,8 @@ use Illuminate\Queue\SerializesModels;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\CotizacionProveedor;
+use App\Services\Organizacion\OrganizacionMensajeriaService;
+use App\Services\WhatsApp\WhatsAppCoordinacionBatchService;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Traits\WhatsappTrait;
 use App\Traits\DatabaseConnectionTrait;
@@ -49,6 +51,7 @@ class ForceSendRotuladoJob implements ShouldQueue
         try {
             // Establecer la conexión de BD basándose en el dominio
             $this->setDatabaseConnection($this->domain);
+            $this->setWhatsappFlujo('rotulado');
 
             Log::info("Iniciando ForceSendRotuladoJob", [
                 'id_cotizacion' => $this->idCotizacion,
@@ -64,6 +67,21 @@ class ForceSendRotuladoJob implements ShouldQueue
                 throw new Exception("Cotización no encontrada");
             }
 
+            $orgId = (int) $cotizacionInfo->getAttribute('organizacion_id');
+            if ($orgId <= 0) {
+                $orgId = OrganizacionMensajeriaService::ID_ORGANIZACION_ADMIN;
+            }
+            $this->setWhatsappOrganizacionId($orgId);
+            $mensajeria = app(OrganizacionMensajeriaService::class);
+            if (!$mensajeria->rotuladoHabilitado($orgId)) {
+                Log::info('ForceSendRotuladoJob omitido: rotulado deshabilitado', [
+                    'organizacion_id' => $orgId,
+                    'id_cotizacion' => $this->idCotizacion,
+                ]);
+                DB::rollBack();
+                return;
+            }
+
             $telefono = preg_replace('/\s+/', '', $cotizacionInfo->telefono);
             $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
 
@@ -74,6 +92,25 @@ class ForceSendRotuladoJob implements ShouldQueue
                 throw new Exception("Contenedor no encontrado");
             }
             $carga = $contenedor->carga;
+
+            if (
+                $this->whatsappCoordinacionBatchId === null
+                && $this->shouldRouteCoordinacionToMeta('consolidado')
+                && $this->phoneNumberId
+            ) {
+                $phoneE164 = preg_replace('/[^0-9]/', '', (string) $this->phoneNumberId);
+                $batch = app(WhatsAppCoordinacionBatchService::class)->create('rotulado', [
+                    'id_cotizacion' => $this->idCotizacion,
+                    'cliente' => $cotizacionInfo->nombre,
+                    'carga' => (string) $carga,
+                    'phone_e164' => $phoneE164,
+                    'job_domain' => $this->domain,
+                ]);
+                $this->whatsappCoordinacionBatchId = (int) $batch->id;
+            }
+            if ($this->whatsappCoordinacionBatchId !== null) {
+                $this->setWhatsAppCoordinacionBatchId($this->whatsappCoordinacionBatchId);
+            }
 
             // Procesar plantilla de bienvenida
             $htmlWelcomePath = public_path('assets/templates/Welcome_Consolidado_Template.html');
@@ -109,6 +146,8 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 );
                 Log::info('Mensaje de nuevo proveedor enviado - procesando proveedores específicos');
             }
+
+            $sleepSendMedia = 7;
 
             // Configurar ZIP
             $zipFileName = storage_path('app/Rotulado.zip');
@@ -154,7 +193,6 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $options->set('debugLayoutBlocks', false);
             $options->set('debugLayoutInline', false);
             $options->set('debugLayoutPaddingBox', false);
-            $sleepSendMedia = 7;
 
             $processedProviders = 0;
 
@@ -189,7 +227,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 $sleepSendMedia += 1;
 
                 $pdfService = app(\App\Services\CargaConsolidada\RotuladoPdfService::class);
-                $htmlContent = $pdfService->buildHtml($cliente, $supplierCode, $carga);
+                $htmlContent = $pdfService->buildHtmlForCotizacion($cliente, $supplierCode, $carga, $cotizacionInfo);
 
                 Log::info('HTML procesado para proveedor: ' . $supplierCode);
 
@@ -248,6 +286,11 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                     );
 
                     $processedProviders++;
+                    if (!empty($proveedorArray['id'])) {
+                        CotizacionProveedor::where('id', $proveedorArray['id'])->update([
+                            'send_rotulado_status' => 'SENDED',
+                        ]);
+                    }
                 } catch (Exception $e) {
                     Log::error('Error procesando proveedor ' . $supplierCode . ': ' . $e->getMessage());
                     continue;
@@ -267,20 +310,22 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
             Log::info('ZIP cerrado correctamente');
 
-            // Enviar imagen de dirección
-            $direccionUrl = public_path('assets/images/Direccion_27_04_26.jpeg');
-            $sleepSendMedia += 3;
-            $dirCaption = '🏽Dile a tu proveedor que envíe la carga a nuestro almacén en China';
-            $this->sendMedia(
-                $direccionUrl,
-                'image/jpg',
-                $dirCaption,
-                $this->phoneNumberId,
-                $sleepSendMedia,
-                'consolidado',
-                'Direccion_almacen_China.jpeg',
-                CoordinacionWhatsappPayload::rotuladoAlmacenChinaImg((string) $this->phoneNumberId, $direccionUrl, $dirCaption, $sleepSendMedia)
-            );
+            // Enviar imagen de dirección (socio sin foto → org 1 / jpeg por defecto)
+            $direccionUrl = $mensajeria->localPathImagenConFallback($orgId, OrganizacionMensajeriaService::IMG_DIRECCION);
+            if ($direccionUrl && is_file($direccionUrl)) {
+                $sleepSendMedia += 3;
+                $dirCaption = 'Dile a tu proveedor que envíe la carga a nuestro almacén en China';
+                $this->sendMedia(
+                    $direccionUrl,
+                    'image/jpeg',
+                    $dirCaption,
+                    $this->phoneNumberId,
+                    $sleepSendMedia,
+                    'consolidado',
+                    'Direccion_almacen_China.jpeg',
+                    CoordinacionWhatsappPayload::rotuladoAlmacenChinaImg((string) $this->phoneNumberId, $direccionUrl, $dirCaption, $sleepSendMedia)
+                );
+            }
 
             // Ya no se envía pb_rotulado_datos_proveedor_v1 al pedir rotulado.
 
@@ -296,6 +341,14 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             if ($fileSize === false || $fileSize == 0) {
                 Log::error("El archivo ZIP está vacío o no se puede leer");
                 throw new Exception("El archivo ZIP está vacío");
+            }
+
+            if ($this->whatsappCoordinacionBatchId !== null) {
+                $laravelBatchId = $this->dispatchWhatsAppCoordinacionBatch();
+                Log::info('ForceSendRotuladoJob: batch WhatsApp despachado', [
+                    'batch_id' => $this->whatsappCoordinacionBatchId,
+                    'laravel_batch_id' => $laravelBatchId,
+                ]);
             }
 
             DB::commit();

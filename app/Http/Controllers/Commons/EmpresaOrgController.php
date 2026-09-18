@@ -36,6 +36,26 @@ class EmpresaOrgController extends Controller
      */
     public function getOrganizaciones(Request $request)
     {
+        $authUser = auth()->user();
+        $authUserOrgId = $authUser ? (int) $authUser->getAttribute('ID_Organizacion') : 0;
+
+        // Org ≠ 1: solo la suya. No filtrar por empresa_id del request.
+        if ($authUserOrgId !== 1) {
+            $orgs = Organizacion::where('ID_Organizacion', $authUserOrgId)
+                ->where('Nu_Estado', 1)
+                ->select('ID_Organizacion', 'No_Organizacion')
+                ->orderBy('No_Organizacion')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $orgs->map(fn($o) => [
+                    'id'     => $o->ID_Organizacion,
+                    'nombre' => $o->No_Organizacion,
+                ]),
+            ]);
+        }
+
         $request->validate(['empresa_id' => 'required|integer']);
 
         $orgs = Organizacion::where('ID_Empresa', $request->empresa_id)
@@ -59,13 +79,22 @@ class EmpresaOrgController extends Controller
      */
     public function getGrupos(Request $request)
     {
-        $request->validate([
-            'empresa_id' => 'required|integer',
-            'org_id'     => 'required|integer',
-        ]);
+        $authUser = auth()->user();
+        $authUserOrgId = $authUser ? (int) $authUser->getAttribute('ID_Organizacion') : 0;
 
-        $grupos = Grupo::where('ID_Empresa', $request->empresa_id)
-            ->where('ID_Organizacion', $request->org_id)
+        $idOrg = $authUserOrgId === 1
+            ? (int) $request->input('org_id')
+            : $authUserOrgId;
+
+        $organizacion = Organizacion::find($idOrg);
+        if (!$organizacion) {
+            return response()->json(['success' => true, 'data' => []]);
+        }
+
+        $idEmpresa = (int) $organizacion->getAttribute('ID_Empresa');
+
+        $grupos = Grupo::where('ID_Empresa', $idEmpresa)
+            ->where('ID_Organizacion', $idOrg)
             ->where('Nu_Estado', 1)
             ->select('ID_Grupo', 'No_Grupo', 'No_Grupo_Descripcion', 'Nu_Tipo_Privilegio_Acceso')
             ->orderBy('No_Grupo')

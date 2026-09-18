@@ -29,7 +29,7 @@ class BroadcastController extends Controller
      * Authenticate the request for channel access.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
+     * @return \Illuminate\Http\JsonResponse
      */
     public $CHANNELS = [
         'private-Cotizador-notifications' => 'Cotizador',
@@ -66,7 +66,7 @@ class BroadcastController extends Controller
      * Authenticate the request for channel access.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
+     * @return \Illuminate\Http\JsonResponse
      */
     public function authenticate(Request $request)
     {
@@ -165,6 +165,25 @@ class BroadcastController extends Controller
                     'user_id' => $user->ID_Usuario,
                     'channel' => $channelName,
                     'user_grupo' => $user->grupo ? $user->grupo->No_Grupo : 'Sin grupo',
+                ]);
+                return response()->json(['message' => 'No autorizado para este canal'], 403);
+            }
+
+            $waInboxOrgPrefix = 'private-whatsapp-inbox.org.';
+            if (strpos($channelName, $waInboxOrgPrefix) === 0) {
+                $channelOrgId = (int) substr($channelName, strlen($waInboxOrgPrefix));
+                $userOrgId = (int) $user->getAttribute('ID_Organizacion');
+                if (
+                    $this->usuarioPuedeAccederWhatsappInbox($user)
+                    && $channelOrgId > 0
+                    && $channelOrgId === $userOrgId
+                ) {
+                    return response()->json($this->pusherAuthPayload($request, $channelName));
+                }
+                Log::error('User not authorized for whatsapp-inbox org channel', [
+                    'user_id' => $user->ID_Usuario,
+                    'channel' => $channelName,
+                    'user_org' => $userOrgId,
                 ]);
                 return response()->json(['message' => 'No autorizado para este canal'], 403);
             }

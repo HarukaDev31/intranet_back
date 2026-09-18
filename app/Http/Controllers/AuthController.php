@@ -28,6 +28,7 @@ use App\Models\CargaConsolidada\Cotizacion;
 use App\Traits\FileTrait;
 use App\Traits\UsesObjectStorage;
 use App\Support\Menu\PedidosCursoMenuFilter;
+use App\Support\Organizacion\OrganizacionPortalUrls;
 use App\Services\Auth\AuthMenuCacheService;
 
 class AuthController extends Controller
@@ -123,7 +124,7 @@ class AuthController extends Controller
                         $this->registrarDeviceFcm((int) $usuario->ID_Usuario, $data);
 
                         // Cargar relaciones del usuario
-                        $usuario->load(['grupo', 'empresa', 'organizacion']);
+                        $usuario->load(['grupo', 'empresa', 'organizacion.paisFlag']);
 
                         // Obtener menús del usuario
                         $menus = $this->obtenerMenusUsuarioCacheados($usuario);
@@ -224,8 +225,18 @@ class AuthController extends Controller
                                 ] : null,
                                 'organizacion' => $usuario->organizacion ? [
                                     'id' => $usuario->organizacion->ID_Organizacion,
-                                    'nombre' => $usuario->organizacion->No_Organizacion
+                                    'nombre' => $usuario->organizacion->No_Organizacion,
+                                    'phone_code' => \App\Support\Phone\CountryPhoneHelper::codeForOrganizacionId(
+                                        $usuario->organizacion->ID_Organizacion
+                                    ),
+                                    'paises_habilitados' => \App\Support\Organizacion\OrganizacionPaisesHabilitados::idsPermitidos(
+                                        $usuario->organizacion->ID_Organizacion
+                                    ),
                                 ] : null,
+                                // Solo la organizacion 1 (admin) puede crear/editar usuarios de
+                                // cualquier organizacion; el resto queda fijo en la suya. El front
+                                // usa esto para decidir si renderiza el select de organizacion.
+                                'puedeGestionarOrganizaciones' => (int) $usuario->getAttribute('ID_Organizacion') === 1,
                                 'grupo' => $grupoInfo
                             ],
                             'iCantidadAcessoUsuario' => $result['iCantidadAcessoUsuario'] ?? null,
@@ -395,6 +406,7 @@ class AuthController extends Controller
                 'soldCBM' => (float) $soldCBM,
                 'embarquedCBM' => (float) $embarquedCBM,
                 'goals' => $usuario->Txt_Objetivos ?? null,
+                'puedeGestionarOrganizaciones' => (int) $usuario->getAttribute('ID_Organizacion') === 1,
             ];
 
             return response()->json([
@@ -743,7 +755,7 @@ class AuthController extends Controller
      * @param array $data
      * @return void
      */
-    private function registrarDeviceFcm(int $idUsuario, array $data)
+    private function    registrarDeviceFcm(int $idUsuario, array $data)
     {
         $platform = $data['platform'] ?? null;
         $fcmToken = $data['fcm_token'] ?? null;
@@ -1517,7 +1529,7 @@ class AuthController extends Controller
         Log::info('validated data', $validatedData);
 
         try {
-            $user = User::create([
+            $userPayload = [
                 'name' => $validatedData['nombre'],
                 'lastname' => $validatedData['lastname'] ?? null,
                 'email' => $validatedData['email'],
@@ -1525,14 +1537,29 @@ class AuthController extends Controller
                 'goals' => $validatedData['goals'] ?? null,
                 'password' => Hash::make($validatedData['password']),
                 'dni' => $validatedData['dni'] ?? null,
-                'birth_date' => $validatedData['fechaNacimiento'] ?? null,  
+                'birth_date' => $validatedData['fechaNacimiento'] ?? null,
                 'provincia_id' => $validatedData['provincia_id'] ?? null,
                 'departamento_id' => $validatedData['departamento_id'] ?? null,
                 'distrito_id' => $validatedData['distrito_id'] ?? null,
                 'no_como_entero' => $validatedData['no_como_entero'] ?? null,
                 'no_otros_como_entero_empresa' => $validatedData['no_otros_como_entero_empresa'] ?? null,
                 'pais_id' => $validatedData['pais_id'] ?? null,
-            ]);
+            ];
+            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'tipo_documento')) {
+                $userPayload['tipo_documento'] = $validatedData['tipo_documento'] ?? 'DNI';
+            }
+            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'whatsapp_prefix')) {
+                $userPayload['whatsapp_prefix'] = $validatedData['whatsapp_prefix'] ?? null;
+            }
+            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'organizacion_id')) {
+                $orgId = (int) $request->attributes->get('organizacion_id', 0);
+                if ($orgId <= 0) {
+                    $orgId = OrganizacionPortalUrls::orgIdFromPublicRequest($request);
+                }
+                $userPayload['organizacion_id'] = $orgId;
+            }
+
+            $user = User::create($userPayload);
 
             Log::info('user created', $user->toArray());
 
@@ -1670,6 +1697,22 @@ class AuthController extends Controller
                     'status' => 'danger',
                     'message' => 'Usuario no encontrado'
                 ], 401);
+            }
+
+            $orgId = (int) $request->attributes->get(
+                'organizacion_id',
+                OrganizacionPortalUrls::orgIdFromPublicRequest($request)
+            );
+            $userOrg = (int) ($user->organizacion_id ?? 0);
+            if ($userOrg <= 0) {
+                $userOrg = OrganizacionPortalUrls::ADMIN_ORG;
+            }
+            if ($userOrg !== $orgId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El usuario no pertenece a esta organización',
+                    'code' => 'ORG_MISMATCH',
+                ], 403);
             }
 
             // Verificar contraseña
@@ -2044,6 +2087,22 @@ class AuthController extends Controller
                 ], 404);
             }
 
+            $orgId = (int) $request->attributes->get(
+                'organizacion_id',
+                OrganizacionPortalUrls::orgIdFromPublicRequest($request)
+            );
+            $userOrg = (int) ($user->organizacion_id ?? 0);
+            if ($userOrg <= 0) {
+                $userOrg = OrganizacionPortalUrls::ADMIN_ORG;
+            }
+            if ($userOrg !== $orgId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El usuario no pertenece a esta organización',
+                    'code' => 'ORG_MISMATCH',
+                ], 403);
+            }
+
             // Generar token único
             $token = Str::random(64);
 
@@ -2057,9 +2116,11 @@ class AuthController extends Controller
                 ]
             );
 
-            // Construir URL de reset (viene del frontend)
-            $frontendUrl = config('app.url_clientes');
-            $resetUrl = $frontendUrl . '/reset-password?token=' . $token;
+            $orgReset = (int) ($user->organizacion_id ?? 0);
+            if ($orgReset <= 0) {
+                $orgReset = $orgId;
+            }
+            $resetUrl = OrganizacionPortalUrls::resetPassword($orgReset, $token);
 
             // Despachar job para enviar email
             \App\Jobs\SendForgotPasswordEmailJob::dispatch($email, $token, $resetUrl)->onQueue('emails');

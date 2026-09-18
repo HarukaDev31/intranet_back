@@ -24,6 +24,7 @@ class User extends Authenticatable implements JWTSubject
         'email',
         'password',
         'whatsapp',
+        'whatsapp_prefix',
         'phone',
         'photo_url',
         'goals',
@@ -32,6 +33,7 @@ class User extends Authenticatable implements JWTSubject
         'id_user_business',
         'api_token',
         'dni',
+        'tipo_documento',
         'birth_date',
         'pais_id',
         'provincia_id',
@@ -41,6 +43,7 @@ class User extends Authenticatable implements JWTSubject
         'no_como_entero',
         'no_otros_como_entero_empresa',
         'domicilio_fiscal',
+        'organizacion_id',
     ];
 
     /**

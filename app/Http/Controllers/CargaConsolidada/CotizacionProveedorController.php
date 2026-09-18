@@ -36,10 +36,11 @@ use Illuminate\Support\Str;
 use App\Traits\UserGroupsTrait;
 use App\Traits\FileTrait;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
+use App\Support\Organizacion\OrganizacionPortalUrls;
 use App\Support\BrandLogoPaths;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\EmbarqueExport;
-use App\Jobs\SendRotuladoJob;
+use App\Services\Organizacion\OrganizacionMensajeriaService;
 use App\Models\CargaConsolidada\DocumentacionFile;
 use App\Models\CargaConsolidada\DocumentacionFolder;
 use App\Models\CargaConsolidada\CotizacionDocumentacion;
@@ -157,8 +158,16 @@ class CotizacionProveedorController extends Controller
 
             $rol = $user->getNombreGrupo();
 
+            if (!Contenedor::where('id', $idContenedor)->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no encontrado'
+                ], 404);
+            }
+
             $estadoChina = $request->estado_china ?? 'todos';
             $search = $request->search ?? '';
+            $idCotizacion = $request->input('idCotizacion', $request->input('id_cotizacion'));
             // Compatibilidad con ambos nombres de parámetros
             $page = $request->input('page', $request->input('currentPage', 1));
             $perPage = $request->input('limit', $request->input('itemsPerPage', 100));
@@ -171,11 +180,15 @@ class CotizacionProveedorController extends Controller
                 ->leftJoin('contenedor_consolidado_tipo_cliente AS TC', 'TC.id', '=', 'main.id_tipo_cliente')
                 ->leftJoin('usuario AS U', 'U.ID_Usuario', '=', 'main.id_usuario')
                 ->where('main.id_contenedor', $idContenedor)
+                ->whereNull('main.deleted_at')
                 ->whereRaw('NOT EXISTS (SELECT 1 FROM calculadora_importacion ci WHERE ci.id_cotizacion = main.id AND ci.estado = ?)', ['PENDIENTE']);
 
             if (!empty($search)) {
                 Log::info('search: ' . $search);
                 $query->where('main.nombre', 'LIKE', '%' . $search . '%');
+            }
+            if (!empty($idCotizacion)) {
+                $query->where('main.id', $idCotizacion);
             }
             if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
                 $query->whereExists(function ($sub) use ($request) {
@@ -200,6 +213,9 @@ class CotizacionProveedorController extends Controller
 
 
             switch ($rol) {
+                case Usuario::ROL_SOCIO:
+                    break;
+
                 case Usuario::ROL_COTIZADOR:
                     if ($user->getIdUsuario() != 28791 && $user->getIdUsuario() != 28911) {
                         $query->where('main.id_usuario', $user->getIdUsuario());
@@ -267,6 +283,7 @@ class CotizacionProveedorController extends Controller
                         'send_rotulado_status',
                         'tipo_rotulado'
                     ])
+                    ->orderBy('id')
                     ->get()
                     ->groupBy('id_cotizacion');
             }
@@ -399,6 +416,7 @@ class CotizacionProveedorController extends Controller
                     'arrive_date',
                     'send_rotulado_status'
                 ])
+                ->orderBy('id')
                 ->get()
                 ->toArray();
 
@@ -581,6 +599,7 @@ class CotizacionProveedorController extends Controller
             }
 
             // Enviar mensaje de WhatsApp
+            $this->setWhatsappFlujo('datos_proveedor');
             $resultadoWhatsApp = $this->sendMessage(
                 $mensaje,
                 $telefono,
@@ -936,6 +955,7 @@ class CotizacionProveedorController extends Controller
             }
 
             // Enviar mensaje de bienvenida si es necesario
+            $this->setWhatsappFlujo('rotulado');
             if (count($providersHasSended) == 0) {
                 $this->sendWelcome($carga);
             } elseif (count($providersHasSended) > 0 && count($providersHasNoSended) > 0) {
@@ -1011,7 +1031,8 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 $sleepSendMedia += 1;
 
                 $pdfService = app(\App\Services\CargaConsolidada\RotuladoPdfService::class);
-                $htmlContent = $pdfService->buildHtml($cliente, $supplierCode, $carga);
+                $cotizacionPdf = Cotizacion::where('id', $idCotizacion)->first();
+                $htmlContent = $pdfService->buildHtmlForCotizacion($cliente, $supplierCode, $carga, $cotizacionPdf);
 
                 Log::info('HTML procesado para proveedor: ' . $supplierCode);
 
@@ -1138,28 +1159,118 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
     }
 
     /**
+     * @param Cotizacion $cotizacion
+     * @return \Illuminate\Http\JsonResponse|null
+     */
+    private function respuestaRotuladoDeshabilitado($cotizacion)
+    {
+        $orgId = (int) $cotizacion->getAttribute('organizacion_id');
+        if ($orgId <= 0) {
+            $orgId = OrganizacionMensajeriaService::ID_ORGANIZACION_ADMIN;
+        }
+        if (app(OrganizacionMensajeriaService::class)->rotuladoHabilitado($orgId)) {
+            return null;
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Los envíos de rotulado están deshabilitados para esta organización.',
+        ], 403);
+    }
+
+    /**
+     * Guarda tipo_rotulado elegido en el modal (General = rotulado) antes de encolar el envío.
+     *
+     * @param int $idCotizacion
+     * @param array $proveedores
+     * @return array
+     */
+    private function persistirTipoRotuladoProveedores($idCotizacion, $proveedores)
+    {
+        $tiposValidos = array(
+            'pendiente',
+            'rotulado',
+            'calzado',
+            'ropa',
+            'ropa_interior',
+            'maquinaria',
+            'movilidad_personal',
+        );
+        $idsProveedores = array();
+
+        foreach ((array) $proveedores as $proveedor) {
+            $row = is_object($proveedor) ? (array) $proveedor : $proveedor;
+            if (empty($row['id'])) {
+                continue;
+            }
+
+            $idProveedor = (int) $row['id'];
+            $idsProveedores[] = $idProveedor;
+
+            $tipoRaw = isset($row['tipo_rotulado']) ? $row['tipo_rotulado'] : '';
+            if (is_array($tipoRaw)) {
+                $tipoRaw = isset($tipoRaw['value']) ? $tipoRaw['value'] : '';
+            }
+            $tipo = strtolower(trim(str_replace(' ', '_', (string) $tipoRaw)));
+            if ($tipo === 'general') {
+                $tipo = 'rotulado';
+            }
+            if ($tipo === '' || !in_array($tipo, $tiposValidos, true)) {
+                continue;
+            }
+
+            $model = CotizacionProveedor::where('id', $idProveedor)
+                ->where('id_cotizacion', $idCotizacion)
+                ->first();
+            if (!$model) {
+                continue;
+            }
+
+            $model->tipo_rotulado = $tipo;
+            $model->save();
+        }
+
+        return $idsProveedores;
+    }
+
+    /**
      * Procesar estado de rotulado usando Job asíncrono
      *
      * @param string $cliente
      * @param string $carga
      * @param array $proveedores
      * @param int $idCotizacion
-     * @return \Illuminate\Http\Response
+     * @return \Illuminate\Http\JsonResponse
      * @throws Exception
      */
     protected function procesarEstadoRotuladoJob($cliente, $carga, $proveedores, $idCotizacion, $total_movilidad_personal = 0)
     {
         try {
-            $idContenedor = Cotizacion::where('id', $idCotizacion)->first()->id_contenedor;
+            $cotizacion = Cotizacion::where('id', $idCotizacion)->first();
+            if (!$cotizacion) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada',
+                ], 404);
+            }
+
+            $idsProveedores = $this->persistirTipoRotuladoProveedores($idCotizacion, $proveedores);
+
+            $bloqueado = $this->respuestaRotuladoDeshabilitado($cotizacion);
+            if ($bloqueado) {
+                return $bloqueado;
+            }
+
+            $idContenedor = $cotizacion->id_contenedor;
             $carga = Contenedor::where('id', $idContenedor)->first()->carga;
 
             // Obtener dominio del frontend
             $domain = WhatsappTrait::getCurrentRequestDomain();
 
-            // Dispatch del Job para procesamiento asíncrono
-            SendRotuladoJob::dispatch($cliente, $carga, $proveedores, $idCotizacion, $total_movilidad_personal, $domain)->onQueue('importaciones');
+            $idsProveedores = $this->persistirTipoRotuladoProveedores($idCotizacion, $proveedores);
+            ForceSendRotuladoJob::dispatch($idCotizacion, $idsProveedores, $idContenedor, $domain)->onQueue('importaciones');
 
-            Log::info('SendRotuladoJob dispatchado exitosamente');
+            Log::info('ForceSendRotuladoJob dispatchado desde send-rotulado (SendRotuladoJob abandoned)');
 
             return response()->json([
                 'success' => true,
@@ -1271,6 +1382,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 "📦 En caso hubiera variaciones en el cubicaje se cobrará la diferencia en la cotización final.\n\n" .
                 "Apenas haga el pago, envíe por este medio para hacer la reserva.";
 
+            $this->setWhatsappFlujo('cobranza');
             $this->sendMessage($message, 'administracion');
 
             // Enviar imagen de pagos
@@ -1429,21 +1541,31 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                         'December' => 'Diciembre'
                     ];
                     $month = strtr($month, $months);
-                    $date = $day . ' de ' . $month;
+                    $fecha = $day . ' de ' . $month;
+                    $codeSupplier = (string) ($proveedor->code_supplier ?: $supplierCode);
                     $message = 'Hola, hemos contactado a tu proveedor con código ' .
-                        $supplierCode . ' nos comunica que la carga será enviada el ' .
-                        $date . '.';
+                        $codeSupplier . ' nos comunica que la carga será enviada el ' .
+                        $fecha . ',';
                     $cotizacion = Cotizacion::find($idCotizacion);
                     $telefono = $cotizacion->telefono;
 
                     $telefono = preg_replace('/\s+/', '', $telefono);
                     $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
-                    $this->sendMessage(
-                        $message,
-                        $this->phoneNumberId,
-                        0,
-                        'consolidado',
-                        CoordinacionWhatsappPayload::generalCliente((string) $this->phoneNumberId, $message, $message)
+                    if (!empty($cotizacion->organizacion_id)) {
+                        $this->setWhatsappOrganizacionId($cotizacion->organizacion_id);
+                    }
+                    $this->setWhatsappFlujo('arrive_date');
+                    $payloadRetraso = CoordinacionWhatsappPayload::retrasoEntrega(
+                        (string) $this->phoneNumberId,
+                        $codeSupplier,
+                        $fecha,
+                        $message
+                    );
+                    $payloadRetraso['id_cotizacion'] = (int) $idCotizacion;
+                    $this->queueCoordinacionWhatsApp(
+                        $payloadRetraso,
+                        'retraso_entrega',
+                        'Aviso retraso entrega — ' . $codeSupplier
                     );
 
                     // Disparar evento de proveedor contactado en China
@@ -1721,7 +1843,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 return response()->json(['success' => false, 'message' => 'Usuario no autenticado'], 401);
             }
 
-            $allowedRoles = [Usuario::ROL_COTIZADOR, Usuario::ROL_COORDINACION];
+            $allowedRoles = [Usuario::ROL_COTIZADOR, Usuario::ROL_COORDINACION, Usuario::ROL_SOCIO];
             if (!in_array($user->getNombreGrupo(), $allowedRoles)) {
                 return response()->json(['success' => false, 'message' => 'No tienes permisos para realizar esta acción'], 403);
             }
@@ -1764,6 +1886,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
     public function sendAlertDifferenceCbmMessage($idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('cbm_alerta');
             Log::info('sendAlertDifferenceCbmMessage: ' . $idCotizacion);
             $cotizacion = Cotizacion::find($idCotizacion);
             $proveedores = CotizacionProveedor::where('id_cotizacion', $idCotizacion)->where('estados_proveedor', '!=', 'NO LOADED')->get();
@@ -2167,9 +2290,12 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $qtyPalletChina = (int) ($proveedor->qty_pallet_china ?? 0);
 
             // Preparar mensaje inicial de inspección (solo pb_inspeccion_llegada_v1; 1 vez por proveedor)
-            $baseUrl = rtrim((string) config('app.url_clientes'), '/');
             $cotizacionUuid = Cotizacion::where('id', $idCotizacion)->value('uuid');
-            $inspeccionViewUrl = $baseUrl . '/inspeccion/' . ($cotizacionUuid ?? '') . '?id_proveedor=' . $idProveedor;
+            $inspeccionViewUrl = OrganizacionPortalUrls::inspeccion(
+                OrganizacionPortalUrls::orgIdFromParent($cotizacion),
+                $cotizacionUuid ?? '',
+                $idProveedor
+            );
             $inspectionMessage = $this->buildInspectionMessage(
                 $cotizacion->nombre,
                 $proveedor->code_supplier,
@@ -2201,6 +2327,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
 
             if ($proveedorsWithFilesSended < 1) {
+                $this->setWhatsappFlujo('cobranza');
                 if ($this->shouldSendReservationMessage($idCotizacion)) {
                     $this->sendReservationMessage($cotizacion, $telefono);
                 }
@@ -2334,6 +2461,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
         ?string $linkInspeccion = null,
         ?int $idProveedor = null
     ) {
+        $this->setWhatsappFlujo('inspeccion');
         $sentFiles = ['images' => 0, 'videos' => 0, 'llegada_enviada' => false];
 
         $totalFiles = count($inspectionFiles['images']) + count($inspectionFiles['videos']);
@@ -2391,6 +2519,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
     private function sendReservationMessage($cotizacion, $telefono)
     {
+        $this->setWhatsappFlujo('cobranza');
         $contenedor = Contenedor::where('id', $cotizacion->id_contenedor)->first();
         if (!$contenedor) {
             return;
@@ -3442,6 +3571,14 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $idContainer = $request->idContainer;
             $idsProveedores = $request->proveedores;
 
+            $cotizacion = Cotizacion::where('id', $idCotizacion)->first();
+            if ($cotizacion) {
+                $bloqueado = $this->respuestaRotuladoDeshabilitado($cotizacion);
+                if ($bloqueado) {
+                    return $bloqueado;
+                }
+            }
+
             Log::info("Iniciando proceso de envío de rotulado", [
                 'id_cotizacion' => $idCotizacion,
                 'id_container' => $idContainer,
@@ -3711,8 +3848,16 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
             $rol = $user->getNombreGrupo();
 
+            if (!Contenedor::where('id', $idContenedor)->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no encontrado'
+                ], 404);
+            }
+
             $estadoChina = $request->estado_china ?? 'todos';
             $search = $request->search ?? '';
+            $idCotizacion = $request->input('idCotizacion', $request->input('id_cotizacion'));
 
             // Usar la misma lógica de filtros que getContenedorCotizacionProveedores
             $query = DB::table('contenedor_consolidado_cotizacion AS main')
@@ -3722,11 +3867,15 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 ])
                 ->leftJoin('contenedor_consolidado_tipo_cliente AS TC', 'TC.id', '=', 'main.id_tipo_cliente')
                 ->leftJoin('usuario AS U', 'U.ID_Usuario', '=', 'main.id_usuario')
-                ->where('main.id_contenedor', $idContenedor);
+                ->where('main.id_contenedor', $idContenedor)
+                ->whereNull('main.deleted_at');
 
             if (!empty($search)) {
                 Log::info('search: ' . $search);
                 $query->where('main.nombre', 'LIKE', '%' . $search . '%');
+            }
+            if (!empty($idCotizacion)) {
+                $query->where('main.id', $idCotizacion);
             }
 
             if ($request->has('estado_coordinacion') || $request->has('estado_china')) {
@@ -3799,6 +3948,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                         'arrive_date_china',
                         'send_rotulado_status'
                     ])
+                    ->orderBy('id')
                     ->get()
                     ->toArray();
 
@@ -4061,6 +4211,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
             $finalFilePath = $this->storageLocalPath($uploadPath);
             $fileName = 'contrato_' . $cotizacion->cod_contract . '.pdf';
+            $this->setWhatsappFlujo('cotizacion_pdf');
             $this->sendMedia($finalFilePath, 'application/pdf', $message, $telefono, 10, 'ventas', $fileName);
 
             Log::info('Contrato firmado guardado exitosamente', [

@@ -12,6 +12,8 @@ use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\Usuario;
 use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveService;
 use App\Support\CargaConsolidada\DocumentStatusSync;
+use App\Support\CargaConsolidada\ClientesVisibility;
+use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Log;
 use Exception;
 
@@ -54,6 +56,16 @@ class EmbarcadosController extends Controller
             $search = trim((string) $request->input('search', ''));
 
             $estadoChinaContenedor = Contenedor::where('id', $idContenedor)->value('estado_china');
+            $user = null;
+            try {
+                $user = JWTAuth::parseToken()->authenticate();
+            } catch (Exception $e) {
+                $user = null;
+            }
+            $esSocio = $user && (
+                $user->getNombreGrupo() === Usuario::ROL_SOCIO
+                || (int) $user->getAttribute('ID_Organizacion') !== 1
+            );
 
             $baseQuery = DB::table('contenedor_consolidado_cotizacion as CC')
                 ->leftJoin('contenedor_consolidado_tipo_cliente as TC', 'TC.id', '=', 'CC.id_tipo_cliente')
@@ -67,18 +79,18 @@ class EmbarcadosController extends Controller
                 ->where('CC.id_contenedor', $idContenedor)
                 ->whereNull('CC.deleted_at')
                 ->whereNull('CC.id_cliente_importacion')
-                ->where('CC.estado_cotizador', 'CONFIRMADO')
                 ->whereExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('contenedor_consolidado_cotizacion_proveedores')
                     ->whereColumn('contenedor_consolidado_cotizacion_proveedores.id_cotizacion', 'CC.id');
             });
 
-            // Mientras el contenedor no haya completado la recepción en China, se listan
-            // todas las cotizaciones; al llegar a COMPLETADO se exige estado_cliente definido.
-            if ($estadoChinaContenedor === Contenedor::ESTADOS_CHINA['COMPLETADO']) {
-                $baseQuery->whereNotNull('CC.estado_cliente');
-            }
+            ClientesVisibility::applyListado(
+                $baseQuery,
+                'CC',
+                $esSocio,
+                $estadoChinaContenedor === Contenedor::ESTADOS_CHINA['COMPLETADO']
+            );
 
             if ($search !== '') {
                 $like = "%{$search}%";
@@ -517,9 +529,9 @@ class EmbarcadosController extends Controller
             ])
             ->where('id_contenedor', $idContenedor)
             ->whereNotNull('estado_cliente')
-            ->where('estado_cotizador', 'CONFIRMADO')
-            ->whereNull('id_cliente_importacion')
-            ->first();
+            ->whereNull('id_cliente_importacion');
+        ClientesVisibility::applyConfirmadoParaBd($headers, '');
+        $headers = $headers->first();
         // Attach formatted totals alongside numeric values
         if ($headers) {
             $headers->total_logistica_formatted = $this->formatCurrency($headers->total_logistica ?? 0);

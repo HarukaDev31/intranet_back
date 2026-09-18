@@ -36,7 +36,13 @@ use PhpOffice\PhpSpreadsheet\Style\Font;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Illuminate\Support\Facades\DB;
 use App\Models\CargaConsolidada\Contenedor;
+use App\Services\Organizacion\OrganizacionMensajeriaService;
 
+/**
+ * ABANDONED — no usar. El envío de rotulado vive en ForceSendRotuladoJob.
+ *
+ * @deprecated Usar ForceSendRotuladoJob.
+ */
 class SendRotuladoJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, UsesObjectStorage, WhatsappTrait, DatabaseConnectionTrait, GoogleSheetsHelper, MailTrait;
@@ -56,6 +62,12 @@ class SendRotuladoJob implements ShouldQueue
 
     /** @var array<string, array{path: string, name: string, mime: string}> */
     protected $coordinationAttachments = [];
+
+    /** @var Cotizacion|null */
+    protected $cotizacionInfo;
+
+    /** @var int */
+    protected $organizacionId = 1;
 
     /**
      * Create a new job instance.
@@ -101,9 +113,42 @@ class SendRotuladoJob implements ShouldQueue
      */
     public function handle(): void
     {
+        Log::warning('SendRotuladoJob abandoned: reenviando a ForceSendRotuladoJob', [
+            'id_cotizacion' => $this->idCotizacion,
+        ]);
+        $this->setDatabaseConnection($this->domain);
+        $cotizacion = Cotizacion::where('id', $this->idCotizacion)->first();
+        if (!$cotizacion || empty($cotizacion->id_contenedor)) {
+            return;
+        }
+        $ids = [];
+        foreach ((array) $this->proveedores as $proveedor) {
+            $row = is_object($proveedor) ? (array) $proveedor : $proveedor;
+            if (!empty($row['id'])) {
+                $ids[] = (int) $row['id'];
+            }
+        }
+        if ($ids === []) {
+            return;
+        }
+        ForceSendRotuladoJob::dispatch(
+            $this->idCotizacion,
+            $ids,
+            $cotizacion->id_contenedor,
+            $this->domain
+        )->onQueue('importaciones');
+    }
+
+    /**
+     * @abandoned Cuerpo histórico. handle() ya no lo ejecuta.
+     * @phpstan-ignore method.unused
+     */
+    private function handleAbandoned(): void
+    {
         try {
             // Establecer la conexión de BD basándose en el dominio
             $this->setDatabaseConnection($this->domain);
+            $this->setWhatsappFlujo('rotulado');
 
             $this->resetCoordinationEmailPayload();
 
@@ -118,6 +163,24 @@ class SendRotuladoJob implements ShouldQueue
             // Obtener información de la cotización para configurar el teléfono
             $cotizacionInfo = null;
             $cotizacionInfo = Cotizacion::where('id', $this->idCotizacion)->first();
+            $this->cotizacionInfo = $cotizacionInfo;
+            $this->organizacionId = $cotizacionInfo
+                ? (int) $cotizacionInfo->getAttribute('organizacion_id')
+                : OrganizacionMensajeriaService::ID_ORGANIZACION_ADMIN;
+            if ($this->organizacionId <= 0) {
+                $this->organizacionId = OrganizacionMensajeriaService::ID_ORGANIZACION_ADMIN;
+            }
+            $this->setWhatsappOrganizacionId($this->organizacionId);
+
+            $mensajeria = app(OrganizacionMensajeriaService::class);
+            if (!$mensajeria->rotuladoHabilitado($this->organizacionId)) {
+                Log::info('SendRotuladoJob omitido: rotulado deshabilitado para la organización', [
+                    'organizacion_id' => $this->organizacionId,
+                    'id_cotizacion' => $this->idCotizacion,
+                ]);
+                return;
+            }
+
             if ($cotizacionInfo) {
                 $telefono = preg_replace('/\s+/', '', $cotizacionInfo->telefono);
                 $this->phoneNumberId = $telefono ? $telefono . '@c.us' : '';
@@ -126,9 +189,11 @@ class SendRotuladoJob implements ShouldQueue
                 Log::warning('No se encontró la cotización con ID: ' . $this->idCotizacion);
             }
 
+            // Socios (org ≠ 1): más adelante irán por API keys EMTA por organización.
+            // Por ahora se usa la conexión general de coordinación que ya existe.
             if (
                 $this->whatsappCoordinacionBatchId === null
-                && config('meta_whatsapp.coordinacion_enabled')
+                && $this->shouldRouteCoordinacionToMeta('consolidado')
                 && $this->phoneNumberId
             ) {
                 $phoneE164 = preg_replace('/[^0-9]/', '', (string) $this->phoneNumberId);
@@ -206,7 +271,7 @@ class SendRotuladoJob implements ShouldQueue
             if (count($providersHasSended) == 0 || $hasForceSend) {
                 Log::info('Enviando mensaje de bienvenida - no hay proveedores enviados previamente o hay proveedores con force_send');
                 $welcomeText = WhatsappTrait::buildWelcomeRotuladoMessageText($this->carga);
-                if (config('meta_whatsapp.coordinacion_enabled') && $this->phoneNumberId) {
+                if ($this->shouldRouteCoordinacionToMeta('consolidado') && $this->phoneNumberId) {
                     $result = $this->queueCoordinacionWhatsApp(
                         CoordinacionWhatsappPayload::welcomeRotulado($this->phoneNumberId, (string) $this->carga, $welcomeText),
                         'rotulado_bienvenida',
@@ -225,7 +290,7 @@ class SendRotuladoJob implements ShouldQueue
 *Rotulado: 👇🏼*  
 Tienes que indicarle a tu proveedor que las cajas máster 📦 cuenten con un rotulado para 
 identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro almacén.";
-                if (config('meta_whatsapp.coordinacion_enabled') && $this->phoneNumberId) {
+                if ($this->shouldRouteCoordinacionToMeta('consolidado') && $this->phoneNumberId) {
                     $this->queueCoordinacionWhatsApp(
                         CoordinacionWhatsappPayload::rotuladoNuevoProveedor(
                             $this->phoneNumberId,
@@ -240,6 +305,14 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 }
                 $this->addCoordinationSection(null, $nuevoProveedorMsg);
             }
+
+            $sleepSendMedia = 7;
+            $sleepSendMedia = $this->sendOrgRotuladoPasoImagen(
+                $mensajeria,
+                OrganizacionMensajeriaService::IMG_PASO1,
+                'Pasos 1 y 2 — rotulado',
+                $sleepSendMedia
+            );
 
             // Configurar ZIP
             $zipFileName = storage_path('app/Rotulado.zip');
@@ -277,7 +350,6 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $options->set('debugLayoutInline', false);
             $options->set('debugLayoutPaddingBox', false);
 
-            $sleepSendMedia = 7;
             $processedProviders = 0;
             
             // Procesar cada proveedor pendiente
@@ -324,7 +396,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                     $this->addCoordinationSection(null, $rotuladoCaption);
                     $this->addCoordinationAttachment($tempFileForSend, $fileName, 'application/pdf');
 
-                    // PASO 1: Enviar rotulado PDF del proveedor
+                    // PASO 3 (socios) / PASO 1 (admin): PDF etiqueta consolidado
                     $sleepSendMedia += 1;
                     $metaRotulado = $this->withBatchStep(
                         CoordinacionWhatsappPayload::rotuladoPdfProducto(
@@ -408,34 +480,37 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 throw new \Exception("Error al cerrar el archivo ZIP");
             }
 
-            // PASO 3: Enviar imagen de dirección (después de todos los proveedores)
-            $direccionUrl = public_path('assets/images/Direccion_27_04_26.jpeg');
-            $direccionCaption = '🏽Dile a tu proveedor que envíe la carga a nuestro almacén en China';
-            $this->addCoordinationSection(null, $direccionCaption);
-            if (is_file($direccionUrl)) {
-                $this->addCoordinationAttachment($direccionUrl, 'Direccion_almacen_China.jpeg', 'image/jpeg');
-            }
-            $sleepSendMedia += 3;
-            $metaDireccion = $this->withBatchStep(
-                CoordinacionWhatsappPayload::rotuladoAlmacenChinaImg(
-                    (string) $this->phoneNumberId,
-                    $direccionUrl,
+            // Imagen de dirección (socio sin foto → org 1 / jpeg por defecto)
+            $direccionPath = $mensajeria->localPathImagenConFallback(
+                $this->organizacionId,
+                OrganizacionMensajeriaService::IMG_DIRECCION
+            );
+            if ($direccionPath && is_file($direccionPath)) {
+                $direccionCaption = 'Dile a tu proveedor que envíe la carga a nuestro almacén en China';
+                $this->addCoordinationSection(null, $direccionCaption);
+                $this->addCoordinationAttachment($direccionPath, 'Direccion_almacen_China.jpeg', 'image/jpeg');
+                $sleepSendMedia += 3;
+                $metaDireccion = $this->withBatchStep(
+                    CoordinacionWhatsappPayload::rotuladoAlmacenChinaImg(
+                        (string) $this->phoneNumberId,
+                        $direccionPath,
+                        $direccionCaption,
+                        $sleepSendMedia
+                    ),
+                    'rotulado_direccion_almacen',
+                    'Imagen dirección almacén China'
+                );
+                $this->sendMedia(
+                    $direccionPath,
+                    'image/jpeg',
                     $direccionCaption,
-                    $sleepSendMedia
-                ),
-                'rotulado_direccion_almacen',
-                'Imagen dirección almacén China'
-            );
-            $this->sendMedia(
-                $direccionUrl,
-                'image/jpg',
-                $direccionCaption,
-                $this->phoneNumberId,
-                $sleepSendMedia,
-                'consolidado',
-                'Direccion_almacen_China.jpeg',
-                $metaDireccion
-            );
+                    $this->phoneNumberId,
+                    $sleepSendMedia,
+                    'consolidado',
+                    'Direccion_almacen_China.jpeg',
+                    $metaDireccion
+                );
+            }
 
             // Ya no se envía pb_rotulado_datos_proveedor_v1 al pedir rotulado.
 
@@ -545,8 +620,79 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
         $service = app(\App\Services\CargaConsolidada\RotuladoPdfService::class);
 
         return $service->renderPdf(
-            $service->buildHtml($this->cliente, $supplierCode, $this->carga)
+            $service->buildHtmlForCotizacion($this->cliente, $supplierCode, $this->carga, $this->cotizacionInfo)
         );
+    }
+
+    /**
+     * Foto de instrucción (pasos 1 y 2) configurada en el panel de organización.
+     *
+     * @param OrganizacionMensajeriaService $mensajeria
+     * @param string $slot
+     * @param string $label
+     * @param int $sleepSendMedia
+     * @return int
+     */
+    private function sendOrgRotuladoPasoImagen($mensajeria, $slot, $label, $sleepSendMedia)
+    {
+        $path = $mensajeria->localPathImagenConFallback($this->organizacionId, $slot);
+        if (!$path || !is_file($path)) {
+            Log::info('SendRotuladoJob: sin imagen de ' . $slot . ' para org ' . $this->organizacionId);
+            return $sleepSendMedia;
+        }
+
+        $sleepSendMedia += 2;
+        $caption = $label;
+        $fileName = basename($path);
+        $mime = $this->mimeFromPath($path);
+        $this->addCoordinationSection(null, $caption);
+        $this->addCoordinationAttachment($path, $fileName, $mime);
+        $metaPaso = $this->withBatchStep(
+            [
+                'type' => 'legacy_media',
+                'path' => $path,
+                'mimeType' => $mime,
+                'caption' => $caption,
+                'fileName' => $fileName,
+                'phone' => $this->phoneNumberId,
+                'sleep' => $sleepSendMedia,
+                'chat_preview' => $caption,
+            ],
+            'rotulado_pasos_' . $slot,
+            $label
+        );
+        $this->sendMedia(
+            $path,
+            $mime,
+            $caption,
+            $this->phoneNumberId,
+            $sleepSendMedia,
+            'consolidado',
+            $fileName,
+            $metaPaso
+        );
+
+        return $sleepSendMedia;
+    }
+
+    /**
+     * @param string $path
+     * @return string
+     */
+    private function mimeFromPath($path)
+    {
+        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        if ($ext === 'png') {
+            return 'image/png';
+        }
+        if ($ext === 'webp') {
+            return 'image/webp';
+        }
+        if ($ext === 'gif') {
+            return 'image/gif';
+        }
+
+        return 'image/jpeg';
     }
 
     /**

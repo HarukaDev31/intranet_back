@@ -33,6 +33,7 @@ class SendComprobanteFormNotificationJob implements ShouldQueue
     public function handle(): void
     {
         try {
+            $this->setWhatsappFlujo('comprobante_form');
             $form = ComprobanteForm::find($this->comprobanteFormId);
             if (!$form) {
                 Log::error('SendComprobanteFormNotificationJob: formulario no encontrado', ['id' => $this->comprobanteFormId]);

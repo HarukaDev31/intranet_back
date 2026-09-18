@@ -10,16 +10,20 @@ use Illuminate\Http\Request;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\TipoCliente;
 use App\Models\CargaConsolidada\CotizacionProveedor;
+use App\Models\CargaConsolidada\CotizacionProveedorArchivoIa;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
 use App\Services\CargaConsolidada\CotizacionService;
+use App\Services\CargaConsolidada\CustomersHeadersService;
 use App\Services\CargaConsolidada\CotizacionExportService;
 use App\Services\CargaConsolidada\ThirdPartyCotizacionExportCacheService;
 use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveService;
 use App\Models\Usuario;
+use App\Models\PaisFlag;
 use App\Models\Notificacion;
 use App\Traits\WhatsappTrait;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
+use App\Support\Organizacion\OrganizacionPortalUrls;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -61,6 +65,15 @@ class CotizacionController extends Controller
         return $symbol . number_format($num, 2, '.', ',');
     }
 
+    private function esArchivoPdf($path, $nombre = null)
+    {
+        $haystack = strtolower(trim((string) ($nombre ?: $path)));
+        if ($haystack === '') {
+            return false;
+        }
+        return (bool) preg_match('/\.pdf($|\?)/', $haystack);
+    }
+
     /**
      * Apply currency formatting directly to the 'value' of CBM and logística totals.
      */
@@ -70,7 +83,7 @@ class CotizacionController extends Controller
             if (!is_array($item) || !array_key_exists('value', $item)) {
                 continue;
             }
-            if (in_array($key, ['total_logistica', 'total_logistica_pagado', 'total_diferencia_logistica'])) {
+            if (in_array($key, ['total_logistica', 'total_logistica_pagado', 'total_diferencia_logistica', 'total_fob', 'total_isd', 'total_impuestos'])) {
                 $headers[$key]['value'] = $this->formatCurrency($item['value']);
             }
         }
@@ -93,11 +106,34 @@ class CotizacionController extends Controller
             'SELECT
                 COALESCE(SUM(CASE WHEN cc.estado_cotizador = ? THEN cc.volumen ELSE 0 END), 0) AS cbm_total_peru,
                 COALESCE(SUM(CASE WHEN cc.estado_cotizador = ? AND cc.id_usuario = ? THEN cc.volumen ELSE 0 END), 0) AS cbm_vendido,
-                COALESCE(SUM(CASE WHEN cc.estado_cotizador != ? AND cc.id_usuario = ? THEN cc.volumen ELSE 0 END), 0) AS cbm_pendiente
+                COALESCE(SUM(CASE WHEN cc.estado_cotizador != ? AND cc.id_usuario = ? THEN cc.volumen ELSE 0 END), 0) AS cbm_pendiente,
+                COALESCE(SUM(CASE
+                    WHEN cc.estado_resumen = ? OR cc.estado_cotizador = ?
+                    THEN cc.volumen ELSE 0
+                END), 0) AS cbm_destino_confirmado,
+                COALESCE(SUM(CASE
+                    WHEN COALESCE(cc.estado_resumen, \'\') != ? AND cc.estado_cotizador != ?
+                    THEN cc.volumen ELSE 0
+                END), 0) AS cbm_pendiente_total,
+                COALESCE(SUM(cc.fob), 0) AS total_fob,
+                COALESCE(SUM(cc.isd), 0) AS total_isd,
+                COALESCE(SUM(cc.impuestos), 0) AS total_impuestos,
+                COALESCE(SUM(cc.monto), 0) AS total_logistica_todas
             FROM contenedor_consolidado_cotizacion AS cc
             WHERE cc.id_contenedor = ?
               AND cc.deleted_at IS NULL',
-            ['CONFIRMADO', 'CONFIRMADO', $userId, 'CONFIRMADO', $userId, $idContenedor]
+            [
+                'CONFIRMADO',
+                'CONFIRMADO',
+                $userId,
+                'CONFIRMADO',
+                $userId,
+                'CONFIRMADO',
+                'CONFIRMADO',
+                'CONFIRMADO',
+                'CONFIRMADO',
+                $idContenedor,
+            ]
         );
 
         $imo = DB::selectOne(
@@ -138,6 +174,8 @@ class CotizacionController extends Controller
         $proveedores = DB::selectOne(
             'SELECT
                 COALESCE(SUM(CASE WHEN cc.estado_cotizador = ? THEN cccp.cbm_total_china ELSE 0 END), 0) AS cbm_total_china,
+                COALESCE(SUM(cccp.cbm_total_china), 0) AS cbm_total_china_all,
+                COALESCE(SUM(CASE WHEN cc.estado_cotizador = ? THEN cccp.cbm_imo ELSE 0 END), 0) AS cbm_imo_proveedores,
                 COALESCE(SUM(
                     CASE
                         WHEN cccp.estados_proveedor = ? AND cc.id_usuario = ?
@@ -150,7 +188,7 @@ class CotizacionController extends Controller
                 ON cc.id = cccp.id_cotizacion
                 AND cc.deleted_at IS NULL
             WHERE cccp.id_contenedor = ?',
-            ['CONFIRMADO', 'LOADED', $userId, $idContenedor]
+            ['CONFIRMADO', 'CONFIRMADO', 'LOADED', $userId, $idContenedor]
         );
 
         $pagos = DB::selectOne(
@@ -294,12 +332,35 @@ class CotizacionController extends Controller
                         ->orWhere('estados_proveedor', $request->estado_china);
                 });
             }
-            // filtrar por estado_cotizador
-            if ($request->has('estado_cotizador') && !empty($request->estado_cotizador)) {
-                $query->where('estado_cotizador', $request->estado_cotizador);
+            // filtrar por estado_cotizador (socio: COTIZADO/CONFIRMADO = estado_resumen)
+            if ($request->has('estado_cotizador') && !empty($request->estado_cotizador) && $request->estado_cotizador !== 'todos') {
+                if ($request->estado_cotizador === 'COTIZADO') {
+                    $query->where(function ($q) {
+                        $q->where('estado_resumen', 'COTIZADO')
+                            ->orWhere(function ($q2) {
+                                $q2->where(function ($q3) {
+                                    $q3->whereNull('estado_resumen')
+                                        ->orWhere('estado_resumen', '');
+                                })->where(function ($q4) {
+                                    $q4->whereNull('estado_cotizador')
+                                        ->orWhere('estado_cotizador', '!=', 'CONFIRMADO');
+                                });
+                            });
+                    });
+                } elseif ($request->estado_cotizador === 'CONFIRMADO') {
+                    $query->where(function ($q) {
+                        $q->where('estado_resumen', 'CONFIRMADO')
+                            ->orWhere('estado_cotizador', 'CONFIRMADO');
+                    });
+                } else {
+                    $query->where('estado_cotizador', $request->estado_cotizador);
+                }
             }
             // Aplicar filtros según el rol del usuario
             switch ($rol) {
+                case Usuario::ROL_SOCIO:
+                    break;
+
                 case Usuario::ROL_COTIZADOR:
                     if ($user->getIdUsuario() != 28791 && $user->getIdUsuario() != 28911) {
                         $query->where('id_usuario', $user->getIdUsuario());
@@ -378,8 +439,7 @@ class CotizacionController extends Controller
 
             $userId = auth()->id();
 
-            $files = DB::table('carga_consolidada_contenedor')
-                ->where('id', $idContenedor)
+            $files = Contenedor::where('id', $idContenedor)
                 ->select('bl_file_url', 'lista_embarque_url')
                 ->first();
 
@@ -392,11 +452,38 @@ class CotizacionController extends Controller
 
             $listaEmbarqueUrl = $this->cdnStorageUrl($files->lista_embarque_url);
 
+            $archivosIaPorCotizacion = collect();
+            $idsPagina = $results->pluck('id')->filter()->values()->all();
+            if (!empty($idsPagina)) {
+                $archivosIaPorCotizacion = CotizacionProveedorArchivoIa::query()
+                    ->whereIn('id_cotizacion', $idsPagina)
+                    ->orderBy('id')
+                    ->get()
+                    ->groupBy(function ($a) {
+                        return $a->getAttribute('id_cotizacion');
+                    });
+            }
+
             // Transformar los datos para la respuesta
-            $data = $results->map(function ($cotizacion) use ($files, $listaEmbarqueUrl, $estadoPermisoPorCotizacion, $idTramitePorCotizacion) {
-                $urlCotizacionPdf = $this->cdnStorageUrl(
-                    optional($cotizacion->calculadoraImportacion)->url_cotizacion_pdf
-                );
+            $data = $results->map(function ($cotizacion) use ($files, $listaEmbarqueUrl, $estadoPermisoPorCotizacion, $idTramitePorCotizacion, $archivosIaPorCotizacion) {
+                $archivoIa = optional($archivosIaPorCotizacion->get($cotizacion->id, collect())->first());
+                $archivoPath = $archivoIa ? $archivoIa->getAttribute('archivo_path') : null;
+                $archivoNombre = $archivoIa ? $archivoIa->getAttribute('archivo_nombre_original') : null;
+                $excelPath = $cotizacion->cotizacion_file_url;
+                $pdfPath = optional($cotizacion->calculadoraImportacion)->url_cotizacion_pdf;
+                if ($archivoPath) {
+                    if ($this->esArchivoPdf($archivoPath, $archivoNombre)) {
+                        if (!$pdfPath) {
+                            $pdfPath = $archivoPath;
+                        }
+                        if ($excelPath && $this->esArchivoPdf($excelPath, null)) {
+                            $excelPath = null;
+                        }
+                    } elseif (!$excelPath) {
+                        $excelPath = $archivoPath;
+                    }
+                }
+                $urlCotizacionPdf = $this->cdnStorageUrl($pdfPath);
 
                 return [
                     'id' => $cotizacion->id,
@@ -409,6 +496,7 @@ class CotizacionController extends Controller
                     'estado' => $cotizacion->estado,
                     'estado_cliente' => $cotizacion->name,
                     'estado_cotizador' => $cotizacion->estado_cotizador,
+                    'estado_resumen' => $cotizacion->estado_resumen,
                     'cotizacion_contrato_autosigned_url' => $this->cdnStorageUrl($cotizacion->cotizacion_contrato_autosigned_url),
                     'cotizacion_contrato_firmado_url' => $this->cdnStorageUrl($cotizacion->cotizacion_contrato_firmado_url),
                     'cotizacion_contrato_url' => $this->cdnStorageUrl($cotizacion->cotizacion_contrato_url),
@@ -421,7 +509,8 @@ class CotizacionController extends Controller
                     'tarifa' => $cotizacion->tarifa,
                     'qty_item' => $cotizacion->qty_item,
                     'fob' => $cotizacion->fob,
-                    'cotizacion_file_url' => $this->cdnStorageUrl($cotizacion->cotizacion_file_url),
+                    'isd' => $cotizacion->isd,
+                    'cotizacion_file_url' => $this->cdnStorageUrl($excelPath),
                     'impuestos' => $cotizacion->impuestos,
                     'tipo_cliente' => optional($cotizacion->tipoCliente)->name,
                     'origen_marketing' => $cotizacion->origen_marketing,
@@ -458,6 +547,113 @@ class CotizacionController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Banderas reales (tabla pais_flags / flagcdn) para China y el país del contenedor.
+     */
+    private function resolveContenedorHeaderFlags($contenedor)
+    {
+        $flagChina = PaisFlag::urlForIso('cn');
+        if (!$flagChina) {
+            $flagChina = PaisFlag::flagCdnUrl('cn');
+        }
+
+        $flagDestino = null;
+        $nombreDestino = 'Destino';
+        if ($contenedor && $contenedor->id_pais) {
+            $flagDestino = PaisFlag::urlForPaisId($contenedor->id_pais);
+        }
+        if ($contenedor && $contenedor->pais && $contenedor->pais->No_Pais) {
+            $nombreDestino = function_exists('mb_convert_case')
+                ? mb_convert_case(mb_strtolower($contenedor->pais->No_Pais, 'UTF-8'), MB_CASE_TITLE, 'UTF-8')
+                : ucwords(strtolower($contenedor->pais->No_Pais));
+            if (!$flagDestino) {
+                $iso = PaisFlag::isoDesdeNombre($nombreDestino);
+                $flagDestino = $iso ? PaisFlag::urlForIso($iso) : null;
+            }
+        }
+        if (!$flagDestino) {
+            $flagDestino = 'mage:box-3d';
+        }
+
+        return [
+            'china' => $flagChina,
+            'destino' => $flagDestino,
+            'nombre_destino' => $nombreDestino,
+        ];
+    }
+
+    /**
+     * Headers de Prospectos y Embarcados para socios: bandera + "CBM",
+     * Pendiente, IMO, Fob, Total ISD, Logística e Impuestos. Sin nombre de país.
+     */
+    private function buildSocioHeadersData($headers, array $paisFlags)
+    {
+        $china = 0;
+        $destino = 0;
+        $pendiente = 0;
+        $imoCalc = 0;
+        $imoProv = 0;
+        $fob = 0;
+        $isd = 0;
+        $logistica = 0;
+        $impuestos = 0;
+        if ($headers) {
+            $china = isset($headers->cbm_total_china_all) ? $headers->cbm_total_china_all : $headers->cbm_total_china;
+            $destino = isset($headers->cbm_destino_confirmado) ? $headers->cbm_destino_confirmado : $headers->cbm_total_peru;
+            $pendiente = isset($headers->cbm_pendiente_total) ? $headers->cbm_pendiente_total : $headers->cbm_pendiente;
+            $imoCalc = isset($headers->cbm_total_imo) ? $headers->cbm_total_imo : 0;
+            $imoProv = isset($headers->cbm_imo_proveedores) ? $headers->cbm_imo_proveedores : 0;
+            $fob = isset($headers->total_fob) ? $headers->total_fob : 0;
+            $isd = isset($headers->total_isd) ? $headers->total_isd : 0;
+            $logistica = isset($headers->total_logistica_todas) ? $headers->total_logistica_todas : $headers->total_logistica;
+            $impuestos = isset($headers->total_impuestos) ? $headers->total_impuestos : 0;
+        }
+
+        return [
+            'cbm_total_china' => [
+                'value' => number_format((float) $china, 2, '.', ''),
+                'label' => 'CBM',
+                'icon' => $paisFlags['china'],
+            ],
+            'cbm_total_peru' => [
+                'value' => number_format((float) $destino, 2, '.', ''),
+                'label' => 'CBM',
+                'icon' => $paisFlags['destino'],
+            ],
+            'cbm_pendiente' => [
+                'value' => number_format((float) $pendiente, 2, '.', ''),
+                'label' => 'CBM Pendiente',
+                'icon' => 'mage:box-3d',
+            ],
+            'cbm_total_imo' => [
+                'value' => number_format((float) $imoCalc + (float) $imoProv, 2, '.', ''),
+                'label' => 'CBM IMO',
+                'icon' => 'mdi:biohazard',
+            ],
+            'total_fob' => [
+                'value' => $fob,
+                'label' => 'Fob',
+                'icon' => 'cryptocurrency-color:soc',
+            ],
+            'total_isd' => [
+                'value' => $isd,
+                'label' => 'Total ISD',
+                'icon' => 'cryptocurrency-color:soc',
+            ],
+            'total_logistica' => [
+                'value' => $logistica,
+                'label' => 'Logística',
+                'icon' => 'cryptocurrency-color:soc',
+            ],
+            'total_impuestos' => [
+                'value' => $impuestos,
+                'label' => 'Impuestos',
+                'icon' => 'cryptocurrency-color:soc',
+            ],
+        ];
+    }
+
     public function getHeadersData($idContenedor)
     {
         $idContenedor = (int) $idContenedor;
@@ -466,17 +662,26 @@ class CotizacionController extends Controller
         $usergroup = $user->getNombreGrupo();
 
         $headers = $this->fetchContenedorHeadersMetrics($idContenedor, $userId);
+        $contenedor = Contenedor::with('pais')->find($idContenedor);
+        if (!$contenedor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Contenedor no encontrado'
+            ], 404);
+        }
+        $paisFlags = $this->resolveContenedorHeaderFlags($contenedor);
+
         // Preparar los headers
         $headersData = [
             'cbm_total_china' => [
                 'value' => $headers ? $headers->cbm_total_china : 0,
-                'label' => '',
-                'icon' => 'https://upload.wikimedia.org/wikipedia/commons/f/fa/Flag_of_the_People%27s_Republic_of_China.svg'
+                'label' => 'CBM',
+                'icon' => $paisFlags['china']
             ],
             'cbm_total_peru' => [
                 'value' => $headers ? $headers->cbm_total_peru : 0,
-                'label' => '',
-                'icon' => 'https://upload.wikimedia.org/wikipedia/commons/c/cf/Flag_of_Peru.svg'
+                'label' => 'CBM',
+                'icon' => $paisFlags['destino']
             ],
             'cbm_total_imo' => [
                 'value' => $headers ? $headers->cbm_total_imo : 0,
@@ -519,12 +724,65 @@ class CotizacionController extends Controller
                 'label' => 'Total Diferencia',
                 'icon' => 'cryptocurrency-color:soc'
             ],
-
-
+            'total_fob' => [
+                'value' => $headers ? $headers->total_fob : 0,
+                'label' => 'Fob',
+                'icon' => 'cryptocurrency-color:soc'
+            ],
+            'total_impuestos' => [
+                'value' => $headers ? $headers->total_impuestos : 0,
+                'label' => 'Impuestos',
+                'icon' => 'cryptocurrency-color:soc'
+            ],
         ];
+
+        // Conteo NUEVO / ANTIGUO (tipo_cliente) — solo para Jefe Marketing en prospectos
+        if ($usergroup === Usuario::JEFE_MARKETING) {
+            $tipoCounts = DB::table('contenedor_consolidado_cotizacion as c')
+                ->leftJoin('contenedor_consolidado_tipo_cliente as t', 't.id', '=', 'c.id_tipo_cliente')
+                ->where('c.id_contenedor', $idContenedor)
+                ->whereNull('c.deleted_at')
+                ->where('c.estado_cotizador', 'CONFIRMADO')
+                ->whereNull('c.id_cliente_importacion')
+                ->selectRaw("
+                    SUM(CASE WHEN UPPER(TRIM(COALESCE(t.name, ''))) = 'NUEVO' THEN 1 ELSE 0 END) as total_nuevo,
+                    SUM(CASE WHEN UPPER(TRIM(COALESCE(t.name, ''))) = 'ANTIGUO' THEN 1 ELSE 0 END) as total_antiguo
+                ")
+                ->first();
+
+            $headersData['clientes_nuevo'] = [
+                'value' => (int) ($tipoCounts->total_nuevo ?? 0),
+                'label' => 'Nuevo',
+                'icon' => 'i-heroicons-user-plus',
+            ];
+            $headersData['clientes_antiguo'] = [
+                'value' => (int) ($tipoCounts->total_antiguo ?? 0),
+                'label' => 'Antiguo',
+                'icon' => 'i-heroicons-user',
+            ];
+        }
+
+        if ($usergroup === Usuario::ROL_ALMACEN_CHINA) {
+            $headersData = app(CustomersHeadersService::class)->buildForContenedor($idContenedor);
+
+            return response()->json([
+                'success' => true,
+                'data' => $headersData,
+                'data_pagos' => [],
+                'f_cierre' => $contenedor->fecha_cierre ?? $contenedor->f_cierre,
+                'carga' => $contenedor->carga,
+                'lista_embarque_url' => $this->cdnStorageUrl($contenedor->lista_embarque_url),
+                'excel_seguimiento_drive' => $this->excelSeguimientoDrivePayload($idContenedor, $user),
+                'url_clientes' => OrganizacionPortalUrls::urlClientes(
+                    OrganizacionPortalUrls::orgIdFromParent($contenedor)
+                ),
+            ]);
+        }
+
         $roleAllowedMap = [
             Usuario::ROL_COTIZADOR => ['cbm_vendido', 'cbm_pendiente', 'cbm_embarcado', 'qty_items', 'cbm_total_peru', 'cbm_total_china','cbm_total_imo'],
-            Usuario::ROL_ALMACEN_CHINA => ['cbm_total_china', 'cbm_total_peru', 'qty_items'],
+            Usuario::ROL_SOCIO => ['cbm_total_china', 'cbm_total_peru', 'cbm_pendiente', 'cbm_total_imo', 'total_fob', 'total_isd', 'total_logistica', 'total_impuestos'],
+            Usuario::ROL_ALMACEN_CHINA => ['cbm_total_china', 'cbm_total_peru'],
             Usuario::ROL_ADMINISTRACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
             Usuario::ROL_COORDINACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
             Usuario::ROL_CONTABILIDAD => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado', 'total_diferencia_logistica'],
@@ -534,14 +792,21 @@ class CotizacionController extends Controller
             Usuario::ROL_RRHH => ['cbm_vendido', 'cbm_pendiente', 'cbm_embarcado', 'qty_items', 'cbm_total_peru', 'cbm_total_china', 'cbm_total_imo'],
         ];
         $userIdCheck = $user->ID_Usuario;
-        if (array_key_exists($usergroup, $roleAllowedMap)) {
+        $esHeadersSocio = $usergroup === Usuario::ROL_SOCIO
+            || (int) $user->getAttribute('ID_Organizacion') !== 1;
+
+        if ($esHeadersSocio) {
+            $headersData = $this->buildSocioHeadersData($headers, $paisFlags);
+        } elseif (array_key_exists($usergroup, $roleAllowedMap)) {
             $allowedKeys = $roleAllowedMap[$usergroup];
             $headersData = array_filter($headersData, function ($key) use ($allowedKeys) {
                 return in_array($key, $allowedKeys);
             }, ARRAY_FILTER_USE_KEY);
         } else {
-            // Si el rol no está en el mapa, devolver todos los headers
-            return $headersData;
+            $allowedKeys = $roleAllowedMap[Usuario::ROL_COTIZADOR];
+            $headersData = array_filter($headersData, function ($key) use ($allowedKeys) {
+                return in_array($key, $allowedKeys);
+            }, ARRAY_FILTER_USE_KEY);
         }
 
         // Headers exclusivos para el tab de pagos (solo contabilidad) - solo en cotizacion-final
@@ -656,13 +921,6 @@ class CotizacionController extends Controller
                 ];
             }
 
-            $contenedor = Contenedor::find($idContenedor);
-            if (!$contenedor) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Contenedor no encontrado'
-                ], 404);
-            }
             // Format values as currency where applicable before returning
             $headersData = $this->applyCurrencyToHeaders($headersData);
             return response()->json([
@@ -673,16 +931,12 @@ class CotizacionController extends Controller
                 'f_cierre' => $contenedor->fecha_cierre??$contenedor->f_cierre,
                 'lista_embarque_url' => $this->cdnStorageUrl($contenedor->lista_embarque_url),
                 'excel_seguimiento_drive' => $this->excelSeguimientoDrivePayload($idContenedor, $user),
+                'url_clientes' => OrganizacionPortalUrls::urlClientes(
+                    OrganizacionPortalUrls::orgIdFromParent($contenedor)
+                ),
             ]);
         }
 
-        $contenedor = Contenedor::find($idContenedor);
-        if (!$contenedor) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Contenedor no encontrado'
-            ], 404);
-        }
         // Format values as currency where applicable before returning
         $headersData = $this->applyCurrencyToHeaders($headersData);
         return response()->json([
@@ -693,6 +947,9 @@ class CotizacionController extends Controller
             'carga' => $contenedor->carga,
             'lista_embarque_url' => $this->cdnStorageUrl($contenedor->lista_embarque_url),
             'excel_seguimiento_drive' => $this->excelSeguimientoDrivePayload($idContenedor, $user),
+            'url_clientes' => OrganizacionPortalUrls::urlClientes(
+                OrganizacionPortalUrls::orgIdFromParent($contenedor)
+            ),
         ]);
     }
 
@@ -1185,15 +1442,25 @@ class CotizacionController extends Controller
                 'deleted_reason_id' => 'nullable|integer|exists:reason_delete_cotizacion,id',
             ]);
 
+            $cotizacion = Cotizacion::find($id);
+            if (!$cotizacion) {
+                return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
+            }
+
+            $esResumen = CotizacionProveedor::where('id_cotizacion', $id)
+                ->where('modo_cotizacion', 'resumen')
+                ->exists();
+            $estadoResumen = (string) ($cotizacion->getAttribute('estado_resumen') ?: '');
+            if ($esResumen && $estadoResumen === 'CONFIRMADO') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Solo se puede eliminar una cotización en estado COTIZADO.',
+                ], 422);
+            }
+
             DB::statement('SET FOREIGN_KEY_CHECKS = 0');
             $cotizacionProveedor = CotizacionProveedor::where('id_cotizacion', $id);
             $cotizacionProveedor->delete();
-            //delete cotizacion
-            $cotizacion = Cotizacion::find($id);
-            if (!$cotizacion) {
-                DB::statement('SET FOREIGN_KEY_CHECKS = 1');
-                return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
-            }
             $cotizacion->deleted_reason_id = $validated['deleted_reason_id'] ?? null;
             $cotizacion->save();
             $cotizacion->delete();
@@ -1944,7 +2211,16 @@ class CotizacionController extends Controller
         }
 
         $digits = preg_replace('/\D+/u', '', $text);
-        return $digits === '' ? null : $digits;
+        if ($digits === '') {
+            return null;
+        }
+        $orgId = auth()->user() ? (int) auth()->user()->getAttribute('ID_Organizacion') : 0;
+        $conPrefijo = \App\Support\Phone\CountryPhoneHelper::ensureCountryCode(
+            $digits,
+            \App\Support\Phone\CountryPhoneHelper::codeForOrganizacionId($orgId)
+        );
+
+        return $conPrefijo !== '' ? $conPrefijo : $digits;
     }
 
     /**
@@ -2321,6 +2597,7 @@ class CotizacionController extends Controller
             $message = str_replace('@nombrecliente', $cotizacion->nombre, $message);
             $message = str_replace('@contenedorDestino', '#' . $contenedorDestino->carga, $message);
             if ($phone !== '') {
+                $this->setWhatsappFlujo('cambio_consolidado');
                 $this->sendMessage(
                     $message,
                     $phone,
@@ -2937,7 +3214,17 @@ class CotizacionController extends Controller
                         Log::error('No se pudo actualizar cotizacion_contrato_url: ' . $e->getMessage());
                     }
                 } catch (\Throwable $ex) {
-                    Log::error('Excepción al generar/enviar PDF por WhatsApp: ' . $ex->getMessage(), ['cotizacion_id' => $cotizacion->id]);
+                    Log::error('Excepción al generar/enviar PDF por WhatsApp: ' . $ex->getMessage(), [
+                        'cotizacion_id' => $cotizacion->id,
+                        'file' => $ex->getFile(),
+                        'line' => $ex->getLine(),
+                        'trace' => $ex->getTraceAsString(),
+                    ]);
+                    return response()->json([
+                        'status' => 'error',
+                        'success' => false,
+                        'message' => 'Estado CONFIRMADO, pero falló la generación del contrato: ' . $ex->getMessage(),
+                    ], 500);
                 }
             }
 
@@ -3840,7 +4127,10 @@ class CotizacionController extends Controller
             // Construir el mensaje
             $nombreCliente = $cotizacion->nombre;
             $carga = $contenedor->carga;
-            $signUrl = rtrim((string) config('app.url_clientes'), '/') . '/firma-acuerdo-servicio/' . ($cotizacion->uuid ?? '');
+            $signUrl = OrganizacionPortalUrls::firmaAcuerdoServicio(
+                OrganizacionPortalUrls::orgIdFromParent($cotizacion),
+                $cotizacion->uuid ?? ''
+            );
             
             $message = "Hola {$nombreCliente} porfavor firmar su contrato del consolidado #{$carga} {$signUrl}";
 

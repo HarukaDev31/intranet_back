@@ -46,6 +46,7 @@ class SendViaticoWhatsappNotificationJob implements ShouldQueue
     public function handle(): void
     {
         try {
+            $this->setWhatsappFlujo('viaticos');
             $this->phoneNumberId = $this->userPhone;
             //if numbers have 9 digts add 51 and add @c.us
             if (strlen($this->userPhone) === 9) {

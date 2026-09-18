@@ -5,10 +5,12 @@ namespace App\Models\CargaConsolidada;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\User;
+use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
 class ConsolidadoDeliveryFormLima extends Model
 {
     use HasFactory;
+    use SincronizaOrganizacionId;
 
     /**
      * La tabla asociada al modelo.
@@ -16,6 +18,11 @@ class ConsolidadoDeliveryFormLima extends Model
      * @var string
      */
     protected $table = 'consolidado_delivery_form_lima';
+
+    protected static function organizacionRelacion(): string
+    {
+        return 'contenedor';
+    }
 
     /**
      * Los atributos que son asignables masivamente.

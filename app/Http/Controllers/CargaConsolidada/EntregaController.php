@@ -23,6 +23,7 @@ use App\Jobs\SendDeliveryFormBulkJob;
 use App\Helpers\UsuarioDatosFacturacionHelper;
 use App\Services\Delivery\DeliveryFormLinkCoordinationNotifier;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
+use App\Support\Organizacion\OrganizacionPortalUrls;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use ZipArchive;
@@ -132,15 +133,13 @@ class EntregaController extends Controller
      */
     private function buildFormularioEntregaUrl(int $idContenedor, ?int $typeForm): string
     {
-        $base = rtrim((string) config('app.url_clientes'), '/') . '/formulario-entrega/' . $idContenedor;
-        if ($typeForm === 1) {
-            return $base . '?destino=lima';
-        }
-        if ($typeForm === 0) {
-            return $base . '?destino=provincia';
-        }
+        $contenedor = Contenedor::query()->whereKey($idContenedor)->first();
 
-        return $base;
+        return OrganizacionPortalUrls::formularioEntrega(
+            OrganizacionPortalUrls::orgIdFromParent($contenedor),
+            $idContenedor,
+            $typeForm
+        );
     }
 
     /**
@@ -2754,6 +2753,7 @@ class EntregaController extends Controller
                     $numeroWhatsapp = '51' . $numeroWhatsapp;
                 }
                 $numeroWhatsapp = $numeroWhatsapp . '@c.us';
+                $this->setWhatsappFlujo('entrega');
                 $contenedor = Contenedor::find($idContenedor);
                 $carga = $contenedor->carga;
                 $message = "Hola $nombre 👋
@@ -2935,7 +2935,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
         $tableName = $typeForm === 1 ? 'consolidado_delivery_form_lima_conformidad' : 'consolidado_delivery_form_province_conformidad';
 
         $row = DB::table($tableName)->where('id', $id)->first();
-        if (!$row) {
+        if (!$row || !Cotizacion::where('id', $row->id_cotizacion)->exists()) {
             return response()->json(['message' => 'Conformidad no encontrada', 'success' => false], 404);
         }
 
@@ -3363,6 +3363,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
     public function sendMessageDelivery(Request $request, $idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('entrega');
             $idCotizacion = (int) $idCotizacion;
             $cotizacion = DB::table('contenedor_consolidado_cotizacion as C')
                 ->leftJoin('consolidado_delivery_form_lima as L', function ($join) {
@@ -3501,6 +3502,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
     public function sendMessageDeliveryBulk(Request $request)
     {
         try {
+            $this->setWhatsappFlujo('entrega');
             $this->validate($request, [
                 'cotizaciones' => 'required_without:cotizacion_ids|array|min:1',
                 'cotizaciones.*.id_cotizacion' => 'required_with:cotizaciones|integer|min:1',
@@ -3615,6 +3617,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
     public function sendRecordatorioFormularioDelivery(Request $request, $idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('entrega');
             $cotizacion = Cotizacion::find($idCotizacion);
             if (!$cotizacion) {
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
@@ -3659,6 +3662,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
     public function sendCobroCotizacionFinalDelivery(Request $request, $idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('cobranza');
             $cotizacion = Cotizacion::find($idCotizacion);
             if (!$cotizacion) {
                 return response()->json(['message' => 'Cotización no encontrada', 'success' => false], 404);
@@ -3697,6 +3701,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
     public function sendCobroDeliveryDelivery(Request $request, $idCotizacion)
     {
         try {
+            $this->setWhatsappFlujo('entrega');
             $idCotizacion = (int) $idCotizacion;
             $cotizacion = Cotizacion::find($idCotizacion);
             if (!$cotizacion) {
@@ -4539,6 +4544,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
                 $numeroWhatsapp = '51' . $numeroWhatsapp;
             }
             $numeroWhatsapp = $numeroWhatsapp . '@c.us';
+            $this->setWhatsappFlujo('entrega');
 
             $message = "Hola {$row->cliente} 👋\nAdjunto el documento de cargo de entrega firmado correspondiente a su importación del consolidado #{$row->carga}.\n\nMuchas gracias por confiar en Pro Business. ✈️📦";
 
@@ -4610,16 +4616,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             }
         }
         $typeForms = UsuarioDatosFacturacionHelper::getLatestTypeFormForUserIds($userIds);
-        $sourceMap = [
-            0 => 'No especificado',
-            1 => 'TikTok',
-            2 => 'Facebook',
-            3 => 'Instagram',
-            4 => 'YouTube',
-            5 => 'Familiares/Amigos',
-            6 => 'Otros',
-            8 => 'Otros',
-        ];
+        $sourceMap = \App\Support\Register\ComoEnteroCatalog::labels();
 
         foreach ($items as $idx => $row) {
             $user = $users[$idx] ?? null;
@@ -4638,7 +4635,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
             $origen = null;
             if ($noComoEntero !== null && $noComoEntero !== '') {
                 $codeInt = (int) $noComoEntero;
-                if (($codeInt === 6 || $codeInt === 8) && !empty($noOtrosComoEnteroEmpresa)) {
+                if (\App\Support\Register\ComoEnteroCatalog::requiresOtrosText($codeInt) && !empty($noOtrosComoEnteroEmpresa)) {
                     $origen = $noOtrosComoEnteroEmpresa;
                 } elseif (isset($sourceMap[$codeInt])) {
                     $origen = $sourceMap[$codeInt];

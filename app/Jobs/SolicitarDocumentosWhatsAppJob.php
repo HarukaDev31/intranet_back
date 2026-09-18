@@ -9,6 +9,7 @@ use App\Services\Google\GoogleDriveExcelConfirmacionService;
 use App\Services\Storage\S3ObjectStorageConnector;
 use App\Services\WhatsApp\WhatsAppCoordinacionBatchService;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
+use App\Support\Organizacion\OrganizacionPortalUrls;
 use App\Traits\DatabaseConnectionTrait;
 use App\Traits\UsesObjectStorage;
 use App\Traits\WhatsappTrait;
@@ -57,9 +58,10 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
     ): void {
         try {
             $this->setDatabaseConnection($this->domain ?? 'localhost');
+            $this->setWhatsappFlujo('documentos');
 
             $cot = DB::table('contenedor_consolidado_cotizacion')
-                ->select('id_contenedor', 'telefono', 'nombre', 'uuid')
+                ->select('id_contenedor', 'telefono', 'nombre', 'uuid', 'organizacion_id')
                 ->where('id', $this->idCotizacion)
                 ->whereNull('deleted_at')
                 ->first();
@@ -140,8 +142,16 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
             }
 
             $driveLink = null;
+            $orgId = (int) ($cot->organizacion_id ?? 0);
+            if ($orgId <= 0) {
+                $orgId = OrganizacionPortalUrls::orgIdFromParent($contenedor);
+            }
             $formLink = $cotizacionUuid !== ''
-                ? CoordinacionWhatsappPayload::buildExcelConfirmacionUrl($cotizacionUuid)
+                ? CoordinacionWhatsappPayload::buildExcelConfirmacionUrl(
+                    $cotizacionUuid,
+                    null,
+                    $orgId
+                )
                 : '';
             $idProveedorRef = isset($proveedorModels[0]) ? (int) $proveedorModels[0]->id : null;
             $codigoLabel = 'General';

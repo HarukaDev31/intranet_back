@@ -10,15 +10,73 @@ use App\Models\CalculadoraImportacion;
 use App\Models\CargaConsolidada\Comprobante;
 use App\Models\CargaConsolidada\Detraccion;
 use App\Models\CargaConsolidada\ReasonDeleteCotizacion;
+use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
 /**
  * @property int $id
  * @property int|null $id_contenedor
+ * @property int|null $id_contenedor_pago
+ * @property int|null $id_contenedor_destino
+ * @property string|null $uuid
+ * @property int|null $id_tipo_cliente
+ * @property string|null $origen_marketing
+ * @property int|null $id_cliente
+ * @property \Illuminate\Support\Carbon|null $fecha
+ * @property string|null $nombre
+ * @property string|null $documento
+ * @property string|null $correo
+ * @property string|null $telefono
+ * @property string|float|int|null $volumen
+ * @property string|float|int|null $volumen_neto
+ * @property string|float|int|null $volumen_doc
+ * @property string|float|int|null $volumen_china
+ * @property string|float|int|null $volumen_final
+ * @property string|float|int|null $valor_doc
+ * @property string|float|int|null $valor_cot
+ * @property string|float|int|null $monto
+ * @property string|float|int|null $monto_final
+ * @property string|float|int|null $fob
+ * @property string|float|int|null $isd
+ * @property string|float|int|null $fob_final
+ * @property string|float|int|null $impuestos
+ * @property string|float|int|null $impuestos_final
+ * @property string|float|int|null $tarifa
+ * @property string|float|int|null $tarifa_descuento
+ * @property string|float|int|null $tarifa_final
+ * @property string|float|int|null $peso
+ * @property string|float|int|null $peso_final
+ * @property string|float|int|null $logistica_final
+ * @property string|float|int|null $servicios_extra_final
+ * @property string|float|int|null $total_pago_delivery
+ * @property int|null $qty_item
+ * @property int|null $qty_proveedores
+ * @property int|null $id_usuario
+ * @property int|null $id_cliente_importacion
+ * @property string|null $estado
+ * @property string|null $estado_cliente
+ * @property string|null $estado_cotizador
+ * @property string|null $estado_resumen
+ * @property string|null $estado_pagos_coordinacion
+ * @property string|null $estado_cotizacion_final
+ * @property string|null $cotizacion_file_url
+ * @property string|null $cotizacion_contrato_url
+ * @property string|null $cotizacion_contrato_firmado_url
+ * @property string|null $cotizacion_final_file_url
+ * @property string|null $guia_remision_url
+ * @property string|null $factura_general_url
+ * @property string|null $cotizacion_final_url
+ * @property string|null $cotizacion_contrato_autosigned_url
+ * @property string|null $cod_contract
+ * @property \Illuminate\Support\Carbon|null $fecha_confirmacion
+ * @property \Illuminate\Support\Carbon|null $autosigned_contract_at
+ * @property \Illuminate\Support\Carbon|null $delivery_form_registered_at
+ * @property int|null $organizacion_id
  */
 class Cotizacion extends Model
 {
     use HasFactory;
     use SoftDeletes;
+    use SincronizaOrganizacionId;
 
     /**
      * La tabla asociada al modelo.
@@ -27,6 +85,11 @@ class Cotizacion extends Model
      */
     protected $table = 'contenedor_consolidado_cotizacion';
     public $timestamps = false;
+
+    protected static function organizacionRelacion(): string
+    {
+        return 'contenedor';
+    }
 
     /**
      * Los atributos que son asignables masivamente.
@@ -60,8 +123,10 @@ class Cotizacion extends Model
         'id_usuario',
         'monto',
         'fob',
+        'isd',
         'impuestos',
         'tarifa',
+        'tarifa_descuento',
         'excel_comercial',
         'excel_confirmacion',
         'vol_selected',
@@ -75,6 +140,7 @@ class Cotizacion extends Model
         'factura_general_url',
         'cotizacion_final_url',
         'estado_cotizador',
+        'estado_resumen',
         'fecha_confirmacion',
         'estado_pagos_coordinacion',
         'estado_cotizacion_final',
@@ -85,6 +151,7 @@ class Cotizacion extends Model
         'logistica_final',
         'servicios_extra_final',
         'qty_item',
+        'qty_proveedores',
         'id_cliente_importacion',
         'delivery_form_registered_at',
         'registrado_comprobante_form',
@@ -118,6 +185,7 @@ class Cotizacion extends Model
         'valor_cot' => 'decimal:2',
         'monto' => 'decimal:2',
         'fob' => 'decimal:2',
+        'isd' => 'decimal:2',
         'impuestos' => 'decimal:2',
         'tarifa' => 'decimal:2',
         'peso' => 'decimal:2',
@@ -130,6 +198,7 @@ class Cotizacion extends Model
         'logistica_final' => 'decimal:2',
         'servicios_extra_final' => 'decimal:2',
         'qty_item' => 'integer',
+        'qty_proveedores' => 'integer',
         'delivery_form_registered_at' => 'date',
         'registrado_comprobante_form' => 'boolean',
         'total_pago_delivery' => 'decimal:2',
@@ -172,6 +241,11 @@ class Cotizacion extends Model
         'CONFIRMADO' => 'Confirmado',
         'INTERESADO' => 'Interesado',
         'CONTACTADO' => 'Contactado'
+    ];
+
+    public const ESTADOS_RESUMEN = [
+        'COTIZADO' => 'Cotizado',
+        'CONFIRMADO' => 'Confirmado',
     ];
 
     /**
@@ -482,7 +556,7 @@ class Cotizacion extends Model
      */
     public function proveedores()
     {
-        return $this->hasMany(CotizacionProveedor::class, 'id_cotizacion');
+        return $this->hasMany(CotizacionProveedor::class, 'id_cotizacion')->orderBy('id');
     }
 
     /**

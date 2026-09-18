@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Commons\PaisController;
 use App\Http\Controllers\Commons\EmpresaOrgController;
+use App\Http\Controllers\Commons\ComoEnteroController;
 
 /*
 |--------------------------------------------------------------------------
@@ -14,7 +15,9 @@ use App\Http\Controllers\Commons\EmpresaOrgController;
 */
 
 Route::group(['prefix' => 'options'], function () {
-    Route::get('paises', [PaisController::class, 'getPaisDropdown']);
+    // Portal clientes: paises exige X-Org-Key
+    Route::get('paises', [PaisController::class, 'getPaisDropdown'])->middleware('org.key');
+    Route::get('medios-encontrado', [ComoEnteroController::class, 'options'])->middleware('org.key');
     // Helpers para selects de empresa, organización y grupo (requieren auth)
     Route::middleware('jwt.auth')->group(function () {
         Route::get('empresas', [EmpresaOrgController::class, 'getEmpresas']);

@@ -11,6 +11,7 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use App\Models\CargaConsolidada\Contenedor;
+use App\Support\CargaConsolidada\ClientesVisibility;
 
 class GeneralExportService
 {
@@ -77,8 +78,8 @@ class GeneralExportService
             ->leftJoin('contenedor_consolidado_tipo_cliente', 'contenedor_consolidado_tipo_cliente.id', '=', 'contenedor_consolidado_cotizacion.id_tipo_cliente')
             ->where('contenedor_consolidado_cotizacion.id_contenedor', $idContenedor)
             ->whereNull('contenedor_consolidado_cotizacion.deleted_at')
-            ->where('estado_cotizador', 'CONFIRMADO')
             ->whereNotNull('estado_cliente');
+        ClientesVisibility::applyConfirmadoParaBd($query, 'contenedor_consolidado_cotizacion');
 
         //obtener asesores: construimos un mapa cotizacion_id => nombre_asesor
         $asesoresQuery = DB::table('contenedor_consolidado_cotizacion as CC')

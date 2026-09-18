@@ -2,6 +2,8 @@
 
 namespace App\Services\CargaConsolidada;
 
+use App\Support\CargaConsolidada\ResumenClienteCampos;
+use App\Support\CargaConsolidada\ResumenCostoClasificador;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -10,17 +12,27 @@ use Illuminate\Support\Facades\Log;
  * Modelo usado: gemini-1.5-flash (soporta visión/documentos; estable y disponible).
  * Puedes cambiar a gemini-2.5-flash en GEMINI_MODEL si tu cuenta tiene acceso.
  *
- * Configuración:
+ * Configuración (config/services.php → .env):
  *   GEMINI_API_KEY=<tu clave en Google AI Studio>
  *   GEMINI_MODEL=gemini-1.5-flash (opcional; por defecto gemini-1.5-flash)
+ *
+ * No usar env() aquí: con `config:cache` (deploy QA/PROD) Laravel deja de
+ * cargar .env en runtime y env() queda vacío.
  */
 class GeminiService
 {
     const GEMINI_MODEL_DEFAULT = 'gemini-1.5-flash';
 
+    protected static function getApiKey()
+    {
+        return (string) config('services.gemini.api_key', '');
+    }
+
     protected static function getModel(): string
     {
-        return env('GEMINI_MODEL', self::GEMINI_MODEL_DEFAULT);
+        $model = config('services.gemini.model', self::GEMINI_MODEL_DEFAULT);
+
+        return $model ? (string) $model : self::GEMINI_MODEL_DEFAULT;
     }
 
     protected static function getApiUrl(): string
@@ -59,7 +71,7 @@ class GeminiService
             $filePath,
             $mimeType,
             $prompt,
-            (int) env('GEMINI_COMPROBANTE_MAX_TOKENS', 4096),
+            (int) config('services.gemini.comprobante_max_tokens', 4096),
             self::comprobanteResponseSchema()
         );
 
@@ -135,6 +147,255 @@ class GeminiService
     }
 
     /**
+     * Extrae datos de cliente y proveedores desde un documento de cotización
+     * (usado por el flujo "resumen": organizaciones sin items, que suben un
+     * documento en vez de cargar la calculadora item por item).
+     *
+     * @param string $filePath  Ruta absoluta del archivo
+     * @param string $mimeType  MIME type soportado (ver COTIZACION_RESUMEN_SUPPORTED_MIMES)
+     * @return array{success: bool, error: string|null, data: array{cliente: array, proveedores: array}|null}
+     */
+    public function extractFromCotizacionResumen($filePath, $mimeType)
+    {
+        $prompt = 'Analiza este documento de cotización de importación (puede ser una cotización de proveedor, ' .
+            'una factura proforma o una lista de productos con costos). Extrae los datos del cliente y de cada ' .
+            'proveedor/producto que encuentres. ' .
+            'Reglas: ' .
+            '- cliente.nombre: nombre o razón social del cliente/destinatario. null si no aparece. ' .
+            '- cliente.tipo_documento: "RUC" si el identificador del CLIENTE tiene formato de RUC (11 dígitos), "ID" solo si es DNI/cédula del cliente. ' .
+            '- cliente.documento: SOLO DNI (8 dígitos), cédula o RUC (11 dígitos) del CLIENTE/destinatario. NUNCA uses el teléfono, WhatsApp, N° de cotización, N° de boleta, N° de factura, código interno, ID de usuario, ID de la boleta, ni el RUC de la empresa emisora. Si no hay DNI/RUC/cédula claro del cliente, null (JSON null, no el texto "null"). ' .
+            '- cliente.whatsapp: teléfono de contacto del cliente, con código de país si aparece. Nunca lo pongas en documento. Si no aparece, null. ' .
+            '- cliente.correo: correo electrónico real del cliente (debe llevar @). Si no aparece, null. Nunca escribas la palabra null. ' .
+            '- proveedores: un elemento por cada ítem o línea de producto (al menos uno). No combines varios ítems en un solo elemento aunque compartan proveedor. Si el documento lista varios productos, genera un elemento por cada uno. ' .
+            '- proveedores[].cbm_total: volumen total en CBM/m3 de ese proveedor. null si no aparece. ' .
+            '- proveedores[].peso_total: peso total en KG de ese proveedor. null si no aparece. ' .
+            '- proveedores[].qty_cajas: cantidad de cajas/bultos de ese proveedor. null si no aparece. ' .
+            '- proveedores[].unidades: cantidad de unidades/piezas de ese proveedor. null si no aparece. ' .
+            '- proveedores[].incoterm: Incoterm si aparece (FOB, EXW, CIF, DDP, Consolidado, etc.). null si no aparece. ' .
+            '- proveedores[].productos: descripción breve de ese ítem (solo ese producto, no juntes varios). null si no aparece. ' .
+            '- proveedores[].logistica: SOLO el monto de Servicio de importación (del documento, una vez, en el primer elemento). No pongas flete, transferencia, seguro ni logística internacional ahí. ' .
+            '- proveedores[].fob, impuesto, isd: totales del DOCUMENTO, solo en el primer elemento; en los demás null. ' .
+            '- proveedores[].costos: desglose de inversión del DOCUMENTO (tabla de conceptos). Ponlo SOLO en el primer elemento; en los demás array vacío. ' .
+            'No copies FOB, ISD, flete ni impuestos en cada ítem: si lo haces se duplican al guardar. ' .
+            'Incluye cada concepto con su nombre tal cual aparece: Valor de Mercadería, FOB, Servicio de importación, Flete, Transferencia, ISD, Logística Internacional, Tributos, Impuestos Aduaneros, Seguro, etc. ' .
+            'Cada elemento tiene concepto (texto) y valor (número sin símbolo de moneda). Si el concepto no tiene monto, valor null. ' .
+            'Responde solo con el JSON del schema (una línea, compacto).';
+
+        $result = $this->callGemini(
+            $filePath,
+            $mimeType,
+            $prompt,
+            8192,
+            self::cotizacionResumenResponseSchema()
+        );
+
+        if (!$result['success']) {
+            return ['success' => false, 'error' => $result['error'], 'data' => null];
+        }
+
+        return $this->packCotizacionResumenExtracted($result['data'], basename($filePath));
+    }
+
+    /**
+     * Misma extracción, pero a partir del texto de un Excel/CSV.
+     *
+     * @param string $spreadsheetText
+     * @return array{success: bool, error: string|null, data: array{cliente: array, proveedores: array}|null}
+     */
+    public function extractFromCotizacionResumenText($spreadsheetText)
+    {
+        $prompt = 'Analiza este documento de cotización de importación extraído de una hoja de cálculo. ' .
+            'Extrae los datos del cliente y de cada proveedor/producto. ' .
+            'cliente.nombre, cliente.tipo_documento (RUC o ID), cliente.documento (SOLO DNI/cédula/RUC del cliente, nunca teléfono ni N° de boleta/cotización ni ID de usuario), cliente.whatsapp (teléfono, no en documento), cliente.correo (email real o JSON null, nunca el texto "null"). ' .
+            'Un elemento en proveedores por cada ítem o línea de producto; no combines varios ítems en uno. ' .
+            'Por ítem: cbm_total, peso_total, qty_cajas, unidades, incoterm, productos (solo ese ítem). ' .
+            'logistica es SOLO Servicio de importación (no flete ni seguro). fob, impuesto, isd y costos son totales del DOCUMENTO: ponlos SOLO en el primer ítem; en los demás null / array vacío. No los copies en cada línea. ' .
+            'Si un dato no aparece, null. ' .
+            "Contenido:\n" . $spreadsheetText;
+
+        $result = $this->analyzeTextAsJson(
+            $prompt,
+            8192,
+            0.1,
+            self::cotizacionResumenResponseSchema()
+        );
+
+        if (!$result['success']) {
+            return ['success' => false, 'error' => $result['error'], 'data' => null];
+        }
+
+        return $this->packCotizacionResumenExtracted($result['data'], 'spreadsheet');
+    }
+
+    /**
+     * @param mixed $extracted
+     * @param string $source
+     * @return array{success: bool, error: null, data: array{cliente: array, proveedores: array}}
+     */
+    private function packCotizacionResumenExtracted($extracted, $source)
+    {
+        $extracted = is_array($extracted) ? $extracted : [];
+        $proveedores = isset($extracted['proveedores']) && is_array($extracted['proveedores'])
+            ? $extracted['proveedores']
+            : [];
+
+        foreach ($proveedores as $idx => $prov) {
+            if (!is_array($prov)) {
+                unset($proveedores[$idx]);
+                continue;
+            }
+            $costos = isset($prov['costos']) && is_array($prov['costos']) ? $prov['costos'] : [];
+            $normalizados = [];
+            foreach ($costos as $costo) {
+                if (!is_array($costo)) {
+                    continue;
+                }
+                $concepto = isset($costo['concepto']) ? trim((string) $costo['concepto']) : '';
+                if ($concepto === '') {
+                    continue;
+                }
+                $normalizados[] = [
+                    'concepto' => $concepto,
+                    'valor' => array_key_exists('valor', $costo) && $costo['valor'] !== null
+                        ? (float) $costo['valor']
+                        : null,
+                ];
+            }
+            $proveedores[$idx]['costos'] = $this->completarCostosDesdeTotales($normalizados, $prov);
+        }
+
+        $proveedores = $this->deduplicarCostosDocumento(array_values($proveedores));
+        $cliente = ResumenClienteCampos::sanitizar(
+            isset($extracted['cliente']) && is_array($extracted['cliente']) ? $extracted['cliente'] : []
+        );
+
+        Log::info('GeminiService extractFromCotizacionResumen: datos extraídos', [
+            'source'    => $source,
+            'extracted' => $extracted,
+        ]);
+
+        return [
+            'success' => true,
+            'error'   => null,
+            'data'    => [
+                'cliente'     => $cliente,
+                'proveedores' => array_values($proveedores),
+            ],
+        ];
+    }
+
+    /**
+     * @param array<int, array{concepto: string, valor: float|null}> $costos
+     * @param array<string, mixed> $prov
+     * @return array<int, array{concepto: string, valor: float|null}>
+     */
+    private function completarCostosDesdeTotales(array $costos, array $prov)
+    {
+        $mapa = [
+            'logistica' => 'Servicio de importación',
+            'fob' => 'FOB',
+            'impuesto' => 'Impuestos',
+            'isd' => 'ISD',
+        ];
+        foreach ($mapa as $campo => $concepto) {
+            if (!isset($prov[$campo]) || (float) $prov[$campo] <= 0) {
+                continue;
+            }
+            $yaExiste = false;
+            foreach ($costos as $costo) {
+                if (ResumenCostoClasificador::tipo($costo['concepto'] ?? '') === $campo) {
+                    $yaExiste = true;
+                    break;
+                }
+            }
+            if (!$yaExiste) {
+                $costos[] = ['concepto' => $concepto, 'valor' => (float) $prov[$campo]];
+            }
+        }
+
+        return $costos;
+    }
+
+    /**
+     * FOB/ISD/logística/impuestos son totales del documento. Si Gemini los
+     * copia en cada ítem, al sumar quedan multiplicados.
+     *
+     * @param array<int, array<string, mixed>> $proveedores
+     * @return array<int, array<string, mixed>>
+     */
+    private function deduplicarCostosDocumento(array $proveedores)
+    {
+        $n = count($proveedores);
+        if ($n < 2) {
+            return $proveedores;
+        }
+
+        $repetidos = [];
+        $conteo = [];
+        foreach ($proveedores as $p) {
+            $vistos = [];
+            foreach ($p['costos'] ?? [] as $costo) {
+                $key = $this->firmaCosto($costo);
+                if ($key === '' || isset($vistos[$key])) {
+                    continue;
+                }
+                $vistos[$key] = true;
+                if (!isset($conteo[$key])) {
+                    $conteo[$key] = 0;
+                }
+                $conteo[$key]++;
+            }
+        }
+        foreach ($conteo as $key => $count) {
+            if ($count === $n) {
+                $repetidos[$key] = true;
+            }
+        }
+
+        if (count($repetidos) === 0) {
+            return $proveedores;
+        }
+
+        foreach ($proveedores as $idx => $p) {
+            if ($idx === 0) {
+                continue;
+            }
+            $nuevos = [];
+            foreach ($p['costos'] ?? [] as $costo) {
+                $key = $this->firmaCosto($costo);
+                if ($key !== '' && isset($repetidos[$key])) {
+                    continue;
+                }
+                $nuevos[] = $costo;
+            }
+            $proveedores[$idx]['costos'] = $nuevos;
+            $proveedores[$idx]['logistica'] = null;
+            $proveedores[$idx]['fob'] = null;
+            $proveedores[$idx]['impuesto'] = null;
+            $proveedores[$idx]['isd'] = null;
+        }
+
+        return $proveedores;
+    }
+
+    /**
+     * @param mixed $costo
+     * @return string
+     */
+    private function firmaCosto($costo)
+    {
+        if (!is_array($costo)) {
+            return '';
+        }
+        $concepto = mb_strtolower(trim((string) ($costo['concepto'] ?? '')));
+        if ($concepto === '') {
+            return '';
+        }
+
+        return $concepto . '|' . number_format((float) ($costo['valor'] ?? 0), 4, '.', '');
+    }
+
+    /**
      * Genera y parsea JSON desde un prompt de texto (sin archivo adjunto).
      *
      * @param  string  $prompt
@@ -151,10 +412,10 @@ class GeminiService
      */
     public function analyzeTextAsJson($prompt, $maxOutputTokens = 2048, $temperature = 0.2, $responseSchema = null)
     {
-        $apiKey = env('GEMINI_API_KEY');
+        $apiKey = self::getApiKey();
 
         if (!$apiKey) {
-            Log::error('GeminiService: GEMINI_API_KEY no configurado en .env');
+            Log::error('GeminiService: GEMINI_API_KEY no configurado');
             return ['success' => false, 'data' => null, 'error' => 'GEMINI_API_KEY no configurado', 'finish_reason' => null];
         }
 
@@ -320,6 +581,62 @@ class GeminiService
     }
 
     /**
+     * Schema Gemini para el flujo "resumen" (cliente + proveedores sin items).
+     *
+     * @return array<string, mixed>
+     */
+    private static function cotizacionResumenResponseSchema()
+    {
+        return [
+            'type' => 'OBJECT',
+            'properties' => [
+                'cliente' => [
+                    'type' => 'OBJECT',
+                    'properties' => [
+                        'nombre' => ['type' => 'STRING', 'nullable' => true],
+                        'tipo_documento' => ['type' => 'STRING', 'nullable' => true],
+                        'documento' => ['type' => 'STRING', 'nullable' => true],
+                        'whatsapp' => ['type' => 'STRING', 'nullable' => true],
+                        'correo' => ['type' => 'STRING', 'nullable' => true],
+                    ],
+                    'required' => ['nombre', 'tipo_documento', 'documento', 'whatsapp', 'correo'],
+                ],
+                'proveedores' => [
+                    'type' => 'ARRAY',
+                    'items' => [
+                        'type' => 'OBJECT',
+                        'properties' => [
+                            'cbm_total' => ['type' => 'NUMBER', 'nullable' => true],
+                            'peso_total' => ['type' => 'NUMBER', 'nullable' => true],
+                            'qty_cajas' => ['type' => 'NUMBER', 'nullable' => true],
+                            'unidades' => ['type' => 'NUMBER', 'nullable' => true],
+                            'incoterm' => ['type' => 'STRING', 'nullable' => true],
+                            'productos' => ['type' => 'STRING', 'nullable' => true],
+                            'logistica' => ['type' => 'NUMBER', 'nullable' => true],
+                            'fob' => ['type' => 'NUMBER', 'nullable' => true],
+                            'impuesto' => ['type' => 'NUMBER', 'nullable' => true],
+                            'isd' => ['type' => 'NUMBER', 'nullable' => true],
+                            'costos' => [
+                                'type' => 'ARRAY',
+                                'items' => [
+                                    'type' => 'OBJECT',
+                                    'properties' => [
+                                        'concepto' => ['type' => 'STRING', 'nullable' => true],
+                                        'valor' => ['type' => 'NUMBER', 'nullable' => true],
+                                    ],
+                                    'required' => ['concepto', 'valor'],
+                                ],
+                            ],
+                        ],
+                        'required' => ['cbm_total', 'peso_total', 'qty_cajas', 'unidades', 'incoterm', 'productos', 'logistica', 'fob', 'impuesto', 'isd', 'costos'],
+                    ],
+                ],
+            ],
+            'required' => ['cliente', 'proveedores'],
+        ];
+    }
+
+    /**
      * Realiza la llamada HTTP a la API de Gemini y retorna el JSON extraído.
      *
      * @param  array<string, mixed>|null  $responseSchema
@@ -327,10 +644,10 @@ class GeminiService
      */
     private function callGemini($filePath, $mimeType, $prompt, $maxOutputTokens = 256, $responseSchema = null)
     {
-        $apiKey = env('GEMINI_API_KEY');
+        $apiKey = self::getApiKey();
 
         if (!$apiKey) {
-            Log::error('GeminiService: GEMINI_API_KEY no configurado en .env');
+            Log::error('GeminiService: GEMINI_API_KEY no configurado');
             return ['success' => false, 'data' => null, 'error' => 'GEMINI_API_KEY no configurado'];
         }
 
@@ -393,7 +710,7 @@ class GeminiService
         $fileBase64,
         $useThinkingBudgetZero = true
     ) {
-        $apiKey = env('GEMINI_API_KEY');
+        $apiKey = self::getApiKey();
 
         $generationConfig = [
             'temperature' => 0,

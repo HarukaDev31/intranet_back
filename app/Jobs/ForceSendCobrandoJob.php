@@ -43,6 +43,7 @@ class ForceSendCobrandoJob implements ShouldQueue
 
         try {
             $this->setDatabaseConnection($this->domain);
+            $this->setWhatsappFlujo('cobranza');
 
             Log::info("Iniciando Job ForceSendCobrando", [
                 'id_cotizacion' => $this->idCotizacion,

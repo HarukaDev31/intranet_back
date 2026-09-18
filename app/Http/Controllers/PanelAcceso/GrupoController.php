@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\Grupo;
+use App\Models\Organizacion;
 
 class GrupoController extends Controller
 {
@@ -20,6 +21,41 @@ class GrupoController extends Controller
     ];
 
     /**
+     * ID_Organizacion que actua como "admin": el unico que puede crear/editar
+     * cargos en cualquier organizacion. El resto solo puede gestionar la suya.
+     */
+    private const ID_ORGANIZACION_ADMIN = 1;
+
+    /**
+     * Resuelve id_org/id_empresa para crear o editar un cargo: si quien hace
+     * la request pertenece a la organizacion admin, puede elegir cualquier
+     * organizacion (la que venga en el request, validando que exista). Si no,
+     * se ignora lo que haya mandado el cliente y se fuerza su propia
+     * organizacion -- el select no deberia ni renderizarse para ese caso, pero
+     * esto es lo que realmente lo impide a nivel de datos.
+     *
+     * id_empresa nunca se toma del request: siempre se deriva de la
+     * organizacion resuelta, para que no puedan quedar incoherentes entre si.
+     *
+     * @return array{0: int, 1: int}|\Illuminate\Http\JsonResponse
+     */
+    private function resolverOrganizacionParaGrupo(Request $request, $authUser)
+    {
+        $puedeElegirOrganizacion = (int) $authUser->getAttribute('ID_Organizacion') === self::ID_ORGANIZACION_ADMIN;
+
+        $idOrg = $puedeElegirOrganizacion
+            ? (int) $request->input('id_org')
+            : (int) $authUser->getAttribute('ID_Organizacion');
+
+        $organizacion = Organizacion::find($idOrg);
+        if (!$organizacion) {
+            return response()->json(['success' => false, 'message' => 'Organización no encontrada'], 422);
+        }
+
+        return [(int) $organizacion->getAttribute('ID_Organizacion'), (int) $organizacion->getAttribute('ID_Empresa')];
+    }
+
+    /**
      * Listado de grupos con filtros opcionales.
      * GET /api/panel-acceso/grupos
      */
@@ -31,12 +67,19 @@ class GrupoController extends Controller
                 ->join('empresa AS emp', 'emp.ID_Empresa', '=', 'grupo.ID_Empresa')
                 ->join('organizacion AS org', 'org.ID_Organizacion', '=', 'grupo.ID_Organizacion');
 
-            if ($request->filled('empresa_id')) {
-                $query->where('grupo.ID_Empresa', $request->empresa_id);
-            }
+            $user = auth()->user();
+            $authOrg = (int) $user->getAttribute('ID_Organizacion');
 
-            if ($request->filled('org_id')) {
-                $query->where('grupo.ID_Organizacion', $request->org_id);
+            // Org ≠ 1: solo sus cargos. Ignorar empresa_id/org_id del request.
+            if ($authOrg !== self::ID_ORGANIZACION_ADMIN) {
+                $query->where('grupo.ID_Organizacion', $authOrg);
+            } else {
+                if ($request->filled('empresa_id')) {
+                    $query->where('grupo.ID_Empresa', $request->empresa_id);
+                }
+                if ($request->filled('org_id')) {
+                    $query->whereRaw('grupo.ID_Organizacion = ?', [$request->org_id]);
+                }
             }
 
             if ($request->filled('search')) {
@@ -44,7 +87,6 @@ class GrupoController extends Controller
             }
 
             // Excluir grupo root (ID_Grupo=1) para usuarios no-root
-            $user = auth()->user();
             if ($user->ID_Grupo != 1) {
                 $query->where('grupo.ID_Grupo', '!=', 1);
             }
@@ -87,6 +129,13 @@ class GrupoController extends Controller
                 return response()->json(['success' => false, 'message' => 'Grupo no encontrado'], 404);
             }
 
+            $authUser = auth()->user();
+            $authUserOrgId = (int) $authUser->getAttribute('ID_Organizacion');
+            if ($authUserOrgId !== self::ID_ORGANIZACION_ADMIN
+                && (int) $grupo->getAttribute('ID_Organizacion') !== $authUserOrgId) {
+                return response()->json(['success' => false, 'message' => 'Grupo no encontrado'], 404);
+            }
+
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -116,17 +165,24 @@ class GrupoController extends Controller
     {
         try {
             $request->validate([
-                'id_empresa'    => 'required|integer',
-                'id_org'        => 'required|integer',
+                'id_empresa'    => 'nullable|integer',
+                'id_org'        => 'nullable|integer',
                 'cargo'         => 'required|string|max:30',
                 'descripcion'   => 'nullable|string|max:100',
                 'privilegio'    => 'required|integer|in:1,2,3,4,5,6',
                 'estado'        => 'required|integer|in:0,1',
             ]);
 
+            $authUser = auth()->user();
+            $resuelto = $this->resolverOrganizacionParaGrupo($request, $authUser);
+            if ($resuelto instanceof \Illuminate\Http\JsonResponse) {
+                return $resuelto;
+            }
+            [$idOrg, $idEmpresa] = $resuelto;
+
             $existe = DB::selectOne(
                 'SELECT COUNT(*) AS existe FROM grupo WHERE ID_Empresa = ? AND ID_Organizacion = ? AND No_Grupo = ? LIMIT 1',
-                [$request->id_empresa, $request->id_org, $request->cargo]
+                [$idEmpresa, $idOrg, $request->cargo]
             );
 
             if ($existe->existe > 0) {
@@ -134,8 +190,8 @@ class GrupoController extends Controller
             }
 
             $grupo = Grupo::create([
-                'ID_Empresa'                => $request->id_empresa,
-                'ID_Organizacion'           => $request->id_org,
+                'ID_Empresa'                => $idEmpresa,
+                'ID_Organizacion'           => $idOrg,
                 'No_Grupo'                  => $request->cargo,
                 'No_Grupo_Descripcion'      => $request->descripcion,
                 'Nu_Tipo_Privilegio_Acceso' => $request->privilegio,
@@ -160,24 +216,39 @@ class GrupoController extends Controller
     {
         try {
             $request->validate([
-                'id_empresa'    => 'required|integer',
-                'id_org'        => 'required|integer',
+                'id_empresa'    => 'nullable|integer',
+                'id_org'        => 'nullable|integer',
                 'cargo'         => 'required|string|max:30',
                 'descripcion'   => 'nullable|string|max:100',
                 'privilegio'    => 'required|integer|in:1,2,3,4,5,6',
                 'estado'        => 'required|integer|in:0,1',
             ]);
 
+            $authUser = auth()->user();
+            $resuelto = $this->resolverOrganizacionParaGrupo($request, $authUser);
+            if ($resuelto instanceof \Illuminate\Http\JsonResponse) {
+                return $resuelto;
+            }
+            [$idOrg, $idEmpresa] = $resuelto;
+
             $grupo = Grupo::find($id);
             if (!$grupo) {
                 return response()->json(['success' => false, 'message' => 'Cargo no encontrado'], 404);
             }
 
+            // Un admin de organizacion puede editar cargos de cualquiera; el resto
+            // solo los de su propia organizacion.
+            $authUserOrgId = (int) $authUser->getAttribute('ID_Organizacion');
+            if ($authUserOrgId !== self::ID_ORGANIZACION_ADMIN
+                && (int) $grupo->getAttribute('ID_Organizacion') !== $authUserOrgId) {
+                return response()->json(['success' => false, 'message' => 'Cargo no encontrado'], 404);
+            }
+
             // Validar duplicado solo si cambió org o nombre
-            if ($grupo->ID_Organizacion != $request->id_org || $grupo->No_Grupo != $request->cargo) {
+            if ($grupo->ID_Organizacion != $idOrg || $grupo->No_Grupo != $request->cargo) {
                 $existe = DB::selectOne(
                     'SELECT COUNT(*) AS existe FROM grupo WHERE ID_Empresa = ? AND ID_Organizacion = ? AND No_Grupo = ? LIMIT 1',
-                    [$request->id_empresa, $request->id_org, $request->cargo]
+                    [$idEmpresa, $idOrg, $request->cargo]
                 );
                 if ($existe->existe > 0) {
                     return response()->json(['success' => false, 'message' => 'El cargo ya existe'], 422);
@@ -185,8 +256,8 @@ class GrupoController extends Controller
             }
 
             $grupo->update([
-                'ID_Empresa'                => $request->id_empresa,
-                'ID_Organizacion'           => $request->id_org,
+                'ID_Empresa'                => $idEmpresa,
+                'ID_Organizacion'           => $idOrg,
                 'No_Grupo'                  => $request->cargo,
                 'No_Grupo_Descripcion'      => $request->descripcion,
                 'Nu_Tipo_Privilegio_Acceso' => $request->privilegio,
@@ -213,6 +284,18 @@ class GrupoController extends Controller
                 return response()->json(['success' => false, 'message' => 'No se puede eliminar el grupo ROOT'], 422);
             }
 
+            $grupo = Grupo::find($id);
+            if (!$grupo) {
+                return response()->json(['success' => false, 'message' => 'Cargo no encontrado'], 404);
+            }
+
+            $authUser = auth()->user();
+            $authUserOrgId = (int) $authUser->getAttribute('ID_Organizacion');
+            if ($authUserOrgId !== self::ID_ORGANIZACION_ADMIN
+                && (int) $grupo->getAttribute('ID_Organizacion') !== $authUserOrgId) {
+                return response()->json(['success' => false, 'message' => 'Cargo no encontrado'], 404);
+            }
+
             $tieneUsuarios = DB::selectOne(
                 'SELECT COUNT(*) AS existe FROM grupo_usuario WHERE ID_Grupo = ? LIMIT 1',
                 [$id]
@@ -220,11 +303,6 @@ class GrupoController extends Controller
 
             if ($tieneUsuarios->existe > 0) {
                 return response()->json(['success' => false, 'message' => 'El cargo tiene usuario(s) asignado(s)'], 422);
-            }
-
-            $grupo = Grupo::find($id);
-            if (!$grupo) {
-                return response()->json(['success' => false, 'message' => 'Cargo no encontrado'], 404);
             }
 
             $grupo->delete();
@@ -249,6 +327,13 @@ class GrupoController extends Controller
 
             $grupo = Grupo::find($id);
             if (!$grupo) {
+                return response()->json(['success' => false, 'message' => 'Cargo no encontrado'], 404);
+            }
+
+            $authUser = auth()->user();
+            $authUserOrgId = (int) $authUser->getAttribute('ID_Organizacion');
+            if ($authUserOrgId !== self::ID_ORGANIZACION_ADMIN
+                && (int) $grupo->getAttribute('ID_Organizacion') !== $authUserOrgId) {
                 return response()->json(['success' => false, 'message' => 'Cargo no encontrado'], 404);
             }
 

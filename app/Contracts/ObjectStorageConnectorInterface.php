@@ -25,6 +25,8 @@ interface ObjectStorageConnectorInterface
 
     public function exists(string $relativePath): bool;
 
+    public function existsOnS3(string $relativePath): bool;
+
     public function delete(string $relativePath): bool;
 
     /**

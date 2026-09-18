@@ -8,6 +8,20 @@ use Illuminate\Support\Facades\Log;
 
 class WhatsappInboxTemplateService
 {
+    /** @var int */
+    protected $organizacionId = 1;
+
+    /**
+     * @param  int  $organizacionId
+     * @return $this
+     */
+    public function usingOrganizacion($organizacionId)
+    {
+        $this->organizacionId = (int) $organizacionId > 0 ? (int) $organizacionId : 1;
+
+        return $this;
+    }
+
     /**
      * Plantillas conocidas con encabezado DOCUMENT (por si el caché no trae components).
      *
@@ -32,6 +46,7 @@ class WhatsappInboxTemplateService
     private $knownImageHeaderTemplates = [
         'pb_consolidado_pagos_img_v1',
         'pb_consolidado_resumen_pago_v1',
+        'pb_rotulado_almacen_china_img_v1',
     ];
 
     /**
@@ -56,6 +71,7 @@ class WhatsappInboxTemplateService
         'pb_docs_excel_conf_recibido_v1' => ['consolidado', 'enlace'],
         'pb_docs_recordatorio_proveedor_v1' => ['codigo_proveedor', 'documentos_faltantes'],
         'pb_docs_recordatorio_proveedor_v1_qa' => ['documentos_faltantes'],
+        'pb_retraso_entrega_v1' => ['code_supplier', 'fecha'],
     ];
 
     /**
@@ -100,6 +116,14 @@ class WhatsappInboxTemplateService
                 'language' => 'es_PE',
                 'text' => "📩 Recordatorio:\n\n{{mensaje}}\n\n🙌",
                 'params' => ['mensaje'],
+            ],
+            [
+                'name' => 'pb_rotulado_almacen_china_img_v1',
+                'label' => 'Rotulado — Dirección almacén China',
+                'language' => 'es_PE',
+                'text' => 'Dile a tu proveedor que envíe la carga a nuestro almacén en China',
+                'params' => [],
+                'header_format' => 'IMAGE',
             ],
             [
                 'name' => 'pb_docs_consideraciones_doc_v1',
@@ -151,6 +175,13 @@ class WhatsappInboxTemplateService
                 'text' => "💰*Resumen de Pago*\n✅Cotización final: \${{total_cotizacion}}\n✅Adelanto: \${{adelanto}}\n✅ Pendiente de pago: \${{pendiente}} 💳",
                 'params' => ['total_cotizacion', 'adelanto', 'pendiente'],
                 'header_format' => 'IMAGE',
+            ],
+            [
+                'name' => 'pb_retraso_entrega_v1',
+                'label' => 'Proveedor — Retraso / fecha de envío',
+                'language' => 'es_PE',
+                'text' => 'Hola, hemos contactado a tu proveedor con código {{code_supplier}} nos comunica que la carga será enviada el {{fecha}},',
+                'params' => ['code_supplier', 'fecha'],
             ],
             [
                 'name' => 'pb_consolidado_cotizacion_final_v1',
@@ -439,7 +470,8 @@ class WhatsappInboxTemplateService
         $fromMeta = trim($this->buildPreviewBody($templateName, $params));
         $missingMarker = '[' . $templateName . ']';
 
-        if (config('meta_whatsapp.coordinacion_inbox_preview_from_template', true)) {
+        $creds = app(WhatsappInboxOrgConfigService::class)->credentials($this->organizacionId);
+        if (!empty($creds['preview_from_template'])) {
             if ($fromMeta !== '' && $fromMeta !== $missingMarker) {
                 return $fromMeta;
             }
@@ -455,7 +487,7 @@ class WhatsappInboxTemplateService
      */
     public function listTemplates()
     {
-        $cacheKey = 'wa_inbox_meta_templates_v3';
+        $cacheKey = 'wa_inbox_meta_templates_org_' . $this->organizacionId;
 
         $templates = Cache::remember($cacheKey, 3600, function () {
             return $this->fetchFromMetaOrDefault();
@@ -472,13 +504,14 @@ class WhatsappInboxTemplateService
      */
     private function fetchFromMetaOrDefault()
     {
-        $wabaId = (string) config('meta_whatsapp.waba_id');
-        $token = (string) config('meta_whatsapp.access_token');
+        $creds = app(WhatsappInboxOrgConfigService::class)->credentials($this->organizacionId);
+        $wabaId = (string) $creds['waba_id'];
+        $token = (string) $creds['access_token'];
         if ($wabaId === '' || $token === '') {
             return $this->defaultTemplates();
         }
 
-        $version = (string) config('meta_whatsapp.graph_api_version', 'v19.0');
+        $version = (string) ($creds['graph_api_version'] ?: 'v19.0');
         $url = "https://graph.facebook.com/{$version}/{$wabaId}/message_templates";
 
         try {

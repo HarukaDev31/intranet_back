@@ -7,13 +7,29 @@ use App\Models\Usuario;
 use App\Models\User;
 use App\Models\Provincia;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Carbon\Carbon;
+use App\Support\CargaConsolidada\ClientesVisibility;
 
 class ClienteService
 {
+    /**
+     * IDs de organizacion del usuario autenticado. Eloquent en `clientes`
+     * ya filtra por OrganizacionScope. Las queries de Carga Consolidada
+     * hechas con DB::table() no heredan ese scope: filtrar a mano.
+     *
+     * @return array<int, int>
+     */
+    private function organizacionIdsUsuarioActual(): array
+    {
+        $usuario = Auth::guard('api')->user();
+
+        return $usuario instanceof Usuario ? $usuario->organizacionesPermitidas() : [];
+    }
+
     /**
      * Obtener clientes con paginación y filtros
      */
@@ -192,29 +208,11 @@ class ClienteService
                         try {
                             $cotizacionQuery = DB::table('contenedor_consolidado_cotizacion as CC')
                                 ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+                                ->whereIn('CC.organizacion_id', $this->organizacionIdsUsuarioActual())
                                 ->whereNull('CC.deleted_at')
-                                ->where('CC.estado_cotizador', 'CONFIRMADO')
                                 ->whereNotNull('CC.estado_cliente');
-
-                            if (!empty($cliente->telefono)) {
-                                $telefonoLimpio = preg_replace('/[^0-9]/', '', $cliente->telefono);
-                                $cotizacionQuery->where(function($q) use ($telefonoLimpio) {
-                                    $q->where(DB::raw('REPLACE(REPLACE(CC.telefono, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%")
-                                      ->orWhere(DB::raw('REPLACE(REPLACE(CC.telefono, " ", ""), "-", "")'), 'LIKE', "%" . preg_replace('/^51/', '', $telefonoLimpio) . "%");
-                                });
-                            }
-
-                            if (!empty($cliente->documento)) {
-                                $cotizacionQuery->orWhere('CC.documento', $cliente->documento);
-                            }
-
-                            if (!empty($cliente->correo)) {
-                                $cotizacionQuery->orWhere(function($q2) use ($cliente) {
-                                    $q2->whereNotNull('CC.correo')
-                                       ->where('CC.correo', '!=', '')
-                                       ->where('CC.correo', $cliente->correo);
-                                });
-                            }
+                            ClientesVisibility::applyConfirmadoParaBd($cotizacionQuery, 'CC');
+                            ClientesVisibility::applyMatchCliente($cotizacionQuery, $cliente, 'CC');
 
                             $cotizacion = $cotizacionQuery->select('CC.*')
                                 ->orderBy('CC.fecha', 'asc')
@@ -308,21 +306,13 @@ class ClienteService
             }
 
             // Map numeric codes to labels. If code is 6 or 8, prefer the 'otros' free-text field.
-            $sourceMap = [
-                0 => 'No especificado',
-                1 => 'TikTok',
-                2 => 'Facebook',
-                3 => 'Instagram',
-                4 => 'YouTube',
-                5 => 'Familiares/Amigos',
-                6 => 'Otros'
-            ];
+            $sourceMap = \App\Support\Register\ComoEnteroCatalog::labels();
 
             $no_como_entero_final = null;
             if (!is_null($primaryCode) && $primaryCode !== '') {
                 $codeInt = (int) $primaryCode;
                 // If code indicates 'Otros' (6 or 8) and we don't yet have the free-text, try to resolve entidad now
-                if (($codeInt === 6 || $codeInt === 8) && empty($no_otros_como_entero)) {
+                if (\App\Support\Register\ComoEnteroCatalog::requiresOtrosText($codeInt) && empty($no_otros_como_entero)) {
                     try {
                         if (!isset($ent) && method_exists($cliente, 'resolveEntidad')) {
                             $ent = $cliente->resolveEntidad();
@@ -335,7 +325,7 @@ class ClienteService
                     }
                 }
 
-                if (($codeInt === 6 || $codeInt === 8) && !empty($no_otros_como_entero)) {
+                if (\App\Support\Register\ComoEnteroCatalog::requiresOtrosText($codeInt) && !empty($no_otros_como_entero)) {
                     $no_como_entero_final = $no_otros_como_entero;
                 } elseif (isset($sourceMap[$codeInt])) {
                     $no_como_entero_final = $sourceMap[$codeInt];
@@ -392,6 +382,8 @@ class ClienteService
                 'id_user' => $idUser,
                 'primer_servicio' => $primerServicio ? [
                     'servicio' => $primerServicio['servicio'],
+                    'detalle' => $primerServicio['detalle'] ?? null,
+                    'carga' => $primerServicio['carga'] ?? null,
                     'fecha' => Carbon::parse($primerServicio['fecha'])->format('d/m/Y'),
                     'categoria' => $primerServicio['categoria']
                 ] : null,
@@ -682,16 +674,20 @@ class ClienteService
             ->get();
 
         // Obtener servicios de contenedor_consolidado_cotizacion
-        $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
-            ->whereNotNull('estado_cliente')
-            ->whereNull('deleted_at')
-            ->where('estado_cotizador', 'CONFIRMADO')
-            ->whereIn('id_cliente', $clienteIds)
+        $cotizaciones = DB::table('contenedor_consolidado_cotizacion as ccc')
+            ->leftJoin('carga_consolidada_contenedor as cont', 'cont.id', '=', 'ccc.id_contenedor')
+            ->whereNotNull('ccc.estado_cliente')
+            ->whereNull('ccc.deleted_at')
+            ->whereIn('ccc.organizacion_id', $this->organizacionIdsUsuarioActual())
+            ->whereIn('ccc.id_cliente', $clienteIds);
+        ClientesVisibility::applyConfirmadoParaBd($cotizaciones, 'ccc');
+        $cotizaciones = $cotizaciones
             ->select(
-                'id_cliente',
-                'fecha',
+                'ccc.id_cliente',
+                'ccc.fecha',
                 DB::raw("'Consolidado' as servicio"),
-                'monto'
+                'ccc.monto',
+                'cont.carga'
             )
             ->get();
 
@@ -708,7 +704,9 @@ class ClienteService
             $serviciosPorCliente[$cotizacion->id_cliente][] = [
                 'servicio' => $cotizacion->servicio,
                 'fecha' => $cotizacion->fecha,
-                'monto' => $cotizacion->monto
+                'monto' => $cotizacion->monto,
+                'carga' => $cotizacion->carga,
+                'detalle' => Cliente::detalleCarga($cotizacion->carga, $cotizacion->fecha),
             ];
         }
 
@@ -824,28 +822,14 @@ class ClienteService
                     }
                 }
                 if (!$provinciaName) {
-                    $cotizacion = DB::table('contenedor_consolidado_cotizacion as CC')
+                    $cotizacionQuery = DB::table('contenedor_consolidado_cotizacion as CC')
                         ->join('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+                        ->whereIn('CC.organizacion_id', $this->organizacionIdsUsuarioActual())
                         ->whereNull('CC.deleted_at')
-                        ->where('CC.estado_cotizador', 'CONFIRMADO')
-                        ->whereNotNull('CC.estado_cliente')
-                        ->where(function ($q) use ($cliente) {
-                            if (!empty($cliente->telefono)) {
-                                $telefonoLimpio = preg_replace('/[^0-9]/', '', $cliente->telefono);
-                                $q->where(function ($q2) use ($telefonoLimpio) {
-                                    $q2->where(DB::raw('REPLACE(REPLACE(CC.telefono, " ", ""), "-", "")'), 'LIKE', "%{$telefonoLimpio}%")
-                                        ->orWhere(DB::raw('REPLACE(REPLACE(CC.telefono, " ", ""), "-", "")'), 'LIKE', "%" . preg_replace('/^51/', '', $telefonoLimpio) . "%");
-                                });
-                            }
-                            if (!empty($cliente->documento)) {
-                                $q->orWhere('CC.documento', $cliente->documento);
-                            }
-                            if (!empty($cliente->correo)) {
-                                $q->orWhere(function ($q2) use ($cliente) {
-                                    $q2->whereNotNull('CC.correo')->where('CC.correo', '!=', '')->where('CC.correo', $cliente->correo);
-                                });
-                            }
-                        })
+                        ->whereNotNull('CC.estado_cliente');
+                    ClientesVisibility::applyConfirmadoParaBd($cotizacionQuery, 'CC');
+                    ClientesVisibility::applyMatchCliente($cotizacionQuery, $cliente, 'CC');
+                    $cotizacion = $cotizacionQuery
                         ->select('CC.*')
                         ->orderBy('CC.fecha', 'asc')
                         ->orderByRaw('CAST(C.carga AS UNSIGNED)')
@@ -905,20 +889,11 @@ class ClienteService
         }
         $no_otros_val = $no_otros_val ?? $nuOtrosComoEnteroEmpresa ?? null;
 
-        $sourceMap = [
-            0 => 'No especificado',
-            1 => 'TikTok',
-            2 => 'Facebook',
-            3 => 'Instagram',
-            4 => 'YouTube',
-            5 => 'Familiares/Amigos',
-            6 => 'Otros',
-            8 => 'Otros'
-        ];
+        $sourceMap = \App\Support\Register\ComoEnteroCatalog::labels();
         $origen = null;
         if ($primaryCode !== null && $primaryCode !== '') {
             $codeInt = (int) $primaryCode;
-            if (($codeInt === 6 || $codeInt === 8) && !empty($no_otros_val)) {
+            if (\App\Support\Register\ComoEnteroCatalog::requiresOtrosText($codeInt) && !empty($no_otros_val)) {
                 $origen = $no_otros_val;
             } elseif (isset($sourceMap[$codeInt])) {
                 $origen = $sourceMap[$codeInt];
@@ -1169,17 +1144,6 @@ class ClienteService
             ? collect()
             : Provincia::whereIn('ID_Provincia', array_values(array_unique($provinciaIds)))->get()->keyBy('ID_Provincia');
 
-        $sourceMap = [
-            0 => 'No especificado',
-            1 => 'TikTok',
-            2 => 'Facebook',
-            3 => 'Instagram',
-            4 => 'YouTube',
-            5 => 'Familiares/Amigos',
-            6 => 'Otros',
-            8 => 'Otros'
-        ];
-
         foreach ($clientesList as $cliente) {
             $servicios = $serviciosPorCliente[$cliente->id] ?? [];
             $categoria = $this->determinarCategoriaCliente($servicios);
@@ -1265,14 +1229,16 @@ class ClienteService
                 // ignore
             }
 
+            $sourceMap = \App\Support\Register\ComoEnteroCatalog::labels();
+
             $no_como_entero_final = null;
             if (!is_null($primaryCode) && $primaryCode !== '') {
                 $codeInt = (int) $primaryCode;
-                if (($codeInt === 6 || $codeInt === 8) && empty($no_otros_val) && $ent && !empty($ent->No_Otros_Como_Entero_Empresa)) {
+                if (\App\Support\Register\ComoEnteroCatalog::requiresOtrosText($codeInt) && empty($no_otros_val) && $ent && !empty($ent->No_Otros_Como_Entero_Empresa)) {
                     $no_otros_val = $ent->No_Otros_Como_Entero_Empresa;
                 }
 
-                if (($codeInt === 6 || $codeInt === 8) && !empty($no_otros_val)) {
+                if (\App\Support\Register\ComoEnteroCatalog::requiresOtrosText($codeInt) && !empty($no_otros_val)) {
                     $no_como_entero_final = $no_otros_val;
                 } elseif (isset($sourceMap[$codeInt])) {
                     $no_como_entero_final = $sourceMap[$codeInt];
@@ -1293,6 +1259,8 @@ class ClienteService
                 'categoria' => $categoria,
                 'primer_servicio' => $primerServicio ? [
                     'servicio' => $primerServicio['servicio'],
+                    'detalle' => $primerServicio['detalle'] ?? null,
+                    'carga' => $primerServicio['carga'] ?? null,
                     'fecha' => Carbon::parse($primerServicio['fecha'])->format('d/m/Y'),
                     'categoria' => $categoria
                 ] : null,
@@ -1300,6 +1268,8 @@ class ClienteService
                 'servicios' => collect($servicios)->map(function ($servicio) use ($categoria) {
                     return [
                         'servicio' => $servicio['servicio'],
+                        'detalle' => $servicio['detalle'] ?? null,
+                        'carga' => $servicio['carga'] ?? null,
                         'fecha' => Carbon::parse($servicio['fecha'])->format('d/m/Y'),
                         'categoria' => $categoria
                     ];
@@ -1348,9 +1318,11 @@ class ClienteService
 
         // Fecha mínima de CONSOLIDADO por cliente (solo confirmados)
         $minConsolidado = DB::table('contenedor_consolidado_cotizacion as ccc')
-            ->where('ccc.estado_cotizador', 'CONFIRMADO')
+            ->whereIn('ccc.organizacion_id', $this->organizacionIdsUsuarioActual())
             ->whereNull('ccc.deleted_at')
-            ->whereNotNull('ccc.id_cliente')
+            ->whereNotNull('ccc.id_cliente');
+        ClientesVisibility::applyConfirmadoParaBd($minConsolidado, 'ccc');
+        $minConsolidado
             ->groupBy('ccc.id_cliente')
             ->select('ccc.id_cliente', DB::raw('MIN(ccc.fecha) as min_consolidado'));
 

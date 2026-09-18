@@ -108,6 +108,7 @@ class InspeccionadosController extends Controller
                 ])
                 ->leftJoin($this->table_tipo_cliente . ' as TC', 'TC.id', '=', 'CC.id_tipo_cliente')
                 ->join($this->table_contenedor . ' as CONT', 'CONT.id', '=', 'CC.id_contenedor')
+                ->whereIn('CONT.organizacion_id', $user->organizacionesPermitidas())
                 ->whereNull('CC.id_cliente_importacion')
                 ->where('CC.estado_cotizador', 'CONFIRMADO')
                 ->whereNotNull('CC.estado_cliente')

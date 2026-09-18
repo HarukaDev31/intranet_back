@@ -29,6 +29,14 @@ class CotizacionCotizadorDocumentacionController extends Controller
     public function show($idCotizacion)
     {
         try {
+            $cotizacionScoped = Cotizacion::find($idCotizacion);
+            if (!$cotizacionScoped) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cotización no encontrada'
+                ], 404);
+            }
+
             $main = DB::table('contenedor_consolidado_cotizacion as main')
                 ->select([
                     'main.*',
@@ -70,6 +78,7 @@ class CotizacionCotizadorDocumentacionController extends Controller
                     ) as proveedor_documentos")
                 ])
                 ->where('main.id', $idCotizacion)
+                ->where('main.organizacion_id', $cotizacionScoped->getAttribute('organizacion_id'))
                 ->whereNull('main.deleted_at')
                 ->whereNotNull('main.estado')
                 ->first();
@@ -140,7 +149,7 @@ class CotizacionCotizadorDocumentacionController extends Controller
             }
 
             $file = $request->file('file');
-            $fileUrl = $this->storeFile($file);
+            $fileUrl = $this->storeFile($file, $cotizacion->getAttribute('organizacion_id'));
             if (!$fileUrl) {
                 return response()->json(['success' => false, 'message' => 'Error al guardar el archivo'], 500);
             }
@@ -229,7 +238,7 @@ class CotizacionCotizadorDocumentacionController extends Controller
             }
 
             $file = $request->file('file');
-            $fileUrl = $this->storeFile($file);
+            $fileUrl = $this->storeFile($file, $proveedor->getAttribute('organizacion_id'));
             if (!$fileUrl) {
                 return response()->json(['success' => false, 'message' => 'Error al guardar el archivo'], 500);
             }
@@ -373,7 +382,8 @@ class CotizacionCotizadorDocumentacionController extends Controller
             $documentMeta = json_decode($request->input('document_meta', '[]'), true) ?: [];
             $proveedorMeta = json_decode($request->input('proveedor_meta', '[]'), true) ?: [];
 
-            DB::transaction(function () use ($idCotizacion, $documentIdsToDelete, $proveedorIdsToDelete, $request, $documentMeta, $proveedorMeta) {
+            $orgId = $cotizacion->getAttribute('organizacion_id');
+            DB::transaction(function () use ($idCotizacion, $documentIdsToDelete, $proveedorIdsToDelete, $request, $documentMeta, $proveedorMeta, $orgId) {
                 // 1) Eliminar documentos e imágenes por ID (solo los que vienen de la BD)
                 if (!empty($documentIdsToDelete)) {
                     $docs = CotizacionCotizadorDocumento::where('id_cotizacion', $idCotizacion)
@@ -410,7 +420,7 @@ class CotizacionCotizadorDocumentacionController extends Controller
                         }
                     }
                     $file = $request->file($fileKey);
-                    $fileUrl = $this->storeFile($file);
+                    $fileUrl = $this->storeFile($file, $orgId);
                     if (!$fileUrl) {
                         continue;
                     }
@@ -445,7 +455,7 @@ class CotizacionCotizadorDocumentacionController extends Controller
                         continue;
                     }
                     $file = $request->file($fileKey);
-                    $fileUrl = $this->storeFile($file);
+                    $fileUrl = $this->storeFile($file, $orgId);
                     if (!$fileUrl) {
                         continue;
                     }
@@ -477,7 +487,7 @@ class CotizacionCotizadorDocumentacionController extends Controller
         }
     }
 
-    private function storeFile($file): ?string
+    private function storeFile($file, $orgId = null): ?string
     {
         $allowed = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'];
         $ext = strtolower($file->getClientOriginalExtension());
@@ -489,7 +499,8 @@ class CotizacionCotizadorDocumentacionController extends Controller
             return null;
         }
         $filename = time() . '_' . uniqid() . '.' . $ext;
-        $path = 'assets/images/agentecompra/';
+        $orgSegment = $orgId ? ((int) $orgId) . '/' : '';
+        $path = 'assets/images/agentecompra/' . $orgSegment;
         return $this->storageStoreUpload($file, $path, $filename);
     }
 }

@@ -3,12 +3,20 @@
 namespace App\Models\CargaConsolidada;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
 class CotizacionDeliveryServicio extends Model
 {
+    use SincronizaOrganizacionId;
+
     public $timestamps = false;
 
     protected $table = 'contenedor_consolidado_cotizacion_delivery_servicio';
+
+    protected static function organizacionRelacion(): string
+    {
+        return 'cotizacion';
+    }
 
     protected $fillable = [
         'id_cotizacion',

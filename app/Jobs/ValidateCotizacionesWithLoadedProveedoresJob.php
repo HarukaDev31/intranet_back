@@ -7,6 +7,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use App\Helpers\ClienteLookupHelper;
+use App\Support\Phone\CountryPhoneHelper;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -39,9 +41,15 @@ class ValidateCotizacionesWithLoadedProveedoresJob implements ShouldQueue
 
             $cotizaciones = DB::table('contenedor_consolidado_cotizacion as ccc')
                 ->join('contenedor_consolidado_cotizacion_proveedores as cccp', 'ccc.id', '=', 'cccp.id_cotizacion')
+                ->leftJoin('carga_consolidada_contenedor as cont', 'cont.id', '=', 'ccc.id_contenedor')
+                ->leftJoin('pais_flags as pf', 'pf.id_pais', '=', 'cont.id_pais')
                 ->where('ccc.id_contenedor', $this->contenedorId)
                 ->whereNull('ccc.deleted_at')
                 ->where('cccp.estados_proveedor', 'LOADED')
+                ->where(function ($q) {
+                    $q->where('ccc.estado_cotizador', 'CONFIRMADO')
+                        ->orWhere('ccc.estado_resumen', 'CONFIRMADO');
+                })
                 ->whereNotNull('ccc.nombre')
                 ->where('ccc.nombre', '!=', '')
                 ->whereRaw('LENGTH(TRIM(ccc.nombre)) >= 2')
@@ -62,7 +70,17 @@ class ValidateCotizacionesWithLoadedProveedoresJob implements ShouldQueue
                             ->whereRaw('ccc.correo REGEXP "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"');
                     });
                 })
-                ->select('ccc.id', 'ccc.telefono', 'ccc.nombre', 'ccc.documento', 'ccc.correo')
+                ->select(
+                    'ccc.id',
+                    'ccc.telefono',
+                    'ccc.nombre',
+                    'ccc.documento',
+                    'ccc.correo',
+                    'ccc.fecha',
+                    'cont.id_pais',
+                    'pf.phone_code',
+                    DB::raw('COALESCE(ccc.organizacion_id, cont.organizacion_id) as organizacion_id')
+                )
                 ->distinct()
                 ->get();
 
@@ -73,31 +91,45 @@ class ValidateCotizacionesWithLoadedProveedoresJob implements ShouldQueue
             $clientesEncontrados = 0;
 
             foreach ($cotizaciones as $cotizacion) {
+                $telefono = CountryPhoneHelper::ensureCountryCode(
+                    $cotizacion->telefono,
+                    $cotizacion->phone_code ?? null
+                );
                 $clienteObj = (object) [
                     'nombre' => $cotizacion->nombre,
                     'documento' => $cotizacion->documento,
                     'correo' => $cotizacion->correo,
-                    'telefono' => $cotizacion->telefono,
+                    'telefono' => $telefono !== '' ? $telefono : $cotizacion->telefono,
                 ];
 
                 if ($this->validateClienteDataFromCommand($clienteObj)) {
                     $validados++;
-                    $clienteId = $this->insertOrGetClienteFromCommand($clienteObj, 'cotizacion_proveedor_loaded');
+                    $orgId = (int) ($cotizacion->organizacion_id ?: 1);
+                    $resultado = $this->insertOrGetClienteFromCommand(
+                        $clienteObj,
+                        $cotizacion->fecha ?? null,
+                        $orgId,
+                        $cotizacion->phone_code ?? null
+                    );
+                    $clienteId = $resultado ? (int) $resultado['id'] : 0;
+                    $fueCreado = $resultado ? (bool) $resultado['created'] : false;
 
                     if ($clienteId) {
-                        $clienteExistia = DB::table('clientes')->where('id', $clienteId)->exists();
+                        DB::table('contenedor_consolidado_cotizacion')
+                            ->where('id', $cotizacion->id)
+                            ->update(['id_cliente' => $clienteId]);
 
-                        if ($clienteExistia) {
-                            $clientesEncontrados++;
-                        } else {
+                        if ($fueCreado) {
                             $clientesCreados++;
+                        } else {
+                            $clientesEncontrados++;
                         }
 
                         Log::info("✅ Cliente validado para cotización con proveedor cargado", [
                             'cotizacion_id' => $cotizacion->id,
                             'cliente_id' => $clienteId,
                             'nombre' => $clienteObj->nombre,
-                            'fue_creado' => !$clienteExistia
+                            'fue_creado' => $fueCreado
                         ]);
                     }
                 } else {
@@ -150,62 +182,39 @@ class ValidateCotizacionesWithLoadedProveedoresJob implements ShouldQueue
 
     private function normalizePhoneFromCommand($phone): ?string
     {
-        if (empty($phone)) {
-            return null;
-        }
+        $digits = CountryPhoneHelper::digits($phone);
 
-        $normalized = preg_replace('/[\\s\\-\\(\\)\\.\\+]/', '', $phone);
-        $normalized = preg_replace('/[^0-9]/', '', $normalized);
-
-        return $normalized ?: null;
+        return $digits !== '' ? $digits : null;
     }
 
-    private function insertOrGetClienteFromCommand($data, $fuente = 'desconocida')
+    private function insertOrGetClienteFromCommand($data, $fecha = null, $organizacionId = 1, $callingCode = null)
     {
-        $telefonoNormalizado = $this->normalizePhoneFromCommand($data->telefono ?? null);
+        $organizacionId = (int) $organizacionId ?: 1;
 
-        $cliente = null;
+        $existente = ClienteLookupHelper::findClienteByContact(
+            $data->correo ?? null,
+            $data->telefono ?? null,
+            $data->documento ?? null,
+            $organizacionId,
+            $callingCode
+        );
 
-        if (!empty($telefonoNormalizado)) {
-            $cliente = DB::table('clientes')
-                ->where('telefono', 'like', $telefonoNormalizado)
-                ->first();
-
-            if ($cliente) {
-                return $cliente->id;
-            }
-        }
-
-        if (!$cliente && !empty(trim($data->documento ?? ''))) {
-            $cliente = DB::table('clientes')
-                ->where('documento', $data->documento)
-                ->first();
-
-            if ($cliente) {
-                return $cliente->id;
-            }
-        }
-
-        if (!$cliente && !empty(trim($data->correo ?? ''))) {
-            $cliente = DB::table('clientes')
-                ->where('correo', $data->correo)
-                ->first();
-
-            if ($cliente) {
-                return $cliente->id;
-            }
+        if ($existente) {
+            return ['id' => (int) $existente->id, 'created' => false];
         }
 
         $clienteId = DB::table('clientes')->insertGetId([
             'nombre' => $data->nombre,
             'documento' => $data->documento,
             'correo' => $data->correo,
-            'telefono' => $telefonoNormalizado,
+            'telefono' => $this->normalizePhoneFromCommand($data->telefono ?? null),
+            'fecha' => $fecha ?: now()->toDateString(),
+            'organizacion_id' => $organizacionId,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        return $clienteId;
+        return ['id' => (int) $clienteId, 'created' => true];
     }
 }
 

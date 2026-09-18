@@ -26,6 +26,14 @@ class CalculadoraImportacionWhatsappService
 
             $phoneNumberId = $this->formatWhatsAppNumber($whatsappCliente);
 
+            $this->setWhatsappOrganizacionId(
+                app(\App\Services\Organizacion\OrganizacionMensajeriaService::class)->resolverOrganizacionId([
+                    'id_cotizacion' => $calculadora->id_cotizacion ?? null,
+                    'id_contenedor' => $calculadora->id_carga_consolidada_contenedor ?? null,
+                ])
+            );
+            $this->setWhatsappFlujo('calculadora');
+
             $primerMensaje = "Bien, Te envío la cotización de tu importación, en el documento podrás ver el detalle de los costos.\n\n⚠️ Nota: Leer Términos y Condiciones.\n\n🎥 Video Explicativo:\n▶️ https://youtu.be/H7U-_5wCWd4";
             $tercerMensaje = "📊 Aquí te paso el resumen de cuánto te saldría cada modelo y el total de inversión\n\n💰 El primer pago es el SERVICIO DE IMPORTACIÓN y se realiza antes del zarpe de buque 🚢";
             $captionResumen = '📊 Resumen detallado de costos y pagos';

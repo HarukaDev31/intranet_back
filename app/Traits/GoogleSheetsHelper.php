@@ -513,7 +513,12 @@ trait GoogleSheetsHelper
             return $newSheetId;
 
         } catch (\Exception $e) {
-            Log::error("Error creando hoja '{$sheetName}': " . $e->getMessage());
+            $mensaje = $e->getMessage();
+            if (stripos($mensaje, 'must not be an Office file') !== false || stripos($mensaje, 'FAILED_PRECONDITION') !== false) {
+                Log::warning("No se puede crear la pestaña '{$sheetName}': POST_SHEET_STATUS_DOC_ID es un Excel de Office, no una hoja nativa de Google. En Drive: Archivo → Guardar como Hojas de cálculo de Google, y usa ese ID en el .env. Esto no afecta el cierre ni BD clientes.");
+                return false;
+            }
+            Log::error("Error creando hoja '{$sheetName}': " . $mensaje);
             return false;
         }
     }

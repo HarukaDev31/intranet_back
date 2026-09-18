@@ -5,8 +5,8 @@ use App\Http\Controllers\CargaConsolidada\CotizacionProveedorController;
 use App\Http\Controllers\Clientes\ImportacionesController;
 use App\Http\Controllers\PublicSite\ExcelConfirmacionController;
 
-// Rutas externas (algunas sin JWT para acceso por enlace)
-Route::group(['prefix' => 'contenedor/external' ], function () {
+// Rutas externas (algunas sin JWT para acceso por enlace) — requieren X-Org-Key
+Route::group(['prefix' => 'contenedor/external', 'middleware' => 'org.key'], function () {
     Route::get('inspeccion/{uuid}', [ImportacionesController::class, 'getInspeccionByUuidPublic']);
     Route::get('cotizacion-proveedor/{uuid}', [CotizacionProveedorController::class, 'getContenedorCotizacionProveedoresByUuid']);
     Route::put('cotizacion-proveedor/{uuid}', [CotizacionProveedorController::class, 'updateContenedorCotizacionProveedoresByUuid']);

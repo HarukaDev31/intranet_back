@@ -4,6 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property string|null $No_Grupo
+ * @property string|null $No_Grupo_Descripcion
+ * @property int|null $Nu_Tipo_Privilegio_Acceso
+ */
 class Grupo extends Model
 {
     protected $table = 'grupo';

@@ -4,13 +4,58 @@ namespace App\Models\CargaConsolidada;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Models\Pais;
+use App\Models\PaisFlag;
+use App\Models\Organizacion;
+use App\Models\CargaConsolidada\Scopes\OrganizacionScope;
+use App\Support\CargaConsolidada\CargaLabel;
 
 /**
  * @property int $id
- * @property \Carbon\Carbon|null $fecha_maxima_pago
+ * @property string|null $mes
+ * @property int|null $id_pais
+ * @property int|null $organizacion_id
  * @property string|null $carga
+ * @property string|null $parte
+ * @property int|null $id_contenedor_origen
+ * @property \Illuminate\Support\Carbon|null $f_puerto
+ * @property \Illuminate\Support\Carbon|null $f_entrega
+ * @property \Illuminate\Support\Carbon|null $f_cierre
+ * @property \Illuminate\Support\Carbon|null $f_inicio
+ * @property string|int|null $empresa
+ * @property string|null $estado
+ * @property string|null $estado_china
+ * @property string|null $estado_documentacion
+ * @property string|null $estado_finanzas
+ * @property string|null $tipo_carga
+ * @property string|null $naviera
+ * @property string|null $tipo_contenedor
+ * @property string|null $canal_control
+ * @property string|null $numero_dua
+ * @property \Illuminate\Support\Carbon|null $fecha_zarpe
+ * @property \Illuminate\Support\Carbon|null $fecha_arribo
+ * @property \Illuminate\Support\Carbon|null $fecha_declaracion
+ * @property \Illuminate\Support\Carbon|null $fecha_levante
+ * @property \Illuminate\Support\Carbon|null $fecha_maxima_pago
+ * @property string|float|int|null $valor_fob
+ * @property string|float|int|null $valor_flete
+ * @property string|float|int|null $costo_destino
+ * @property string|float|int|null $ajuste_valor
+ * @property string|float|int|null $multa
+ * @property string|float|int|null $limite_cbm_imo
+ * @property string|null $observaciones
+ * @property string|null $fecha_documentacion_max
+ * @property string|null $lista_embarque_url
+ * @property string|null $bl_file_url
+ * @property string|null $factura_general_url
+ * @property-read Pais|null $pais
+ * @property-read Organizacion|null $organizacion
+ * @property-read ContenedorTcYuan|null $tcYuan
+ * @property string|null $phone_code
+ * @property string|null $iso2
  */
 class Contenedor extends Model
 {
@@ -32,6 +77,11 @@ class Contenedor extends Model
     protected $primaryKey = 'id';
     public $timestamps = false;
 
+    protected static function booted()
+    {
+        static::addGlobalScope(new OrganizacionScope());
+    }
+
     /**
      * Los atributos que son asignables masivamente.
      *
@@ -40,6 +90,7 @@ class Contenedor extends Model
     protected $fillable = [
         'mes',
         'id_pais',
+        'organizacion_id',
         'carga',
         'parte',
         'id_contenedor_origen',
@@ -184,40 +235,79 @@ class Contenedor extends Model
     ];
 
     /**
-     * Label de carga para listados: "15 - 2026" o partido "15A-2026".
+     * Label de carga para tablas y selects: "15-2026" / "15A-2026". Sin prefijo de país.
      *
      * @return string
      */
     public function formatCargaLabel()
     {
-        $year = $this->f_inicio ? date('Y', strtotime($this->f_inicio)) : date('Y');
-        if (!empty($this->parte)) {
-            return $this->carga . $this->parte . '-' . $year;
+        return CargaLabel::format($this->carga, $this->f_inicio, $this->parte);
+    }
+
+    /**
+     * ISO-2 del país del contenedor (pais_flags), no se guarda en `carga`.
+     *
+     * @return string
+     */
+    public function prefijoPais()
+    {
+        if (!empty($this->iso2)) {
+            return strtoupper(trim((string) $this->iso2));
+        }
+        if ($this->relationLoaded('paisFlag') && $this->paisFlag) {
+            return strtoupper(trim((string) $this->paisFlag->iso2));
+        }
+        if ((int) $this->id_pais <= 0) {
+            return '';
         }
 
-        return $this->carga . ' - ' . $year;
+        $iso = PaisFlag::query()->where('id_pais', $this->id_pais)->value('iso2');
+
+        return $iso ? strtoupper(trim((string) $iso)) : '';
+    }
+
+    /**
+     * @return HasOne<PaisFlag, $this>
+     */
+    public function paisFlag()
+    {
+        return $this->hasOne(PaisFlag::class, 'id_pais', 'id_pais');
     }
 
     /**
      * Contenedor original del grupo partido (parte A).
      */
-    public function contenedorOrigen()
+    public function contenedorOrigen(): BelongsTo
     {
         return $this->belongsTo(self::class, 'id_contenedor_origen');
     }
 
     /**
      * Obtiene el país asociado al contenedor.
+     *
+     * @return BelongsTo<Pais, $this>
      */
-    public function pais()
+    public function pais(): BelongsTo
     {
         return $this->belongsTo(Pais::class, 'id_pais', 'ID_Pais');
     }
 
     /**
-     * TC Yuan vigente del consolidado (periodo dado por created_at/updated_at).
+     * Obtiene la organización asociada al contenedor.
+     *
+     * @return BelongsTo<Organizacion, $this>
      */
-    public function tcYuan()
+    public function organizacion(): BelongsTo
+    {
+        return $this->belongsTo(Organizacion::class, 'organizacion_id', 'ID_Organizacion');
+    }
+
+    /**
+     * TC Yuan vigente del consolidado (periodo dado por created_at/updated_at).
+     *
+     * @return HasOne<ContenedorTcYuan, $this>
+     */
+    public function tcYuan(): HasOne
     {
         return $this->hasOne(ContenedorTcYuan::class, 'id_contenedor');
     }
@@ -276,6 +366,14 @@ class Contenedor extends Model
     public function scopePorPais($query, $idPais)
     {
         return $query->where('id_pais', $idPais);
+    }
+
+    /**
+     * Scope para filtrar por organización.
+     */
+    public function scopePorOrganizacion($query, $idOrganizacion)
+    {
+        return $query->where('organizacion_id', $idOrganizacion);
     }
 
     /**

@@ -381,9 +381,12 @@ class CalculadoraImportacionController extends Controller
                 $cotizacionesPendientes = CalculadoraImportacion::where('estado', 'PENDIENTE')->count();
                 $cotizacionesVendidas = CalculadoraImportacion::where('estado', 'CONFIRMADO')->count();
 
+                // Cachear arrays (nunca Eloquent/Collection): Redis serializa mal los modelos → __PHP_Incomplete_Class.
                 return [
                     'success' => true,
-                    'data' => $data,
+                    'data' => array_map(static function ($calculadora) {
+                        return $calculadora->toArray();
+                    }, $data),
                     'pagination' => [
                         'current_page' => $calculos->currentPage(),
                         'last_page' => $calculos->lastPage(),
@@ -407,9 +410,9 @@ class CalculadoraImportacionController extends Controller
                         ],
                     ],
                     'filters' => [
-                        'contenedores' => $contenedores,
+                        'contenedores' => $contenedores->values()->all(),
                         'estadoCalculadora' => $estadoCalculadora,
-                        'vendedores' => $vendedores,
+                        'vendedores' => $vendedores->values()->all(),
                     ],
                 ];
             });
@@ -566,6 +569,14 @@ class CalculadoraImportacionController extends Controller
             }
             $request->replace($data);
 
+            // Asegurar tipoDocumento camelCase antes de validar (por si llega snake_case)
+            $data = $request->all();
+            if (isset($data['clienteInfo']) && is_array($data['clienteInfo'])) {
+                $rawTipo = $data['clienteInfo']['tipoDocumento'] ?? $data['clienteInfo']['tipo_documento'] ?? 'DNI';
+                $data['clienteInfo']['tipoDocumento'] = strtoupper(trim((string) $rawTipo)) === 'RUC' ? 'RUC' : 'DNI';
+                $request->replace($data);
+            }
+
             $request->validate([
                 'id' => 'nullable|integer|exists:calculadora_importacion,id',
                 'clienteInfo.nombre' => 'required_if:clienteInfo.tipoDocumento,DNI|nullable|string',
@@ -573,6 +584,9 @@ class CalculadoraImportacionController extends Controller
                 'clienteInfo.dni' => 'nullable|string',
                 'clienteInfo.ruc' => 'required_if:clienteInfo.tipoDocumento,RUC|nullable|string',
                 'clienteInfo.empresa' => 'required_if:clienteInfo.tipoDocumento,RUC|nullable|string',
+                'clienteInfo.domicilioFiscal' => 'required_if:clienteInfo.tipoDocumento,RUC|nullable|string|max:500',
+                'clienteInfo.coordinadorOperativoNombre' => 'required_if:clienteInfo.tipoDocumento,RUC|nullable|string|max:255',
+                'clienteInfo.coordinadorOperativoDni' => 'required_if:clienteInfo.tipoDocumento,RUC|nullable|string|max:20',
                 'clienteInfo.whatsapp' => 'nullable|string',
                 'clienteInfo.correo' => 'nullable|string',
                 'clienteInfo.tipoCliente' => 'required|string',
@@ -595,6 +609,10 @@ class CalculadoraImportacionController extends Controller
             ]);
 
             $data = $request->all();
+            if (isset($data['clienteInfo']) && is_array($data['clienteInfo'])) {
+                $rawTipo = $data['clienteInfo']['tipoDocumento'] ?? $data['clienteInfo']['tipo_documento'] ?? 'DNI';
+                $data['clienteInfo']['tipoDocumento'] = strtoupper(trim((string) $rawTipo)) === 'RUC' ? 'RUC' : 'DNI';
+            }
             // Compatibilidad: algunos clientes envían "tariftype" en lugar de tarifa.type.
             if (
                 isset($data['tarifa']) &&
@@ -925,7 +943,7 @@ class CalculadoraImportacionController extends Controller
                 return [
                     'success' => true,
                     'data' => [
-                        'calculadora' => $calculadora,
+                        'calculadora' => $calculadora->toArray(),
                         'totales' => $totales,
                         'tc_yuan_actual' => $tcYuanActual,
                     ],
@@ -962,7 +980,7 @@ class CalculadoraImportacionController extends Controller
                 $calculos = $this->calculadoraImportacionService->obtenerCalculosPorCliente($dni);
                 return [
                     'success' => true,
-                    'data' => $calculos,
+                    'data' => $calculos->toArray(),
                     'total' => $calculos->count(),
                 ];
             });
@@ -1199,6 +1217,50 @@ class CalculadoraImportacionController extends Controller
                     $this->sincronizarCodeSupplierCalculadoraDesdeCotizacion($calculadora, $calculadora->id_cotizacion);
                 }
             }
+
+            if ($estado === 'CONFIRMADO') {
+                $calculadora->save();
+
+                if (!$calculadora->id_cotizacion) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No se puede confirmar: la calculadora no tiene cotización vinculada en carga consolidada. Pásala primero a COTIZADO.',
+                    ], 400);
+                }
+
+                // El PDF/código de contrato se generan en updateEstadoCotizacion (módulo cotizaciones consolidado).
+                $cotizacionController = app(CotizacionController::class);
+                $estadoRequest = Request::create('/', 'PUT', ['estado' => 'CONFIRMADO']);
+                $estadoResponse = $cotizacionController->updateEstadoCotizacion(
+                    (int) $calculadora->id_cotizacion,
+                    $estadoRequest
+                );
+                $estadoData = json_decode($estadoResponse->getContent(), true);
+
+                if (!($estadoData['success'] ?? false)) {
+                    Log::error('No se pudo confirmar cotización vinculada desde calculadora', [
+                        'calculadora_id' => $calculadora->id,
+                        'cotizacion_id' => $calculadora->id_cotizacion,
+                        'response' => $estadoData,
+                    ]);
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => $estadoData['message'] ?? 'Error al confirmar la cotización vinculada y generar el contrato',
+                    ], $estadoResponse->getStatusCode() >= 400 ? $estadoResponse->getStatusCode() : 500);
+                }
+
+                $this->cacheService->invalidateAfterWrite($calculadora, [
+                    'dni_cliente' => $calculadora->dni_cliente ?? null,
+                    'whatsapp' => $calculadora->whatsapp_cliente ?? null,
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Estado cambiado a CONFIRMADO y contrato generado',
+                ]);
+            }
+
             $calculadora->save();
 
             $this->cacheService->invalidateAfterWrite($calculadora, [

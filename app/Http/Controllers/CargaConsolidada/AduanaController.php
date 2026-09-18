@@ -98,9 +98,17 @@ class AduanaController extends Controller
      */
     public function saveFormularioAduana(Request $request)
     {
+        $idContenedor = $request->idContainer;
+        $contenedor = Contenedor::find($idContenedor);
+        if (!$contenedor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Contenedor no encontrado'
+            ], 404);
+        }
+
         DB::beginTransaction();
         try {
-            $idContenedor = $request->idContainer;
             $data = $request->all();
 
             $files = $request->file('files');
@@ -142,7 +150,6 @@ class AduanaController extends Controller
                     ]);
                 }
             }
-            $contenedor = Contenedor::find($idContenedor);
             $contenedor->fill($data);
             $contenedor->save();
             return response()->json([
@@ -181,8 +188,14 @@ class AduanaController extends Controller
     public function deleteFileAduana($idFile)
     {
         $file = DB::table('carga_consolidada_aduana_files')->where('id', $idFile)->first();
+        if (!$file || !Contenedor::where('id', $file->id_contenedor)->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Archivo no encontrado'
+            ], 404);
+        }
         DB::table('carga_consolidada_aduana_files')->where('id', $idFile)->delete();
-        if ($file && !empty($file->file_path)) {
+        if (!empty($file->file_path)) {
             $this->objectStorage()->delete($file->file_path);
         }
         return response()->json([
