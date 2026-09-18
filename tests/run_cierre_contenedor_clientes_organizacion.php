@@ -148,7 +148,7 @@ try {
         'CONT',
         'contenedor_consolidado_cotizacion_proveedores'
     );
-    qa_assert($customers->select('CC.id')->first() === null, 'Sale de Customers al estar COMPLETADO + LOADED');
+    qa_assert($customers->select('CC.id')->first() === null, 'Sale de Customers al estar COMPLETADO');
 } catch (Throwable $e) {
     echo "  FAIL  excepción: " . $e->getMessage() . "\n";
     $failed++;

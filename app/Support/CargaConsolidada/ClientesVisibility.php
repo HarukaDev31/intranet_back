@@ -101,18 +101,22 @@ class ClientesVisibility
         });
     }
 
+    /**
+     * Customers de Almacén China: no listar cotizaciones de un consolidado
+     * ya cerrado (estado_china COMPLETADO), aunque el proveedor siga en
+     * NO LOADED / INSPECTION / WAIT.
+     *
+     * @param \Illuminate\Database\Query\Builder $query
+     * @param string $cotizacionAlias
+     * @param string $contenedorAlias
+     * @param string $proveedoresTable se mantiene por compatibilidad con callers
+     * @return void
+     */
     public static function excludeGraduadosDeCustomers($query, $cotizacionAlias, $contenedorAlias, $proveedoresTable)
     {
-        $query->where(function ($q) use ($cotizacionAlias, $contenedorAlias, $proveedoresTable) {
-            $q->where(function ($open) use ($contenedorAlias) {
-                $open->where($contenedorAlias . '.estado_china', '!=', 'COMPLETADO')
-                    ->orWhereNull($contenedorAlias . '.estado_china');
-            })->orWhereNotExists(function ($sub) use ($cotizacionAlias, $proveedoresTable) {
-                $sub->select(\Illuminate\Support\Facades\DB::raw(1))
-                    ->from($proveedoresTable)
-                    ->whereColumn($proveedoresTable . '.id_cotizacion', $cotizacionAlias . '.id')
-                    ->where('estados_proveedor', 'LOADED');
-            });
+        $query->where(function ($q) use ($contenedorAlias) {
+            $q->where($contenedorAlias . '.estado_china', '!=', 'COMPLETADO')
+                ->orWhereNull($contenedorAlias . '.estado_china');
         });
     }
 }

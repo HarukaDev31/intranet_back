@@ -1179,6 +1179,35 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
     }
 
     /**
+     * En orgs socio, solo se puede pasar a rotulado si la cotización está confirmada.
+     *
+     * @param \App\Models\CargaConsolidada\Cotizacion $cotizacion
+     * @return \Illuminate\Http\JsonResponse|null
+     */
+    private function respuestaRotuladoRequiereConfirmado($cotizacion)
+    {
+        $orgId = (int) $cotizacion->getAttribute('organizacion_id');
+        if ($orgId <= 0 && $cotizacion->id_contenedor) {
+            $contenedor = Contenedor::find($cotizacion->id_contenedor);
+            $orgId = $contenedor ? (int) $contenedor->getAttribute('organizacion_id') : 0;
+        }
+        if ($orgId === Usuario::ID_ORGANIZACION_ADMIN || $orgId <= 0) {
+            return null;
+        }
+
+        $estadoResumen = strtoupper(trim((string) $cotizacion->getAttribute('estado_resumen')));
+        $estadoCotizador = strtoupper(trim((string) $cotizacion->getAttribute('estado_cotizador')));
+        if ($estadoResumen === 'CONFIRMADO' || $estadoCotizador === 'CONFIRMADO') {
+            return null;
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'La cotización debe estar confirmada para cambiar a rotulado.',
+        ], 422);
+    }
+
+    /**
      * Guarda tipo_rotulado elegido en el modal (General = rotulado) antes de encolar el envío.
      *
      * @param int $idCotizacion
@@ -1254,12 +1283,17 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 ], 404);
             }
 
-            $idsProveedores = $this->persistirTipoRotuladoProveedores($idCotizacion, $proveedores);
+            $bloqueadoConfirmado = $this->respuestaRotuladoRequiereConfirmado($cotizacion);
+            if ($bloqueadoConfirmado) {
+                return $bloqueadoConfirmado;
+            }
 
             $bloqueado = $this->respuestaRotuladoDeshabilitado($cotizacion);
             if ($bloqueado) {
                 return $bloqueado;
             }
+
+            $idsProveedores = $this->persistirTipoRotuladoProveedores($idCotizacion, $proveedores);
 
             $idContenedor = $cotizacion->id_contenedor;
             $carga = Contenedor::where('id', $idContenedor)->first()->carga;
@@ -1267,7 +1301,6 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             // Obtener dominio del frontend
             $domain = WhatsappTrait::getCurrentRequestDomain();
 
-            $idsProveedores = $this->persistirTipoRotuladoProveedores($idCotizacion, $proveedores);
             ForceSendRotuladoJob::dispatch($idCotizacion, $idsProveedores, $idContenedor, $domain)->onQueue('importaciones');
 
             Log::info('ForceSendRotuladoJob dispatchado desde send-rotulado (SendRotuladoJob abandoned)');
@@ -1766,6 +1799,23 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             }
 
             $data = DocumentStatusSync::stripStatusFields($data);
+
+            if (isset($data['tipo_rotulado'])) {
+                $tipoRotulado = strtolower(trim(str_replace(' ', '_', (string) $data['tipo_rotulado'])));
+                if ($tipoRotulado === 'general') {
+                    $tipoRotulado = 'rotulado';
+                }
+                $data['tipo_rotulado'] = $tipoRotulado;
+                if ($tipoRotulado !== '' && $tipoRotulado !== 'pendiente') {
+                    $cotizacionRotulado = Cotizacion::find($idCotizacion);
+                    if ($cotizacionRotulado) {
+                        $bloqueadoRotulado = $this->respuestaRotuladoRequiereConfirmado($cotizacionRotulado);
+                        if ($bloqueadoRotulado) {
+                            return $bloqueadoRotulado;
+                        }
+                    }
+                }
+            }
 
             // Persistir estados antes del update masivo (evita perder dirty attrs)
             $proveedor->save();
@@ -3573,6 +3623,10 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
             $cotizacion = Cotizacion::where('id', $idCotizacion)->first();
             if ($cotizacion) {
+                $bloqueadoConfirmado = $this->respuestaRotuladoRequiereConfirmado($cotizacion);
+                if ($bloqueadoConfirmado) {
+                    return $bloqueadoConfirmado;
+                }
                 $bloqueado = $this->respuestaRotuladoDeshabilitado($cotizacion);
                 if ($bloqueado) {
                     return $bloqueado;
@@ -3997,6 +4051,34 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             ], 500);
         }
     }
+
+    public function validarRotulado(Request $request)
+    {
+        $idCotizacion = $request->idCotizacion ?: $request->id_cotizacion;
+        $cotizacion = Cotizacion::find($idCotizacion);
+        if (!$cotizacion) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cotización no encontrada',
+            ], 404);
+        }
+
+        $bloqueadoConfirmado = $this->respuestaRotuladoRequiereConfirmado($cotizacion);
+        if ($bloqueadoConfirmado) {
+            return $bloqueadoConfirmado;
+        }
+
+        $bloqueado = $this->respuestaRotuladoDeshabilitado($cotizacion);
+        if ($bloqueado) {
+            return $bloqueado;
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'La cotización puede cambiar a rotulado.',
+        ]);
+    }
+
     public function sendRotulado(Request $request)
     {
 
@@ -4017,7 +4099,20 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 'message' => 'Proveedores no encontrados'
             ], 404);
         }
-        $this->procesarEstadoRotuladoJob($cotizacion->nombre, $cotizacion->carga, $proveedores, $idCotizacion, $total_movilidad_personal);
+
+        $bloqueadoConfirmado = $this->respuestaRotuladoRequiereConfirmado($cotizacion);
+        if ($bloqueadoConfirmado) {
+            return $bloqueadoConfirmado;
+        }
+
+        $jobResponse = $this->procesarEstadoRotuladoJob($cotizacion->nombre, $cotizacion->carga, $proveedores, $idCotizacion, $total_movilidad_personal);
+        if ($jobResponse instanceof \Illuminate\Http\JsonResponse) {
+            $payload = $jobResponse->getData(true);
+            if (is_array($payload) && array_key_exists('success', $payload) && empty($payload['success'])) {
+                return $jobResponse;
+            }
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Rotulado enviado correctamente'

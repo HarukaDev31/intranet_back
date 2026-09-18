@@ -764,6 +764,10 @@ class CotizacionController extends Controller
 
         if ($usergroup === Usuario::ROL_ALMACEN_CHINA) {
             $headersData = app(CustomersHeadersService::class)->buildForContenedor($idContenedor);
+            if (isset($headersData['cbm_pais'])) {
+                $headersData['cbm_pais']['label'] = 'CBM ' . $paisFlags['nombre_destino'];
+                $headersData['cbm_pais']['icon'] = $paisFlags['destino'];
+            }
 
             return response()->json([
                 'success' => true,
