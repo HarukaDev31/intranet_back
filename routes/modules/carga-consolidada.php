@@ -215,7 +215,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
             Route::get('/general/download-cotizacion-excel/{idCotizacion}', [CotizacionFinalController::class, 'downloadCotizacionFinalExcel']);
             Route::get('/cargos-extra/{idContenedor}', [CotizacionFinalController::class, 'getCotizacionFinalCargosExtra']);
             Route::get('/pagos/{idContenedor}/export-excel', [CotizacionFinalController::class, 'exportContabilidadPagosExcel']);
-            Route::get('/pagos/{idCotizacion}', [CotizacionFinalController::class, 'getCotizacionFinalDocumentacionPagos']);
+            Route::get('/pagos/{idContenedor}', [CotizacionFinalController::class, 'getCotizacionFinalDocumentacionPagos']);
             Route::get('/general/{idContenedor}', [CotizacionFinalController::class, 'getContenedorCotizacionesFinales']);
             Route::get('/general/{idContenedor}/headers', [CotizacionFinalController::class, 'getCotizacionFinalHeaders']);
             Route::get('/general/{idContenedor}/preview-reminder-pago', [CotizacionFinalController::class, 'previewReminderPago']);
