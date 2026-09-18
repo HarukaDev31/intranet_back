@@ -269,6 +269,7 @@ class CotizacionProveedorController extends Controller
                         'peso_china',
                         'id_cotizacion',
                         'cbm_total',
+                        'cbm_imo',
                         'supplier',
                         'code_supplier',
                         'estados_proveedor',
@@ -322,6 +323,9 @@ class CotizacionProveedorController extends Controller
                     }
                     if (is_numeric($proveedor['cbm_total'] ?? null)) {
                         $cbmTotalPeru += $proveedor['cbm_total'];
+                    }
+                    if (is_numeric($proveedor['cbm_imo'] ?? null)) {
+                        $cbmTotalPeru += $proveedor['cbm_imo'];
                     }
                 }
 
@@ -403,6 +407,7 @@ class CotizacionProveedorController extends Controller
                     'peso_china',
                     'id_cotizacion',
                     'cbm_total',
+                    'cbm_imo',
                     'supplier',
                     'code_supplier',
                     'estados_proveedor',
@@ -439,6 +444,9 @@ class CotizacionProveedorController extends Controller
                 }
                 if (is_numeric($proveedor['cbm_total'] ?? null)) {
                     $cbmTotalPeru += $proveedor['cbm_total'];
+                }
+                if (is_numeric($proveedor['cbm_imo'] ?? null)) {
+                    $cbmTotalPeru += $proveedor['cbm_imo'];
                 }
             }
 
@@ -3990,6 +3998,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                         'peso_china',
                         'id_cotizacion',
                         'cbm_total',
+                        'cbm_imo',
                         'supplier',
                         'code_supplier',
                         'estados_proveedor',

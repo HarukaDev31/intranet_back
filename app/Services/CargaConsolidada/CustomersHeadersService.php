@@ -30,7 +30,7 @@ class CustomersHeadersService
         $statsQuery = $this->scopedCustomersQuery($orgIds, $search, $idPais, $estadoChina, $fechaInicio, $fechaFin, true);
         $stats = $statsQuery
             ->selectRaw('
-                COALESCE(SUM(PR.cbm_total), 0) as cbm_warehouse,
+                COALESCE(SUM(' . $this->sqlCbmFull('PR') . '), 0) as cbm_warehouse,
                 COUNT(DISTINCT CC.id) as total_customers,
                 COUNT(PR.id) as total_suppliers_code,
                 SUM(CASE WHEN PR.estados_proveedor = ? THEN 1 ELSE 0 END) as total_nc
@@ -72,10 +72,10 @@ class CustomersHeadersService
             ', ['NC'])
             ->first();
 
-        $volumeRows = $this->scopedResumenQuery($orgIds, $search, $estadoChina, false)
+        $volumeRows = $this->scopedResumenQuery($orgIds, $search, $estadoChina, true)
             ->selectRaw('COALESCE(P.No_Pais, "Sin país") as country')
-            ->selectRaw("COALESCE(SUM(CASE WHEN CC.estado_resumen = 'CONFIRMADO' THEN CC.volumen ELSE 0 END), 0) as vendido")
-            ->selectRaw("COALESCE(SUM(CASE WHEN CC.estado_resumen IS NULL OR CC.estado_resumen != 'CONFIRMADO' THEN CC.volumen ELSE 0 END), 0) as pendiente")
+            ->selectRaw('COALESCE(SUM(CASE WHEN CC.estado_resumen = \'CONFIRMADO\' THEN ' . $this->sqlCbmFull('PR') . ' ELSE 0 END), 0) as vendido')
+            ->selectRaw('COALESCE(SUM(CASE WHEN CC.estado_resumen IS NULL OR CC.estado_resumen != \'CONFIRMADO\' THEN ' . $this->sqlCbmFull('PR') . ' ELSE 0 END), 0) as pendiente')
             ->groupBy(DB::raw('COALESCE(P.No_Pais, "Sin país")'))
             ->orderBy('country')
             ->get();
@@ -147,7 +147,7 @@ class CustomersHeadersService
         ClientesVisibility::applyConfirmadoParaBd($statsQuery, 'CC');
         $stats = $statsQuery
             ->selectRaw('
-                COALESCE(SUM(PR.cbm_total), 0) as cbm_warehouse,
+                COALESCE(SUM(' . $this->sqlCbmFull('PR') . '), 0) as cbm_warehouse,
                 COUNT(DISTINCT CC.id) as total_customers,
                 COUNT(PR.id) as total_suppliers_code,
                 SUM(CASE WHEN PR.estados_proveedor = ? THEN 1 ELSE 0 END) as total_nc
@@ -155,22 +155,17 @@ class CustomersHeadersService
             ->first();
 
         $cbmPaisQuery = DB::table($this->tableCotizacion . ' as CC')
+            ->leftJoin($this->tableProveedor . ' as PR', 'PR.id_cotizacion', '=', 'CC.id')
             ->where('CC.id_contenedor', $idContenedor)
             ->whereNull('CC.deleted_at')
             ->whereNull('CC.id_cliente_importacion');
         ClientesVisibility::applyConfirmadoParaBd($cbmPaisQuery, 'CC');
-        $cbmPais = (float) $cbmPaisQuery->sum('CC.volumen');
-
-        $paisNombre = DB::table($this->tableContenedor . ' as CONT')
-            ->leftJoin($this->tablePais . ' as P', 'P.ID_Pais', '=', 'CONT.id_pais')
-            ->where('CONT.id', $idContenedor)
-            ->value('P.No_Pais');
-        $paisNombre = $paisNombre ? (string) $paisNombre : 'País';
+        $cbmPais = (float) $cbmPaisQuery->selectRaw('COALESCE(SUM(' . $this->sqlCbmFull('PR') . '), 0) as total')->value('total');
 
         return [
             'cbm_pais' => [
                 'value' => number_format($cbmPais, 3, '.', ''),
-                'label' => 'CBM ' . $paisNombre,
+                'label' => 'CBM',
                 'icon' => 'fluent:box-32-filled',
             ],
         ] + $this->format($stats);
@@ -354,12 +349,11 @@ class CustomersHeadersService
      */
     private function cbmByCountry(array $orgIds, $search, $idPais, $estadoChina, $fechaInicio, $fechaFin, $tipo)
     {
-        $withProveedores = $tipo === 'warehouse';
-        $sumExpr = $withProveedores
-            ? 'COALESCE(SUM(PR.cbm_total), 0)'
+        $sumExpr = $tipo === 'warehouse' || $tipo === 'vendido'
+            ? 'COALESCE(SUM(' . $this->sqlCbmFull('PR') . '), 0)'
             : 'COALESCE(SUM(CC.volumen), 0)';
 
-        $rows = $this->scopedCustomersQuery($orgIds, $search, $idPais, $estadoChina, $fechaInicio, $fechaFin, $withProveedores)
+        $rows = $this->scopedCustomersQuery($orgIds, $search, $idPais, $estadoChina, $fechaInicio, $fechaFin, true)
             ->selectRaw('COALESCE(P.No_Pais, "Sin país") as country')
             ->selectRaw($sumExpr . ' as value')
             ->groupBy(DB::raw('COALESCE(P.No_Pais, "Sin país")'))
@@ -474,6 +468,17 @@ class CustomersHeadersService
         if ($hasta) {
             $query->whereDate('CONT.f_inicio', '<=', $hasta);
         }
+    }
+
+    /**
+     * CBM cotizado completo: volumen normal + IMO.
+     *
+     * @param string $alias
+     * @return string
+     */
+    private function sqlCbmFull($alias = 'PR')
+    {
+        return '(COALESCE(' . $alias . '.cbm_total, 0) + COALESCE(' . $alias . '.cbm_imo, 0))';
     }
 
     /**
