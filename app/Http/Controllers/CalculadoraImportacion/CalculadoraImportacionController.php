@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\BaseDatos\Clientes\Cliente;
 use App\Models\CalculadoraImportacion;
+use App\Models\PaisFlag;
 use App\Services\BaseDatos\Clientes\ClienteService;
 use App\Services\CalculadoraImportacionService;
 use App\Services\ResumenCostosImageService;
@@ -341,6 +342,8 @@ class CalculadoraImportacionController extends Controller
                     }
                 }
 
+                $headersData = $this->buildCalculadoraIndexHeaders($query);
+
                 $calculos = $query->paginate($perPage, ['*'], 'page', $page);
 
                 // Calcular totales para cada cálculo
@@ -377,10 +380,6 @@ class CalculadoraImportacionController extends Controller
                         return ['id' => $u->ID_Usuario, 'label' => $u->No_Nombres_Apellidos ?? 'Usuario ' . $u->ID_Usuario, 'value' => $u->ID_Usuario];
                     });
 
-                $cotizacionesRealizadas = CalculadoraImportacion::whereIn('estado', ['COTIZADO', 'CONFIRMADO'])->count();
-                $cotizacionesPendientes = CalculadoraImportacion::where('estado', 'PENDIENTE')->count();
-                $cotizacionesVendidas = CalculadoraImportacion::where('estado', 'CONFIRMADO')->count();
-
                 // Cachear arrays (nunca Eloquent/Collection): Redis serializa mal los modelos → __PHP_Incomplete_Class.
                 return [
                     'success' => true,
@@ -395,20 +394,7 @@ class CalculadoraImportacionController extends Controller
                         'from' => $calculos->firstItem(),
                         'to' => $calculos->lastItem(),
                     ],
-                    'headers' => [
-                        'cotizaciones_pendientes' => [
-                            'value' => $cotizacionesPendientes,
-                            'label' => 'Cotizaciones Pendientes',
-                        ],
-                        'cotizaciones_realizadas' => [
-                            'value' => $cotizacionesRealizadas,
-                            'label' => 'Cotizaciones Realizadas',
-                        ],
-                        'cotizaciones_vendidas' => [
-                            'value' => $cotizacionesVendidas,
-                            'label' => 'Cotizaciones Vendidas',
-                        ],
-                    ],
+                    'headers' => $headersData,
                     'filters' => [
                         'contenedores' => $contenedores->values()->all(),
                         'estadoCalculadora' => $estadoCalculadora,
@@ -424,6 +410,96 @@ class CalculadoraImportacionController extends Controller
                 'message' => 'Error al obtener los cálculos: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * KPI equivalentes al cotizador de socio: CBM confirmado (China),
+     * CBM cotizado+confirmado (destino), Pendiente, IMO, FOB, Logística e Impuestos.
+     * Sin ISD: la calculadora no tiene ese campo.
+     */
+    private function cloneQueryForAggregate($query)
+    {
+        $clone = clone $query;
+        $clone->setEagerLoads([]);
+        $base = $clone->getQuery();
+        $base->orders = null;
+        $base->limit = null;
+        $base->offset = null;
+        $base->unions = null;
+        $base->columns = null;
+
+        return $clone;
+    }
+
+    private function buildCalculadoraIndexHeaders($query)
+    {
+        $flagChina = PaisFlag::urlForIso('cn');
+        if (!$flagChina) {
+            $flagChina = PaisFlag::flagCdnUrl('cn');
+        }
+        $flagDestino = PaisFlag::urlForIso('pe');
+        if (!$flagDestino) {
+            $flagDestino = PaisFlag::flagCdnUrl('pe');
+        }
+
+        $money = $this->cloneQueryForAggregate($query)
+            ->selectRaw('COALESCE(SUM(calculadora_importacion.total_fob), 0) as total_fob, COALESCE(SUM(calculadora_importacion.logistica), 0) as total_logistica, COALESCE(SUM(calculadora_importacion.total_impuestos), 0) as total_impuestos')
+            ->first();
+
+        $cbmExpr = 'GREATEST(COALESCE(PR.cbm, 0), COALESCE(PR.peso, 0) / 1000)';
+        $idsSub = $this->cloneQueryForAggregate($query)->select('calculadora_importacion.id');
+        $cbm = DB::table('calculadora_importacion as CI')
+            ->leftJoin('calculadora_importacion_proveedores as PR', 'PR.id_calculadora_importacion', '=', 'CI.id')
+            ->whereIn('CI.id', $idsSub)
+            ->selectRaw("
+                COALESCE(SUM(CASE WHEN CI.estado = 'CONFIRMADO' THEN {$cbmExpr} ELSE 0 END), 0) as cbm_china,
+                COALESCE(SUM(CASE WHEN CI.estado IN ('COTIZADO', 'CONFIRMADO') THEN {$cbmExpr} ELSE 0 END), 0) as cbm_destino,
+                COALESCE(SUM(CASE WHEN CI.estado = 'PENDIENTE' THEN {$cbmExpr} ELSE 0 END), 0) as cbm_pendiente,
+                COALESCE(SUM(CASE WHEN CI.es_imo = 1 THEN {$cbmExpr} ELSE 0 END), 0) as cbm_imo
+            ")
+            ->first();
+
+        $fmt = function ($value) {
+            return number_format((float) $value, 2, '.', '');
+        };
+
+        return [
+            'cbm_total_china' => [
+                'value' => $fmt($cbm ? $cbm->cbm_china : 0),
+                'label' => 'CBM',
+                'icon' => $flagChina,
+            ],
+            'cbm_total_peru' => [
+                'value' => $fmt($cbm ? $cbm->cbm_destino : 0),
+                'label' => 'CBM',
+                'icon' => $flagDestino,
+            ],
+            'cbm_pendiente' => [
+                'value' => $fmt($cbm ? $cbm->cbm_pendiente : 0),
+                'label' => 'CBM Pendiente',
+                'icon' => 'mage:box-3d',
+            ],
+            'cbm_total_imo' => [
+                'value' => $fmt($cbm ? $cbm->cbm_imo : 0),
+                'label' => 'CBM IMO',
+                'icon' => 'mdi:biohazard',
+            ],
+            'total_fob' => [
+                'value' => $fmt($money ? $money->total_fob : 0),
+                'label' => 'Fob',
+                'icon' => 'cryptocurrency-color:soc',
+            ],
+            'total_logistica' => [
+                'value' => $fmt($money ? $money->total_logistica : 0),
+                'label' => 'Logística',
+                'icon' => 'cryptocurrency-color:soc',
+            ],
+            'total_impuestos' => [
+                'value' => $fmt($money ? $money->total_impuestos : 0),
+                'label' => 'Impuestos',
+                'icon' => 'cryptocurrency-color:soc',
+            ],
+        ];
     }
 
     /**
