@@ -124,7 +124,7 @@ class CierreContenedorClientesOrganizacionTest extends TestCase
         );
         $this->assertNull(
             $customers->select('CC.id')->first(),
-            'Con contenedor COMPLETADO y proveedor LOADED la fila no debe seguir en Customers.'
+            'Con contenedor COMPLETADO la fila no debe seguir en Customers (aunque el proveedor no esté LOADED).'
         );
     }
 

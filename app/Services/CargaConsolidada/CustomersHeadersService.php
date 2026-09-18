@@ -24,26 +24,10 @@ class CustomersHeadersService
     {
         $orgIds = array_values(array_unique(array_map('intval', $orgIds)));
         if ($orgIds === []) {
-            return $this->empty();
+            return $this->empty(true);
         }
 
-        $statsQuery = DB::table($this->tableCotizacion . ' as CC')
-            ->join($this->tableContenedor . ' as CONT', 'CONT.id', '=', 'CC.id_contenedor')
-            ->leftJoin($this->tablePais . ' as P', 'P.ID_Pais', '=', 'CONT.id_pais')
-            ->leftJoin($this->tableProveedor . ' as PR', 'PR.id_cotizacion', '=', 'CC.id')
-            ->whereIn('CONT.organizacion_id', $orgIds)
-            ->whereNull('CC.deleted_at')
-            ->whereNull('CONT.deleted_at')
-            ->whereNull('CC.id_cliente_importacion')
-            ->where('CONT.empresa', '!=', 1);
-        ClientesVisibility::applyConfirmadoParaBd($statsQuery, 'CC');
-        ClientesVisibility::excludeGraduadosDeCustomers(
-            $statsQuery,
-            'CC',
-            'CONT',
-            $this->tableProveedor
-        );
-        $this->applyFilters($statsQuery, $search, $idPais, $estadoChina, 'PR', $fechaInicio, $fechaFin);
+        $statsQuery = $this->scopedCustomersQuery($orgIds, $search, $idPais, $estadoChina, $fechaInicio, $fechaFin, true);
         $stats = $statsQuery
             ->selectRaw('
                 COALESCE(SUM(PR.cbm_total), 0) as cbm_warehouse,
@@ -53,7 +37,16 @@ class CustomersHeadersService
             ', ['NC'])
             ->first();
 
-        return $this->format($stats);
+        $vendidoRows = $this->cbmByCountry($orgIds, $search, $idPais, $estadoChina, $fechaInicio, $fechaFin, 'vendido');
+        $warehouseRows = $this->cbmByCountry($orgIds, $search, $idPais, $estadoChina, $fechaInicio, $fechaFin, 'warehouse');
+
+        return $this->format(
+            $stats,
+            $this->sumCountryValues($vendidoRows),
+            $vendidoRows,
+            $warehouseRows,
+            true
+        );
     }
 
     /**
@@ -66,34 +59,71 @@ class CustomersHeadersService
     {
         $orgIds = array_values(array_unique(array_map('intval', $orgIds)));
         if ($orgIds === []) {
-            return $this->empty();
+            return $this->empty(true, true);
         }
 
-        $statsQuery = DB::table($this->tableCotizacion . ' as CC')
-            ->leftJoin($this->tableContenedor . ' as CONT', 'CONT.id', '=', 'CC.id_contenedor')
-            ->leftJoin($this->tablePais . ' as P', 'P.ID_Pais', '=', 'CONT.id_pais')
-            ->leftJoin($this->tableProveedor . ' as PR', function ($join) {
-                $join->on('PR.id_cotizacion', '=', 'CC.id')
-                    ->where('PR.modo_cotizacion', '=', 'resumen');
-            })
-            ->whereIn('CC.organizacion_id', $orgIds)
-            ->whereNull('CC.deleted_at')
-            ->whereNull('CC.id_cliente_importacion')
-            ->where(function ($q) {
-                $q->whereIn('CC.estado_resumen', ['COTIZADO', 'CONFIRMADO'])
-                    ->orWhereNull('CC.estado_resumen');
-            });
-        $this->applyFilters($statsQuery, $search, null, $estadoChina, 'PR');
+        $statsQuery = $this->scopedResumenQuery($orgIds, $search, $estadoChina, true);
         $stats = $statsQuery
             ->selectRaw('
-                COALESCE(SUM(COALESCE(PR.cbm_total, 0) + COALESCE(PR.cbm_imo, 0)), 0) as cbm_warehouse,
+                COALESCE(SUM(PR.cbm_total_china), 0) as cbm_warehouse,
                 COUNT(DISTINCT CC.id) as total_customers,
                 COUNT(PR.id) as total_suppliers_code,
                 SUM(CASE WHEN PR.estados_proveedor = ? THEN 1 ELSE 0 END) as total_nc
             ', ['NC'])
             ->first();
 
-        return $this->format($stats);
+        $volumeRows = $this->scopedResumenQuery($orgIds, $search, $estadoChina, false)
+            ->selectRaw('COALESCE(P.No_Pais, "Sin país") as country')
+            ->selectRaw("COALESCE(SUM(CASE WHEN CC.estado_resumen = 'CONFIRMADO' THEN CC.volumen ELSE 0 END), 0) as vendido")
+            ->selectRaw("COALESCE(SUM(CASE WHEN CC.estado_resumen IS NULL OR CC.estado_resumen != 'CONFIRMADO' THEN CC.volumen ELSE 0 END), 0) as pendiente")
+            ->groupBy(DB::raw('COALESCE(P.No_Pais, "Sin país")'))
+            ->orderBy('country')
+            ->get();
+
+        $vendidoRows = [];
+        $pendienteRows = [];
+        $cbmVendido = 0.0;
+        $cbmPendiente = 0.0;
+        foreach ($volumeRows as $row) {
+            $country = trim((string) $row->country);
+            if ($country === '') {
+                $country = 'Sin país';
+            }
+            $vendido = (float) $row->vendido;
+            $pendiente = (float) $row->pendiente;
+            $cbmVendido += $vendido;
+            $cbmPendiente += $pendiente;
+            if ($vendido != 0.0) {
+                $vendidoRows[] = [
+                    'country' => $country,
+                    'value' => number_format($vendido, 3, '.', ''),
+                ];
+            }
+            if ($pendiente != 0.0) {
+                $pendienteRows[] = [
+                    'country' => $country,
+                    'value' => number_format($pendiente, 3, '.', ''),
+                ];
+            }
+        }
+
+        $warehouseRows = $this->scopedResumenQuery($orgIds, $search, $estadoChina, true)
+            ->selectRaw('COALESCE(P.No_Pais, "Sin país") as country')
+            ->selectRaw('COALESCE(SUM(PR.cbm_total_china), 0) as value')
+            ->groupBy(DB::raw('COALESCE(P.No_Pais, "Sin país")'))
+            ->orderBy('country')
+            ->get();
+
+        return $this->format(
+            $stats,
+            $cbmVendido,
+            $vendidoRows,
+            $this->mapCountryRows($warehouseRows),
+            true,
+            $cbmPendiente,
+            $pendienteRows,
+            true
+        );
     }
 
     /**
@@ -124,24 +154,77 @@ class CustomersHeadersService
             ', ['NC'])
             ->first();
 
-        return $this->format($stats);
+        $cbmPaisQuery = DB::table($this->tableCotizacion . ' as CC')
+            ->where('CC.id_contenedor', $idContenedor)
+            ->whereNull('CC.deleted_at')
+            ->whereNull('CC.id_cliente_importacion');
+        ClientesVisibility::applyConfirmadoParaBd($cbmPaisQuery, 'CC');
+        $cbmPais = (float) $cbmPaisQuery->sum('CC.volumen');
+
+        $paisNombre = DB::table($this->tableContenedor . ' as CONT')
+            ->leftJoin($this->tablePais . ' as P', 'P.ID_Pais', '=', 'CONT.id_pais')
+            ->where('CONT.id', $idContenedor)
+            ->value('P.No_Pais');
+        $paisNombre = $paisNombre ? (string) $paisNombre : 'País';
+
+        return [
+            'cbm_pais' => [
+                'value' => number_format($cbmPais, 3, '.', ''),
+                'label' => 'CBM ' . $paisNombre,
+                'icon' => 'fluent:box-32-filled',
+            ],
+        ] + $this->format($stats);
     }
 
     /**
      * @param object|null $stats
-     * @return array<string, array<string, string>>
+     * @param float $cbmVendido
+     * @param array<int, array<string, string>> $vendidoByCountry
+     * @param array<int, array<string, string>> $warehouseByCountry
+     * @param bool $includeVendido
+     * @param float $cbmPendiente
+     * @param array<int, array<string, string>> $pendienteByCountry
+     * @param bool $includePendiente
+     * @return array<string, array<string, mixed>>
      */
-    private function format($stats)
-    {
+    private function format(
+        $stats,
+        $cbmVendido = 0,
+        array $vendidoByCountry = [],
+        array $warehouseByCountry = [],
+        $includeVendido = false,
+        $cbmPendiente = 0,
+        array $pendienteByCountry = [],
+        $includePendiente = false
+    ) {
         if (!$stats) {
-            return $this->empty();
+            return $this->empty($includeVendido, $includePendiente);
         }
 
-        return [
+        $headers = [];
+        if ($includeVendido) {
+            $headers['cbm_vendido'] = [
+                'value' => number_format((float) $cbmVendido, 3, '.', ''),
+                'label' => 'CBM Vendido',
+                'icon' => 'fluent:box-32-filled',
+                'by_country' => $vendidoByCountry,
+            ];
+        }
+        if ($includePendiente) {
+            $headers['cbm_pendiente'] = [
+                'value' => number_format((float) $cbmPendiente, 3, '.', ''),
+                'label' => 'CBM Pendiente',
+                'icon' => 'heroicons:clock',
+                'by_country' => $pendienteByCountry,
+            ];
+        }
+
+        return $headers + [
             'cbm_warehouse' => [
                 'value' => number_format((float) ($stats->cbm_warehouse ?? 0), 3, '.', ''),
                 'label' => 'CBM Warehouse',
                 'icon' => 'i-heroicons-cube',
+                'by_country' => $warehouseByCountry,
             ],
             'total_customers' => [
                 'value' => (string) ((int) ($stats->total_customers ?? 0)),
@@ -162,16 +245,173 @@ class CustomersHeadersService
     }
 
     /**
-     * @return array<string, array<string, string>>
+     * @param bool $includeVendido
+     * @param bool $includePendiente
+     * @return array<string, array<string, mixed>>
      */
-    public function empty()
+    public function empty($includeVendido = false, $includePendiente = false)
     {
-        return [
-            'cbm_warehouse' => ['value' => '0.000', 'label' => 'CBM Warehouse', 'icon' => 'i-heroicons-cube'],
+        $headers = [];
+        if ($includeVendido) {
+            $headers['cbm_vendido'] = [
+                'value' => '0.000',
+                'label' => 'CBM Vendido',
+                'icon' => 'fluent:box-32-filled',
+                'by_country' => [],
+            ];
+        }
+        if ($includePendiente) {
+            $headers['cbm_pendiente'] = [
+                'value' => '0.000',
+                'label' => 'CBM Pendiente',
+                'icon' => 'heroicons:clock',
+                'by_country' => [],
+            ];
+        }
+
+        return $headers + [
+            'cbm_warehouse' => ['value' => '0.000', 'label' => 'CBM Warehouse', 'icon' => 'i-heroicons-cube', 'by_country' => []],
             'total_customers' => ['value' => '0', 'label' => 'Total customers', 'icon' => 'i-heroicons-users'],
             'total_suppliers_code' => ['value' => '0', 'label' => 'Total suppliers code', 'icon' => 'i-heroicons-tag'],
             'total_nc' => ['value' => '0', 'label' => 'Total NC', 'icon' => 'i-heroicons-exclamation-triangle'],
         ];
+    }
+
+    /**
+     * @param array<int, int> $orgIds
+     * @param bool $withProveedores
+     * @return \Illuminate\Database\Query\Builder
+     */
+    private function scopedCustomersQuery(array $orgIds, $search, $idPais, $estadoChina, $fechaInicio, $fechaFin, $withProveedores)
+    {
+        $query = DB::table($this->tableCotizacion . ' as CC')
+            ->join($this->tableContenedor . ' as CONT', 'CONT.id', '=', 'CC.id_contenedor')
+            ->leftJoin($this->tablePais . ' as P', 'P.ID_Pais', '=', 'CONT.id_pais')
+            ->whereIn('CONT.organizacion_id', $orgIds)
+            ->whereNull('CC.deleted_at')
+            ->whereNull('CONT.deleted_at')
+            ->whereNull('CC.id_cliente_importacion')
+            ->where('CONT.empresa', '!=', 1);
+
+        if ($withProveedores) {
+            $query->leftJoin($this->tableProveedor . ' as PR', 'PR.id_cotizacion', '=', 'CC.id');
+        }
+
+        ClientesVisibility::applyConfirmadoParaBd($query, 'CC');
+        ClientesVisibility::excludeGraduadosDeCustomers(
+            $query,
+            'CC',
+            'CONT',
+            $this->tableProveedor
+        );
+        $this->applyFilters(
+            $query,
+            $search,
+            $idPais,
+            $estadoChina,
+            $withProveedores ? 'PR' : null,
+            $fechaInicio,
+            $fechaFin
+        );
+
+        return $query;
+    }
+
+    /**
+     * @param array<int, int> $orgIds
+     * @param bool $withProveedores
+     * @return \Illuminate\Database\Query\Builder
+     */
+    private function scopedResumenQuery(array $orgIds, $search, $estadoChina, $withProveedores)
+    {
+        $query = DB::table($this->tableCotizacion . ' as CC')
+            ->leftJoin($this->tableContenedor . ' as CONT', 'CONT.id', '=', 'CC.id_contenedor')
+            ->leftJoin($this->tablePais . ' as P', 'P.ID_Pais', '=', 'CONT.id_pais')
+            ->whereIn('CC.organizacion_id', $orgIds)
+            ->whereNull('CC.deleted_at')
+            ->whereNull('CC.id_cliente_importacion')
+            ->where(function ($q) {
+                $q->whereIn('CC.estado_resumen', ['COTIZADO', 'CONFIRMADO'])
+                    ->orWhereNull('CC.estado_resumen');
+            });
+
+        if ($withProveedores) {
+            $query->leftJoin($this->tableProveedor . ' as PR', function ($join) {
+                $join->on('PR.id_cotizacion', '=', 'CC.id')
+                    ->where('PR.modo_cotizacion', '=', 'resumen');
+            });
+        }
+
+        $this->applyFilters($query, $search, null, $estadoChina, $withProveedores ? 'PR' : null);
+
+        return $query;
+    }
+
+    /**
+     * @param array<int, int> $orgIds
+     * @param string $tipo vendido|warehouse
+     * @return array<int, array<string, string>>
+     */
+    private function cbmByCountry(array $orgIds, $search, $idPais, $estadoChina, $fechaInicio, $fechaFin, $tipo)
+    {
+        $withProveedores = $tipo === 'warehouse';
+        $sumExpr = $withProveedores
+            ? 'COALESCE(SUM(PR.cbm_total), 0)'
+            : 'COALESCE(SUM(CC.volumen), 0)';
+
+        $rows = $this->scopedCustomersQuery($orgIds, $search, $idPais, $estadoChina, $fechaInicio, $fechaFin, $withProveedores)
+            ->selectRaw('COALESCE(P.No_Pais, "Sin país") as country')
+            ->selectRaw($sumExpr . ' as value')
+            ->groupBy(DB::raw('COALESCE(P.No_Pais, "Sin país")'))
+            ->orderBy('country')
+            ->get();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $country = trim((string) $row->country);
+            $out[] = [
+                'country' => $country !== '' ? $country : 'Sin país',
+                'value' => number_format((float) $row->value, 3, '.', ''),
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param array<int, array<string, string>> $rows
+     * @return float
+     */
+    private function sumCountryValues(array $rows)
+    {
+        $total = 0.0;
+        foreach ($rows as $row) {
+            $total += (float) ($row['value'] ?? 0);
+        }
+
+        return $total;
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection|array $rows
+     * @return array<int, array<string, string>>
+     */
+    private function mapCountryRows($rows)
+    {
+        $out = [];
+        foreach ($rows as $row) {
+            $value = (float) $row->value;
+            if ($value == 0.0) {
+                continue;
+            }
+            $country = trim((string) $row->country);
+            $out[] = [
+                'country' => $country !== '' ? $country : 'Sin país',
+                'value' => number_format($value, 3, '.', ''),
+            ];
+        }
+
+        return $out;
     }
 
     /**

@@ -47,9 +47,9 @@ class CustomersController extends Controller
             }
 
             $page = max(1, (int) $request->input('currentPage', $request->input('page', 1)));
-            $perPage = (int) $request->input('itemsPerPage', $request->input('limit', 10));
+            $perPage = (int) $request->input('itemsPerPage', $request->input('limit', 20));
             if (!in_array($perPage, [5, 10, 20, 50, 100], true)) {
-                $perPage = 10;
+                $perPage = 20;
             }
             $search = trim((string) $request->input('search', ''));
             $idPais = $request->input('id_pais', $request->input('pais'));
@@ -283,7 +283,7 @@ class CustomersController extends Controller
         return [
             'current_page' => 1,
             'last_page' => 1,
-            'per_page' => 10,
+            'per_page' => 20,
             'total' => 0,
             'from' => 0,
             'to' => 0,
@@ -292,6 +292,6 @@ class CustomersController extends Controller
 
     private function emptyHeaders()
     {
-        return (new CustomersHeadersService())->empty();
+        return (new CustomersHeadersService())->empty(true);
     }
 }

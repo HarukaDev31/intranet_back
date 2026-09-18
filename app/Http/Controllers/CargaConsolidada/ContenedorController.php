@@ -1537,26 +1537,32 @@ Le estaré informando cualquier avance 🫡.";
         try {
             $authUser = auth()->user();
             $orgIdsPermitidas = $authUser ? $authUser->organizacionesPermitidas() : [];
+            $esSocio = $authUser && (int) $authUser->getAttribute('ID_Organizacion') !== Usuario::ID_ORGANIZACION_ADMIN;
 
-            // Lista = usuarios Cotizador de la org (alta en Panel / "Crear vendedor").
-            // Las cotizaciones no crean ni ocultan vendedores.
-            $vendedores = DB::table('usuario as u')
+            // Org 1: solo Cotizador (alta en Panel / "Crear vendedor").
+            // Socios (cotización resumen): todos los usuarios activos de la org.
+            $query = DB::table('usuario as u')
                 ->select([
                     'u.ID_Usuario as id',
                     'u.No_Nombres_Apellidos as nombre',
                     DB::raw('COUNT(DISTINCT cc.id) as total_cotizaciones'),
                     DB::raw('COALESCE(SUM(cccp.cbm_total), 0) as volumen_total'),
                 ])
-                ->join('grupo as g', 'u.ID_Grupo', '=', 'g.ID_Grupo')
                 ->leftJoin('contenedor_consolidado_cotizacion as cc', function ($join) {
                     $join->on('u.ID_Usuario', '=', 'cc.id_usuario')
                         ->whereNull('cc.deleted_at');
                 })
                 ->leftJoin('contenedor_consolidado_cotizacion_proveedores as cccp', 'cc.id', '=', 'cccp.id_cotizacion')
                 ->whereIn('u.ID_Organizacion', $orgIdsPermitidas)
-                ->where('g.No_Grupo', Usuario::ROL_COTIZADOR)
-                ->where('u.Nu_Estado', 1)
-                ->whereNotIn('u.No_Nombres_Apellidos', ['Danitza', 'Leonardo', 'Frank Oviedo', 'Importaciones'])
+                ->where('u.Nu_Estado', 1);
+
+            if (!$esSocio) {
+                $query->join('grupo as g', 'u.ID_Grupo', '=', 'g.ID_Grupo')
+                    ->where('g.No_Grupo', Usuario::ROL_COTIZADOR)
+                    ->whereNotIn('u.No_Nombres_Apellidos', ['Danitza', 'Leonardo', 'Frank Oviedo', 'Importaciones']);
+            }
+
+            $vendedores = $query
                 ->groupBy('u.ID_Usuario', 'u.No_Nombres_Apellidos')
                 ->orderBy('u.No_Nombres_Apellidos')
                 ->get()

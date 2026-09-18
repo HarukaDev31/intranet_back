@@ -345,6 +345,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
     Route::group(['prefix' => 'cotizaciones-proveedores'], function () {
         //send-rotulado
         Route::post('proveedor/send-rotulado', [CotizacionProveedorController::class, 'sendRotulado']);
+        Route::post('proveedor/validar-rotulado', [CotizacionProveedorController::class, 'validarRotulado']);
         Route::get('proveedor/get-google-sheet-values', [SheetController::class, 'getMergedRanges']);
         Route::get('proveedor/cotizacion/{idCotizacion}', [CotizacionProveedorController::class, 'getCotizacionProveedorByIdCotizacion']);
         Route::get('contenedor/{idContenedor}', [CotizacionProveedorController::class, 'getContenedorCotizacionProveedores']);
