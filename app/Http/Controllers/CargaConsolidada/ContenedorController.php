@@ -1015,6 +1015,7 @@ class ContenedorController extends Controller
         try {
             $user = JWTAuth::user();
             $role = $user->getNombreGrupo();
+            $authOrg = (int) $user->getAttribute('ID_Organizacion');
             // Si el token es Jefe Importación y la petición envía "role" (query), usar ese rol para decidir qué pasos devolver
             // El role puede venir separado por coma (ej. "Coordinación,Documentacion"), se toma el primer rol válido
             if (Usuario::rolEquivaleJefeImportacion($role) && $request->filled('role')) {
@@ -1053,19 +1054,15 @@ class ContenedorController extends Controller
                 case Usuario::ROL_RRHH:
                     $query->where('tipo', 'COTIZADOR')->limit(2);
                     break;
-                case Usuario::ROL_ADMINISTRACION:
-                    $query->where('tipo', 'COTIZADOR')->where('id_order', '>', 1);
-                    break;
                 case Usuario::ROL_DOCUMENTACION:
                     $query->where('tipo', 'DOCUMENTACION');
                     break;
                 case Usuario::ROL_COORDINADOR_GENERAL:
                 case Usuario::ROL_JEFE_IMPORTACION:
-                    //if not exists tipe Jefe Importacion, get documentacion steps
-                        $query->where('tipo', 'DOCUMENTACION');
-                    
+                    $query->where('tipo', 'DOCUMENTACION');
                     break;
                 case Usuario::ROL_COORDINACION:
+                case Usuario::ROL_ADMINISTRACION:
                     $query->where('tipo', 'COTIZADOR');
                     break;
                 case Usuario::JEFE_MARKETING:
@@ -1080,7 +1077,10 @@ class ContenedorController extends Controller
                         ->limit($request->boolean('completado') ? 3 : 2);
                     break;
                 default:
-                    $query->where('tipo', 'COTIZADOR');
+                    // Orgs socio: roles no mapeados solo ven pasos COTIZADOR.
+                    if ($authOrg !== Usuario::ID_ORGANIZACION_ADMIN) {
+                        $query->where('tipo', 'COTIZADOR');
+                    }
                     break;
             }
             }
