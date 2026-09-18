@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Cache;
  */
 class SoporteTiCacheService
 {
-    const VERSION = 'v2';
+    const VERSION = 'v4';
 
     const TAG = 'soporte-ti';
 

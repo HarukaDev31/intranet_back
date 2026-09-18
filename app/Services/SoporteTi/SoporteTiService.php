@@ -248,24 +248,6 @@ class SoporteTiService
                 $query->where('solicitante_user_id', (int) $filters['creador_user_id']);
             }
 
-            if (!empty($filters['estado_codigo']) && $filters['estado_codigo'] !== 'todos') {
-                $codigo = (string) $filters['estado_codigo'];
-                $query->whereHas('estadoActual', function ($eq) use ($codigo) {
-                    $eq->where('codigo', $codigo);
-                });
-            }
-
-            if (!empty($filters['prioridad']) && (int) $filters['prioridad'] > 0) {
-                $query->where('prioridad', (int) $filters['prioridad']);
-            }
-
-            if (!empty($filters['solo_mias']) && $authUser && $this->usuarioEsStaffSoporteTi($authUser)) {
-                $uid = (int) $authUser->getKey();
-                $query->where(function ($q) use ($uid) {
-                    $q->where('pm_user_id', $uid)->orWhere('analista_user_id', $uid);
-                });
-            }
-
             $rows = $query->get();
             $resumen = $this->resumenListadoSolicitudes($rows);
             $solicitudes = $rows->map(function (SoporteTiSolicitud $s) use ($authUser) {
@@ -435,10 +417,26 @@ class SoporteTiService
             if ($allowed[$sortBy] !== 'created_at') {
                 $query->orderBy('created_at', 'desc');
             }
+            if ($allowed[$sortBy] !== 'prioridad') {
+                $query->orderBy('prioridad', 'asc');
+            }
             return;
         }
 
-        $query->reorder('prioridad', 'asc')->orderBy('created_at', 'desc');
+        $estadosTable = (new SoporteTiEstado())->getTable();
+        $solicitudesTable = (new SoporteTiSolicitud())->getTable();
+        $query->reorder()
+            ->orderByRaw(
+                "CASE (SELECT e.codigo FROM {$estadosTable} e WHERE e.id = {$solicitudesTable}.estado_actual_id)
+                    WHEN 'pendiente' THEN 0
+                    WHEN 'en_progreso' THEN 1
+                    WHEN 'en_maqueta' THEN 1
+                    ELSE 2
+                END"
+            )
+            ->orderBy($solicitudesTable . '.tipo_solicitud', 'asc')
+            ->orderBy($solicitudesTable . '.created_at', 'desc')
+            ->orderBy($solicitudesTable . '.prioridad', 'asc');
     }
 
     /**
