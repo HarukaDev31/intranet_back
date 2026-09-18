@@ -50,6 +50,29 @@ class UsuarioAdminController extends Controller
     }
 
     /**
+     * El cargo (grupo) debe pertenecer a la misma organizacion del usuario.
+     * Evita IDOR de privilegios: asignar un grupo de otra org (p.ej. root).
+     *
+     * @return true|\Illuminate\Http\JsonResponse
+     */
+    private function assertGrupoPerteneceAOrganizacion(int $idGrupo, int $idOrg)
+    {
+        $existe = DB::table('grupo')
+            ->where('ID_Grupo', $idGrupo)
+            ->where('ID_Organizacion', $idOrg)
+            ->exists();
+
+        if (!$existe) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El cargo/grupo no pertenece a la organización seleccionada',
+            ], 422);
+        }
+
+        return true;
+    }
+
+    /**
      * Listado de usuarios con filtros opcionales.
      * GET /api/panel-acceso/usuarios
      */
@@ -68,7 +91,6 @@ class UsuarioAdminController extends Controller
                     'USR.ID_Organizacion',
                     'USR.ID_Grupo',
                     'USR.No_Usuario',
-                    'USR.No_Password_Sin_Encriptar',
                     'USR.No_Nombres_Apellidos',
                     'USR.Txt_Email',
                     'USR.Nu_Celular',
@@ -127,7 +149,6 @@ class UsuarioAdminController extends Controller
                     'organizacion'     => $u->No_Organizacion,
                     'cargo'            => $u->No_Grupo,
                     'usuario'          => $u->No_Usuario,
-                    'password_sin_encriptar' => $u->No_Password_Sin_Encriptar,
                     'nombres_apellidos'=> $u->No_Nombres_Apellidos,
                     'email'            => $u->Txt_Email,
                     'celular'          => $u->Nu_Celular,
@@ -162,7 +183,18 @@ class UsuarioAdminController extends Controller
         try {
             $usuario = DB::table('usuario AS USR')
                 ->leftJoin('grupo AS GRP', 'GRP.ID_Grupo', '=', 'USR.ID_Grupo')
-                ->select('USR.*', 'GRP.No_Grupo')
+                ->select(
+                    'USR.ID_Usuario',
+                    'USR.ID_Empresa',
+                    'USR.ID_Organizacion',
+                    'USR.ID_Grupo',
+                    'USR.No_Usuario',
+                    'USR.No_Nombres_Apellidos',
+                    'USR.Txt_Email',
+                    'USR.Nu_Celular',
+                    'USR.Nu_Estado',
+                    'GRP.No_Grupo'
+                )
                 ->where('USR.ID_Usuario', $id)
                 ->first();
 
@@ -186,7 +218,6 @@ class UsuarioAdminController extends Controller
                     'id_grupo'         => $usuario->ID_Grupo,
                     'cargo'            => $usuario->No_Grupo,
                     'usuario'          => $usuario->No_Usuario,
-                    'password_sin_encriptar' => $usuario->No_Password_Sin_Encriptar,
                     'nombres_apellidos'=> $usuario->No_Nombres_Apellidos,
                     'email'            => $usuario->Txt_Email,
                     'celular'          => $usuario->Nu_Celular,
@@ -224,6 +255,11 @@ class UsuarioAdminController extends Controller
                 return $resuelto;
             }
             [$idOrg, $idEmpresa] = $resuelto;
+
+            $grupoOk = $this->assertGrupoPerteneceAOrganizacion((int) $request->id_grupo, $idOrg);
+            if ($grupoOk instanceof \Illuminate\Http\JsonResponse) {
+                return $grupoOk;
+            }
 
             $email = trim($request->usuario);
 
@@ -343,6 +379,11 @@ class UsuarioAdminController extends Controller
                 return $resuelto;
             }
             [$idOrg, $idEmpresa] = $resuelto;
+
+            $grupoOk = $this->assertGrupoPerteneceAOrganizacion((int) $request->id_grupo, $idOrg);
+            if ($grupoOk instanceof \Illuminate\Http\JsonResponse) {
+                return $grupoOk;
+            }
 
             if ($id == 1) {
                 $email = trim($request->usuario);
