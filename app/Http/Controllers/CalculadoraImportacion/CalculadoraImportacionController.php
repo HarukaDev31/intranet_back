@@ -399,14 +399,17 @@ class CalculadoraImportacionController extends Controller
                         'cotizaciones_pendientes' => [
                             'value' => $cotizacionesPendientes,
                             'label' => 'Cotizaciones Pendientes',
+                            'icon' => 'heroicons:clock',
                         ],
                         'cotizaciones_realizadas' => [
                             'value' => $cotizacionesRealizadas,
                             'label' => 'Cotizaciones Realizadas',
+                            'icon' => 'heroicons:document-text',
                         ],
                         'cotizaciones_vendidas' => [
                             'value' => $cotizacionesVendidas,
                             'label' => 'Cotizaciones Vendidas',
+                            'icon' => 'heroicons:check-badge',
                         ],
                     ],
                     'filters' => [
