@@ -173,7 +173,7 @@ class GeminiService
             '- proveedores[].unidades: cantidad de unidades/piezas de ese proveedor. null si no aparece. ' .
             '- proveedores[].incoterm: Incoterm si aparece (FOB, EXW, CIF, DDP, Consolidado, etc.). null si no aparece. ' .
             '- proveedores[].productos: descripción breve de ese ítem (solo ese producto, no juntes varios). null si no aparece. ' .
-            '- proveedores[].logistica: SOLO el monto de Servicio de importación (del documento, una vez, en el primer elemento). No pongas flete, transferencia, seguro ni logística internacional ahí. ' .
+            '- proveedores[].logistica: monto de logística si aparece como total suelto (Servicio de importación o cualquier concepto que diga logística). No pongas flete, transferencia ni seguro. El desglose va en costos. ' .
             '- proveedores[].fob, impuesto, isd: totales del DOCUMENTO, solo en el primer elemento; en los demás null. ' .
             '- proveedores[].costos: desglose de inversión del DOCUMENTO (tabla de conceptos). Ponlo SOLO en el primer elemento; en los demás array vacío. ' .
             'No copies FOB, ISD, flete ni impuestos en cada ítem: si lo haces se duplican al guardar. ' .
@@ -209,7 +209,7 @@ class GeminiService
             'cliente.nombre, cliente.tipo_documento (RUC o ID), cliente.documento (SOLO DNI/cédula/RUC del cliente, nunca teléfono ni N° de boleta/cotización ni ID de usuario), cliente.whatsapp (teléfono, no en documento), cliente.correo (email real o JSON null, nunca el texto "null"). ' .
             'Un elemento en proveedores por cada ítem o línea de producto; no combines varios ítems en uno. ' .
             'Por ítem: cbm_total, peso_total, qty_cajas, unidades, incoterm, productos (solo ese ítem). ' .
-            'logistica es SOLO Servicio de importación (no flete ni seguro). fob, impuesto, isd y costos son totales del DOCUMENTO: ponlos SOLO en el primer ítem; en los demás null / array vacío. No los copies en cada línea. ' .
+            'logistica es Servicio de importación o cualquier concepto que diga logística (no flete ni seguro). fob, impuesto, isd y costos son totales del DOCUMENTO: ponlos SOLO en el primer ítem; en los demás null / array vacío. No los copies en cada línea. ' .
             'Si un dato no aparece, null. ' .
             "Contenido:\n" . $spreadsheetText;
 
@@ -292,7 +292,7 @@ class GeminiService
     private function completarCostosDesdeTotales(array $costos, array $prov)
     {
         $mapa = [
-            'logistica' => 'Servicio de importación',
+            'logistica' => 'Logística Internacional',
             'fob' => 'FOB',
             'impuesto' => 'Impuestos',
             'isd' => 'ISD',

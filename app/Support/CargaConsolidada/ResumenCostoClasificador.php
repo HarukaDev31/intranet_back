@@ -4,7 +4,9 @@ namespace App\Support\CargaConsolidada;
 
 /**
  * Clasifica el texto libre de un concepto de costo resumen
- * (FOB / ISD / impuesto / logística = solo servicio de importación).
+ * (FOB / ISD / impuesto / logística). Logística = Servicio de importación
+ * o cualquier concepto que diga logística (internacional, marítima, etc.).
+ * Transferencia, flete y seguro no entran.
  */
 class ResumenCostoClasificador
 {
@@ -82,14 +84,18 @@ class ResumenCostoClasificador
     }
 
     /**
-     * Logística del listado = solo servicio de importación.
-     * Flete, transferencia, seguro y logística internacional no entran.
+     * Servicio de importación, o logística + lo que sea (internacional, marítima…).
+     * Flete, transferencia y seguro no entran.
      *
      * @param string $c
      * @return bool
      */
     private static function esLogistica($c)
     {
-        return strpos($c, 'servicio') !== false && strpos($c, 'import') !== false;
+        if (strpos($c, 'servicio') !== false && strpos($c, 'import') !== false) {
+            return true;
+        }
+
+        return strpos($c, 'logist') !== false || strpos($c, 'logíst') !== false;
     }
 }
