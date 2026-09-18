@@ -596,7 +596,7 @@ class CustomersHeadersService
             if ($fecha60 === null && $cum >= 60) {
                 $fecha60 = $day;
             }
-            if ($fecha65 === null && $cum >= 65) {
+            if ($cum >= 65) {
                 $fecha65 = $day;
                 break;
             }
