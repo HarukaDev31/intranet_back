@@ -30,7 +30,7 @@ class CustomersHeadersService
         $statsQuery = $this->scopedCustomersQuery($orgIds, $search, $idPais, $estadoChina, $fechaInicio, $fechaFin, true);
         $stats = $statsQuery
             ->selectRaw('
-                COALESCE(SUM(' . $this->sqlCbmFull('PR') . '), 0) as cbm_warehouse,
+                COALESCE(SUM(' . $this->sqlCbmChina('PR') . '), 0) as cbm_warehouse,
                 COUNT(DISTINCT CC.id) as total_customers,
                 COUNT(PR.id) as total_suppliers_code,
                 SUM(CASE WHEN PR.estados_proveedor = ? THEN 1 ELSE 0 END) as total_nc
@@ -65,7 +65,7 @@ class CustomersHeadersService
         $statsQuery = $this->scopedResumenQuery($orgIds, $search, $estadoChina, true);
         $stats = $statsQuery
             ->selectRaw('
-                COALESCE(SUM(PR.cbm_total_china), 0) as cbm_warehouse,
+                COALESCE(SUM(' . $this->sqlCbmChina('PR') . '), 0) as cbm_warehouse,
                 COUNT(DISTINCT CC.id) as total_customers,
                 COUNT(PR.id) as total_suppliers_code,
                 SUM(CASE WHEN PR.estados_proveedor = ? THEN 1 ELSE 0 END) as total_nc
@@ -109,7 +109,7 @@ class CustomersHeadersService
 
         $warehouseRows = $this->scopedResumenQuery($orgIds, $search, $estadoChina, true)
             ->selectRaw('COALESCE(P.No_Pais, "Sin país") as country')
-            ->selectRaw('COALESCE(SUM(PR.cbm_total_china), 0) as value')
+            ->selectRaw('COALESCE(SUM(' . $this->sqlCbmChina('PR') . '), 0) as value')
             ->groupBy(DB::raw('COALESCE(P.No_Pais, "Sin país")'))
             ->orderBy('country')
             ->get();
@@ -147,7 +147,7 @@ class CustomersHeadersService
         ClientesVisibility::applyConfirmadoParaBd($statsQuery, 'CC');
         $stats = $statsQuery
             ->selectRaw('
-                COALESCE(SUM(' . $this->sqlCbmFull('PR') . '), 0) as cbm_warehouse,
+                COALESCE(SUM(' . $this->sqlCbmChina('PR') . '), 0) as cbm_warehouse,
                 COUNT(DISTINCT CC.id) as total_customers,
                 COUNT(PR.id) as total_suppliers_code,
                 SUM(CASE WHEN PR.estados_proveedor = ? THEN 1 ELSE 0 END) as total_nc
@@ -351,9 +351,13 @@ class CustomersHeadersService
      */
     private function cbmByCountry(array $orgIds, $search, $idPais, $estadoChina, $fechaInicio, $fechaFin, $tipo)
     {
-        $sumExpr = $tipo === 'warehouse' || $tipo === 'vendido'
-            ? 'COALESCE(SUM(' . $this->sqlCbmFull('PR') . '), 0)'
-            : 'COALESCE(SUM(CC.volumen), 0)';
+        if ($tipo === 'warehouse') {
+            $sumExpr = 'COALESCE(SUM(' . $this->sqlCbmChina('PR') . '), 0)';
+        } elseif ($tipo === 'vendido') {
+            $sumExpr = 'COALESCE(SUM(' . $this->sqlCbmFull('PR') . '), 0)';
+        } else {
+            $sumExpr = 'COALESCE(SUM(CC.volumen), 0)';
+        }
 
         $rows = $this->scopedCustomersQuery($orgIds, $search, $idPais, $estadoChina, $fechaInicio, $fechaFin, true)
             ->selectRaw('COALESCE(P.No_Pais, "Sin país") as country')
@@ -473,7 +477,7 @@ class CustomersHeadersService
     }
 
     /**
-     * CBM cotizado completo: volumen normal + IMO.
+     * CBM cotizado completo: volumen normal + IMO (Perú).
      *
      * @param string $alias
      * @return string
@@ -481,6 +485,33 @@ class CustomersHeadersService
     private function sqlCbmFull($alias = 'PR')
     {
         return '(COALESCE(' . $alias . '.cbm_total, 0) + COALESCE(' . $alias . '.cbm_imo, 0))';
+    }
+
+    /**
+     * CBM en almacén: volumen China del proveedor.
+     *
+     * @param string $alias
+     * @return string
+     */
+    private function sqlCbmChina($alias = 'PR')
+    {
+        return 'COALESCE(' . $alias . '.cbm_total_china, 0)';
+    }
+
+    /**
+     * CBM para proyectar 60/65: Perú cotizado + IMO; China si ya existe.
+     *
+     * @param object $row
+     * @return float
+     */
+    private function cbmParaProyeccion($row)
+    {
+        $china = (float) ($row->cbm_total_china ?? 0);
+        if ($china > 0) {
+            return $china;
+        }
+
+        return (float) ($row->cbm_total ?? 0) + (float) ($row->cbm_imo ?? 0);
     }
 
     /**
@@ -535,8 +566,8 @@ class CustomersHeadersService
     }
 
     /**
-     * Proyección por Arrive Date China: primer día en que el CBM acumulado
-     * llega a 60 y a 65.
+     * Proyección por Arrive Date China: suma CBM Perú (cotizado + IMO);
+     * si el proveedor ya tiene CBM China, usa ese valor en su lugar.
      *
      * @param int $idContenedor
      * @return array{fecha_60: string|null, fecha_65: string|null}
@@ -561,9 +592,7 @@ class CustomersHeadersService
         $sinFecha = 0.0;
         $items = [];
         foreach ($rows as $row) {
-            $china = (float) ($row->cbm_total_china ?? 0);
-            $quoted = (float) ($row->cbm_total ?? 0) + (float) ($row->cbm_imo ?? 0);
-            $cbm = $china > 0 ? $china : $quoted;
+            $cbm = $this->cbmParaProyeccion($row);
             if ($cbm <= 0) {
                 continue;
             }
