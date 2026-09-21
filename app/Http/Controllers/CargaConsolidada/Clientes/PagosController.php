@@ -274,6 +274,7 @@ class PagosController extends Controller
                 'payment_date' => date('Y-m-d', strtotime($request->fecha)),
                 'banco' => $request->banco,
                 'created_by' => $user->ID_Usuario,
+                'organizacion_id' => Pago::resolverOrganizacionId($request->idCotizacion, $request->idContenedor),
                 'created_at' => now(),
                 'updated_at' => now()
             ];

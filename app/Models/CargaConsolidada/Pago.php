@@ -3,6 +3,7 @@
 namespace App\Models\CargaConsolidada;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
 
 class Pago extends Model
@@ -28,7 +29,8 @@ class Pago extends Model
         'is_confirmed',
         'status',
         'confirmation_date',
-        'created_by'
+        'created_by',
+        'organizacion_id',
     ];
 
     protected $casts = [
@@ -54,6 +56,29 @@ class Pago extends Model
     public function cotizacion()
     {
         return $this->belongsTo(Cotizacion::class, 'id_cotizacion');
+    }
+
+    /**
+     * Org del padre (cotización, o contenedor si la cotización no tiene).
+     * Para inserts con DB::table, que no disparan SincronizaOrganizacionId.
+     *
+     * @return int|null
+     */
+    public static function resolverOrganizacionId($idCotizacion, $idContenedor = null)
+    {
+        $query = DB::table('contenedor_consolidado_cotizacion as CC')
+            ->leftJoin('carga_consolidada_contenedor as C', 'C.id', '=', 'CC.id_contenedor')
+            ->where('CC.id', $idCotizacion)
+            ->selectRaw('COALESCE(CC.organizacion_id, C.organizacion_id) as organizacion_id');
+
+        if ($idContenedor !== null && $idContenedor !== '') {
+            $query->where('CC.id_contenedor', $idContenedor);
+        }
+
+        $row = $query->first();
+        $org = (int) ($row->organizacion_id ?? 0);
+
+        return $org > 0 ? $org : null;
     }
 
     /**
