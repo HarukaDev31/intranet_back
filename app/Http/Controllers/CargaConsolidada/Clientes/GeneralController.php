@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Storage;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Services\CargaConsolidada\Clientes\GeneralService;
 use App\Services\CargaConsolidada\Clientes\GeneralExportService;
+use App\Services\CargaConsolidada\Clientes\ClientesTablasExcelService;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\CotizacionProveedorItems;
 use App\Models\CargaConsolidada\CotizacionProveedorResumen;
@@ -837,6 +838,16 @@ class GeneralController extends Controller
             return $this->generalExportService->exportarClientes($request, $idContenedor);
         } catch (\Exception $e) {
             Log::error('Error en exportarClientes: ' . $e->getMessage());
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function exportarTablas(Request $request, $idContenedor)
+    {
+        try {
+            return app(ClientesTablasExcelService::class)->exportar($request, $idContenedor);
+        } catch (\Exception $e) {
+            Log::error('Error en exportarTablas clientes: ' . $e->getMessage());
             return response()->json(['message' => $e->getMessage()], 500);
         }
     }
