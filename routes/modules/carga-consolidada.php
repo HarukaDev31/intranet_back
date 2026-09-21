@@ -137,6 +137,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
             Route::get('/general/{idCotizacion}/proveedores-items', [GeneralController::class, 'getProveedoresItemsCotizacion']);
             Route::get('/general/{idCotizacion}/proveedores-pending-documents', [GeneralController::class, 'getProveedorPendingDocuments']);
             Route::get('/general/{idContenedor}/export', [GeneralController::class, 'exportarClientes']);
+            Route::get('/tablas-excel/{idContenedor}', [GeneralController::class, 'exportarTablas']);
             Route::get('/general/{idContenedor}/headers', [GeneralController::class, 'getClientesHeader']);
             Route::get('/general/{idContenedor}', [GeneralController::class, 'index']);
             Route::post('/general/estado-cliente', [GeneralController::class, 'updateEstadoCliente']);
