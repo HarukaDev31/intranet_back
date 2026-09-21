@@ -128,6 +128,14 @@ class EntregaController extends Controller
     }
 
     /**
+     * Bultos China: qty_box_china (o qty_box) + qty_pallet_china.
+     */
+    private function sqlSumBultosChina(string $alias = 'CP'): string
+    {
+        return "SUM(COALESCE({$alias}.qty_box_china, {$alias}.qty_box, 0) + COALESCE({$alias}.qty_pallet_china, 0))";
+    }
+
+    /**
      * URL pública del formulario de entrega en app clientes.
      * Con destino: ?destino=lima|provincia; sin tipo definido: solo /formulario-entrega/{idContenedor}
      */
@@ -915,7 +923,7 @@ class EntregaController extends Controller
             ->select(
                 'CP.id_cotizacion',
                 DB::raw('SUM(COALESCE(CP.cbm_total_china, CP.cbm_total, 0)) as sum_cbm_china'),
-                DB::raw('SUM(COALESCE(CP.qty_box_china, CP.qty_box, 0)) as sum_qty_box')
+                DB::raw($this->sqlSumBultosChina() . ' as sum_qty_box')
             )
             ->where('CP.id_contenedor', $idContenedor)
             ->groupBy('CP.id_cotizacion');
@@ -1153,7 +1161,7 @@ class EntregaController extends Controller
         $proveedoresBultos = DB::table('contenedor_consolidado_cotizacion_proveedores as CP')
             ->select(
                 'CP.id_cotizacion',
-                DB::raw('SUM(COALESCE(CP.qty_box_china, CP.qty_box, 0)) as sum_qty_box')
+                DB::raw($this->sqlSumBultosChina() . ' as sum_qty_box')
             )
             ->where('CP.id_contenedor', $idContenedor)
             ->groupBy('CP.id_cotizacion');
@@ -1263,7 +1271,7 @@ class EntregaController extends Controller
             ->select(
                 'CP.id_cotizacion',
                 DB::raw('SUM(COALESCE(CP.cbm_total_china, CP.cbm_total, 0)) as sum_cbm_china'),
-                DB::raw('SUM(COALESCE(CP.qty_box_china, CP.qty_box, 0)) as sum_qty_box')
+                DB::raw($this->sqlSumBultosChina() . ' as sum_qty_box')
             )
             ->where('CP.id_contenedor', $idContenedor)
             ->groupBy('CP.id_cotizacion');
@@ -1497,7 +1505,7 @@ class EntregaController extends Controller
         $proveedoresBultos = DB::table('contenedor_consolidado_cotizacion_proveedores as CP')
             ->select(
                 'CP.id_cotizacion',
-                DB::raw('SUM(COALESCE(CP.qty_box_china, CP.qty_box, 0)) as sum_qty_box')
+                DB::raw($this->sqlSumBultosChina() . ' as sum_qty_box')
             )
             ->where('CP.id_contenedor', $idContenedor)
             ->groupBy('CP.id_cotizacion');
@@ -2380,7 +2388,7 @@ class EntregaController extends Controller
                 'CP.id_cotizacion',
                 DB::raw('SUM(COALESCE(CP.cbm_total_china, 0)) as sum_cbm_china'),
                 DB::raw('SUM(COALESCE(CP.cbm_total, 0)) as sum_cbm_total'),
-                DB::raw('SUM(COALESCE(CP.qty_box_china, CP.qty_box, 0)) as sum_qty_box')
+                DB::raw($this->sqlSumBultosChina() . ' as sum_qty_box')
             )
             ->where('CP.id_cotizacion', $idCotizacion)
             ->groupBy('CP.id_cotizacion');
@@ -4369,7 +4377,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
 
         $qty = (int) DB::table('contenedor_consolidado_cotizacion_proveedores')
             ->where('id_cotizacion', $idCotizacion)
-            ->sum(DB::raw('COALESCE(qty_box_china, qty_box, 0)'));
+            ->sum(DB::raw('COALESCE(qty_box_china, qty_box, 0) + COALESCE(qty_pallet_china, 0)'));
 
         $viewData = [
             'nombre' => null,
@@ -4490,7 +4498,7 @@ Muchas gracias por confiar en Pro Business. Si tiene una próxima importación, 
 
         $qty = (int) DB::table('contenedor_consolidado_cotizacion_proveedores')
             ->where('id_cotizacion', $idCotizacion)
-            ->sum(DB::raw('COALESCE(qty_box_china, qty_box, 0)'));
+            ->sum(DB::raw('COALESCE(qty_box_china, qty_box, 0) + COALESCE(qty_pallet_china, 0)'));
 
         $signatureBase64 = (strpos($signature, 'data:') === 0) ? $signature : ('data:image/png;base64,' . $signature);
 
