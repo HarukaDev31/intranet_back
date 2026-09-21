@@ -4,6 +4,7 @@ namespace App\Http\Controllers\CargaConsolidada\CotizacionFinal;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\CargaConsolidada\Pago;
 use App\Models\CargaConsolidada\TipoCliente;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\Usuario;
@@ -1722,6 +1723,7 @@ class CotizacionFinalController extends Controller
                 'monto' => $request->monto,
                 'payment_date' => date('Y-m-d', strtotime($request->fecha)),
                 'banco' => $request->banco,
+                'organizacion_id' => Pago::resolverOrganizacionId($request->idCotizacion, $request->idContenedor),
                 'created_at' => now(),
                 'updated_at' => now()
             ];
