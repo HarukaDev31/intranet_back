@@ -221,7 +221,7 @@ class ExcelConfirmacionFormService
                     // Coordinación: completa → Recibido, incompleta → Pendiente (sin tocar Revisado).
                     $this->refreshProveedorExcelConfStatus($proveedorId, $labelsMap);
                 } else {
-                    // Cliente: si estaba Pendiente (u Observado), al guardar pasa a Recibido.
+                    // Cliente: si estaba Pendiente / Solicitado / Observado, al guardar pasa a Entregado.
                     $this->markExcelConfRecibidoTrasGuardadoCliente($proveedorId);
                 }
             }
@@ -759,8 +759,8 @@ class ExcelConfirmacionFormService
     }
 
     /**
-     * Cuando el cliente guarda un proveedor en Pendiente/Observado (o vacío),
-     * el estado Excel Conf. pasa a Recibido. No toca Revisado.
+     * Cuando el cliente guarda un proveedor en Pendiente/Solicitado/Observado (o vacío),
+     * el estado Excel Conf. (Coord 2) pasa a Entregado. No toca Revisado.
      */
     private function markExcelConfRecibidoTrasGuardadoCliente(int $proveedorId): void
     {
@@ -774,12 +774,12 @@ class ExcelConfirmacionFormService
             return;
         }
 
-        // Solo avanzamos desde Pendiente / Observado / vacío (no regresamos desde Recibido).
-        $shouldMarkRecibido = $current === ''
+        $shouldMarkEntregado = $current === ''
             || strcasecmp($current, 'Pendiente') === 0
+            || strcasecmp($current, 'Solicitado') === 0
             || strcasecmp($current, 'Observado') === 0;
 
-        if (!$shouldMarkRecibido) {
+        if (!$shouldMarkEntregado) {
             return;
         }
 
