@@ -242,6 +242,7 @@ class CotizacionFinalController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => $transformedData,
+                'fecha_maxima_pago' => $this->isoFechaMaximaPago($idContenedor),
                 'pagination' => [
                     'current_page' => $data->currentPage(),
                     'per_page' => $data->perPage(),
@@ -276,6 +277,7 @@ class CotizacionFinalController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => $items,
+                'fecha_maxima_pago' => $this->isoFechaMaximaPago($idContenedor),
                 'pagination' => [
                     'current_page' => (int) $page,
                     'per_page' => (int) $perPage,
@@ -1410,6 +1412,16 @@ class CotizacionFinalController extends Controller
                 'message' => 'Error al actualizar la fecha máxima de pago: ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    private function isoFechaMaximaPago($idContenedor)
+    {
+        $result = FechaMaximaPagoGuard::forContenedorId((int) $idContenedor);
+        if (empty($result['ok'])) {
+            return null;
+        }
+
+        return FechaMaximaPagoGuard::toIso($result['fecha']);
     }
 
     private function jsonIfMissingFechaMaximaPago($idCotizacion)
@@ -2828,7 +2840,8 @@ class CotizacionFinalController extends Controller
                     'carga' => $result2->carga ?? '',
                     //fecha_arribo is null use f_puerto
                     'f_puerto' => $result2->fecha_arribo ? \Carbon\Carbon::parse($result2->fecha_arribo)->format('d/m/Y') : ($result2->f_puerto ? \Carbon\Carbon::parse($result2->f_puerto)->format('d/m/Y') : null),
-                    'fecha_maxima_pago' => FechaMaximaPagoGuard::toIso($result2->fecha_maxima_pago ?? null),
+                    'fecha_maxima_pago' => $this->isoFechaMaximaPago($idContenedor)
+                        ?: FechaMaximaPagoGuard::toIso($result2->fecha_maxima_pago ?? null),
                 ]);
             }
 
@@ -2876,7 +2889,8 @@ class CotizacionFinalController extends Controller
                     'data' => $dataHeaders,
                     'carga' => $result2->carga ?? '',
                     'f_puerto' => $result2->fecha_arribo ? \Carbon\Carbon::parse($result2->fecha_arribo)->format('d/m/Y') : ($result2->f_puerto ? \Carbon\Carbon::parse($result2->f_puerto)->format('d/m/Y') : null),
-                    'fecha_maxima_pago' => FechaMaximaPagoGuard::toIso($result2->fecha_maxima_pago ?? null),
+                    'fecha_maxima_pago' => $this->isoFechaMaximaPago($idContenedor)
+                        ?: FechaMaximaPagoGuard::toIso($result2->fecha_maxima_pago ?? null),
                 ]);
             } else {
                 return response()->json([
@@ -2891,7 +2905,8 @@ class CotizacionFinalController extends Controller
                     ],
                     'carga' => '',
                     'f_puerto' => $result2->fecha_arribo ? \Carbon\Carbon::parse($result2->fecha_arribo)->format('d/m/Y') : ($result2->f_puerto ? \Carbon\Carbon::parse($result2->f_puerto)->format('d/m/Y') : null),
-                    'fecha_maxima_pago' => FechaMaximaPagoGuard::toIso($result2->fecha_maxima_pago ?? null),
+                    'fecha_maxima_pago' => $this->isoFechaMaximaPago($idContenedor)
+                        ?: FechaMaximaPagoGuard::toIso(isset($result2->fecha_maxima_pago) ? $result2->fecha_maxima_pago : null),
                 ]);
             }
         } catch (\Exception $e) {
