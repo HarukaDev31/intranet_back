@@ -123,6 +123,12 @@ class Usuario extends Authenticatable implements JWTSubject
             return $this->organizacionesPermitidasMemo;
         }
 
+        // Coordinación, Documentación y Jefe de importación de org admin
+        // solo operan consolidados Probusiness, no los de socios.
+        if ($this->soloVeConsolidadosAdmin()) {
+            return $this->organizacionesPermitidasMemo = [self::ID_ORGANIZACION_ADMIN];
+        }
+
         if (in_array($this->getNombreGrupo(), self::ROLES_VISIBILIDAD_GLOBAL, true)
             || $this->puedeVerContenedoresDeOtrasOrgs()
         ) {
@@ -152,24 +158,54 @@ class Usuario extends Authenticatable implements JWTSubject
     }
 
     /**
-     * Coordinación / Documentación / Jefe de org 1 ven contenedores de socios.
-     * El mismo rol en org ≠ 1 solo ve la suya.
+     * Coordinación, Documentación y Jefe de importación no ven consolidados de socios.
      */
-    public function puedeVerContenedoresDeOtrasOrgs(): bool
+    public static function rolNoVeConsolidadosSocio($rol)
+    {
+        $n = self::normalizarRol($rol);
+
+        return in_array($n, [
+            self::normalizarRol(self::ROL_COORDINACION),
+            self::normalizarRol(self::ROL_DOCUMENTACION),
+            self::normalizarRol(self::ROL_JEFE_IMPORTACION),
+            self::normalizarRol(self::ROL_COORDINADOR_GENERAL),
+        ], true);
+    }
+
+    /**
+     * Coordinación, Documentación y Jefe de importación de org 1
+     * no ven consolidados de socios (solo Probusiness).
+     */
+    public function soloVeConsolidadosAdmin(): bool
     {
         if ((int) $this->getAttribute('ID_Organizacion') !== self::ID_ORGANIZACION_ADMIN) {
             return false;
         }
 
-        $rol = $this->getNombreGrupo();
-        if (self::rolEquivaleJefeImportacion($rol)) {
-            return true;
-        }
+        return self::rolNoVeConsolidadosSocio($this->getNombreGrupo());
+    }
 
-        return in_array($rol, [
-            self::ROL_COORDINACION,
-            self::ROL_DOCUMENTACION,
-        ], true);
+    /**
+     * @param mixed $rol
+     */
+    public static function normalizarRol($rol)
+    {
+        $s = mb_strtolower(trim((string) $rol), 'UTF-8');
+
+        return strtr($s, [
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u',
+            'Á' => 'a', 'É' => 'e', 'Í' => 'i', 'Ó' => 'o', 'Ú' => 'u',
+        ]);
+    }
+
+    /**
+     * Ya ningún staff de org 1 ve consolidados de socios por rol,
+     * salvo ROLES_VISIBILIDAD_GLOBAL (almacén).
+     * El mismo rol en org ≠ 1 solo ve la suya.
+     */
+    public function puedeVerContenedoresDeOtrasOrgs(): bool
+    {
+        return false;
     }
 
     /**

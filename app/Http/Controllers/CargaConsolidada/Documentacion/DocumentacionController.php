@@ -241,19 +241,7 @@ class DocumentacionController extends Controller
             return false;
         }
 
-        if ((int) $user->getAttribute('ID_Organizacion') !== Usuario::ID_ORGANIZACION_ADMIN) {
-            return false;
-        }
-
-        $rol = $user->getNombreGrupo();
-        if (Usuario::rolEquivaleJefeImportacion($rol)) {
-            return true;
-        }
-
-        return in_array($rol, [
-            Usuario::ROL_COORDINACION,
-            Usuario::ROL_DOCUMENTACION,
-        ], true);
+        return trim((string) $user->getNombreGrupo()) === Usuario::ROL_ALMACEN_CHINA;
     }
 
     private function denySocioDocumentacionMutation($user, $contenedor)

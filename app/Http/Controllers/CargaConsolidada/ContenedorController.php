@@ -188,7 +188,19 @@ class ContenedorController extends Controller
             $query->where('estado_finanzas', $request->estado_finanzas);
         }
 
-        if ($authOrg === Usuario::ID_ORGANIZACION_ADMIN) {
+        if (!($authUser instanceof Usuario)) {
+            $jwtUser = JWTAuth::user();
+            $authUser = $jwtUser instanceof Usuario ? $jwtUser : $authUser;
+            $authOrg = $authUser instanceof Usuario ? (int) $authUser->getAttribute('ID_Organizacion') : $authOrg;
+        }
+
+        $soloConsolidadosAdmin = $authUser instanceof Usuario && (
+            $authUser->soloVeConsolidadosAdmin()
+            || ($authOrg === Usuario::ID_ORGANIZACION_ADMIN && Usuario::rolNoVeConsolidadosSocio($effectiveRole))
+        );
+        if ($soloConsolidadosAdmin) {
+            $query->where('organizacion_id', Usuario::ID_ORGANIZACION_ADMIN);
+        } elseif ($authOrg === Usuario::ID_ORGANIZACION_ADMIN) {
             $orgFiltro = $request->input('id_org', $request->input('organizacion_id'));
             if ($orgFiltro !== null && $orgFiltro !== '' && strtolower((string) $orgFiltro) !== 'todos') {
                 $query->where('organizacion_id', (int) $orgFiltro);
@@ -361,7 +373,7 @@ class ContenedorController extends Controller
         });
 
         $organizacionesFiltro = [];
-        if ($authOrg === Usuario::ID_ORGANIZACION_ADMIN && $authUser) {
+        if ($authOrg === Usuario::ID_ORGANIZACION_ADMIN && $authUser && !$soloConsolidadosAdmin) {
             $organizacionesFiltro = Organizacion::query()
                 ->where('Nu_Estado', 1)
                 ->whereIn('ID_Organizacion', $authUser->organizacionesPermitidas())
@@ -1037,9 +1049,15 @@ class ContenedorController extends Controller
             $query = ContenedorPasos::where('id_pedido', $idContenedor)->orderBy('id_order', 'asc');
             $contenedor = Contenedor::find($idContenedor);
             $esContenedorSocio = $contenedor && (int) $contenedor->organizacion_id !== Usuario::ID_ORGANIZACION_ADMIN;
-            if ($esContenedorSocio && $role !== Usuario::ROL_ALMACEN_CHINA) {
-                $query->where('tipo', 'COTIZADOR')
-                    ->limit($request->boolean('completado') ? 3 : 2);
+            if ($esContenedorSocio) {
+                if (Usuario::rolNoVeConsolidadosSocio($role)) {
+                    $query->whereRaw('0 = 1');
+                } elseif ($role === Usuario::ROL_ALMACEN_CHINA) {
+                    $query->where('tipo', 'COTIZADOR')->limit(3);
+                } else {
+                    $query->where('tipo', 'COTIZADOR')
+                        ->limit($request->boolean('completado') ? 3 : 2);
+                }
             } else {
             switch ($role) {
                 case Usuario::ROL_COTIZADOR:

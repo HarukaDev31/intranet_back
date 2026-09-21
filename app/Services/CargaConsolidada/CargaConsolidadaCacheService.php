@@ -15,7 +15,7 @@ class CargaConsolidadaCacheService
 {
     public const TAG = 'carga-consolidada';
 
-    private const VERSION = 'v2';
+    private const VERSION = 'v4';
     private const TTL_MINUTES = 3;
     private const LOCK_SECONDS = 20;
     private const BLOCK_SECONDS = 8;
