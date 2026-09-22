@@ -3,7 +3,6 @@
 namespace App\Services\CargaConsolidada\CotizacionFinal;
 
 use App\Jobs\SendReminderPagoWhatsAppJob;
-use App\Models\CargaConsolidada\Contenedor;
 use App\Traits\FileTrait;
 use Illuminate\Support\Facades\DB;
 use App\Services\CargaConsolidada\CotizacionFinal\FechaMaximaPagoGuard;
@@ -38,12 +37,13 @@ class ReminderPagoWhatsappService
                 'message' => $payload['message'],
                 'has_excel' => $payload['has_excel'],
                 'excel_url' => $payload['excel_url'],
+                'fecha_maxima_pago' => FechaMaximaPagoGuard::toIso($payload['fecha_maxima_pago'] ?? null),
             ],
         ];
     }
 
     /**
-     * @return array{nombre:string,phone:string,phone_id:string,carga:string,message:string,has_excel:bool,excel_url:?string,has_fecha_maxima_pago:bool}|null
+     * @return array{nombre:string,phone:string,phone_id:string,carga:string,message:string,has_excel:bool,excel_url:?string,fecha_maxima_pago:mixed,has_fecha_maxima_pago:bool}|null
      */
     public function buildPayload(int $idCotizacion): ?array
     {
@@ -76,12 +76,12 @@ class ReminderPagoWhatsappService
             return null;
         }
 
-        $contenedor = Contenedor::select('carga', 'fecha_arribo', 'fecha_maxima_pago')
-            ->where('id', $cotizacion->id_contenedor)
-            ->first();
+        $contenedor = FechaMaximaPagoGuard::contenedorRow((int) $cotizacion->id_contenedor);
 
         $carga = $contenedor ? (string) $contenedor->carga : 'N/A';
-        $fechaMaximaPago = $contenedor ? $contenedor->getAttribute('fecha_maxima_pago') : null;
+        $fechaMaximaPago = $contenedor && isset($contenedor->fecha_maxima_pago)
+            ? $contenedor->fecha_maxima_pago
+            : null;
         $recargos=(float) ($cotizacion->recargos ?? 0);
         $logisticaFinal = (float) ($cotizacion->logistica_final ?? 0);
         $impuestosFinal = (float) ($cotizacion->impuestos_final ?? 0);
@@ -116,6 +116,7 @@ class ReminderPagoWhatsappService
             'message' => $message,
             'has_excel' => $excelUrl !== null && $excelUrl !== '',
             'excel_url' => $excelUrl,
+            'fecha_maxima_pago' => $fechaMaximaPago,
             'has_fecha_maxima_pago' => FechaMaximaPagoGuard::isSet($fechaMaximaPago),
         ];
     }

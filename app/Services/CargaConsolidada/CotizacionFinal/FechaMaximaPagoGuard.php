@@ -2,9 +2,9 @@
 
 namespace App\Services\CargaConsolidada\CotizacionFinal;
 
-use App\Models\CargaConsolidada\Contenedor;
-use App\Models\CargaConsolidada\Cotizacion;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class FechaMaximaPagoGuard
 {
@@ -62,12 +62,16 @@ class FechaMaximaPagoGuard
     }
 
     /**
-     * @return array{ok:bool,message?:string,not_found?:bool,contenedor?:Contenedor,fecha?:Carbon}
+     * @return array{ok:bool,message?:string,not_found?:bool,contenedor?:object,fecha?:Carbon}
      */
     public static function forCotizacion(int $idCotizacion): array
     {
-        $cotizacion = Cotizacion::query()->whereKey($idCotizacion)->first();
-        if (!$cotizacion instanceof Cotizacion) {
+        $cotizacion = DB::table('contenedor_consolidado_cotizacion')
+            ->select('id', 'id_contenedor')
+            ->where('id', $idCotizacion)
+            ->first();
+
+        if (!$cotizacion) {
             return [
                 'ok' => false,
                 'not_found' => true,
@@ -75,20 +79,17 @@ class FechaMaximaPagoGuard
             ];
         }
 
-        return self::forContenedorId((int) $cotizacion->getAttribute('id_contenedor'));
+        return self::forContenedorId((int) $cotizacion->id_contenedor);
     }
 
     /**
-     * @return array{ok:bool,message?:string,not_found?:bool,contenedor?:Contenedor,fecha?:Carbon}
+     * @return array{ok:bool,message?:string,not_found?:bool,contenedor?:object,fecha?:Carbon}
      */
     public static function forContenedorId(int $idContenedor): array
     {
-        $contenedor = Contenedor::query()
-            ->select('id', 'fecha_maxima_pago', 'carga')
-            ->whereKey($idContenedor)
-            ->first();
+        $contenedor = self::contenedorRow($idContenedor);
 
-        if (!$contenedor instanceof Contenedor) {
+        if (!$contenedor) {
             return [
                 'ok' => false,
                 'not_found' => true,
@@ -96,7 +97,7 @@ class FechaMaximaPagoGuard
             ];
         }
 
-        $fecha = self::toCarbon($contenedor->getAttribute('fecha_maxima_pago'));
+        $fecha = self::toCarbon(isset($contenedor->fecha_maxima_pago) ? $contenedor->fecha_maxima_pago : null);
         if ($fecha === null) {
             return [
                 'ok' => false,
@@ -111,5 +112,33 @@ class FechaMaximaPagoGuard
             'contenedor' => $contenedor,
             'fecha' => $fecha,
         ];
+    }
+
+    /**
+     * Fila cruda del contenedor (sin casts Eloquent ni soft deletes).
+     *
+     * @return object|null
+     */
+    public static function contenedorRow(int $idContenedor)
+    {
+        $query = DB::table('carga_consolidada_contenedor')
+            ->select('id', 'carga', 'fecha_arribo')
+            ->where('id', $idContenedor);
+
+        if (self::contenedorHasFechaColumn()) {
+            $query->addSelect('fecha_maxima_pago');
+        }
+
+        return $query->first();
+    }
+
+    private static function contenedorHasFechaColumn(): bool
+    {
+        static $has = null;
+        if ($has === null) {
+            $has = Schema::hasColumn('carga_consolidada_contenedor', 'fecha_maxima_pago');
+        }
+
+        return (bool) $has;
     }
 }
