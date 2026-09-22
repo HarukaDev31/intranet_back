@@ -72,6 +72,15 @@ class FechaMaximaPagoGuard
             ->first();
 
         if (!$cotizacion) {
+            $asContenedor = self::contenedorRow($idCotizacion);
+            if ($asContenedor) {
+                return [
+                    'ok' => false,
+                    'not_found' => true,
+                    'message' => 'El recordatorio usa el id de la cotización del cliente, no el del contenedor.',
+                ];
+            }
+
             return [
                 'ok' => false,
                 'not_found' => true,

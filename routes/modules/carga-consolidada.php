@@ -217,10 +217,10 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
             Route::get('/cargos-extra/{idContenedor}', [CotizacionFinalController::class, 'getCotizacionFinalCargosExtra']);
             Route::get('/pagos/{idContenedor}/export-excel', [CotizacionFinalController::class, 'exportContabilidadPagosExcel']);
             Route::get('/pagos/{idContenedor}', [CotizacionFinalController::class, 'getCotizacionFinalDocumentacionPagos']);
+            Route::get('/general/{idCotizacion}/preview-reminder-pago', [CotizacionFinalController::class, 'previewReminderPago']);
+            Route::post('/general/{idCotizacion}/send-reminder-pago', [CotizacionFinalController::class, 'sendReminderPago']);
             Route::get('/general/{idContenedor}', [CotizacionFinalController::class, 'getContenedorCotizacionesFinales']);
             Route::get('/general/{idContenedor}/headers', [CotizacionFinalController::class, 'getCotizacionFinalHeaders']);
-            Route::get('/general/{idContenedor}/preview-reminder-pago', [CotizacionFinalController::class, 'previewReminderPago']);
-            Route::post('/general/{idContenedor}/send-reminder-pago', [CotizacionFinalController::class, 'sendReminderPago']);
         });
         
         // Factura y guía

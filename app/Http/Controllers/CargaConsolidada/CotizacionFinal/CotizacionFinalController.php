@@ -1317,10 +1317,13 @@ class CotizacionFinalController extends Controller
 
             $result = app(ReminderPagoWhatsappService::class)->preview((int) $idCotizacion);
             if (empty($result['success'])) {
+                $message = $result['message'] ?? 'No se pudo armar la vista previa';
+                $isMissing = stripos($message, 'no encontrada') !== false;
+
                 return response()->json([
                     'success' => false,
-                    'message' => $result['message'] ?? 'No se pudo armar la vista previa',
-                ], 404);
+                    'message' => $message,
+                ], $isMissing ? 404 : 422);
             }
 
             return response()->json($result);
@@ -1344,10 +1347,13 @@ class CotizacionFinalController extends Controller
 
             $preview = app(ReminderPagoWhatsappService::class)->preview((int) $idCotizacion);
             if (empty($preview['success'])) {
+                $message = $preview['message'] ?? 'Cotización no encontrada';
+                $isMissing = stripos($message, 'no encontrada') !== false;
+
                 return response()->json([
-                    'message' => $preview['message'] ?? 'Cotización no encontrada',
+                    'message' => $message,
                     'success' => false,
-                ], 404);
+                ], $isMissing ? 404 : 422);
             }
 
             $sleep = $request->input('sleep', 0);
