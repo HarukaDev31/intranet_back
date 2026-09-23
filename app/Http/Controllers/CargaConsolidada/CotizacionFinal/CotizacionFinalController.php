@@ -348,7 +348,7 @@ class CotizacionFinalController extends Controller
                         FROM contenedor_consolidado_cotizacion_coordinacion_pagos cccp
                         JOIN cotizacion_coordinacion_pagos_concept ccp ON cccp.id_concept = ccp.id
                         WHERE cccp.id_cotizacion = contenedor_consolidado_cotizacion.id
-                        AND (ccp.name = 'LOGISTICA' OR ccp.name = 'IMPUESTOS')
+                        AND ccp.name IN ('LOGISTICA', 'IMPUESTOS', 'DELIVERY')
                         order by cccp.id asc
                     ) AS pagos"),
                     DB::raw("(
@@ -356,21 +356,19 @@ class CotizacionFinalController extends Controller
                         FROM contenedor_consolidado_cotizacion_coordinacion_pagos cccp
                         JOIN cotizacion_coordinacion_pagos_concept ccp ON cccp.id_concept = ccp.id
                         WHERE cccp.id_cotizacion = contenedor_consolidado_cotizacion.id
-                        AND (ccp.name = 'LOGISTICA' OR ccp.name = 'IMPUESTOS')
+                        AND ccp.name IN ('LOGISTICA', 'IMPUESTOS', 'DELIVERY')
                     ) AS total_pagos"),
                     DB::raw("(
                         SELECT COUNT(*) 
                         FROM contenedor_consolidado_cotizacion_coordinacion_pagos cccp
                         JOIN cotizacion_coordinacion_pagos_concept ccp ON cccp.id_concept = ccp.id
                         WHERE cccp.id_cotizacion = contenedor_consolidado_cotizacion.id
-                        AND (ccp.name = 'LOGISTICA' OR ccp.name = 'IMPUESTOS')
+                        AND ccp.name IN ('LOGISTICA', 'IMPUESTOS', 'DELIVERY')
                     ) AS pagos_count"),
                     DB::raw('(contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final) as total_logistica_impuestos')
                 ])
                 ->leftJoin('contenedor_consolidado_tipo_cliente as TC', 'TC.id', '=', 'contenedor_consolidado_cotizacion.id_tipo_cliente')
-                ->where('contenedor_consolidado_cotizacion.id_contenedor', $idContenedor)
-                ->whereNotNull('contenedor_consolidado_cotizacion.estado_cliente')
-                ->where('contenedor_consolidado_cotizacion.estado_cotizador', "CONFIRMADO");
+                ->whereRaw($this->sqlScopeCotizacionesPagosFinal('contenedor_consolidado_cotizacion', $idContenedor));
 
             if ($request->has('search')) {
                 $search = $request->search;
@@ -2677,6 +2675,34 @@ class CotizacionFinalController extends Controller
     }
 
     /**
+     * El cobro sigue a id_contenedor_pago (dónde cobrar al rolear).
+     * Si no hay destino de cobro, usa el contenedor de la cotización.
+     */
+    private function sqlOwnershipPagosFinal($alias, $idContenedor)
+    {
+        $id = (int) $idContenedor;
+
+        return $alias . '.deleted_at IS NULL'
+            . ' AND ' . $alias . '.estado_cotizador = \'CONFIRMADO\''
+            . ' AND ' . $alias . '.estado_cliente IS NOT NULL'
+            . ' AND ' . $alias . '.id_cliente_importacion IS NULL'
+            . ' AND COALESCE(' . $alias . '.id_contenedor_pago, ' . $alias . '.id_contenedor) = ' . $id;
+    }
+
+    /**
+     * Vendido: impuestos_final (y log/extras) de quien cobra aquí.
+     * Excluye la cotización que quedó atrás tras el roleo (tiene destino y ya no cobra en su contenedor).
+     */
+    private function sqlScopeCotizacionesPagosFinal($alias, $idContenedor)
+    {
+        return $this->sqlOwnershipPagosFinal($alias, $idContenedor)
+            . ' AND NOT ('
+            . $alias . '.id_contenedor_destino IS NOT NULL'
+            . ' AND ' . $alias . '.id_contenedor != COALESCE(' . $alias . '.id_contenedor_pago, ' . $alias . '.id_contenedor)'
+            . ')';
+    }
+
+    /**
      * Helper: format a number as currency (e.g., $1,234.56)
      */
     private function formatCurrency($value, $symbol = '$')
@@ -2728,7 +2754,7 @@ class CotizacionFinalController extends Controller
 
                     // Subconsulta para total_logistica
                     DB::raw('(
-                        SELECT COALESCE(SUM(IFNULL(logistica_final, 0) + IFNULL(recargos_descuentos_final, 0)), 0) 
+                        SELECT COALESCE(SUM(IFNULL(logistica_final, 0) + IFNULL(recargos_descuentos_final, 0) + IFNULL(servicios_extra_final, 0)), 0) 
                         FROM ' . $this->table_contenedor_cotizacion . ' 
                         WHERE id IN (
                             SELECT DISTINCT id_cotizacion 
@@ -2762,39 +2788,36 @@ class CotizacionFinalController extends Controller
                         AND estado_cotizador = "CONFIRMADO"
                     ) as total_fob'),
 
-                    // Total vendido logistica + impuestos
+                    // Vendido = plantilla nueva: logística + impuestos + recargos/desc + servicios extra
                     DB::raw('(
-                        SELECT COALESCE(SUM(IFNULL(logistica_final, 0) + IFNULL(impuestos_final, 0) + IFNULL(recargos_descuentos_final, 0)), 0)
-                        FROM ' . $this->table_contenedor_cotizacion . '
-                        WHERE id IN (
-                            SELECT DISTINCT id_cotizacion
-                            FROM ' . $this->table_contenedor_cotizacion_proveedores . '
-                            WHERE id_contenedor = ' . $idContenedor . '
-                        )
-                        AND estado_cotizador = "CONFIRMADO"
-                        AND (id_contenedor_pago IS NULL OR id_contenedor_pago = ' . $idContenedor . ')
+                        SELECT COALESCE(SUM(
+                            IFNULL(ccc.logistica_final, 0)
+                            + IFNULL(ccc.impuestos_final, 0)
+                            + IFNULL(ccc.recargos_descuentos_final, 0)
+                            + IFNULL(ccc.servicios_extra_final, 0)
+                        ), 0)
+                        FROM ' . $this->table_contenedor_cotizacion . ' ccc
+                        WHERE ' . $this->sqlScopeCotizacionesPagosFinal('ccc', $idContenedor) . '
                     ) as total_vendido_logistica_impuestos'),
 
-                    // Total pagado logistica (solo cotizaciones con id_contenedor_pago nulo o igual al actual)
+                    // Pagos siguen a dónde se cobra (aunque el voucher haya quedado en el contenedor origen)
                     DB::raw('(
                         SELECT COALESCE(SUM(p.monto), 0)
-                        FROM ' . $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' p
-                        JOIN ' . $this->table_pagos_concept . ' c ON p.id_concept = c.id
-                        JOIN ' . $this->table_contenedor_cotizacion . ' cc_p ON p.id_cotizacion = cc_p.id
-                        WHERE (p.id_contenedor IS NULL OR p.id_contenedor = ' . (int) $idContenedor . ')
-                        AND (cc_p.id_contenedor_pago IS NULL OR cc_p.id_contenedor_pago = ' . (int) $idContenedor . ')
-                        AND c.name = \'LOGISTICA\'
+                        FROM ' . $this->table_contenedor_cotizacion . ' cc_p
+                        INNER JOIN ' . $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' p
+                            ON p.id_cotizacion = cc_p.id
+                        INNER JOIN ' . $this->table_pagos_concept . ' c ON p.id_concept = c.id AND c.name = \'LOGISTICA\'
+                        WHERE ' . $this->sqlOwnershipPagosFinal('cc_p', $idContenedor) . '
                     ) as total_logistica_pagado'),
 
-                    // Total pagado: suma de todos los pagos de cotizaciones del contenedor (CONFIRMADO, estado_cliente no nulo, id_contenedor_pago = contenedor o null)
                     DB::raw('(
                         SELECT COALESCE(SUM(ccccp.monto), 0)
                         FROM ' . $this->table_contenedor_cotizacion . ' ccc
-                        LEFT JOIN ' . $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' ccccp ON ccccp.id_cotizacion = ccc.id
-                        WHERE ccc.id_contenedor = ' . (int) $idContenedor . '
-                        AND ccc.estado_cotizador = \'CONFIRMADO\'
-                        AND ccc.estado_cliente IS NOT NULL
-                        AND (ccc.id_contenedor_pago = ' . (int) $idContenedor . ' OR ccc.id_contenedor_pago IS NULL)
+                        INNER JOIN ' . $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos . ' ccccp
+                            ON ccccp.id_cotizacion = ccc.id
+                        INNER JOIN ' . $this->table_pagos_concept . ' c ON ccccp.id_concept = c.id
+                            AND c.name IN (\'LOGISTICA\', \'IMPUESTOS\', \'DELIVERY\')
+                        WHERE ' . $this->sqlOwnershipPagosFinal('ccc', $idContenedor) . '
                     ) as total_pagado')
                 ])
                 ->join($this->table_contenedor_cotizacion . ' as cc', 'cccp.id_cotizacion', '=', 'cc.id')

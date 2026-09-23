@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\CargaConsolidada\Pago;
 use App\Models\CargaConsolidada\AlmacenDocumentacion;
 use App\Models\CargaConsolidada\AlmacenInspection;
 use App\Models\CargaConsolidada\Contenedor as CargaConsolidadaContenedor;
@@ -3792,13 +3793,24 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $uuid = Str::uuid()->toString();
             $cotizacionDestino->uuid = $uuid;
             $cotizacionDestino->id_contenedor = $idContainerDestino;
+            $cotizacionDestino->id_contenedor_pago = $idContainerPagoDestino;
+            $cotizacionDestino->id_contenedor_destino = $idContainerDestino;
             $cotizacionDestino->save();
             $proveedorIds = collect($proveedores)->map(fn ($id) => (int) $id)->filter()->unique()->values();
+            $proveedoresEnOrigen = CotizacionProveedor::where('id_cotizacion', $cotizacion->id)->count();
             if ($proveedorIds->isNotEmpty()) {
                 CotizacionProveedor::whereIn('id', $proveedorIds)->update([
                     'id_cotizacion' => $cotizacionDestino->id,
                     'id_contenedor' => $idContainerDestino,
                     'id_contenedor_pago' => $idContainerPagoDestino,
+                ]);
+            }
+            $esCargaEntera = $proveedorIds->isNotEmpty() && $proveedorIds->count() >= $proveedoresEnOrigen;
+            if ($esCargaEntera) {
+                $idContenedorCobro = (int) ($idContainerPagoDestino ?: $idContainerDestino);
+                Pago::where('id_cotizacion', $cotizacion->id)->update([
+                    'id_cotizacion' => $cotizacionDestino->id,
+                    'id_contenedor' => $idContenedorCobro,
                 ]);
             }
             Log::info("Iniciando proceso de envío de movimiento", [
