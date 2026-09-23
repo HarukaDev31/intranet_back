@@ -62,7 +62,19 @@ class EntregaController extends Controller
             ->whereIn('tipo_servicio', $this->tipos_servicio_delivery)
             ->orderBy('id')
             ->first();
-        $update = ['total_pago_delivery' => $sum];
+        // Misma suma que cotización final / header Vendido: delivery + montacarga + sanciones + BQ
+        $serviciosExtraFinal = round((float) DB::table($this->table_delivery_servicio)
+            ->where('id_cotizacion', $idCotizacion)
+            ->where(function ($q) {
+                foreach ($this->tipos_servicio_cargos_extra as $tipo) {
+                    $q->orWhereRaw('UPPER(TRIM(tipo_servicio)) = ?', [$tipo]);
+                }
+            })
+            ->sum('importe'), 2);
+        $update = [
+            'total_pago_delivery' => $sum,
+            'servicios_extra_final' => $serviciosExtraFinal,
+        ];
         if ($first && in_array($first->tipo_servicio, $this->tipos_servicio_delivery, true)) {
             $update['tipo_servicio'] = $first->tipo_servicio;
         }
