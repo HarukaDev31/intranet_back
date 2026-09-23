@@ -242,7 +242,8 @@ ClientesVisibility::applyListado($queryAbierta, 'CC', true, false);
 $sqlAbierta = $queryAbierta->toSql();
 $bindingsAbierta = $queryAbierta->getBindings();
 qa_assert(strpos($sqlAbierta, 'estado_resumen') !== false, 'Abierto incluye estado_resumen');
-qa_assert(in_array('COTIZADO', $bindingsAbierta, true), 'Abierto incluye COTIZADO');
+qa_assert(in_array('CONFIRMADO', $bindingsAbierta, true), 'Abierto incluye CONFIRMADO');
+qa_assert(!in_array('COTIZADO', $bindingsAbierta, true), 'Abierto no incluye COTIZADO');
 
 $queryCerrada = DB::table('contenedor_consolidado_cotizacion as CC');
 ClientesVisibility::applyListado($queryCerrada, 'CC', true, true);
