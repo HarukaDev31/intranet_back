@@ -10,8 +10,10 @@ use Illuminate\Queue\SerializesModels;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\CotizacionProveedor;
+use App\Services\CargaConsolidada\MovilidadPersonalVimService;
 use App\Services\Organizacion\OrganizacionMensajeriaService;
 use App\Services\WhatsApp\WhatsAppCoordinacionBatchService;
+use App\Support\WhatsApp\CoordinacionMediaLink;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Traits\WhatsappTrait;
 use App\Traits\DatabaseConnectionTrait;
@@ -285,6 +287,17 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                         )
                     );
 
+                    $tipoRotulado = strtolower(trim((string) ($proveedorArray['tipo_rotulado'] ?? '')));
+                    if ($tipoRotulado === 'movilidad_personal') {
+                        $sleepSendMedia += 1;
+                        $sleepSendMedia = $this->enviarRotuladoMovilidadPersonal(
+                            $proveedorArray,
+                            $cotizacionInfo,
+                            $carga,
+                            $sleepSendMedia
+                        );
+                    }
+
                     $processedProviders++;
                     if (!empty($proveedorArray['id'])) {
                         CotizacionProveedor::where('id', $proveedorArray['id'])->update([
@@ -373,6 +386,88 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             Log::error('Error en ForceSendRotuladoJob: ' . $e->getMessage());
             throw $e;
         }
+    }
+
+    /**
+     * Genera códigos VIN/VIM, escribe el sheet y envía PDF + Excel por WhatsApp.
+     *
+     * @param array<string, mixed> $proveedorArray
+     */
+    private function enviarRotuladoMovilidadPersonal($proveedorArray, $cotizacionInfo, $carga, $sleepSendMedia): int
+    {
+        $supplierCode = (string) ($proveedorArray['code_supplier'] ?? '');
+        $vimService = app(MovilidadPersonalVimService::class);
+        $result = $vimService->generateForProveedor($cotizacionInfo, $proveedorArray, $carga);
+
+        if ($result === null) {
+            Log::error('ForceSendRotuladoJob: no se generaron códigos VIM para movilidad personal', [
+                'id_cotizacion' => $this->idCotizacion,
+                'code_supplier' => $supplierCode,
+            ]);
+
+            return (int) $sleepSendMedia;
+        }
+
+        $message = "👆🏻 ⚠ Atención ⚠
+Etiqueta especial: Movilidad Personal
+
+Según la regulación de Aduanas - Perú todos los Scooters / Monociclos /Bicimotos / Trimotos requiere tener código VIN y Motor grabado en el producto de manera obligatoria.
+
+Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
+
+⛔ No aceptamos cargas sin código VIN o Motor ya que la aduana lo puede observar o decomisar.
+📝 Aquí tienes el archivo con los códigos generados";
+
+        $movilidadPersonalPath = $vimService->ejemploPdfPath();
+        if ($movilidadPersonalPath) {
+            $this->sendMedia(
+                $movilidadPersonalPath,
+                'application/pdf',
+                $message,
+                $this->phoneNumberId,
+                $sleepSendMedia,
+                'consolidado',
+                'movilidad_personal_ejemplo.pdf',
+                CoordinacionWhatsappPayload::rotuladoPdfProducto(
+                    (string) $this->phoneNumberId,
+                    'Movilidad Personal',
+                    $supplierCode,
+                    $movilidadPersonalPath,
+                    $message,
+                    (int) $sleepSendMedia
+                )
+            );
+            Log::info('ForceSendRotuladoJob: PDF movilidad personal enviado', [
+                'code_supplier' => $supplierCode,
+            ]);
+        } else {
+            Log::warning('ForceSendRotuladoJob: no se encontró PDF de ejemplo movilidad_personal');
+        }
+
+        $excelPath = $result['excel_path'];
+        if (is_file($excelPath)) {
+            $sleepSendMedia += 1;
+            $vinMessage = "👆🏼 Le adjuntamos la lista de códigos VIN que deben ir grabados en los vehículos de movilidad personal.\n\nDescárgala aquí: {{link}} 📋";
+            $linkVin = CoordinacionMediaLink::uploadLocalFile($excelPath, 'temp/vin/' . basename($excelPath));
+            if ($linkVin !== null) {
+                $vinMessage = str_replace('{{link}}', $linkVin, $vinMessage);
+            }
+            $metaVin = $linkVin !== null
+                ? CoordinacionWhatsappPayload::rotuladoVinLink(
+                    (string) $this->phoneNumberId,
+                    $linkVin,
+                    $vinMessage,
+                    (int) $sleepSendMedia
+                )
+                : null;
+            $this->sendMessage($vinMessage, $this->phoneNumberId, $sleepSendMedia, 'consolidado', $metaVin);
+            Log::info('ForceSendRotuladoJob: enlace VIN enviado', [
+                'code_supplier' => $supplierCode,
+                'codes_count' => count($result['codes']),
+            ]);
+        }
+
+        return (int) $sleepSendMedia;
     }
 
     /**
