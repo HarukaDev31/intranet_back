@@ -202,7 +202,7 @@ class CierreContenedorClientesOrganizacionTest extends TestCase
         );
     }
 
-    public function test_listado_socio_abierto_incluye_cotizado_y_cerrado_solo_loaded()
+    public function test_listado_socio_abierto_solo_confirmado_y_cerrado_solo_loaded()
     {
         $this->skipSiFaltaSchema();
 
@@ -210,7 +210,8 @@ class CierreContenedorClientesOrganizacionTest extends TestCase
         ClientesVisibility::applyListado($queryAbierta, 'CC', true, false);
         $sqlAbierta = $queryAbierta->toSql();
         $this->assertStringContainsString('estado_resumen', $sqlAbierta);
-        $this->assertContains('COTIZADO', $queryAbierta->getBindings());
+        $this->assertContains('CONFIRMADO', $queryAbierta->getBindings());
+        $this->assertNotContains('COTIZADO', $queryAbierta->getBindings());
 
         $queryCerrada = DB::table('contenedor_consolidado_cotizacion as CC');
         ClientesVisibility::applyListado($queryCerrada, 'CC', true, true);

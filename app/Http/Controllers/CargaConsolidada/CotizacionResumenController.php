@@ -1189,13 +1189,6 @@ class CotizacionResumenController extends Controller
     }
 
     /**
-     * Tarifa = logística / CBM. Se persiste en `tarifa`; el front no la calcula.
-     *
-     * @param float $logistica
-     * @param float $cbm
-     * @return float
-     */
-    /**
      * Qty proveedores del wizard: el valor enviado, o el conteo de filas si no vino.
      *
      * @param Request $request
@@ -1267,14 +1260,24 @@ class CotizacionResumenController extends Controller
         $cotizacion->save();
     }
 
+    /**
+     * Tarifa = logística / CBM cuando CBM >= 1.
+     * Si CBM < 1 (incluye 0.99, 0, etc.) no se divide: la tarifa es la logística tal cual.
+     * Se persiste en `tarifa`; el front no la calcula.
+     *
+     * @param float $logistica
+     * @param float $cbm
+     * @return float
+     */
     private function tarifaDesdeLogistica($logistica, $cbm)
     {
+        $logistica = (float) $logistica;
         $cbm = (float) $cbm;
-        if ($cbm <= 0) {
-            return 0.0;
+        if ($cbm < 1) {
+            return round($logistica, 2);
         }
 
-        return round(((float) $logistica) / $cbm, 2);
+        return round($logistica / $cbm, 2);
     }
 
     /**

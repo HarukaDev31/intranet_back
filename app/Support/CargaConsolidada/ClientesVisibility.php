@@ -6,7 +6,7 @@ use App\Helpers\ClienteLookupHelper;
 
 /**
  * Visibilidad de filas en Clientes / Embarcados / Variación.
- * Abierto: mismas filas que Cotizaciones (socio incluye resumen COTIZADO/CONFIRMADO).
+ * Abierto: solo cotizaciones CONFIRMADO (cotizador o resumen socio).
  * Cerrado: solo las que ya tienen estado_cliente (se setea al pasar un item a LOADED).
  */
 class ClientesVisibility
@@ -26,10 +26,7 @@ class ClientesVisibility
         }
 
         if ($esSocio) {
-            $query->where(function ($q) use ($alias) {
-                $q->where($alias . '.estado_cotizador', 'CONFIRMADO')
-                    ->orWhereIn($alias . '.estado_resumen', ['COTIZADO', 'CONFIRMADO']);
-            });
+            self::applyConfirmadoParaBd($query, $alias);
             return;
         }
 
