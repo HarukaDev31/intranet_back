@@ -61,8 +61,20 @@ class CotizacionController extends Controller
      */
     private function formatCurrency($value, $symbol = '$')
     {
+        return $this->formatCurrencyWithSign($value, false, $symbol);
+    }
+
+    private function formatCurrencyWithSign($value, $forcePlus = false, $symbol = '$')
+    {
         $num = is_numeric($value) ? (float) $value : 0.0;
-        return $symbol . number_format($num, 2, '.', ',');
+        $abs = number_format(abs($num), 2, '.', ',');
+        if ($num < 0) {
+            return '-' . $symbol . $abs;
+        }
+        if ($forcePlus && $num > 0) {
+            return '+' . $symbol . $abs;
+        }
+        return $symbol . $abs;
     }
 
     private function esArchivoPdf($path, $nombre = null)
@@ -83,11 +95,90 @@ class CotizacionController extends Controller
             if (!is_array($item) || !array_key_exists('value', $item)) {
                 continue;
             }
-            if (in_array($key, ['total_logistica', 'total_logistica_pagado', 'total_diferencia_logistica', 'total_fob', 'total_isd', 'total_impuestos'])) {
+            if (in_array($key, [
+                'total_logistica',
+                'total_logistica_pagado',
+                'total_diferencia_logistica',
+                'total_fob',
+                'total_isd',
+                'total_impuestos',
+            ], true)) {
                 $headers[$key]['value'] = $this->formatCurrency($item['value']);
             }
         }
         return $headers;
+    }
+
+    /**
+     * Saldos de logística sin netear: pendiente vs a favor por cotización.
+     *
+     * @return array{pendiente: float, favor: float}
+     */
+    private function computeSaldosLogisticaCotizaciones($idContenedor)
+    {
+        $idContenedor = (int) $idContenedor;
+        $rows = DB::select(
+            'SELECT
+                COALESCE(cc.monto, 0) AS monto,
+                COALESCE((
+                    SELECT SUM(p.monto)
+                    FROM contenedor_consolidado_cotizacion_coordinacion_pagos p
+                    INNER JOIN cotizacion_coordinacion_pagos_concept pc
+                        ON p.id_concept = pc.id AND pc.name = \'LOGISTICA\'
+                    WHERE p.id_cotizacion = cc.id
+                ), 0) AS total_pagado
+            FROM contenedor_consolidado_cotizacion cc
+            WHERE cc.id_contenedor = ?
+              AND cc.deleted_at IS NULL
+              AND cc.estado_cotizador = \'CONFIRMADO\'
+              AND cc.id_cliente_importacion IS NULL
+              AND (cc.id_contenedor_pago = ? OR cc.id_contenedor_pago IS NULL)',
+            [$idContenedor, $idContenedor]
+        );
+
+        $pendiente = 0.0;
+        $favor = 0.0;
+        foreach ($rows as $row) {
+            $diff = round((float) $row->total_pagado - (float) $row->monto, 2);
+            if ($diff > 0) {
+                $favor += $diff;
+            } elseif ($diff < 0) {
+                $pendiente += abs($diff);
+            }
+        }
+
+        return [
+            'pendiente' => round($pendiente, 2),
+            'favor' => round($favor, 2),
+        ];
+    }
+
+    /**
+     * Un solo KPI con pendiente (−) y a favor (+) juntos.
+     *
+     * @param array{pendiente: float, favor: float} $saldos
+     * @return array
+     */
+    private function buildSaldoLogisticaHeader(array $saldos)
+    {
+        $pendienteTxt = $this->formatCurrencyWithSign(
+            $saldos['pendiente'] > 0 ? -1 * $saldos['pendiente'] : 0,
+            false
+        );
+        $favorTxt = $this->formatCurrencyWithSign($saldos['favor'], true);
+
+        return [
+            'saldos' => [
+                'value' => $pendienteTxt . ' · ' . $favorTxt,
+                'label' => 'Saldos',
+                'hint' => 'Pendiente · A favor',
+                'icon' => 'cryptocurrency-color:soc',
+                'sublines' => [
+                    ['label' => 'Saldo pendiente', 'value' => $pendienteTxt],
+                    ['label' => 'Saldo a favor', 'value' => $favorTxt],
+                ],
+            ],
+        ];
     }
 
     /**
@@ -718,12 +809,7 @@ class CotizacionController extends Controller
                 'label' => 'Logist.',
                 'icon' => 'cryptocurrency-color:soc'
             ],
-            //total_diferencia_impuestos_logistica
-            'total_diferencia_logistica' => [
-                'value' => $headers ? round($headers->total_logistica - $headers->total_logistica_pagado, 2) : 0,
-                'label' => 'Total Diferencia',
-                'icon' => 'cryptocurrency-color:soc'
-            ],
+            //total_diferencia_impuestos_logistica (reemplazado por saldos juntos, sin netear)
             'total_fob' => [
                 'value' => $headers ? $headers->total_fob : 0,
                 'label' => 'Fob',
@@ -735,6 +821,11 @@ class CotizacionController extends Controller
                 'icon' => 'cryptocurrency-color:soc'
             ],
         ];
+
+        $headersData = array_merge(
+            $headersData,
+            $this->buildSaldoLogisticaHeader($this->computeSaldosLogisticaCotizaciones($idContenedor))
+        );
 
         // Conteo NUEVO / ANTIGUO (tipo_cliente) — solo para Jefe Marketing en prospectos
         if ($usergroup === Usuario::JEFE_MARKETING) {
@@ -787,9 +878,9 @@ class CotizacionController extends Controller
             Usuario::ROL_COTIZADOR => ['cbm_vendido', 'cbm_pendiente', 'cbm_embarcado', 'qty_items', 'cbm_total_peru', 'cbm_total_china','cbm_total_imo'],
             Usuario::ROL_SOCIO => ['cbm_total_china', 'cbm_total_peru', 'cbm_pendiente', 'cbm_total_imo', 'total_fob', 'total_isd', 'total_logistica', 'total_impuestos'],
             Usuario::ROL_ALMACEN_CHINA => ['cbm_total_china', 'cbm_total_peru'],
-            Usuario::ROL_ADMINISTRACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado', 'total_diferencia_logistica'],
+            Usuario::ROL_ADMINISTRACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado', 'saldos'],
             Usuario::ROL_COORDINACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
-            Usuario::ROL_CONTABILIDAD => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado', 'total_diferencia_logistica'],
+            Usuario::ROL_CONTABILIDAD => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado', 'saldos'],
             Usuario::ROL_JEFE_IMPORTACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
             Usuario::ROL_COORDINADOR_GENERAL => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
             Usuario::JEFE_MARKETING => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],

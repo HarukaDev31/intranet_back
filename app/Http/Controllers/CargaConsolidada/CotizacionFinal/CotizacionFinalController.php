@@ -425,7 +425,8 @@ class CotizacionFinalController extends Controller
                     'show_pagos_grid' => (int) ($row->show_pagos_grid ?? 1),
                     'pagos' => json_encode($pagos),
                     'estado_cotizacion_final' => $row->estado_cotizacion_final ?? null,
-                    'diferencia' => round($importeTotal - $totalPag, 2),
+                    // + = saldo a favor (pagó de más); - = saldo pendiente
+                    'diferencia' => round($totalPag - $importeTotal, 2),
                 ]);
                 $index++;
             }
@@ -2665,13 +2666,47 @@ class CotizacionFinalController extends Controller
      */
     private function addCurrencyFormatting(array $headers)
     {
-        $keysToFormat = ['total_logistica', 'total_logistica_pagado', 'total_fob', 'total_impuestos', 'total_vendido_logistica_impuestos', 'total_pagado', 'total_diferencia_impuestos_logistica'];
+        $keysToFormat = [
+            'total_logistica',
+            'total_logistica_pagado',
+            'total_fob',
+            'total_impuestos',
+            'total_vendido_logistica_impuestos',
+            'total_pagado',
+            'total_diferencia_impuestos_logistica',
+        ];
         foreach ($headers as $k => $item) {
             if (is_array($item) && array_key_exists('value', $item) && in_array($k, $keysToFormat)) {
                 $headers[$k]['value'] = $this->formatCurrency($item['value']);
             }
         }
         return $headers;
+    }
+
+    /**
+     * Suma pendiente (deuda) y a favor (sobrepago) por cotización, sin netear.
+     * Así un cliente con deuda no se oculta detrás del sobrepago de otro.
+     *
+     * @return array{pendiente: float, favor: float}
+     */
+    private function computeSaldosPagosFinal($idContenedor)
+    {
+        $request = Request::create('/', 'GET');
+        $rows = $this->buildPagosFinalCollection($request, $idContenedor);
+        $pendiente = 0.0;
+        $favor = 0.0;
+        foreach ($rows as $row) {
+            $diff = (float) (is_array($row) ? ($row['diferencia'] ?? 0) : ($row->diferencia ?? 0));
+            if ($diff > 0) {
+                $favor += $diff;
+            } elseif ($diff < 0) {
+                $pendiente += abs($diff);
+            }
+        }
+        return [
+            'pendiente' => round($pendiente, 2),
+            'favor' => round($favor, 2),
+        ];
     }
 
     /**
@@ -2707,8 +2742,51 @@ class CotizacionFinalController extends Controller
      */
     private function formatCurrency($value, $symbol = '$')
     {
-        $num = is_numeric($value) ? (float)$value : 0.0;
-        return $symbol . number_format($num, 2, '.', ',');
+        return $this->formatCurrencyWithSign($value, false, $symbol);
+    }
+
+    /**
+     * Formato con signo explícito: -$1.00 / $1.00 / +$1.00
+     */
+    private function formatCurrencyWithSign($value, $forcePlus = false, $symbol = '$')
+    {
+        $num = is_numeric($value) ? (float) $value : 0.0;
+        $abs = number_format(abs($num), 2, '.', ',');
+        if ($num < 0) {
+            return '-' . $symbol . $abs;
+        }
+        if ($forcePlus && $num > 0) {
+            return '+' . $symbol . $abs;
+        }
+        return $symbol . $abs;
+    }
+
+    /**
+     * Un solo KPI con pendiente (−) y a favor (+) juntos, sin netear.
+     *
+     * @param array{pendiente: float, favor: float} $saldos
+     * @return array
+     */
+    private function buildSaldoHeaders(array $saldos)
+    {
+        $pendienteTxt = $this->formatCurrencyWithSign(
+            $saldos['pendiente'] > 0 ? -1 * $saldos['pendiente'] : 0,
+            false
+        );
+        $favorTxt = $this->formatCurrencyWithSign($saldos['favor'], true);
+
+        return [
+            'saldos' => [
+                'value' => $pendienteTxt . ' · ' . $favorTxt,
+                'label' => 'Saldos',
+                'hint' => 'Pendiente · A favor',
+                'icon' => 'cryptocurrency-color:soc',
+                'sublines' => [
+                    ['label' => 'Saldo pendiente', 'value' => $pendienteTxt],
+                    ['label' => 'Saldo a favor', 'value' => $favorTxt],
+                ],
+            ],
+        ];
     }
 
     /**
@@ -2858,12 +2936,8 @@ class CotizacionFinalController extends Controller
                         "label" => "FOB",
                         "icon" => "cryptocurrency-color:soc"
                     ],
-                    'total_diferencia_impuestos_logistica' => [
-                        "value" => (float)($result->total_vendido_logistica_impuestos ?? 0) - (float)($result->total_pagado ?? 0),
-                        "label" => "Total Diferencia",
-                        "icon" => "cryptocurrency-color:soc"
-                    ],
                 ];
+                $dataHeaders = array_merge($dataHeaders, $this->buildSaldoHeaders($this->computeSaldosPagosFinal($idContenedor)));
                 $dataHeaders = $this->addCurrencyFormatting($dataHeaders);
                 return response()->json([
                     'success' => true,
@@ -2908,12 +2982,8 @@ class CotizacionFinalController extends Controller
                         "label" => "Vendido",
                         "icon" => "cryptocurrency-color:soc"
                     ],
-                    'total_diferencia_impuestos_logistica' => [
-                        "value" => (float)($result->total_vendido_logistica_impuestos ?? 0) - (float)($result->total_pagado ?? 0),
-                        "label" => "Total Diferencia",
-                        "icon" => "cryptocurrency-color:soc"
-                    ],
                 ];
+                $dataHeaders = array_merge($dataHeaders, $this->buildSaldoHeaders($this->computeSaldosPagosFinal($idContenedor)));
                 $dataHeaders = $this->addCurrencyFormatting($dataHeaders);
                 return response()->json([
                     'success' => true,

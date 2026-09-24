@@ -194,7 +194,7 @@ class InspeccionadosController extends Controller
                     'tipo_pago'         => 'Logistica',
                     'monto'             => $monto,
                     'total_pagos'       => $totalPagado,
-                    'diferencia'        => round($monto - $totalPagado, 2),
+                    'diferencia'        => round($totalPagado - $monto, 2),
                     'pagos'             => $pagosDetails,
                     'pagos_count'       => $pagosCount,
                 ];
