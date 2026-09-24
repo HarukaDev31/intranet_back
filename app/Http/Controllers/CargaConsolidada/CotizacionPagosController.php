@@ -335,7 +335,8 @@ class CotizacionPagosController extends Controller
 
                     $monto = (float) ($row->monto ?? 0);
                     $totalPagos = (float) ($row->total_pagos ?? 0);
-                    $diferencia = $monto - $totalPagos;
+                    // + = saldo a favor; - = saldo pendiente
+                    $diferencia = $totalPagos - $monto;
 
                     return [
                         'index' => $index + 1,
