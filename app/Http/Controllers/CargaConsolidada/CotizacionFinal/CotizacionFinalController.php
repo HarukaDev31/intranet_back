@@ -1937,6 +1937,11 @@ class CotizacionFinalController extends Controller
             $tarifa_final = $parsed['tarifa_final'];
             $volumen_final = $parsed['volumen_final'];
             $peso_final = $parsed['peso_final'];
+            // Montacarga/envío/recargos aduaneros: el Importe (Pagos) suma servicios_extra_final.
+            $servicios_extra_final = round((float) ($parsed['logistica_servicios_extra'] ?? 0), 2);
+            $recargos = round((float) ($parsed['recargos'] ?? 0), 2);
+            $descuento = round((float) ($parsed['descuento'] ?? 0), 2);
+            $recargos_descuentos_final = round($recargos - $descuento, 2);
 
             if ($monto_final === null || $impuestos_final === null || $logistica_final === null) {
                 // borrar archivo almacenado
@@ -1960,6 +1965,10 @@ class CotizacionFinalController extends Controller
             $updateData['monto_final'] = $monto_final;
             $updateData['impuestos_final'] = $impuestos_final;
             $updateData['logistica_final'] = $logistica_final;
+            $updateData['servicios_extra_final'] = $servicios_extra_final;
+            $updateData['recargos'] = $recargos;
+            $updateData['descuento'] = $descuento;
+            $updateData['recargos_descuentos_final'] = $recargos_descuentos_final;
 
             $updateData['fob_final'] = $fob_final ?? 0;
             $updateData['peso_final'] = $peso_final ?? 0;
