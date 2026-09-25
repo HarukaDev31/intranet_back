@@ -1984,11 +1984,15 @@ class CotizacionFinalController extends Controller
             } catch (\Exception $dbError) {
                 Log::error('Error al actualizar cotizacion final: ' . $dbError->getMessage(), ['id' => $idCotizacion, 'update' => $updateData]);
                 if (strpos($dbError->getMessage(), 'Out of range value') !== false) {
-                    // aplicar lÃ­mites y reintentar
+                    // aplicar límites y reintentar
                     $limited = $updateData;
-                    if (isset($limited['monto_final'])) $limited['monto_final'] = min($limited['monto_final'], 999999.99);
-                    if (isset($limited['logistica_final'])) $limited['logistica_final'] = min($limited['logistica_final'], 999999.99);
-                    if (isset($limited['impuestos_final'])) $limited['impuestos_final'] = min($limited['impuestos_final'], 999999.99);
+                    $limited['monto_final'] = min((float) $limited['monto_final'], 999999.99);
+                    $limited['logistica_final'] = min((float) $limited['logistica_final'], 999999.99);
+                    $limited['impuestos_final'] = min((float) $limited['impuestos_final'], 999999.99);
+                    $limited['servicios_extra_final'] = min((float) $limited['servicios_extra_final'], 999999.99);
+                    $limited['recargos'] = min((float) $limited['recargos'], 999999.99);
+                    $limited['descuento'] = min((float) $limited['descuento'], 999999.99);
+                    $limited['recargos_descuentos_final'] = min((float) $limited['recargos_descuentos_final'], 999999.99);
                     try {
                         DB::table($this->table_contenedor_cotizacion)
                             ->where('id', $idCotizacion)
