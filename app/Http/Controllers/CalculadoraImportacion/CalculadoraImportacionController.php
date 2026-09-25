@@ -413,9 +413,8 @@ class CalculadoraImportacionController extends Controller
     }
 
     /**
-     * KPI equivalentes al cotizador de socio: CBM confirmado (China),
-     * CBM cotizado+confirmado (destino), Pendiente, IMO, FOB, Logística e Impuestos.
-     * Sin ISD: la calculadora no tiene ese campo.
+     * KPI del listado calculadora: CBM China, destino, Pendiente e IMO.
+     * Solo contenedores no embarcados (estado_china != COMPLETADO).
      */
     private function cloneQueryForAggregate($query)
     {
@@ -460,10 +459,6 @@ class CalculadoraImportacionController extends Controller
 
         $kpiQuery = $this->scopeCalculadoraQueryNoEmbarcados($query);
 
-        $money = $this->cloneQueryForAggregate($kpiQuery)
-            ->selectRaw('COALESCE(SUM(calculadora_importacion.total_fob), 0) as total_fob, COALESCE(SUM(calculadora_importacion.logistica), 0) as total_logistica, COALESCE(SUM(calculadora_importacion.total_impuestos), 0) as total_impuestos')
-            ->first();
-
         $cbmExpr = 'GREATEST(COALESCE(PR.cbm, 0), COALESCE(PR.peso, 0) / 1000)';
         $idsSub = $this->cloneQueryForAggregate($kpiQuery)->select('calculadora_importacion.id');
         $cbm = DB::table('calculadora_importacion as CI')
@@ -501,21 +496,6 @@ class CalculadoraImportacionController extends Controller
                 'value' => $fmt($cbm ? $cbm->cbm_imo : 0),
                 'label' => 'CBM IMO',
                 'icon' => 'mdi:biohazard',
-            ],
-            'total_fob' => [
-                'value' => $fmt($money ? $money->total_fob : 0),
-                'label' => 'Fob',
-                'icon' => 'cryptocurrency-color:soc',
-            ],
-            'total_logistica' => [
-                'value' => $fmt($money ? $money->total_logistica : 0),
-                'label' => 'Logística',
-                'icon' => 'cryptocurrency-color:soc',
-            ],
-            'total_impuestos' => [
-                'value' => $fmt($money ? $money->total_impuestos : 0),
-                'label' => 'Impuestos',
-                'icon' => 'cryptocurrency-color:soc',
             ],
         ];
     }
