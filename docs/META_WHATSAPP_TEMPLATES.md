@@ -181,6 +181,7 @@ Los **PDF** e **imágenes** (jpg/png) sí van en plantillas con encabezado DOCUM
 | D02b | `pb_docs_excel_conf_recibido_v1` | TEXT | Cliente guardó Excel confirmación (web) | `{{consolidado}}`, `{{enlace}}` |
 | D03 | `pb_docs_paso2_word_v1` | TEXT | Paso 2 texto | `{{carga}}`, `{{fecha_maxima}}` (opcional) |
 | D04 | `pb_docs_consideraciones_doc_v1` | DOCUMENT + TEXT | `SolicitarDocumentosWhatsAppJob` (media PDF) | — (PDF en header; body fijo) |
+| D04b | `pb_docs_enviar_a_coordinacion_v1` | TEXT | `SolicitarDocumentosWhatsAppJob` (final) | — (WhatsApp Coordinación fijo) |
 | D05 | `pb_docs_recordatorio_intro_v1` | TEXT | `GeneralController::recordatoriosDocumentos` (intro) | `{{nombre_cliente}}`, `{{carga}}` |
 | D06 | `pb_docs_recordatorio_proveedor_v1_qa` | TEXT | `recordatoriosDocumentos` (**1 mensaje agregado**) | `{{documentos_faltantes}}` (bloque dinámico: Excel/Packing/Invoice solo si faltan) |
 | D07 | `pb_docs_recordatorio_aviso_v1` | TEXT | legacy (ya no se envía; aviso va en D06) | — |

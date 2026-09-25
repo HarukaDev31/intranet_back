@@ -814,7 +814,25 @@ Consideraciones para la documentación de tu importación. 📋
 
 Sin variables (el archivo va en el encabezado DOCUMENT, no como `{{link}}` en el texto).
 
-**Secuencia:** D01 → D02 (por proveedor) → D03 → **D04** (documento adjunto).
+**Secuencia:** D01 → D02 (Excel general) → D03 → **D04** (documento adjunto) → **D04b**.
+
+---
+
+### D04b — `pb_docs_enviar_a_coordinacion_v1`
+
+**Tipo:** TEXT · **Categoría:** UTILITY · **WABA:** consolidado  
+**Origen:** `SolicitarDocumentosWhatsAppJob` — mensaje final tras D04 (o tras D03 si no hay consideraciones).
+
+**BODY:**
+
+```
+Para terminar el proceso de documentación, envía tus documentos al WhatsApp de Coordinación: 938787951
+https://wa.me/51938787951
+```
+
+Sin variables.
+
+**Botón (opcional en BM):** URL `Escribir a Coordinación` → `https://wa.me/51938787951`
 
 ---
 

@@ -240,6 +240,12 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
                 ];
             }
 
+            $steps[] = [
+                'type' => 'text',
+                'content' => CoordinacionWhatsappPayload::docsEnviarACoordinacionPreview(),
+                'wa_delay' => 5,
+            ];
+
             if ($formLink !== '' || ($driveLink ?? null) !== null) {
                 $linksMessage = CoordinacionWhatsappPayload::docsExcelLinkPreview(
                     $formLink,
@@ -388,6 +394,12 @@ class SolicitarDocumentosWhatsAppJob implements ShouldQueue
                 'Consideraciones (D04)'
             );
         }
+
+        $this->queueCoordinacionWhatsApp(
+            CoordinacionWhatsappPayload::docsEnviarACoordinacion($telefono, 5),
+            'docs_enviar_coordinacion',
+            'Enviar docs a Coordinación (D04b)'
+        );
 
         Log::info('SolicitarDocumentosWhatsAppJob: batch Meta despachado', [
             'batch_id' => $this->getWhatsAppCoordinacionBatchId(),
