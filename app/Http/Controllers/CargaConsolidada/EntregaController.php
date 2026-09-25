@@ -733,6 +733,7 @@ class EntregaController extends Controller
      */
     public function getClientesEntrega(Request $request, $idContenedor)
     {
+        $idContenedor = (int) $idContenedor;
         // Lo obtiene de la tabla de clientes asociados al contenedor.
         // CC.id_usuario es el usuario interno que creó/gestionó la fila, no el cliente externo (portal users).
         $query = DB::table('contenedor_consolidado_cotizacion as CC')
@@ -763,6 +764,13 @@ class EntregaController extends Controller
             ->select([
                 'CC.*',
                 'TC.name as name',
+                // Productos de la cotización (proveedores), uno por línea
+                DB::raw("(
+                    SELECT GROUP_CONCAT(NULLIF(TRIM(CP.products), '') ORDER BY CP.id SEPARATOR '\\n')
+                    FROM contenedor_consolidado_cotizacion_proveedores CP
+                    WHERE CP.id_cotizacion = CC.id
+                      AND CP.id_contenedor = {$idContenedor}
+                ) as productos"),
                 
                 // Tipo de entrega: prioriza consolidado_comprobante_forms.destino_entrega; si no, L/P
                 DB::raw($this->sqlCaseTypeFormNullable() . ' as type_form'),
