@@ -431,6 +431,22 @@ class CalculadoraImportacionController extends Controller
         return $clone;
     }
 
+    /**
+     * Restringe agregados KPI a contenedores no embarcados (estado_china != COMPLETADO).
+     */
+    private function scopeCalculadoraQueryNoEmbarcados($query)
+    {
+        $clone = clone $query;
+        $clone->whereHas('contenedor', function ($q) {
+            $q->where(function ($inner) {
+                $inner->whereNull('estado_china')
+                    ->orWhere('estado_china', '!=', Contenedor::CONTEDOR_CERRADO);
+            });
+        });
+
+        return $clone;
+    }
+
     private function buildCalculadoraIndexHeaders($query)
     {
         $flagChina = PaisFlag::urlForIso('cn');
@@ -442,12 +458,14 @@ class CalculadoraImportacionController extends Controller
             $flagDestino = PaisFlag::flagCdnUrl('pe');
         }
 
-        $money = $this->cloneQueryForAggregate($query)
+        $kpiQuery = $this->scopeCalculadoraQueryNoEmbarcados($query);
+
+        $money = $this->cloneQueryForAggregate($kpiQuery)
             ->selectRaw('COALESCE(SUM(calculadora_importacion.total_fob), 0) as total_fob, COALESCE(SUM(calculadora_importacion.logistica), 0) as total_logistica, COALESCE(SUM(calculadora_importacion.total_impuestos), 0) as total_impuestos')
             ->first();
 
         $cbmExpr = 'GREATEST(COALESCE(PR.cbm, 0), COALESCE(PR.peso, 0) / 1000)';
-        $idsSub = $this->cloneQueryForAggregate($query)->select('calculadora_importacion.id');
+        $idsSub = $this->cloneQueryForAggregate($kpiQuery)->select('calculadora_importacion.id');
         $cbm = DB::table('calculadora_importacion as CI')
             ->leftJoin('calculadora_importacion_proveedores as PR', 'PR.id_calculadora_importacion', '=', 'CI.id')
             ->whereIn('CI.id', $idsSub)

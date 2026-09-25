@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 
 class CalculadoraImportacionCacheService
 {
-    private const VERSION = 'v3';
+    private const VERSION = 'v4';
     private const TAG = 'calculadora-importacion';
 
     public function rememberTarifas(callable $resolver): array
