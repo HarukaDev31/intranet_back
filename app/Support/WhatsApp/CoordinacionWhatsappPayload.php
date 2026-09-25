@@ -374,6 +374,28 @@ class CoordinacionWhatsappPayload
         ], $bitrixMessage, $sleep);
     }
 
+    /** Plantilla Meta — aviso final: enviar docs al WhatsApp de Coordinación. */
+    private const DOCS_ENVIAR_A_COORDINACION_TEMPLATE = 'pb_docs_enviar_a_coordinacion_v1';
+
+    private const DOCS_ENVIAR_A_COORDINACION_PREVIEW =
+        "Para terminar el proceso de documentación, envía tus documentos al WhatsApp de Coordinación: 938787951\nhttps://wa.me/51938787951";
+
+    public static function docsEnviarACoordinacionPreview(): string
+    {
+        return self::DOCS_ENVIAR_A_COORDINACION_PREVIEW;
+    }
+
+    public static function docsEnviarACoordinacion(string $phone, int $sleep = 0): array
+    {
+        return self::template(
+            $phone,
+            self::DOCS_ENVIAR_A_COORDINACION_TEMPLATE,
+            [],
+            self::DOCS_ENVIAR_A_COORDINACION_PREVIEW,
+            $sleep
+        );
+    }
+
     /** Plantilla Meta — confirmación al cliente tras guardar Excel de confirmación (web). */
     private const DOCS_EXCEL_CONF_RECIBIDO_TEMPLATE = 'pb_docs_excel_conf_recibido_v1';
 

@@ -134,6 +134,13 @@ class WhatsappInboxTemplateService
                 'header_format' => 'DOCUMENT',
             ],
             [
+                'name' => 'pb_docs_enviar_a_coordinacion_v1',
+                'label' => 'Docs — Enviar a Coordinación',
+                'language' => 'es_PE',
+                'text' => "Para terminar el proceso de documentación, envía tus documentos al WhatsApp de Coordinación: 938787951\nhttps://wa.me/51938787951",
+                'params' => [],
+            ],
+            [
                 'name' => 'pb_docs_excel_link_v1',
                 'label' => 'Docs — Excel de confirmación (link)',
                 'language' => 'es_PE',
@@ -487,7 +494,7 @@ class WhatsappInboxTemplateService
      */
     public function listTemplates()
     {
-        $cacheKey = 'wa_inbox_meta_templates_org_' . $this->organizacionId;
+        $cacheKey = 'wa_inbox_meta_templates_v2_org_' . $this->organizacionId;
 
         $templates = Cache::remember($cacheKey, 3600, function () {
             return $this->fetchFromMetaOrDefault();
@@ -568,12 +575,48 @@ class WhatsappInboxTemplateService
                 return $this->defaultTemplates();
             }
 
-            return $out;
+            // Graph no siempre trae plantillas recién aprobadas o locales: completar catálogo inbox.
+            return $this->mergeDefaultTemplatesMissing($out);
         } catch (\Exception $e) {
             Log::warning('WhatsappInboxTemplate: exception', ['message' => $e->getMessage()]);
 
             return $this->defaultTemplates();
         }
+    }
+
+    /**
+     * Añade plantillas del fallback local que no vengan en la lista de Meta (mismo name).
+     *
+     * @param  array<int, array<string, mixed>>  $fromMeta
+     * @return array<int, array<string, mixed>>
+     */
+    private function mergeDefaultTemplatesMissing(array $fromMeta)
+    {
+        $names = [];
+        foreach ($fromMeta as $tpl) {
+            if (!is_array($tpl)) {
+                continue;
+            }
+            $n = isset($tpl['name']) ? (string) $tpl['name'] : '';
+            if ($n !== '') {
+                $names[$n] = true;
+            }
+        }
+
+        $merged = $fromMeta;
+        foreach ($this->defaultTemplates() as $tpl) {
+            if (!is_array($tpl)) {
+                continue;
+            }
+            $n = isset($tpl['name']) ? (string) $tpl['name'] : '';
+            if ($n === '' || isset($names[$n])) {
+                continue;
+            }
+            $merged[] = $tpl;
+            $names[$n] = true;
+        }
+
+        return $merged;
     }
 
     /**
