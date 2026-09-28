@@ -195,11 +195,11 @@ class CotizacionController extends Controller
 
         $cotizacionEnContenedor = DB::selectOne(
             'SELECT
-                COALESCE(SUM(CASE WHEN cc.estado_cotizador = ? AND cc.tiene_embarcado THEN cc.volumen ELSE 0 END), 0) AS cbm_total_peru,
+                COALESCE(SUM(CASE WHEN cc.estado_cotizador = ? THEN cc.volumen ELSE 0 END), 0) AS cbm_total_peru,
                 COALESCE(SUM(CASE WHEN cc.estado_cotizador = ? AND cc.id_usuario = ? THEN cc.volumen ELSE 0 END), 0) AS cbm_vendido,
                 COALESCE(SUM(CASE WHEN cc.estado_cotizador != ? AND cc.id_usuario = ? THEN cc.volumen ELSE 0 END), 0) AS cbm_pendiente,
                 COALESCE(SUM(CASE
-                    WHEN (cc.estado_resumen = ? OR cc.estado_cotizador = ?) AND cc.tiene_embarcado
+                    WHEN cc.estado_resumen = ? OR cc.estado_cotizador = ?
                     THEN cc.volumen ELSE 0
                 END), 0) AS cbm_destino_confirmado,
                 COALESCE(SUM(CASE
@@ -210,17 +210,9 @@ class CotizacionController extends Controller
                 COALESCE(SUM(cc.isd), 0) AS total_isd,
                 COALESCE(SUM(cc.impuestos), 0) AS total_impuestos,
                 COALESCE(SUM(cc.monto), 0) AS total_logistica_todas
-            FROM (
-                SELECT cc.*,
-                    EXISTS (
-                        SELECT 1 FROM contenedor_consolidado_cotizacion_proveedores AS cccp
-                        WHERE cccp.id_cotizacion = cc.id
-                          AND cccp.estados_proveedor = \'LOADED\'
-                    ) AS tiene_embarcado
-                FROM contenedor_consolidado_cotizacion AS cc
-                WHERE cc.id_contenedor = ?
-                  AND cc.deleted_at IS NULL
-            ) AS cc',
+            FROM contenedor_consolidado_cotizacion AS cc
+            WHERE cc.id_contenedor = ?
+              AND cc.deleted_at IS NULL',
             [
                 'CONFIRMADO',
                 'CONFIRMADO',
