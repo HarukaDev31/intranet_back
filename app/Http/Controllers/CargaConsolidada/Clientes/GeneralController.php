@@ -120,7 +120,6 @@ class GeneralController extends Controller
             ->selectRaw('
                 COUNT(DISTINCT cc.id) as qty_clientes,
                 COALESCE(SUM(cc.volumen), 0) as cbm_destino,
-                COALESCE(SUM(cc.qty_item), 0) as qty_items,
                 COALESCE(SUM(cc.fob), 0) as total_fob,
                 COALESCE(SUM(cc.isd), 0) as total_isd,
                 COALESCE(SUM(cc.monto), 0) as total_logistica,
@@ -161,11 +160,6 @@ class GeneralController extends Controller
                 'value' => (int) ($totales->qty_clientes ?? 0),
                 'label' => 'Qty clientes',
                 'icon' => 'i-heroicons-users',
-            ],
-            'qty_items' => [
-                'value' => (int) ($totales->qty_items ?? 0),
-                'label' => 'Qty items',
-                'icon' => 'bi:boxes',
             ],
             'total_fob' => [
                 'value' => $totales->total_fob ?? 0,
