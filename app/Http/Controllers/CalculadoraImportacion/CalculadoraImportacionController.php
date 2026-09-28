@@ -465,9 +465,6 @@ class CalculadoraImportacionController extends Controller
             ->leftJoin('calculadora_importacion_proveedores as PR', 'PR.id_calculadora_importacion', '=', 'CI.id')
             ->whereIn('CI.id', $idsSub)
             ->selectRaw("
-                COALESCE(SUM(CASE WHEN CI.estado = 'CONFIRMADO' THEN {$cbmExpr} ELSE 0 END), 0) as cbm_china,
-                COALESCE(SUM(CASE WHEN CI.estado IN ('COTIZADO', 'CONFIRMADO') THEN {$cbmExpr} ELSE 0 END), 0) as cbm_destino,
-                COALESCE(SUM(CASE WHEN CI.estado = 'PENDIENTE' THEN {$cbmExpr} ELSE 0 END), 0) as cbm_pendiente,
                 COALESCE(SUM(CASE WHEN CI.es_imo = 1 THEN {$cbmExpr} ELSE 0 END), 0) as cbm_imo
             ")
             ->first();
@@ -476,19 +473,21 @@ class CalculadoraImportacionController extends Controller
             return number_format((float) $value, 2, '.', '');
         };
 
+        ['china' => $cbmChina, 'peru' => $cbmPeru, 'pendiente' => $cbmPendiente] = $this->sumCbmTotalesContenedoresAbiertos($query);
+
         return [
             'cbm_total_china' => [
-                'value' => $fmt($cbm ? $cbm->cbm_china : 0),
+                'value' => $fmt($cbmChina),
                 'label' => 'CBM',
                 'icon' => $flagChina,
             ],
             'cbm_total_peru' => [
-                'value' => $fmt($cbm ? $cbm->cbm_destino : 0),
+                'value' => $fmt($cbmPeru),
                 'label' => 'CBM',
                 'icon' => $flagDestino,
             ],
             'cbm_pendiente' => [
-                'value' => $fmt($cbm ? $cbm->cbm_pendiente : 0),
+                'value' => $fmt($cbmPendiente),
                 'label' => 'CBM Pendiente',
                 'icon' => 'mage:box-3d',
             ],
@@ -498,6 +497,59 @@ class CalculadoraImportacionController extends Controller
                 'icon' => 'mdi:biohazard',
             ],
         ];
+    }
+
+    /**
+     * CBM China/Perú/Pendiente del listado calculadora: misma sumatoria que
+     * las columnas de totales de Carga Consolidada Abiertos (ContenedorController),
+     * agregada sobre todos los contenedores no embarcados (estado_china != COMPLETADO)
+     * en vez de uno solo. Respeta el filtro de campaña (contenedor) del query
+     * de calculadora cuando está presente.
+     */
+    private function sumCbmTotalesContenedoresAbiertos($query): array
+    {
+        $idContenedorFiltro = null;
+        foreach ($query->getQuery()->wheres as $where) {
+            if (($where['column'] ?? null) === 'id_carga_consolidada_contenedor' && isset($where['value'])) {
+                $idContenedorFiltro = (int) $where['value'];
+                break;
+            }
+        }
+
+        $contenedoresQuery = Contenedor::query()
+            ->where(function ($q) {
+                $q->whereNull('estado_china')
+                    ->orWhere('estado_china', '!=', Contenedor::CONTEDOR_CERRADO);
+            });
+        if ($idContenedorFiltro) {
+            $contenedoresQuery->where('id', $idContenedorFiltro);
+        }
+        $contenedorIds = $contenedoresQuery->pluck('id')->all();
+
+        if ($contenedorIds === []) {
+            return ['china' => 0.0, 'peru' => 0.0, 'pendiente' => 0.0];
+        }
+
+        $cbmPeru = (float) DB::table('contenedor_consolidado_cotizacion')
+            ->whereIn('id_contenedor', $contenedorIds)
+            ->where('estado_cotizador', 'CONFIRMADO')
+            ->whereNull('deleted_at')
+            ->sum('volumen');
+
+        $cbmPendiente = (float) DB::table('contenedor_consolidado_cotizacion')
+            ->whereIn('id_contenedor', $contenedorIds)
+            ->where('estado_cotizador', '!=', 'CONFIRMADO')
+            ->whereNull('deleted_at')
+            ->sum('volumen');
+
+        $cbmChina = (float) DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
+            ->join('contenedor_consolidado_cotizacion as cc', 'cccp.id_cotizacion', '=', 'cc.id')
+            ->whereIn('cccp.id_contenedor', $contenedorIds)
+            ->whereNull('cc.deleted_at')
+            ->where('cc.estado_cotizador', 'CONFIRMADO')
+            ->sum('cccp.cbm_total_china');
+
+        return ['china' => $cbmChina, 'peru' => $cbmPeru, 'pendiente' => $cbmPendiente];
     }
 
     /**
