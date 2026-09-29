@@ -78,6 +78,7 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
     // Contenedores
     Route::group(['prefix' => 'contenedor'], function () {
         Route::post('packing-list', [ContenedorController::class, 'uploadPackingList']);
+        Route::get('export-list', [ContenedorController::class, 'exportList']);
         Route::get('valid-containers', [ContenedorController::class, 'getValidContainers']);
         Route::get('valid-containers-documentacion', [ContenedorController::class, 'getValidContainersDocumentacion']);
         Route::get('empresas', [ContenedorController::class, 'getEmpresasCreadas']);
