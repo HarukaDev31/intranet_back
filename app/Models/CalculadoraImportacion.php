@@ -180,7 +180,8 @@ class CalculadoraImportacion extends Model
      */
     public function razonDescarte(): BelongsTo
     {
-        return $this->belongsTo(\App\Models\CalculadoraRazonDescarte::class, 'id_razon_descarte');
+        // withTrashed: una razón eliminada (soft delete) sigue mostrándose en las cotizaciones que ya la usaban.
+        return $this->belongsTo(\App\Models\CalculadoraRazonDescarte::class, 'id_razon_descarte')->withTrashed();
     }
 
     public function creador(): BelongsTo

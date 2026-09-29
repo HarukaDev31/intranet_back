@@ -1267,8 +1267,12 @@ class CalculadoraImportacionController extends Controller
         ]);
         $name = trim($validated['name']);
 
-        $existente = CalculadoraRazonDescarte::query()->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
+        $existente = CalculadoraRazonDescarte::withTrashed()->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
         if ($existente) {
+            if ($existente->trashed()) {
+                $existente->restore();
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'La razón ya existía',
@@ -1285,6 +1289,21 @@ class CalculadoraImportacionController extends Controller
         ]);
     }
 
+    public function destroyRazonDescarte($id)
+    {
+        $item = CalculadoraRazonDescarte::query()->find((int) $id);
+        if (!$item) {
+            return response()->json(['success' => false, 'message' => 'Razón no encontrada'], 404);
+        }
+
+        $item->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Razón eliminada correctamente',
+        ]);
+    }
+
     /**
      * Seguimiento de cotizaciones PENDIENTE/COTIZADO: SEGUIMIENTO o DESCARTADA (con razón obligatoria).
      */
@@ -1292,7 +1311,7 @@ class CalculadoraImportacionController extends Controller
     {
         $validated = $request->validate([
             'seguimiento' => 'required|in:' . CalculadoraImportacion::SEGUIMIENTO_SEGUIMIENTO . ',' . CalculadoraImportacion::SEGUIMIENTO_DESCARTADA,
-            'id_razon_descarte' => 'nullable|integer|exists:calculadora_razon_descarte,id',
+            'id_razon_descarte' => ['nullable', 'integer', \Illuminate\Validation\Rule::exists('calculadora_razon_descarte', 'id')->whereNull('deleted_at')],
         ]);
 
         $calculadora = CalculadoraImportacion::query()->find((int) $id);
