@@ -30,6 +30,7 @@ Route::group(['prefix' => 'calculadora-importacion', 'middleware' => 'jwt.auth']
     Route::post('/change-estado/{id}', [CalculadoraImportacionController::class, 'changeEstado']);
     Route::get('razones-descarte', [CalculadoraImportacionController::class, 'getRazonesDescarte']);
     Route::post('razones-descarte', [CalculadoraImportacionController::class, 'storeRazonDescarte']);
+    Route::delete('razones-descarte/{id}', [CalculadoraImportacionController::class, 'destroyRazonDescarte']);
     Route::post('/seguimiento/{id}', [CalculadoraImportacionController::class, 'updateSeguimiento']);
 
     // Documentos asociados a cotización calculadora
