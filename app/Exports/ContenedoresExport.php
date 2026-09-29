@@ -21,9 +21,25 @@ class ContenedoresExport implements FromCollection, WithHeadings, WithMapping, W
     /** @var array<int, array<string, mixed>> */
     protected $rows;
 
-    public function __construct(array $rows)
+    /** @var string País destino para el encabezado de CBM (Ecuador para socios, país del consolidado en org 1). */
+    protected $destino;
+
+    public function __construct(array $rows, string $destino = 'Perú')
     {
         $this->rows = $rows;
+        $this->destino = $destino !== '' ? $destino : 'Perú';
+    }
+
+    public static function nombrePais($pais): string
+    {
+        if (is_object($pais)) {
+            return (string) ($pais->No_Pais ?? '');
+        }
+        if (is_array($pais)) {
+            return (string) ($pais['No_Pais'] ?? '');
+        }
+
+        return '';
     }
 
     public function collection()
@@ -43,7 +59,7 @@ class ContenedoresExport implements FromCollection, WithHeadings, WithMapping, W
             'F. Arribo',
             'F. Entrega',
             'Estado',
-            'CBM Perú',
+            'CBM ' . $this->destino,
             'CBM China',
             'CBM IMO',
         ];
@@ -55,7 +71,7 @@ class ContenedoresExport implements FromCollection, WithHeadings, WithMapping, W
             'CARGA CONSOLIDADA #' . ($row['carga'] ?? ''),
             $row['mes'] ?? '',
             $row['anio'] ?? '',
-            $this->paisNombre($row['pais'] ?? null),
+            self::nombrePais($row['pais'] ?? null),
             $row['empresa'] ?? '',
             $this->fecha($row['f_cierre'] ?? null),
             $this->fecha($row['fecha_arribo'] ?? ($row['f_puerto'] ?? null)),
@@ -65,18 +81,6 @@ class ContenedoresExport implements FromCollection, WithHeadings, WithMapping, W
             $row['cbm_total_china'] ?? 0,
             $row['cbm_total_imo'] ?? 0,
         ];
-    }
-
-    private function paisNombre($pais): string
-    {
-        if (is_object($pais)) {
-            return (string) ($pais->No_Pais ?? '');
-        }
-        if (is_array($pais)) {
-            return (string) ($pais['No_Pais'] ?? '');
-        }
-
-        return '';
     }
 
     private function fecha($value): string

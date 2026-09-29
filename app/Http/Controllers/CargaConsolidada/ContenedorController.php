@@ -179,8 +179,14 @@ class ContenedorController extends Controller
                 $page++;
             } while ($page <= $lastPage && $page <= 100);
 
+            // Igual que la tabla: socios (org ≠ 1) siempre Ecuador; org 1 usa el país del consolidado.
+            $destino = 'Ecuador';
+            if ((int) $user->getAttribute('ID_Organizacion') === Usuario::ID_ORGANIZACION_ADMIN) {
+                $destino = ($rows !== [] ? ContenedoresExport::nombrePais($rows[0]['pais'] ?? null) : '') ?: 'Perú';
+            }
+
             return Excel::download(
-                new ContenedoresExport($rows),
+                new ContenedoresExport($rows, $destino),
                 'consolidados_' . Carbon::now()->format('Y-m-d') . '.xlsx',
                 \Maatwebsite\Excel\Excel::XLSX
             );
