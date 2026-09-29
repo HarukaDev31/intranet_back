@@ -357,8 +357,18 @@ class CotizacionController extends Controller
     {
         try {
             $user = JWTAuth::parseToken()->authenticate();
+
+            // Vista Jefe de Ventas: cotizaciones de todos los contenedores abiertos o completados juntos.
+            $alcance = strtolower((string) $request->input('alcance', ''));
+            $esAgregado = in_array($alcance, ['abiertos', 'completados'], true);
+            if ($esAgregado && !$user->esJefeVentasOEquivalente()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes permisos para ver las cotizaciones de todos los contenedores'
+                ], 403);
+            }
+
             $query = Cotizacion::with(['calculadoraImportacion', 'tipoCliente'])
-                ->where('id_contenedor', $idContenedor)
                 ->whereNull('id_cliente_importacion')
                 ->where(function ($q) {
                     $q->whereDoesntHave('calculadoraImportacion')
@@ -366,6 +376,16 @@ class CotizacionController extends Controller
                             $q->where('estado', '!=', 'PENDIENTE');
                         });
                 });
+            if ($esAgregado) {
+                $contenedoresAlcance = Contenedor::query()
+                    ->select('id')
+                    ->where('empresa', '!=', 1)
+                    ->where('organizacion_id', (int) $user->getAttribute('ID_Organizacion'))
+                    ->where('estado_china', $alcance === 'completados' ? '=' : '!=', Contenedor::CONTEDOR_CERRADO);
+                $query->whereIn('id_contenedor', $contenedoresAlcance);
+            } else {
+                $query->where('id_contenedor', $idContenedor);
+            }
             $rol = $user->getNombreGrupo();
             
             // Filtrar por ID de cotización si se proporciona
@@ -472,6 +492,9 @@ class CotizacionController extends Controller
                     break;
             }
             $query->whereNull('id_cliente_importacion');
+            if ($esAgregado && !$request->filled('sort_by')) {
+                $query->orderBy('id_contenedor', 'desc');
+            }
             $sortField = $request->input('sort_by', 'id');
             $sortOrder = $request->input('sort_order', 'asc');
             $query->orderBy($sortField, $sortOrder);
@@ -494,7 +517,16 @@ class CotizacionController extends Controller
             if (in_array($effectiveRole, array_merge([Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION, Usuario::ROL_COTIZADOR], Usuario::rolesEquivalentesJefeImportacion()), true)) {
                 $cotizacionIds = $results->pluck('id')->filter()->values()->all();
                 if (!empty($cotizacionIds)) {
-                    $tramites = ConsolidadoCotizacionAduanaTramite::where('id_consolidado', (int) $idContenedor)
+                    $tramites = ConsolidadoCotizacionAduanaTramite::query()
+                        ->when(
+                            $esAgregado,
+                            function ($q) use ($results) {
+                                $q->whereIn('id_consolidado', $results->pluck('id_contenedor')->unique()->filter()->values()->all());
+                            },
+                            function ($q) use ($idContenedor) {
+                                $q->where('id_consolidado', (int) $idContenedor);
+                            }
+                        )
                         ->whereIn('id_cotizacion', $cotizacionIds)
                         ->with(['tiposPermiso' => function ($q) { $q->withTrashed(); }])
                         ->get();
@@ -530,9 +562,16 @@ class CotizacionController extends Controller
 
             $userId = auth()->id();
 
-            $files = Contenedor::where('id', $idContenedor)
-                ->select('bl_file_url', 'lista_embarque_url')
-                ->first();
+            $files = $esAgregado
+                ? null
+                : Contenedor::where('id', $idContenedor)
+                    ->select('bl_file_url', 'lista_embarque_url')
+                    ->first();
+
+            $contenedoresPorId = Contenedor::query()
+                ->whereIn('id', $results->pluck('id_contenedor')->unique()->filter()->values()->all())
+                ->get()
+                ->keyBy('id');
 
             if (!$files) {
                 $files = (object) [
@@ -556,7 +595,8 @@ class CotizacionController extends Controller
             }
 
             // Transformar los datos para la respuesta
-            $data = $results->map(function ($cotizacion) use ($files, $listaEmbarqueUrl, $estadoPermisoPorCotizacion, $idTramitePorCotizacion, $archivosIaPorCotizacion) {
+            $data = $results->map(function ($cotizacion) use ($files, $listaEmbarqueUrl, $estadoPermisoPorCotizacion, $idTramitePorCotizacion, $archivosIaPorCotizacion, $contenedoresPorId) {
+                $contenedorFila = $contenedoresPorId->get($cotizacion->id_contenedor);
                 $archivoIa = optional($archivosIaPorCotizacion->get($cotizacion->id, collect())->first());
                 $archivoPath = $archivoIa ? $archivoIa->getAttribute('archivo_path') : null;
                 $archivoNombre = $archivoIa ? $archivoIa->getAttribute('archivo_nombre_original') : null;
@@ -578,6 +618,8 @@ class CotizacionController extends Controller
 
                 return [
                     'id' => $cotizacion->id,
+                    'id_contenedor' => $cotizacion->id_contenedor,
+                    'carga' => $contenedorFila ? $contenedorFila->formatCargaLabel() : null,
                     'uuid' => $cotizacion->uuid,
                     'nombre' => $cotizacion->nombre,
                     'documento' => $cotizacion->documento,
