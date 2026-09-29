@@ -362,11 +362,11 @@ class CalculadoraImportacionController extends Controller
                 }
 
                 $anioActual = Carbon::now()->year;
-                $contenedores = Contenedor::whereYear('f_inicio', $anioActual)->get();
+                $contenedores = Contenedor::whereYear('f_inicio', $anioActual)->orderByDesc('f_inicio')->get();
                 $contenedores = $contenedores->map(function ($contenedor) {
                     return [
                         'id' => $contenedor->id,
-                        'label' => $contenedor->carga,
+                        'label' => $contenedor->formatCargaLabel(),
                         'value' => $contenedor->id,
                     ];
                 });
