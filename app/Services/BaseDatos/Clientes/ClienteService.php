@@ -935,6 +935,14 @@ class ClienteService
      */
     private function resolverEntidadesPorClientes($clientes): array
     {
+        // Las entidades de cursos son solo de la org 1: no cruzarlas con clientes de otras organizaciones.
+        $clientes = collect($clientes)
+            ->filter(function ($cliente) {
+                return $cliente->perteneceOrgCursos();
+            })
+            ->values()
+            ->all();
+
         $telefonos = [];
         $telefonosClean = [];
         $documentos = [];
