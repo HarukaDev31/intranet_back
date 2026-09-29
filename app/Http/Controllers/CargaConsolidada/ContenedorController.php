@@ -1830,6 +1830,23 @@ Le estaré informando cualquier avance 🫡.";
             $path = 'assets/images/agentecompra/';
             $fileUrl = $this->storageStoreUpload($file, $path, $filename);
 
+            $contenedor = Contenedor::find($idContenedor);
+            if (!$contenedor) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Contenedor no encontrado',
+                ], 404);
+            }
+
+            // Se guarda al instante para que el front vea el archivo y el cierre sin esperar a la cola;
+            // el job repite estos updates (idempotente) y se encarga de clientes, sheet y notificaciones.
+            $contenedor->update([
+                'lista_embarque_url' => $fileUrl,
+                'lista_embarque_uploaded_at' => now(),
+                'estado_china' => Contenedor::CONTEDOR_CERRADO,
+            ]);
+            $this->invalidateContenedorListCache();
+
             $user = auth()->user();
             $userId = $user ? $user->ID_Usuario : null;
             $userGroup = $user ? $user->No_Grupo : null;
