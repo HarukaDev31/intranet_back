@@ -28,6 +28,9 @@ Route::group(['prefix' => 'calculadora-importacion', 'middleware' => 'jwt.auth']
     Route::post('vincular-cotizacion/{id}', [CalculadoraImportacionController::class, 'vincularCotizacionDesdeCalculadora']);
     Route::get('/cliente', [CalculadoraImportacionController::class, 'getCalculosPorCliente']);
     Route::post('/change-estado/{id}', [CalculadoraImportacionController::class, 'changeEstado']);
+    Route::get('razones-descarte', [CalculadoraImportacionController::class, 'getRazonesDescarte']);
+    Route::post('razones-descarte', [CalculadoraImportacionController::class, 'storeRazonDescarte']);
+    Route::post('/seguimiento/{id}', [CalculadoraImportacionController::class, 'updateSeguimiento']);
 
     // Documentos asociados a cotización calculadora
     Route::get('/{id}/documentos', [CalculadoraImportacionDocumentosController::class, 'index']);

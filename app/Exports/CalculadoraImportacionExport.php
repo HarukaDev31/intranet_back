@@ -46,7 +46,18 @@ class CalculadoraImportacionExport implements FromCollection, WithHeadings, With
             'Cotizador',
             'Vendedor',
             'Estado',
+            'Seguimiento',
+            'Razón descarte',
         ];
+    }
+
+    private function seguimientoLabel($row): string
+    {
+        if (!in_array($row->estado ?? '', ['PENDIENTE', 'COTIZADO'], true)) {
+            return '';
+        }
+
+        return ($row->seguimiento ?? '') === 'DESCARTADA' ? 'Descartada' : 'Seguimiento';
     }
 
     public function map($row): array
@@ -70,6 +81,8 @@ class CalculadoraImportacionExport implements FromCollection, WithHeadings, With
             $row->nombre_creador ?? '',
             $row->nombre_vendedor ?? '',
             $row->estado ?? '',
+            $this->seguimientoLabel($row),
+            $row->razon_descarte_nombre ?? '',
         ];
     }
 
@@ -109,7 +122,7 @@ class CalculadoraImportacionExport implements FromCollection, WithHeadings, With
 
                 $sheet->getRowDimension(1)->setRowHeight(22);
 
-                $widths = [8, 12, 22, 12, 14, 14, 10, 8, 12, 12, 12, 12, 12, 18, 18, 18, 12];
+                $widths = [8, 12, 22, 12, 14, 14, 10, 8, 12, 12, 12, 12, 12, 18, 18, 18, 12, 14, 24];
                 foreach ($widths as $i => $w) {
                     $col = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i + 1);
                     $sheet->getColumnDimension($col)->setWidth($w);
