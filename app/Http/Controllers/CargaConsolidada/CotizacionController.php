@@ -353,6 +353,20 @@ class CotizacionController extends Controller
      *     @OA\Response(response=404, description="Contenedor no encontrado")
      * )
      */
+    /**
+     * Cotizaciones de todos los contenedores abiertos (por defecto) o completados.
+     * Endpoint aparte porque las rutas con {idContenedor} exigen un contenedor existente.
+     */
+    public function indexTodos(Request $request)
+    {
+        $alcance = strtolower((string) $request->input('alcance', 'abiertos'));
+        $request->merge([
+            'alcance' => in_array($alcance, ['abiertos', 'completados'], true) ? $alcance : 'abiertos',
+        ]);
+
+        return $this->index($request, 0);
+    }
+
     public function index(Request $request, $idContenedor)
     {
         try {
