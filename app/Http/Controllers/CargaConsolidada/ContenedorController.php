@@ -32,6 +32,8 @@ use App\Models\Organizacion;
 use App\Models\Pais;
 use App\Support\Organizacion\OrganizacionPaisesHabilitados;
 use App\Services\CargaConsolidada\CargaConsolidadaCacheService;
+use App\Exports\ContenedoresExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ContenedorController extends Controller
 {
@@ -145,6 +147,48 @@ class ContenedorController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener contenedores: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Exporta a Excel el listado de consolidados con los mismos filtros y rol que index (todas las páginas).
+     */
+    public function exportList(Request $request)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            $effectiveRole = $user->getNombreGrupo();
+            if ($user->usuarioEquivaleJefeImportacion() && $request->filled('role')) {
+                $requestedRole = trim((string) $request->role);
+                if (in_array($requestedRole, [Usuario::ROL_COORDINACION, Usuario::ROL_DOCUMENTACION], true)) {
+                    $effectiveRole = $requestedRole;
+                }
+            }
+
+            $rows = [];
+            $page = 1;
+            $lastPage = 1;
+            do {
+                $request->merge(['limit' => 100, 'page' => $page]);
+                $payload = $this->buildContenedorIndexPayload($request, $effectiveRole);
+                foreach (collect($payload['data'])->all() as $item) {
+                    $rows[] = $item;
+                }
+                $lastPage = (int) ($payload['pagination']['last_page'] ?? 1);
+                $page++;
+            } while ($page <= $lastPage && $page <= 100);
+
+            return Excel::download(
+                new ContenedoresExport($rows),
+                'consolidados_' . Carbon::now()->format('Y-m-d') . '.xlsx',
+                \Maatwebsite\Excel\Excel::XLSX
+            );
+        } catch (\Exception $e) {
+            Log::error('Error al exportar consolidados: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al exportar: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -321,7 +365,10 @@ class ContenedorController extends Controller
         $items = collect($data->items())->map(function ($c) use ($cbmVendidos, $cbmEmbarcados, $cbmImoPorContenedor, $estadoPermisoPorContenedor, $effectiveRole) {
             $cbm_total_peru = 0;
             $cbm_total_china = 0;
-            if ($c->estado_china === Contenedor::CONTEDOR_CERRADO) {
+            // Org 1 (admin): completados usa el mismo cálculo que abiertos (cotizaciones CONFIRMADO).
+            $usaEmbarcados = $c->estado_china === Contenedor::CONTEDOR_CERRADO
+                && (int) $c->organizacion_id !== Usuario::ID_ORGANIZACION_ADMIN;
+            if ($usaEmbarcados) {
                 $vals = $cbmEmbarcados[$c->id] ?? ['peru' => 0, 'china' => 0];
                 $cbm_total_peru = $vals['peru'];
                 $cbm_total_china = $vals['china'];

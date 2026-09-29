@@ -1,0 +1,129 @@
+<?php
+
+namespace App\Exports;
+
+use Carbon\Carbon;
+use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithMapping;
+use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+
+/**
+ * Listado de consolidados (mismas filas que devuelve ContenedorController::index).
+ */
+class ContenedoresExport implements FromCollection, WithHeadings, WithMapping, WithEvents
+{
+    /** @var array<int, array<string, mixed>> */
+    protected $rows;
+
+    public function __construct(array $rows)
+    {
+        $this->rows = $rows;
+    }
+
+    public function collection()
+    {
+        return collect($this->rows);
+    }
+
+    public function headings(): array
+    {
+        return [
+            'Carga',
+            'Mes',
+            'Año',
+            'País',
+            'Empresa',
+            'F. Cierre',
+            'F. Arribo',
+            'F. Entrega',
+            'Estado',
+            'CBM Perú',
+            'CBM China',
+            'CBM IMO',
+        ];
+    }
+
+    public function map($row): array
+    {
+        return [
+            'CARGA CONSOLIDADA #' . ($row['carga'] ?? ''),
+            $row['mes'] ?? '',
+            $row['anio'] ?? '',
+            $this->paisNombre($row['pais'] ?? null),
+            $row['empresa'] ?? '',
+            $this->fecha($row['f_cierre'] ?? null),
+            $this->fecha($row['fecha_arribo'] ?? ($row['f_puerto'] ?? null)),
+            $this->fecha($row['f_entrega'] ?? null),
+            $row['estado_china'] ?? '',
+            $row['cbm_total_peru'] ?? 0,
+            $row['cbm_total_china'] ?? 0,
+            $row['cbm_total_imo'] ?? 0,
+        ];
+    }
+
+    private function paisNombre($pais): string
+    {
+        if (is_object($pais)) {
+            return (string) ($pais->No_Pais ?? '');
+        }
+        if (is_array($pais)) {
+            return (string) ($pais['No_Pais'] ?? '');
+        }
+
+        return '';
+    }
+
+    private function fecha($value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+        try {
+            return Carbon::parse($value)->format('d/m/Y');
+        } catch (\Throwable $e) {
+            return (string) $value;
+        }
+    }
+
+    public function registerEvents(): array
+    {
+        return [
+            AfterSheet::class => function (AfterSheet $event) {
+                $sheet = $event->sheet->getDelegate();
+                $highestRow = $sheet->getHighestRow();
+                $highestColumn = $sheet->getHighestColumn();
+
+                $sheet->getStyle('A1:' . $highestColumn . $highestRow)->applyFromArray([
+                    'borders' => [
+                        'allBorders' => [
+                            'borderStyle' => Border::BORDER_THIN,
+                            'color' => ['rgb' => '000000'],
+                        ],
+                    ],
+                ])->getAlignment()
+                    ->setVertical(Alignment::VERTICAL_CENTER)
+                    ->setWrapText(true);
+
+                $sheet->getStyle('A1:' . $highestColumn . '1')->applyFromArray([
+                    'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 11],
+                    'fill' => [
+                        'fillType' => Fill::FILL_SOLID,
+                        'startColor' => ['rgb' => '2563EB'],
+                    ],
+                ]);
+                $sheet->getRowDimension(1)->setRowHeight(22);
+
+                $widths = [30, 12, 8, 14, 22, 12, 12, 12, 14, 12, 12, 12];
+                foreach ($widths as $i => $w) {
+                    $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($i + 1))->setWidth($w);
+                }
+            },
+        ];
+    }
+}
