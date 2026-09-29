@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\BaseDatos\Clientes\Cliente;
 use App\Models\CalculadoraImportacion;
+use App\Models\CalculadoraRazonDescarte;
 use App\Models\PaisFlag;
 use App\Services\BaseDatos\Clientes\ClienteService;
 use App\Services\CalculadoraImportacionService;
@@ -274,7 +275,7 @@ class CalculadoraImportacionController extends Controller
             ]);
 
             $payload = $this->cacheService->rememberIndex($params, function () use ($request) {
-                $query = CalculadoraImportacion::with(['proveedores.productos', 'cliente', 'contenedor', 'creador', 'vendedor', 'cotizacion']);
+                $query = CalculadoraImportacion::with(['proveedores.productos', 'cliente', 'contenedor', 'creador', 'vendedor', 'cotizacion', 'razonDescarte']);
 
                 //filter optional campania=54&estado_calculadora=PENDIENTE&vendedor=id_usuario
                 if ($request->has('campania') && $request->campania) {
@@ -359,6 +360,7 @@ class CalculadoraImportacionController extends Controller
                     $calculadora->carga_contenedor = '  #' . optional($calculadora->contenedor)->carga . '-' . ($calculadora->contenedor ? Carbon::parse($calculadora->contenedor->f_inicio)->format('Y') : '2025');
                     $calculadora->estado_cotizador = optional($calculadora->cotizacion)->estado_cotizador;
                     $calculadora->cod_contract = optional($calculadora->cotizacion)->cod_contract;
+                    $calculadora->razon_descarte_nombre = optional($calculadora->razonDescarte)->name;
                 }
 
                 $anioActual = Carbon::now()->year;
@@ -579,7 +581,7 @@ class CalculadoraImportacionController extends Controller
     public function exportList(Request $request)
     {
         try {
-            $query = CalculadoraImportacion::with(['proveedores.productos', 'cliente', 'contenedor', 'creador', 'vendedor', 'cotizacion']);
+            $query = CalculadoraImportacion::with(['proveedores.productos', 'cliente', 'contenedor', 'creador', 'vendedor', 'cotizacion', 'razonDescarte']);
 
             if ($request->has('campania') && $request->campania) {
                 $query->where('id_carga_consolidada_contenedor', $request->campania);
@@ -645,9 +647,10 @@ class CalculadoraImportacionController extends Controller
                 $calculadora->nombre_creador = optional($calculadora->creador)->No_Nombres_Apellidos;
                 $calculadora->nombre_vendedor = optional($calculadora->vendedor)->No_Nombres_Apellidos;
                 $calculadora->carga_contenedor = '  #' . optional($calculadora->contenedor)->carga . '-' . ($calculadora->contenedor ? Carbon::parse($calculadora->contenedor->f_inicio)->format('Y') : '2025');
+                $calculadora->razon_descarte_nombre = optional($calculadora->razonDescarte)->name;
             }
 
-            $filename = 'cotizaciones_calculadora_' . Carbon::now()->format('Y-m-d') . '.xlsx';
+            $filename ='cotizaciones_calculadora_' . Carbon::now()->format('Y-m-d') . '.xlsx';
 
             return Excel::download(
                 new CalculadoraImportacionExport($calculos),
@@ -1247,6 +1250,79 @@ class CalculadoraImportacionController extends Controller
                 'message' => 'Error al duplicar el cálculo: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    public function getRazonesDescarte()
+    {
+        return response()->json([
+            'success' => true,
+            'data' => CalculadoraRazonDescarte::query()->orderBy('name')->get(['id', 'name']),
+        ]);
+    }
+
+    public function storeRazonDescarte(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:120',
+        ]);
+        $name = trim($validated['name']);
+
+        $existente = CalculadoraRazonDescarte::query()->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
+        if ($existente) {
+            return response()->json([
+                'success' => true,
+                'message' => 'La razón ya existía',
+                'data' => $existente,
+            ]);
+        }
+
+        $item = CalculadoraRazonDescarte::create(['name' => $name]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Razón creada correctamente',
+            'data' => $item,
+        ]);
+    }
+
+    /**
+     * Seguimiento de cotizaciones PENDIENTE/COTIZADO: SEGUIMIENTO o DESCARTADA (con razón obligatoria).
+     */
+    public function updateSeguimiento(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'seguimiento' => 'required|in:' . CalculadoraImportacion::SEGUIMIENTO_SEGUIMIENTO . ',' . CalculadoraImportacion::SEGUIMIENTO_DESCARTADA,
+            'id_razon_descarte' => 'nullable|integer|exists:calculadora_razon_descarte,id',
+        ]);
+
+        $calculadora = CalculadoraImportacion::find($id);
+        if (!$calculadora) {
+            return response()->json(['success' => false, 'message' => 'Cotización no encontrada'], 404);
+        }
+        if (!in_array($calculadora->estado, [CalculadoraImportacion::ESTADO_PENDIENTE, CalculadoraImportacion::ESTADO_COTIZADO], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El seguimiento solo aplica a cotizaciones pendientes o cotizadas',
+            ], 422);
+        }
+
+        $descartada = $validated['seguimiento'] === CalculadoraImportacion::SEGUIMIENTO_DESCARTADA;
+        if ($descartada && empty($validated['id_razon_descarte'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Debes indicar la razón de descarte',
+            ], 422);
+        }
+
+        $calculadora->seguimiento = $validated['seguimiento'];
+        $calculadora->id_razon_descarte = $descartada ? (int) $validated['id_razon_descarte'] : null;
+        $calculadora->save();
+        $this->cacheService->invalidateAfterWrite($calculadora);
+
+        return response()->json([
+            'success' => true,
+            'message' => $descartada ? 'Cotización descartada' : 'Cotización en seguimiento',
+        ]);
     }
 
     public function changeEstado(Request $request, $id)

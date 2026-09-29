@@ -47,6 +47,8 @@ class CalculadoraImportacion extends Model
         'logistica',
         'cargos_extra',
         'estado',
+        'seguimiento',
+        'id_razon_descarte',
         'id_carga_consolidada_contenedor',
         'es_imo',
         'usa_yuan',
@@ -76,6 +78,8 @@ class CalculadoraImportacion extends Model
     const ESTADO_PENDIENTE = 'PENDIENTE';
     const ESTADO_COTIZADO = 'COTIZADO';
     const ESTADO_CONFIRMADO = 'CONFIRMADO';
+    const SEGUIMIENTO_SEGUIMIENTO = 'SEGUIMIENTO';
+    const SEGUIMIENTO_DESCARTADA = 'DESCARTADA';
     const TIPO_COTIZACION_PESO = 'PESO';
     const TIPO_COTIZACION_VOLUMEN = 'VOLUMEN';
 
@@ -174,6 +178,11 @@ class CalculadoraImportacion extends Model
     /**
      * Relación con el usuario creador
      */
+    public function razonDescarte(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\CalculadoraRazonDescarte::class, 'id_razon_descarte');
+    }
+
     public function creador(): BelongsTo
     {
         return $this->belongsTo(\App\Models\Usuario::class, 'created_by', 'ID_Usuario');
