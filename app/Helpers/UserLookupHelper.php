@@ -18,9 +18,11 @@ class UserLookupHelper
      * @param string|null $correo   Email del contacto
      * @param string|null $telefono Teléfono (se normaliza para comparar con whatsapp/phone)
      * @param string|null $documento DNI del contacto
+     * @param int|null $organizacionId Si viene, solo busca usuarios de esa organización
+     *                                 (el teléfono se compara sin distinguir prefijo de país).
      * @return object|null Registro de users o null
      */
-    public static function findUserByContact(?string $correo, ?string $telefono, ?string $documento): ?object
+    public static function findUserByContact(?string $correo, ?string $telefono, ?string $documento, ?int $organizacionId = null): ?object
     {
         if (empty($correo) && empty($telefono) && empty($documento)) {
             return null;
@@ -48,13 +50,19 @@ class UserLookupHelper
             }
         });
 
+        if ($organizacionId !== null && $organizacionId > 0) {
+            $userQuery->where('organizacion_id', $organizacionId);
+        }
+
         return $userQuery->first();
     }
 
     /**
      * Resuelve varios contactos en una query y los re-asocia en PHP.
      *
-     * @param  array<int|string, array{correo:?string,telefono:?string,documento:?string}>  $contacts
+     * Cada contacto puede traer `organizacion_id`: si viene, solo se asocian usuarios de esa organización.
+     *
+     * @param  array<int|string, array{correo:?string,telefono:?string,documento:?string,organizacion_id?:int|null}>  $contacts
      * @return array<int|string, object|null>
      */
     public static function findUsersIndexedByContact(array $contacts): array
@@ -89,7 +97,20 @@ class UserLookupHelper
             return $result;
         }
 
-        $users = DB::table('users')->where(function ($q) use ($correos, $documentos, $variantes) {
+        $orgIds = [];
+        $todosConOrg = true;
+        foreach ($contacts as $contact) {
+            $orgId = (int) ($contact['organizacion_id'] ?? 0);
+            if ($orgId > 0) {
+                $orgIds[$orgId] = true;
+            } else {
+                $todosConOrg = false;
+            }
+        }
+
+        $users = DB::table('users')->when($todosConOrg && $orgIds !== [], function ($query) use ($orgIds) {
+            $query->whereIn('organizacion_id', array_keys($orgIds));
+        })->where(function ($q) use ($correos, $documentos, $variantes) {
             if ($correos !== []) {
                 $q->orWhereIn('email', $correos);
             }
@@ -122,6 +143,11 @@ class UserLookupHelper
 
     private static function userMatchesContact(object $user, array $contact): bool
     {
+        $orgContacto = (int) ($contact['organizacion_id'] ?? 0);
+        if ($orgContacto > 0 && (int) ($user->organizacion_id ?? 0) !== $orgContacto) {
+            return false;
+        }
+
         if (!empty($contact['correo']) && strcasecmp((string) ($user->email ?? ''), (string) $contact['correo']) === 0) {
             return true;
         }

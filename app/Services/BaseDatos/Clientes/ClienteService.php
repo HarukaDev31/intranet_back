@@ -242,7 +242,8 @@ class ClienteService
                             $user = \App\Helpers\UserLookupHelper::findUserByContact(
                                 $cliente->correo ?? null,
                                 $cliente->telefono ?? null,
-                                $cliente->documento ?? null
+                                $cliente->documento ?? null,
+                                (int) $cliente->getAttribute('organizacion_id') ?: null
                             );
                             if ($user) {
                                 $userRecord = $user;
@@ -849,7 +850,8 @@ class ClienteService
                     $user = \App\Helpers\UserLookupHelper::findUserByContact(
                         $cliente->correo ?? null,
                         $cliente->telefono ?? null,
-                        $cliente->documento ?? null
+                        $cliente->documento ?? null,
+                        (int) $cliente->getAttribute('organizacion_id') ?: null
                     );
                     if ($user) {
                         if (!$provinciaName) {
@@ -1104,6 +1106,7 @@ class ClienteService
                 'correo' => $cliente->correo ?? null,
                 'telefono' => $cliente->telefono ?? null,
                 'documento' => $cliente->documento ?? null,
+                'organizacion_id' => (int) $cliente->getAttribute('organizacion_id') ?: null,
             ];
         }
 
