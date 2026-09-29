@@ -52,11 +52,27 @@ class Cliente extends Model
     }
 
     /**
+     * Las entidades de cursos (tabla `entidad`) son solo de la organización admin (1).
+     * Un cliente de otra organización no debe heredar provincia/origen de esas entidades.
+     * Sin organización asignada se trata como org 1 (mismo default que al crear el cliente).
+     */
+    public function perteneceOrgCursos(): bool
+    {
+        $orgId = (int) $this->getAttribute('organizacion_id');
+
+        return $orgId === 0 || $orgId === Usuario::ID_ORGANIZACION_ADMIN;
+    }
+
+    /**
      * Intentar resolver la entidad asociada al cliente mediante heurística
      * (telefono, documento, correo). Devuelve la instancia de Entidad o null.
      */
     public function resolveEntidad()
     {
+        if (!$this->perteneceOrgCursos()) {
+            return null;
+        }
+
         try {
             $query = Entidad::query();
 
