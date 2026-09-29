@@ -98,6 +98,9 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
         Route::delete('packing-list/{idContenedor}', [ContenedorController::class, 'deletePackingList']);
         Route::post('update-fecha-documentacion/{idContenedor}', [ContenedorController::class, 'updateFechaDocumentacionMax']);
 
+        // Vista Jefe de Ventas: cotizaciones de todos los contenedores (alcance=abiertos|completados, por defecto abiertos)
+        Route::get('cotizaciones-todos', [CotizacionController::class, 'indexTodos']);
+
         // Cotizaciones
         Route::group(['prefix' => 'cotizaciones'], function () {
             Route::get('delete-reasons', [ReasonDeleteCotizacionController::class, 'index']);
