@@ -4,11 +4,11 @@ namespace App\Exports;
 
 use Carbon\Carbon;
 use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Events\AfterSheet;
-use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
@@ -16,7 +16,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 /**
  * Listado de consolidados (mismas filas que devuelve ContenedorController::index).
  */
-class ContenedoresExport implements FromCollection, WithHeadings, WithMapping, WithEvents
+class ContenedoresExport implements FromCollection, WithHeadings, WithMapping, WithEvents, ShouldAutoSize
 {
     /** @var array<int, array<string, mixed>> */
     protected $rows;
@@ -122,11 +122,6 @@ class ContenedoresExport implements FromCollection, WithHeadings, WithMapping, W
                     ],
                 ]);
                 $sheet->getRowDimension(1)->setRowHeight(22);
-
-                $widths = [30, 12, 8, 14, 22, 12, 12, 12, 14, 12, 12, 12];
-                foreach ($widths as $i => $w) {
-                    $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($i + 1))->setWidth($w);
-                }
             },
         ];
     }
