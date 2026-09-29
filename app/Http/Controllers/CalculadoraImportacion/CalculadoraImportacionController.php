@@ -360,7 +360,7 @@ class CalculadoraImportacionController extends Controller
                     $calculadora->carga_contenedor = '  #' . optional($calculadora->contenedor)->carga . '-' . ($calculadora->contenedor ? Carbon::parse($calculadora->contenedor->f_inicio)->format('Y') : '2025');
                     $calculadora->estado_cotizador = optional($calculadora->cotizacion)->estado_cotizador;
                     $calculadora->cod_contract = optional($calculadora->cotizacion)->cod_contract;
-                    $calculadora->razon_descarte_nombre = optional($calculadora->razonDescarte)->name;
+                    $calculadora->setAttribute('razon_descarte_nombre', optional($calculadora->razonDescarte)->name);
                 }
 
                 $anioActual = Carbon::now()->year;
@@ -647,7 +647,7 @@ class CalculadoraImportacionController extends Controller
                 $calculadora->nombre_creador = optional($calculadora->creador)->No_Nombres_Apellidos;
                 $calculadora->nombre_vendedor = optional($calculadora->vendedor)->No_Nombres_Apellidos;
                 $calculadora->carga_contenedor = '  #' . optional($calculadora->contenedor)->carga . '-' . ($calculadora->contenedor ? Carbon::parse($calculadora->contenedor->f_inicio)->format('Y') : '2025');
-                $calculadora->razon_descarte_nombre = optional($calculadora->razonDescarte)->name;
+                $calculadora->setAttribute('razon_descarte_nombre', optional($calculadora->razonDescarte)->name);
             }
 
             $filename ='cotizaciones_calculadora_' . Carbon::now()->format('Y-m-d') . '.xlsx';
@@ -1295,11 +1295,11 @@ class CalculadoraImportacionController extends Controller
             'id_razon_descarte' => 'nullable|integer|exists:calculadora_razon_descarte,id',
         ]);
 
-        $calculadora = CalculadoraImportacion::find($id);
+        $calculadora = CalculadoraImportacion::query()->find((int) $id);
         if (!$calculadora) {
             return response()->json(['success' => false, 'message' => 'Cotización no encontrada'], 404);
         }
-        if (!in_array($calculadora->estado, [CalculadoraImportacion::ESTADO_PENDIENTE, CalculadoraImportacion::ESTADO_COTIZADO], true)) {
+        if (!in_array($calculadora->getAttribute('estado'), [CalculadoraImportacion::ESTADO_PENDIENTE, CalculadoraImportacion::ESTADO_COTIZADO], true)) {
             return response()->json([
                 'success' => false,
                 'message' => 'El seguimiento solo aplica a cotizaciones pendientes o cotizadas',
@@ -1314,9 +1314,10 @@ class CalculadoraImportacionController extends Controller
             ], 422);
         }
 
-        $calculadora->seguimiento = $validated['seguimiento'];
-        $calculadora->id_razon_descarte = $descartada ? (int) $validated['id_razon_descarte'] : null;
-        $calculadora->save();
+        $calculadora->forceFill([
+            'seguimiento' => $validated['seguimiento'],
+            'id_razon_descarte' => $descartada ? (int) $validated['id_razon_descarte'] : null,
+        ])->save();
         $this->cacheService->invalidateAfterWrite($calculadora);
 
         return response()->json([
