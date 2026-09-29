@@ -475,7 +475,28 @@ class CalculadoraImportacionController extends Controller
 
         ['china' => $cbmChina, 'peru' => $cbmPeru, 'pendiente' => $cbmPendiente] = $this->sumCbmTotalesContenedoresAbiertos($query);
 
+        // Conteos sobre las mismas filas que lista la tabla (respeta filtros y búsqueda activos).
+        $conteoQuery = $this->cloneQueryForAggregate($query);
+        $totalCotizaciones = (clone $conteoQuery)->count();
+        $cotizacionesConfirmadas = (clone $conteoQuery)->where('estado', 'CONFIRMADO')->count();
+        $cotizacionesPendientes = (clone $conteoQuery)->where('estado', 'PENDIENTE')->count();
+
         return [
+            'total_cotizaciones' => [
+                'value' => (int) $totalCotizaciones,
+                'label' => 'Total Cotizaciones',
+                'icon' => 'i-heroicons-document-text',
+            ],
+            'cotizaciones_confirmadas' => [
+                'value' => (int) $cotizacionesConfirmadas,
+                'label' => 'Cotizaciones confirmadas',
+                'icon' => 'i-heroicons-check-circle',
+            ],
+            'cotizaciones_pendientes' => [
+                'value' => (int) $cotizacionesPendientes,
+                'label' => 'Cotizaciones pendientes',
+                'icon' => 'i-heroicons-clock',
+            ],
             'cbm_total_china' => [
                 'value' => $fmt($cbmChina),
                 'label' => 'CBM',
