@@ -62,9 +62,7 @@ class CustomersController extends Controller
 
             $pageQuery = clone $baseQuery;
             $cotizacionesPage = $pageQuery
-                ->orderByRaw('YEAR(CONT.f_inicio) DESC')
-                ->orderBy('CONT.carga', 'desc')
-                ->orderBy('CC.id', 'asc')
+                ->orderBy('CC.id', 'desc')
                 ->paginate($perPage, ['CC.id'], 'page', $page);
 
             $items = collect($cotizacionesPage->items());
