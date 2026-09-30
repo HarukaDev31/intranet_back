@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Carbon\Carbon;
 use App\Support\CargaConsolidada\ClientesVisibility;
+use App\Support\Organizacion\OrganizacionPortalUrls;
 
 class ClienteService
 {
@@ -346,7 +347,8 @@ class ClienteService
                 $user = \App\Helpers\UserLookupHelper::findUserByContact(
                     $cliente->correo ?? null,
                     $cliente->telefono ?? null,
-                    $cliente->documento ?? null
+                    $cliente->documento ?? null,
+                    OrganizacionPortalUrls::orgIdFromParent($cliente)
                 );
                 if ($user) {
                     $idUser = $user->id;
@@ -381,6 +383,7 @@ class ClienteService
                 'red_social' => $businessRedSocial,
                 'fecha' => $cliente->fecha ? $cliente->fecha->format('d/m/Y') : null,
                 'id_user' => $idUser,
+                'organizacion_id' => OrganizacionPortalUrls::orgIdFromParent($cliente),
                 'primer_servicio' => $primerServicio ? [
                     'servicio' => $primerServicio['servicio'],
                     'detalle' => $primerServicio['detalle'] ?? null,
@@ -438,7 +441,8 @@ class ClienteService
             $user = \App\Helpers\UserLookupHelper::findUserByContact(
                 $cliente->correo ?? null,
                 $cliente->telefono ?? null,
-                $cliente->documento ?? null
+                $cliente->documento ?? null,
+                OrganizacionPortalUrls::orgIdFromParent($cliente)
             );
             if ($user) {
                 $userId = $user->id;

@@ -1741,6 +1741,7 @@ class CotizacionController extends Controller
             $result = [
                 'id' => $cotizacion->id,
                 'id_contenedor' => $cotizacion->id_contenedor,
+                'organizacion_id' => $cotizacion->organizacion_id,
                 'id_tipo_cliente' => $cotizacion->id_tipo_cliente,
                 'id_cliente' => $cotizacion->id_cliente,
                 'fecha' => $cotizacion->fecha,
