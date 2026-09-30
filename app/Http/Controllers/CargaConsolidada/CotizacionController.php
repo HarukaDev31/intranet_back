@@ -921,7 +921,7 @@ class CotizacionController extends Controller
                 'data' => $headersData,
                 'data_pagos' => [],
                 'f_cierre' => $contenedor->fecha_cierre ?? $contenedor->f_cierre,
-                'carga' => $contenedor->carga,
+                'carga' => $contenedor->cargaConParte(),
                 'lista_embarque_url' => $this->cdnStorageUrl($contenedor->lista_embarque_url),
                 'excel_seguimiento_drive' => $this->excelSeguimientoDrivePayload($idContenedor, $user),
                 'url_clientes' => OrganizacionPortalUrls::urlClientes(
@@ -1078,7 +1078,7 @@ class CotizacionController extends Controller
                 'success' => true,
                 'data' => $headersData,
                 'data_pagos' => $headersDataPagos,
-                'carga' => $contenedor->carga,
+                'carga' => $contenedor->cargaConParte(),
                 'f_cierre' => $contenedor->fecha_cierre??$contenedor->f_cierre,
                 'lista_embarque_url' => $this->cdnStorageUrl($contenedor->lista_embarque_url),
                 'excel_seguimiento_drive' => $this->excelSeguimientoDrivePayload($idContenedor, $user),
@@ -1095,7 +1095,7 @@ class CotizacionController extends Controller
             'data' => $headersData,
             'data_pagos' => $headersDataPagos,
             'f_cierre' => $contenedor->fecha_cierre??$contenedor->f_cierre,
-            'carga' => $contenedor->carga,
+            'carga' => $contenedor->cargaConParte(),
             'lista_embarque_url' => $this->cdnStorageUrl($contenedor->lista_embarque_url),
             'excel_seguimiento_drive' => $this->excelSeguimientoDrivePayload($idContenedor, $user),
             'url_clientes' => OrganizacionPortalUrls::urlClientes(

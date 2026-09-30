@@ -245,6 +245,22 @@ class Contenedor extends Model
     }
 
     /**
+     * Carga con la parte si el consolidado está partido (19 → 19A). Sin año.
+     *
+     * @return string
+     */
+    public function cargaConParte()
+    {
+        $carga = trim((string) $this->carga);
+        $parte = trim((string) $this->parte);
+        if ($parte === '' || substr($carga, -strlen($parte)) === $parte) {
+            return $carga;
+        }
+
+        return $carga . $parte;
+    }
+
+    /**
      * ISO-2 del país del contenedor (pais_flags), no se guarda en `carga`.
      *
      * @return string
