@@ -5,6 +5,7 @@ namespace App\Services\WhatsappInbox;
 use App\Models\Organizacion;
 use App\Models\Usuario;
 use App\Models\WhatsappInbox\WaInboxSession;
+use App\Support\Phone\CountryPhoneHelper;
 
 class WhatsappInboxSessionService
 {
@@ -125,6 +126,8 @@ class WhatsappInboxSessionService
             'configured' => (string) $outbound['phone_number_id'] !== '',
             'enabled' => !empty($outbound['enabled']),
             'can_configure' => $canConfigure,
+            // Prefijo que se antepone a numeros sin codigo de pais (alta manual de contactos)
+            'phone_code' => self::phoneCodeForOrganizacion($organizacionId),
         ];
 
         if ((string) $own['phone_number_id'] === '') {
@@ -148,6 +151,19 @@ class WhatsappInboxSessionService
             'is_active' => (bool) $session->is_active,
             'last_webhook_at' => $session->last_webhook_at,
         ];
+    }
+
+    /**
+     * Codigo de pais de la org (organizacion.id_pais -> pais_flags.phone_code). Sin pais configurado: 51.
+     *
+     * @param  int|null  $organizacionId
+     * @return string
+     */
+    public static function phoneCodeForOrganizacion($organizacionId)
+    {
+        $orgId = (int) $organizacionId > 0 ? (int) $organizacionId : Usuario::ID_ORGANIZACION_ADMIN;
+
+        return CountryPhoneHelper::codeForOrganizacionId($orgId) ?: '51';
     }
 
     /**
