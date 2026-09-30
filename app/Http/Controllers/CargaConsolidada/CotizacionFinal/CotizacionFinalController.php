@@ -6421,11 +6421,11 @@ class CotizacionFinalController extends Controller
         \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet,
         int $fallbackStartRow
     ): int {
-        $needle = 'SIMULACIÃ“N DEL PRECIO PUESTO EN PERÃš POR PIEZA';
+        // Sin tildes: el titulo de la plantilla trae acentos y no debe depender del encoding de este archivo.
         for ($row = 40; $row <= 70; $row++) {
             foreach (range('B', 'L') as $col) {
                 $value = trim((string) $sheet->getCell($col . $row)->getValue());
-                if ($value !== '' && str_contains($value, $needle)) {
+                if ($value !== '' && $this->isMainSheetProductsTitle($value)) {
                     // Plantilla esperada: [titulo] + [encabezados] + [items...]
                     $headerRow = $row + 1;
                     $headerB = strtoupper(trim((string) $sheet->getCell('B' . $headerRow)->getValue()));
@@ -6443,6 +6443,16 @@ class CotizacionFinalController extends Controller
         }
 
         return $fallbackStartRow;
+    }
+
+    /**
+     * Titulo "SIMULACION DEL PRECIO PUESTO EN PERU POR PIEZA" (con o sin tildes).
+     */
+    private function isMainSheetProductsTitle(string $value): bool
+    {
+        $u = mb_strtoupper($value, 'UTF-8');
+
+        return str_contains($u, 'SIMULACI') && str_contains($u, 'PRECIO PUESTO');
     }
 
     /**
@@ -6467,7 +6477,7 @@ class CotizacionFinalController extends Controller
             $sheet->mergeCells('B' . $titleRow . ':L' . $titleRow);
         }
 
-        $sheet->setCellValue('B' . $titleRow, 'SIMULACIÃ“N DEL PRECIO PUESTO EN PERÃš POR PIEZA');
+        $sheet->setCellValue('B' . $titleRow, 'SIMULACIÓN DEL PRECIO PUESTO EN PERÚ POR PIEZA');
         $sheet->getRowDimension($titleRow)->setVisible(true);
         $sheet->getStyle('B' . $titleRow . ':L' . $titleRow)->getFill()->setFillType(Fill::FILL_SOLID);
         $sheet->getStyle('B' . $titleRow . ':L' . $titleRow)->getFill()->getStartColor()->setARGB('009999');
