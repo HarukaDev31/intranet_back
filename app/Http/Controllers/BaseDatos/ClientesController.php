@@ -28,6 +28,7 @@ use App\Traits\WhatsappTrait;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\RecuperarContrasenaMail;
 use App\Support\Organizacion\OrganizacionPortalUrls;
+use App\Helpers\UserLookupHelper;
 
 class ClientesController extends Controller
 {
@@ -311,11 +312,25 @@ class ClientesController extends Controller
                 ], 404);
             }
 
-            $recuperarContrasenaUrl = OrganizacionPortalUrls::recuperarContrasena(
-                OrganizacionPortalUrls::orgIdFromParent($cliente)
-            );
+            $orgId = OrganizacionPortalUrls::orgIdFromParent($cliente);
 
-           
+            // Fuera de org 1 no hay flujo de cursos: solo tiene sentido si el cliente ya tiene cuenta en el portal de su org
+            if ($orgId !== OrganizacionPortalUrls::ADMIN_ORG) {
+                $user = UserLookupHelper::findUserByContact(
+                    $cliente->correo ?? null,
+                    $cliente->telefono ?? null,
+                    $cliente->documento ?? null,
+                    $orgId
+                );
+                if (!$user) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Este cliente no tiene una cuenta en el portal de clientes'
+                    ], 422);
+                }
+            }
+
+            $recuperarContrasenaUrl = OrganizacionPortalUrls::recuperarContrasena($orgId);
 
             // Enviar correo electrónico
             if (!empty($cliente->correo)) {
