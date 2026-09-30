@@ -9,6 +9,7 @@ use App\Models\WhatsappInbox\WaInboxMessage;
 use App\Models\WhatsappInbox\WaInboxSession;
 use App\Services\WhatsApp\WaContactService;
 use App\Support\WhatsApp\WaInboxLog;
+use App\Support\Phone\CountryPhoneHelper;
 use Carbon\Carbon;
 use Illuminate\Broadcasting\BroadcastException;
 
@@ -306,11 +307,14 @@ class WhatsappInboxConversationService
         $session = $this->sessionService->ensureSessionForOutboundOrganizacion(
             $orgId > 0 ? $orgId : Usuario::ID_ORGANIZACION_ADMIN
         );
-        $phoneE164 = $this->normalizePhoneE164(isset($params['phone']) ? $params['phone'] : '');
+        $phoneE164 = $this->phoneManualConPrefijoOrganizacion(
+            isset($params['phone']) ? $params['phone'] : '',
+            $orgId > 0 ? $orgId : (int) $session->organizacion_id
+        );
         if ($phoneE164 === '' || strlen($phoneE164) < 10 || strlen($phoneE164) > 15) {
             return [
                 'success' => false,
-                'message' => 'Indica un teléfono válido (9 dígitos Perú o con código 51).',
+                'message' => 'Indica un teléfono válido (con o sin código de país).',
             ];
         }
 
@@ -618,6 +622,27 @@ class WhatsappInboxConversationService
         }
 
         return $this->organizacionIdOf($conversation) === (int) $user->getAttribute('ID_Organizacion');
+    }
+
+    /**
+     * Numero ingresado a mano: si no trae codigo de pais se antepone el de la organizacion
+     * (51 en org 1, el de organizacion.id_pais en socios). Un 0 inicial es formato nacional.
+     *
+     * @param  mixed  $phone
+     * @param  int  $orgId
+     * @return string
+     */
+    private function phoneManualConPrefijoOrganizacion($phone, $orgId)
+    {
+        $digits = preg_replace('/^0+/', '', CountryPhoneHelper::digits($phone));
+        if ($digits === '') {
+            return '';
+        }
+
+        return CountryPhoneHelper::ensureCountryCode(
+            $digits,
+            WhatsappInboxSessionService::phoneCodeForOrganizacion($orgId)
+        );
     }
 
     public function normalizePhoneE164($phone)
