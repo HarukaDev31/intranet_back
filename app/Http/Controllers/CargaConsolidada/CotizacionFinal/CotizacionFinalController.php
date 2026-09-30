@@ -5115,7 +5115,8 @@ class CotizacionFinalController extends Controller
 
                 $objPHPExcel->setActiveSheetIndex(2)->setCellValue(
                     $InitialColumn . $rowCostosDestinoDetalleCostoTotal,
-                    "=ROUND(MAX(" . $InitialColumn . $rowValorCfr . "," . $InitialColumn . $rowCfrValorizado . ")+" . $InitialColumn . $rowAntidumping . "+" . $InitialColumn . $rowTotalTributos . "+" . $InitialColumn . $rowCostosDestinoItem . ",10)"
+                    // rowTotalTributos ya incluye el antidumping: sumarlo aparte lo contaba dos veces.
+                    "=ROUND(MAX(" . $InitialColumn . $rowValorCfr . "," . $InitialColumn . $rowCfrValorizado . ")+" . $InitialColumn . $rowTotalTributos . "+" . $InitialColumn . $rowCostosDestinoItem . ",10)"
                 );
                 $objPHPExcel->getActiveSheet()->getStyle($InitialColumn . $rowCostosDestinoDetalleCostoTotal)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_CURRENCY_USD_SIMPLE);
 
