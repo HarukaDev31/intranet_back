@@ -388,7 +388,7 @@ class ComprobanteFormController extends Controller
             // Prioridad 2: ComprobanteForm directo (no hay historial usable).
             if ($form) {
                 $form->registered_by = $this->buildRegisteredByPayload($form->id_user);
-                $form->distrito_nombre = $this->distritoNombre($form->distrito_id);
+                $form->setAttribute('distrito_nombre', $this->distritoNombre($form->distrito_id));
 
                 return response()->json([
                     'success' => true,
@@ -418,9 +418,9 @@ class ComprobanteFormController extends Controller
         if (empty($distritoId)) {
             return null;
         }
-        $distrito = Distrito::select('ID_Distrito', 'No_Distrito')->find((int) $distritoId);
+        $nombre = Distrito::where('ID_Distrito', (int) $distritoId)->value('No_Distrito');
 
-        return $distrito ? $distrito->No_Distrito : null;
+        return $nombre !== null ? (string) $nombre : null;
     }
 
     /**
