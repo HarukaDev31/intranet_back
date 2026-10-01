@@ -305,9 +305,10 @@ class CalendarActivityController extends Controller
                 })
                 ->where('estado_china', '!=', Contenedor::CONTEDOR_CERRADO)
                 ->orderByRaw('CAST(carga AS UNSIGNED) DESC')
-                ->get(['id', 'carga', 'f_inicio']);
+                ->orderByRaw('parte ASC')
+                ->get(['id', 'carga', 'parte', 'f_inicio']);
             $data = $cargas->map(function ($c) {
-                $label = 'Contenedor #' . $c->carga;
+                $label = 'Contenedor #' . $c->cargaConParte();
                 if ($c->f_inicio) {
                     $label .= ' - ' . $c->f_inicio->format('Y');
                 }
@@ -879,17 +880,18 @@ class CalendarActivityController extends Controller
         $startedAt = microtime(true);
         try {
             $year = (int) request()->input('year', date('Y'));
-            $cacheKey = 'calendar:contenedores:year:' . $year;
+            // v2: el nombre incluye la parte del consolidado partido (#19A)
+            $cacheKey = 'calendar:contenedores:v2:year:' . $year;
 
             $data = Cache::remember($cacheKey, 600, function () use ($year) {
                 $contenedores = Contenedor::where('empresa', '!=', 1)
                     ->where('estado_documentacion', '!=', Contenedor::CONTEDOR_CERRADO)
-                    ->orderByRaw('COALESCE(YEAR(f_inicio), 2025) ASC, CAST(carga AS UNSIGNED) ASC')
-                    ->get(['id', 'carga', 'f_inicio']);
+                    ->orderByRaw('COALESCE(YEAR(f_inicio), 2025) ASC, CAST(carga AS UNSIGNED) ASC, parte ASC')
+                    ->get(['id', 'carga', 'parte', 'f_inicio']);
 
                 return $contenedores->map(function ($c) {
                     $anio = $c->f_inicio ? $c->f_inicio->format('Y') : '2025';
-                    $nombre = '#' . $c->carga . ' - ' . $anio;
+                    $nombre = '#' . $c->cargaConParte() . ' - ' . $anio;
                     $codigo = 'CONT-' . $anio . '-' . str_pad((string) $c->id, 3, '0', STR_PAD_LEFT);
                     return ['id' => $c->id, 'nombre' => $nombre, 'codigo' => $codigo];
                 })->values()->all();

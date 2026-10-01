@@ -339,7 +339,7 @@ class CalendarEventService
             $c = $event->contenedor;
             $contenedor = [
                 'id' => $c->id,
-                'nombre' => 'Consolidado #' . $c->carga,
+                'nombre' => 'Consolidado #' . $c->cargaConParte(),
                 'codigo' => 'CONT-' . ($c->f_inicio ? $c->f_inicio->format('Y') : date('Y')) . '-' . str_pad((string) $c->id, 3, '0', STR_PAD_LEFT),
             ];
         }
