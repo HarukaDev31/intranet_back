@@ -26,6 +26,11 @@ class CalendarEvent extends Model
     ];
 
     protected $casts = [
+        'calendar_id' => 'integer',
+        'role_group_id' => 'integer',
+        'activity_id' => 'integer',
+        'contenedor_id' => 'integer',
+        'display_order' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',

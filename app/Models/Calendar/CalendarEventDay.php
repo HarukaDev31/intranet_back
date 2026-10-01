@@ -16,6 +16,8 @@ class CalendarEventDay extends Model
     ];
 
     protected $casts = [
+        'calendar_id' => 'integer',
+        'calendar_event_id' => 'integer',
         'date' => 'date',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',

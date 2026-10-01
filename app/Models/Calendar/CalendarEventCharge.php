@@ -29,6 +29,9 @@ class CalendarEventCharge extends Model
     ];
 
     protected $casts = [
+        'calendar_id' => 'integer',
+        'user_id' => 'integer',
+        'calendar_event_id' => 'integer',
         'assigned_at' => 'datetime',
         'removed_at' => 'datetime',
         'created_at' => 'datetime',
