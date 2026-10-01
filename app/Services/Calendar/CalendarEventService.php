@@ -336,6 +336,7 @@ class CalendarEventService
 
         $contenedor = null;
         if ($event->contenedor) {
+            /** @var \App\Models\CargaConsolidada\Contenedor $c */
             $c = $event->contenedor;
             $contenedor = [
                 'id' => $c->id,
