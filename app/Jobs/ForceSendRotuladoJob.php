@@ -7,6 +7,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use App\Contracts\ObjectStorageConnectorInterface;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\CotizacionProveedor;
@@ -296,6 +297,9 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                             $carga,
                             $sleepSendMedia
                         );
+                    } elseif (in_array($tipoRotulado, ['calzado', 'ropa', 'ropa_interior', 'maquinaria'], true)) {
+                        $sleepSendMedia += 1;
+                        $this->enviarConsideracionesPorTipo($tipoRotulado, $supplierCode, $sleepSendMedia);
                     }
 
                     $processedProviders++;
@@ -386,6 +390,73 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             Log::error('Error en ForceSendRotuladoJob: ' . $e->getMessage());
             throw $e;
         }
+    }
+
+    /**
+     * Envía el PDF de consideraciones (etiqueta especial) según el tipo de rotulado.
+     */
+    private function enviarConsideracionesPorTipo($tipoRotulado, $supplierCode, $sleepSendMedia)
+    {
+        $pie = "\n\nPor lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.\n\n";
+        switch ($tipoRotulado) {
+            case 'calzado':
+                $message = "👆🏻 ⚠ Atención ⚠\n\nEtiqueta especial: Calzado\n\nSegún la regulación de Aduanas Perú todo calzado requiere tener una etiqueta Irremovible (Cosida a la lengüeta) de manera obligatoria. "
+                    . $pie . "⛔ No aceptamos cargas sin el etiquetado correcto ya que la aduana lo puede decomisar.\n🚫 El rotulado NO puede estar en Chino deberá ser en ESPAÑOL.\n📝 Aquí tienes un ejemplo de como debes colocar las etiquetas";
+                $payloadMethod = 'rotuladoEtiquetaCalzado';
+                break;
+            case 'ropa':
+                $message = "👆🏻 ⚠ Atención ⚠\n\nEtiqueta especial: Prendas de Vestir\n\nSegún la regulación de Aduanas - Perú todo producto textil, requiere tener un etiqueta Cosida o Sublimada de manera obligatoria. "
+                    . $pie . "⛔ No aceptamos cargas sin el etiquetado correcto ya que la aduana lo puede decomisar.\n🚫 El rotulado NO puede estar en Chino deberá ser en ESPAÑOL.\n📝Aquí tienes un ejemplo de como tu proveedor debe colocar las etiquetas";
+                $payloadMethod = 'rotuladoEtiquetaRopa';
+                break;
+            case 'ropa_interior':
+                $message = "👆🏻 ⚠ Atención ⚠\n\nEtiqueta especial: Ropa interior/ Accesorios de Vestir\n\nSegún la regulación de Aduanas - Perú todo producto textil, requiere tener un etiqueta Cosida o Colgante de manera obligatoria. "
+                    . $pie . "⛔ No aceptamos cargas sin el etiquetado correcto ya que la aduana lo puede decomisar.\n🚫 El rotulado NO puede estar en Chino deberá ser en ESPAÑOL.\n📝 Aquí tienes un ejemplo de como tu proveedor debe colocar las etiquetas";
+                $payloadMethod = 'rotuladoEtiquetaRopaInterior';
+                break;
+            case 'maquinaria':
+                $message = "👆🏻 ⚠ Atención ⚠\n\nEtiqueta especial: Maquinaria\n\nSegún la regulación de Aduanas - Perú todas maquinaria domestico o industrial que contengan un motor eléctrico, requiere tener una placa Irremovible y visible de manera obligatoria. "
+                    . $pie . "⛔ No aceptamos cargas sin la placa ya que la aduana lo puede observar o decomisar.\n🚫 El rotulado del producto NO puede estar en Chino deberá ser en ESPAÑOL.\n📝 Aquí tienes un ejemplo de como tu proveedor debe colocar la placa";
+                $payloadMethod = 'rotuladoEtiquetaMaquinaria';
+                break;
+            default:
+                return;
+        }
+
+        try {
+            $pdfPath = app(ObjectStorageConnectorInterface::class)->localPath('templates/rotulado/' . $tipoRotulado . '.pdf');
+        } catch (\Throwable $e) {
+            $pdfPath = '';
+        }
+        if ($pdfPath === '' || !is_file($pdfPath)) {
+            Log::warning('ForceSendRotuladoJob: no se encontró PDF de consideraciones', [
+                'tipo_rotulado' => $tipoRotulado,
+                'code_supplier' => $supplierCode,
+            ]);
+            return;
+        }
+
+        $fileName = $tipoRotulado . '_ejemplo.pdf';
+        $this->sendMedia(
+            $pdfPath,
+            'application/pdf',
+            $message,
+            $this->phoneNumberId,
+            $sleepSendMedia,
+            'consolidado',
+            $fileName,
+            CoordinacionWhatsappPayload::$payloadMethod(
+                (string) $this->phoneNumberId,
+                (string) $supplierCode,
+                $pdfPath,
+                $message,
+                (int) $sleepSendMedia
+            )
+        );
+        Log::info('ForceSendRotuladoJob: PDF de consideraciones enviado', [
+            'tipo_rotulado' => $tipoRotulado,
+            'code_supplier' => $supplierCode,
+        ]);
     }
 
     /**
