@@ -565,7 +565,7 @@ class CalendarActivityController extends Controller
         }
 
         $canChangeAny = $this->permissionService->canChangeAnyChargeStatus($user);
-        $isOwn = $charge->user_id === $user->getIdUsuario();
+        $isOwn = (int) $charge->user_id === (int) $user->getIdUsuario();
         if (!$canChangeAny && !$isOwn) {
             return response()->json(['success' => false, 'message' => 'No puedes gestionar subtareas de otro responsable'], 403);
         }
@@ -621,7 +621,7 @@ class CalendarActivityController extends Controller
         }
 
         $canChangeAny = $this->permissionService->canChangeAnyChargeStatus($user);
-        $isOwn = $charge->user_id === $user->getIdUsuario();
+        $isOwn = (int) $charge->user_id === (int) $user->getIdUsuario();
         if (!$canChangeAny && !$isOwn) {
             return response()->json(['success' => false, 'message' => 'No puedes gestionar subtareas de otro responsable'], 403);
         }
@@ -666,7 +666,7 @@ class CalendarActivityController extends Controller
         }
 
         $canChangeAny = $this->permissionService->canChangeAnyChargeStatus($user);
-        $isOwn = $charge->user_id === $user->getIdUsuario();
+        $isOwn = (int) $charge->user_id === (int) $user->getIdUsuario();
         if (!$canChangeAny && !$isOwn) {
             return response()->json(['success' => false, 'message' => 'No puedes gestionar subtareas de otro responsable'], 403);
         }

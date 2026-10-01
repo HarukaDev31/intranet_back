@@ -345,14 +345,15 @@ class CalendarEventService
             ];
         }
 
-        // Estado del evento derivado de los charges: COMPLETADO si todos completados, PENDIENTE si alguno pendiente, sino PROGRESO
+        // Estado del evento derivado de los charges (misma regla que el filtro por estado y getProgress):
+        // todos COMPLETADO → COMPLETADO; todos PENDIENTE (o sin charges) → PENDIENTE; mezcla → PROGRESO
         $chargeStatuses = collect($chargesArray)->pluck('status')->filter()->values();
         $eventStatus = CalendarEventCharge::STATUS_PROGRESO;
         if ($chargeStatuses->isEmpty()) {
             $eventStatus = CalendarEventCharge::STATUS_PENDIENTE;
         } elseif ($chargeStatuses->every(fn ($s) => $s === CalendarEventCharge::STATUS_COMPLETADO)) {
             $eventStatus = CalendarEventCharge::STATUS_COMPLETADO;
-        } elseif ($chargeStatuses->contains(CalendarEventCharge::STATUS_PENDIENTE)) {
+        } elseif ($chargeStatuses->every(fn ($s) => $s === CalendarEventCharge::STATUS_PENDIENTE)) {
             $eventStatus = CalendarEventCharge::STATUS_PENDIENTE;
         }
 
@@ -1031,7 +1032,7 @@ class CalendarEventService
         if (!$charge) {
             return null;
         }
-        if (!$canSeeAll && $charge->user_id !== $userId) {
+        if (!$canSeeAll && (int) $charge->user_id !== $userId) {
             return null;
         }
         $rows = CalendarEventChargeTracking::where('calendar_event_charge_id', $chargeId)

@@ -17,6 +17,8 @@ class CalendarUserColorConfig extends Model
     ];
 
     protected $casts = [
+        'calendar_id' => 'integer',
+        'user_id' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];

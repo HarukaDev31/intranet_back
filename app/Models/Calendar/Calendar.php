@@ -18,6 +18,8 @@ class Calendar extends Model
     ];
 
     protected $casts = [
+        'user_id' => 'integer',
+        'role_group_id' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];

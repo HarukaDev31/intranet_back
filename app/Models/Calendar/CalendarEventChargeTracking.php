@@ -21,6 +21,8 @@ class CalendarEventChargeTracking extends Model
     ];
 
     protected $casts = [
+        'calendar_event_charge_id' => 'integer',
+        'changed_by' => 'integer',
         'changed_at' => 'datetime',
     ];
 

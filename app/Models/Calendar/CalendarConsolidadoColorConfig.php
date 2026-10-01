@@ -18,6 +18,9 @@ class CalendarConsolidadoColorConfig extends Model
     ];
 
     protected $casts = [
+        'calendar_id' => 'integer',
+        'role_group_id' => 'integer',
+        'contenedor_id' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
