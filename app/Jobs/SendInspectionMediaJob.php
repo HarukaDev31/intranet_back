@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\AlmacenInspection;
+use App\Models\CargaConsolidada\Contenedor;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Support\Organizacion\OrganizacionPortalUrls;
 use App\Traits\WhatsappTrait;
@@ -189,8 +190,11 @@ class SendInspectionMediaJob implements ShouldQueue
                 $cotizacion->uuid ?? '',
                 $this->idProveedor
             );
+            $contenedorModel = Contenedor::find($cotizacion->id_contenedor);
+            $carga = $contenedorModel ? $contenedorModel->cargaConParte() : '';
             $resolved = CoordinacionWhatsappPayload::resolveInspeccionLlegadaTemplate($qtyBoxChina, $qtyPalletChina);
             $message = CoordinacionWhatsappPayload::inspeccionLlegadaPreview(
+                (string) $carga,
                 (string) $cliente,
                 (string) $proveedor->code_supplier,
                 $resolved['cantidad_line'],
@@ -205,6 +209,7 @@ class SendInspectionMediaJob implements ShouldQueue
             if (!$alreadySentLlegada) {
                 $metaLlegada = CoordinacionWhatsappPayload::inspeccionLlegada(
                     $telefono,
+                    (string) $carga,
                     (string) $cliente,
                     (string) $proveedor->code_supplier,
                     $qtyBoxChina,

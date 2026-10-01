@@ -2355,7 +2355,10 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 $cotizacionUuid ?? '',
                 $idProveedor
             );
+            $contenedorInspeccion = Contenedor::find($cotizacion->id_contenedor);
+            $cargaInspeccion = $contenedorInspeccion ? $contenedorInspeccion->cargaConParte() : '';
             $inspectionMessage = $this->buildInspectionMessage(
+                $cargaInspeccion,
                 $cotizacion->nombre,
                 $proveedor->code_supplier,
                 $qtyBoxChina,
@@ -2375,7 +2378,8 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 $qtyBoxChina,
                 $qtyPalletChina,
                 $inspeccionViewUrl,
-                (int) $idProveedor
+                (int) $idProveedor,
+                $cargaInspeccion
             );
             $usuarioActual = JWTAuth::parseToken()->authenticate();
             $cotizacion = Cotizacion::find($idCotizacion);
@@ -2486,7 +2490,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
     /**
      * Construir mensaje de inspección (link a vista solo cuando se envían fotos/videos por separado)
      */
-    private function buildInspectionMessage($cliente, $codeSupplier, $qtyBoxChina, $qtyPalletChina, $inspeccionViewUrl = null)
+    private function buildInspectionMessage($carga, $cliente, $codeSupplier, $qtyBoxChina, $qtyPalletChina, $inspeccionViewUrl = null)
     {
         $resolved = CoordinacionWhatsappPayload::resolveInspeccionLlegadaTemplate(
             (int) $qtyBoxChina,
@@ -2498,6 +2502,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
         }
 
         return CoordinacionWhatsappPayload::inspeccionLlegadaPreview(
+            (string) $carga,
             (string) $cliente,
             (string) $codeSupplier,
             $resolved['cantidad_line'],
@@ -2518,7 +2523,8 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
         ?int $qtyBoxChina = null,
         ?int $qtyPalletChina = null,
         ?string $linkInspeccion = null,
-        ?int $idProveedor = null
+        ?int $idProveedor = null,
+        ?string $carga = null
     ) {
         $this->setWhatsappFlujo('inspeccion');
         $sentFiles = ['images' => 0, 'videos' => 0, 'llegada_enviada' => false];
@@ -2537,6 +2543,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
         if (!$alreadySentLlegada) {
             $metaLlegada = CoordinacionWhatsappPayload::inspeccionLlegada(
                 (string) $telefono,
+                (string) ($carga ?? ''),
                 (string) ($nombreCliente ?? ''),
                 (string) ($codeSupplier ?? ''),
                 (int) ($qtyBoxChina ?? 0),
