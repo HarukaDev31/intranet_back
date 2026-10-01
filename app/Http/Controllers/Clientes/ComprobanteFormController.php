@@ -9,6 +9,7 @@ use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\ComprobanteForm;
 use App\Models\User;
 use App\Models\UsuarioDatosFacturacion;
+use App\Models\Distrito;
 use App\Jobs\SendComprobanteFormNotificationJob;
 use App\Helpers\UserLookupHelper;
 use App\Helpers\ComprobanteFormResolverHelper;
@@ -365,9 +366,14 @@ class ComprobanteFormController extends Controller
                         $synthetic['updated_at'] = $form->updated_at ? $form->updated_at->toIso8601String() : null;
                         $synthetic['id_user'] = $form->id_user !== null ? (int) $form->id_user : $synthetic['id_user'];
                         $synthetic['distrito_id'] = $form->distrito_id !== null ? (int) $form->distrito_id : $synthetic['distrito_id'];
+                        // El historial solo guarda domicilio en facturas: usar el del formulario si falta
+                        if (empty($synthetic['domicilio_fiscal']) && !empty($form->domicilio_fiscal)) {
+                            $synthetic['domicilio_fiscal'] = $form->domicilio_fiscal;
+                        }
                         $synthetic['registered_by'] = $this->buildRegisteredByPayload($form->id_user);
                         $synthetic['prefill_from_usuario_datos_facturacion'] = false;
                     }
+                    $synthetic['distrito_nombre'] = $this->distritoNombre($synthetic['distrito_id']);
 
                     return response()->json([
                         'success' => true,
@@ -382,6 +388,7 @@ class ComprobanteFormController extends Controller
             // Prioridad 2: ComprobanteForm directo (no hay historial usable).
             if ($form) {
                 $form->registered_by = $this->buildRegisteredByPayload($form->id_user);
+                $form->distrito_nombre = $this->distritoNombre($form->distrito_id);
 
                 return response()->json([
                     'success' => true,
@@ -398,6 +405,22 @@ class ComprobanteFormController extends Controller
             Log::error('ComprobanteFormController@getFormByCotizacion', ['error' => $e->getMessage()]);
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Nombre del distrito del domicilio fiscal (tabla distrito), o null.
+     *
+     * @param mixed $distritoId
+     * @return string|null
+     */
+    private function distritoNombre($distritoId)
+    {
+        if (empty($distritoId)) {
+            return null;
+        }
+        $distrito = Distrito::select('ID_Distrito', 'No_Distrito')->find((int) $distritoId);
+
+        return $distrito ? $distrito->No_Distrito : null;
     }
 
     /**
