@@ -1600,25 +1600,30 @@ class CoordinacionWhatsappPayload
         return [
             'template' => 'pb_inspeccion_llegada_v1',
             'params' => [
-                'cantidad_cajas' => (string) $boxes,
+                'cantidad_boxes' => (string) $boxes,
             ],
             'cantidad_line' => "{$boxes} boxes",
         ];
     }
 
     public static function inspeccionLlegadaPreview(
+        string $carga,
         string $nombreCliente,
         string $codigoProveedor,
         string $cantidadLine,
         string $linkInspeccion
     ): string {
-        return "📦 Cliente: {$nombreCliente} — Proveedor {$codigoProveedor} — {$cantidadLine}.\n\n"
-            . "Tu carga llegó a nuestro almacén de Yiwu, te comparto las fotos y videos.\n\n"
+        return "Consolidado {$carga} - Inspección\n\n"
+            . "✅Cliente: {$nombreCliente}\n"
+            . "Proveedor {$codigoProveedor} — {$cantidadLine}.\n"
+            . "¡Tu carga llegó a nuestro almacén de Yiwu!\n\n"
+            . "Haz clic en el enlace para revisar las fotos y/o el video de toda tu inspección (aleatoria).\n"
             . "🔗 Ver inspección: {$linkInspeccion} 📦";
     }
 
     public static function inspeccionLlegada(
         string $phone,
+        string $carga,
         string $nombreCliente,
         string $codigoProveedor,
         int $qtyBoxChina,
@@ -1630,12 +1635,15 @@ class CoordinacionWhatsappPayload
         $resolved = self::resolveInspeccionLlegadaTemplate($qtyBoxChina, $qtyPalletChina);
 
         $params = array_merge([
-            'nombre_cliente' => $nombreCliente,
+            'carga' => $carga,
+            'cliente' => $nombreCliente,
             'codigo_proveedor' => $codigoProveedor,
+        ], $resolved['params'], [
             'link_inspeccion' => $linkInspeccion,
-        ], $resolved['params']);
+        ]);
 
         $preview = $bitrixMessage ?? self::inspeccionLlegadaPreview(
+            $carga,
             $nombreCliente,
             $codigoProveedor,
             $resolved['cantidad_line'],
