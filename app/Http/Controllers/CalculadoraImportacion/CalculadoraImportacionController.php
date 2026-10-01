@@ -316,6 +316,10 @@ class CalculadoraImportacionController extends Controller
                 if ($request->has('fecha_fin') && $request->fecha_fin) {
                     $query->whereDate('created_at', '<=', $request->fecha_fin);
                 }
+                $anio = (int) $request->get('anio', 0);
+                if ($anio > 0) {
+                    $query->whereYear('created_at', $anio);
+                }
 
                 // Filtro exacto por PK (listado calculadora / vuelta desde documentación o edición)
                 $idCalculadora = (int) $request->get('id_calculadora', 0);
@@ -343,7 +347,15 @@ class CalculadoraImportacionController extends Controller
                     }
                 }
 
-                $headersData = $this->buildCalculadoraIndexHeaders($query);
+                // Los KPI de CBM suman los contenedores del tab (abiertos o embarcados).
+                $cbmQuery = clone $query;
+                $tab = $this->applyTabFilter($query, $request);
+
+                // Los KPI se calculan antes del filtro de seguimiento para que los
+                // contadores "En seguimiento" / "Descartadas" no cambien al filtrar por ellos.
+                $headersData = $this->buildCalculadoraIndexHeaders($query, $cbmQuery, $tab, $anio);
+
+                $this->applySeguimientoFilter($query, $request);
 
                 $calculos = $query->paginate($perPage, ['*'], 'page', $page);
 
@@ -433,22 +445,86 @@ class CalculadoraImportacionController extends Controller
     }
 
     /**
-     * Restringe agregados KPI a contenedores no embarcados (estado_china != COMPLETADO).
+     * Tab del listado: "abiertos" (consolidado abierto o sin contenedor asignado)
+     * o "embarcados" (contenedor con estado_china = COMPLETADO). Por defecto "abiertos".
      */
-    private function scopeCalculadoraQueryNoEmbarcados($query)
+    private function applyTabFilter($query, Request $request)
+    {
+        $tab = $request->get('tab') === 'embarcados' ? 'embarcados' : 'abiertos';
+
+        if ($tab === 'embarcados') {
+            $query->whereHas('contenedor', function ($q) {
+                $q->where('estado_china', Contenedor::CONTEDOR_CERRADO);
+            });
+        } else {
+            $query->where(function ($q) {
+                $q->whereNull('id_carga_consolidada_contenedor')
+                    ->orWhereDoesntHave('contenedor')
+                    ->orWhereHas('contenedor', function ($c) {
+                        $c->where(function ($inner) {
+                            $inner->whereNull('estado_china')
+                                ->orWhere('estado_china', '!=', Contenedor::CONTEDOR_CERRADO);
+                        });
+                    });
+            });
+        }
+
+        return $tab;
+    }
+
+    /**
+     * Filtro por seguimiento de cotizaciones no confirmadas:
+     * SEGUIMIENTO, DESCARTADA o SIN_SELECCIONAR (seguimiento null).
+     */
+    private function applySeguimientoFilter($query, Request $request)
+    {
+        $seguimiento = (string) $request->get('seguimiento', '');
+        if ($seguimiento === '') {
+            return;
+        }
+
+        $query->whereIn('estado', [CalculadoraImportacion::ESTADO_PENDIENTE, CalculadoraImportacion::ESTADO_COTIZADO]);
+        if ($seguimiento === 'SIN_SELECCIONAR') {
+            $query->whereNull('seguimiento');
+        } elseif (in_array($seguimiento, [CalculadoraImportacion::SEGUIMIENTO_SEGUIMIENTO, CalculadoraImportacion::SEGUIMIENTO_DESCARTADA], true)) {
+            $query->where('seguimiento', $seguimiento);
+        }
+    }
+
+    /**
+     * Restringe contenedores al tab: abiertos (estado_china != COMPLETADO o null)
+     * o embarcados (estado_china = COMPLETADO).
+     */
+    private function whereContenedorDelTab($q, string $tab)
+    {
+        if ($tab === 'embarcados') {
+            $q->where('estado_china', Contenedor::CONTEDOR_CERRADO);
+            return;
+        }
+        $q->where(function ($inner) {
+            $inner->whereNull('estado_china')
+                ->orWhere('estado_china', '!=', Contenedor::CONTEDOR_CERRADO);
+        });
+    }
+
+    /**
+     * Restringe agregados KPI (CBM IMO) a los contenedores del tab.
+     */
+    private function scopeCalculadoraQueryContenedoresTab($query, string $tab)
     {
         $clone = clone $query;
-        $clone->whereHas('contenedor', function ($q) {
-            $q->where(function ($inner) {
-                $inner->whereNull('estado_china')
-                    ->orWhere('estado_china', '!=', Contenedor::CONTEDOR_CERRADO);
-            });
+        $clone->whereHas('contenedor', function ($q) use ($tab) {
+            $this->whereContenedorDelTab($q, $tab);
         });
 
         return $clone;
     }
 
-    private function buildCalculadoraIndexHeaders($query)
+    /**
+     * @param $query    Query del listado (con filtro de tab): conteos de cotizaciones.
+     * @param $cbmQuery Query sin filtro de tab: KPI de CBM sobre todos los contenedores del tab.
+     */
+    private function buildCalculadoraIndexHeaders($query, $cbmQuery, string $tab = 'abiertos', int $anio = 0)
     {
         $flagChina = PaisFlag::urlForIso('cn');
         if (!$flagChina) {
@@ -459,7 +535,7 @@ class CalculadoraImportacionController extends Controller
             $flagDestino = PaisFlag::flagCdnUrl('pe');
         }
 
-        $kpiQuery = $this->scopeCalculadoraQueryNoEmbarcados($query);
+        $kpiQuery = $this->scopeCalculadoraQueryContenedoresTab($cbmQuery, $tab);
 
         $cbmExpr = 'GREATEST(COALESCE(PR.cbm, 0), COALESCE(PR.peso, 0) / 1000)';
         $idsSub = $this->cloneQueryForAggregate($kpiQuery)->select('calculadora_importacion.id');
@@ -475,13 +551,17 @@ class CalculadoraImportacionController extends Controller
             return number_format((float) $value, 2, '.', '');
         };
 
-        ['china' => $cbmChina, 'peru' => $cbmPeru, 'pendiente' => $cbmPendiente] = $this->sumCbmTotalesContenedoresAbiertos($query);
+        ['china' => $cbmChina, 'peru' => $cbmPeru, 'pendiente' => $cbmPendiente] = $this->sumCbmTotalesContenedoresTab($cbmQuery, $tab, $anio);
 
         // Conteos sobre las mismas filas que lista la tabla (respeta filtros y búsqueda activos).
         $conteoQuery = $this->cloneQueryForAggregate($query);
         $totalCotizaciones = (clone $conteoQuery)->count();
-        $cotizacionesConfirmadas = (clone $conteoQuery)->where('estado', 'CONFIRMADO')->count();
-        $cotizacionesPendientes = (clone $conteoQuery)->where('estado', 'PENDIENTE')->count();
+        $cotizacionesConfirmadas = (clone $conteoQuery)->where('estado', CalculadoraImportacion::ESTADO_CONFIRMADO)->count();
+        // Pendientes = no confirmadas (PENDIENTE + COTIZADO), que son las que admiten seguimiento.
+        $pendientesQuery = (clone $conteoQuery)->whereIn('estado', [CalculadoraImportacion::ESTADO_PENDIENTE, CalculadoraImportacion::ESTADO_COTIZADO]);
+        $cotizacionesPendientes = (clone $pendientesQuery)->count();
+        $pendientesSeguimiento = (clone $pendientesQuery)->where('seguimiento', CalculadoraImportacion::SEGUIMIENTO_SEGUIMIENTO)->count();
+        $pendientesDescartadas = (clone $pendientesQuery)->where('seguimiento', CalculadoraImportacion::SEGUIMIENTO_DESCARTADA)->count();
 
         return [
             'total_cotizaciones' => [
@@ -498,6 +578,8 @@ class CalculadoraImportacionController extends Controller
                 'value' => (int) $cotizacionesPendientes,
                 'label' => 'Cotizaciones pendientes',
                 'icon' => 'i-heroicons-clock',
+                'seguimiento' => (int) $pendientesSeguimiento,
+                'descartadas' => (int) $pendientesDescartadas,
             ],
             'cbm_total_china' => [
                 'value' => $fmt($cbmChina),
@@ -525,11 +607,11 @@ class CalculadoraImportacionController extends Controller
     /**
      * CBM China/Perú/Pendiente del listado calculadora: misma sumatoria que
      * las columnas de totales de Carga Consolidada Abiertos (ContenedorController),
-     * agregada sobre todos los contenedores no embarcados (estado_china != COMPLETADO)
-     * en vez de uno solo. Respeta el filtro de campaña (contenedor) del query
-     * de calculadora cuando está presente.
+     * agregada sobre todos los contenedores del tab (abiertos: estado_china != COMPLETADO;
+     * embarcados: = COMPLETADO) en vez de uno solo. Respeta el filtro de campaña
+     * (contenedor) del query de calculadora cuando está presente.
      */
-    private function sumCbmTotalesContenedoresAbiertos($query): array
+    private function sumCbmTotalesContenedoresTab($query, string $tab = 'abiertos', int $anio = 0): array
     {
         $idContenedorFiltro = null;
         foreach ($query->getQuery()->wheres as $where) {
@@ -539,11 +621,12 @@ class CalculadoraImportacionController extends Controller
             }
         }
 
-        $contenedoresQuery = Contenedor::query()
-            ->where(function ($q) {
-                $q->whereNull('estado_china')
-                    ->orWhere('estado_china', '!=', Contenedor::CONTEDOR_CERRADO);
-            });
+        $contenedoresQuery = Contenedor::query();
+        $this->whereContenedorDelTab($contenedoresQuery, $tab);
+        // Filtro de año: contenedores cuya campaña inició ese año.
+        if ($anio > 0) {
+            $contenedoresQuery->whereYear('f_inicio', $anio);
+        }
         if ($idContenedorFiltro) {
             $contenedoresQuery->where('id', $idContenedorFiltro);
         }
@@ -618,6 +701,10 @@ class CalculadoraImportacionController extends Controller
             if ($request->has('fecha_fin') && $request->fecha_fin) {
                 $query->whereDate('created_at', '<=', $request->fecha_fin);
             }
+            $anioExport = (int) $request->get('anio', 0);
+            if ($anioExport > 0) {
+                $query->whereYear('created_at', $anioExport);
+            }
 
             $idCalculadoraExport = (int) $request->get('id_calculadora', 0);
 
@@ -639,6 +726,9 @@ class CalculadoraImportacionController extends Controller
                     $query->where('nombre_cliente', 'like', '%' . $search . '%');
                 }
             }
+
+            $this->applyTabFilter($query, $request);
+            $this->applySeguimientoFilter($query, $request);
 
             $calculos = $query->limit(10000)->get();
 
@@ -1256,7 +1346,16 @@ class CalculadoraImportacionController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => CalculadoraRazonDescarte::query()->orderBy('name')->get(['id', 'name']),
+            // uses: cotizaciones que tienen asignada la razón (para el mantenedor de motivos)
+            'data' => CalculadoraRazonDescarte::query()
+                ->select(['id', 'name'])
+                ->selectSub(function ($q) {
+                    $q->from('calculadora_importacion')
+                        ->selectRaw('COUNT(*)')
+                        ->whereColumn('calculadora_importacion.id_razon_descarte', 'calculadora_razon_descarte.id');
+                }, 'uses')
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 
@@ -1310,7 +1409,8 @@ class CalculadoraImportacionController extends Controller
     public function updateSeguimiento(Request $request, $id)
     {
         $validated = $request->validate([
-            'seguimiento' => 'required|in:' . CalculadoraImportacion::SEGUIMIENTO_SEGUIMIENTO . ',' . CalculadoraImportacion::SEGUIMIENTO_DESCARTADA,
+            // null = "Sin seleccionar" (valor por defecto)
+            'seguimiento' => 'nullable|in:' . CalculadoraImportacion::SEGUIMIENTO_SEGUIMIENTO . ',' . CalculadoraImportacion::SEGUIMIENTO_DESCARTADA,
             'id_razon_descarte' => ['nullable', 'integer', \Illuminate\Validation\Rule::exists('calculadora_razon_descarte', 'id')->whereNull('deleted_at')],
         ]);
 
@@ -1325,7 +1425,8 @@ class CalculadoraImportacionController extends Controller
             ], 422);
         }
 
-        $descartada = $validated['seguimiento'] === CalculadoraImportacion::SEGUIMIENTO_DESCARTADA;
+        $seguimiento = $validated['seguimiento'] ?? null;
+        $descartada = $seguimiento === CalculadoraImportacion::SEGUIMIENTO_DESCARTADA;
         if ($descartada && empty($validated['id_razon_descarte'])) {
             return response()->json([
                 'success' => false,
@@ -1334,14 +1435,21 @@ class CalculadoraImportacionController extends Controller
         }
 
         $calculadora->forceFill([
-            'seguimiento' => $validated['seguimiento'],
+            'seguimiento' => $seguimiento,
             'id_razon_descarte' => $descartada ? (int) $validated['id_razon_descarte'] : null,
         ])->save();
         $this->cacheService->invalidateAfterWrite($calculadora);
 
+        $message = 'Seguimiento sin seleccionar';
+        if ($descartada) {
+            $message = 'Cotización descartada';
+        } elseif ($seguimiento === CalculadoraImportacion::SEGUIMIENTO_SEGUIMIENTO) {
+            $message = 'Cotización en seguimiento';
+        }
+
         return response()->json([
             'success' => true,
-            'message' => $descartada ? 'Cotización descartada' : 'Cotización en seguimiento',
+            'message' => $message,
         ]);
     }
 
