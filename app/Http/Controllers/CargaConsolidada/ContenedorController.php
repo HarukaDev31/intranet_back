@@ -943,6 +943,8 @@ class ContenedorController extends Controller
                 }
             });
 
+            $this->forgetCalendarContenedoresCache($contenedor->f_inicio);
+
             return response()->json([
                 'message' => 'Contenedor borrado correctamente',
                 'success' => true,
@@ -952,6 +954,23 @@ class ContenedorController extends Controller
                 'message' => 'Error al eliminar contenedor: ' . $e->getMessage(),
                 'success' => false,
             ], 500);
+        }
+    }
+
+    /**
+     * Invalida la lista de consolidados del calendario (cacheada por año) para que
+     * las partes (19A, 19B) se vean al instante tras partir o borrar.
+     *
+     * @param mixed $fInicio
+     */
+    private function forgetCalendarContenedoresCache($fInicio = null)
+    {
+        $years = [(int) date('Y') - 1, (int) date('Y'), (int) date('Y') + 1];
+        if ($fInicio) {
+            $years[] = (int) date('Y', strtotime((string) $fInicio));
+        }
+        foreach (array_unique($years) as $year) {
+            Cache::forget('calendar:contenedores:v2:year:' . $year);
         }
     }
 
@@ -1029,6 +1048,8 @@ class ContenedorController extends Controller
                     ];
                 }
             });
+
+            $this->forgetCalendarContenedoresCache($origen->f_inicio);
 
             return response()->json([
                 'success' => true,
