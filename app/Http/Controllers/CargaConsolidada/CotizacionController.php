@@ -209,7 +209,11 @@ class CotizacionController extends Controller
                 COALESCE(SUM(cc.fob), 0) AS total_fob,
                 COALESCE(SUM(cc.isd), 0) AS total_isd,
                 COALESCE(SUM(cc.impuestos), 0) AS total_impuestos,
-                COALESCE(SUM(cc.monto), 0) AS total_logistica_todas
+                COALESCE(SUM(cc.monto), 0) AS total_logistica_todas,
+                COALESCE(SUM(CASE
+                    WHEN cc.estado_cotizador = ? AND cc.id_cliente_importacion IS NULL
+                    THEN cc.monto ELSE 0
+                END), 0) AS total_logistica
             FROM contenedor_consolidado_cotizacion AS cc
             WHERE cc.id_contenedor = ?
               AND cc.deleted_at IS NULL',
@@ -219,6 +223,7 @@ class CotizacionController extends Controller
                 $userId,
                 'CONFIRMADO',
                 $userId,
+                'CONFIRMADO',
                 'CONFIRMADO',
                 'CONFIRMADO',
                 'CONFIRMADO',
@@ -241,16 +246,9 @@ class CotizacionController extends Controller
             [$idContenedor, 'CONFIRMADO']
             );
 
+        // Logística: mismas filas que la tabla del tab Pagos (confirmadas del contenedor), ver total_logistica arriba
         $cotizacionConProveedor = DB::selectOne(
             'SELECT
-                COALESCE(SUM(
-                    CASE
-                        WHEN cc.estado_cotizador = ?
-                            AND (cc.id_contenedor_pago = ? OR cc.id_contenedor_pago IS NULL)
-                        THEN cc.monto
-                        ELSE 0
-                    END
-                ), 0) AS total_logistica,
                 COALESCE(SUM(CASE WHEN cc.estado_cotizador = ? THEN cc.qty_item ELSE 0 END), 0) AS total_qty_items
             FROM contenedor_consolidado_cotizacion AS cc
             INNER JOIN (
@@ -259,7 +257,7 @@ class CotizacionController extends Controller
                 WHERE id_contenedor = ?
             ) AS p ON p.id_cotizacion = cc.id
             WHERE cc.deleted_at IS NULL',
-            ['CONFIRMADO', $idContenedor, 'CONFIRMADO', $idContenedor]
+            ['CONFIRMADO', $idContenedor]
         );
 
         $proveedores = DB::selectOne(
@@ -292,9 +290,9 @@ class CotizacionController extends Controller
                 ON cc.id = cccp.id_cotizacion
                 AND cc.id_contenedor = ?
                 AND cc.estado_cotizador = ?
-                AND cc.deleted_at IS NULL
-            WHERE cccp.id_contenedor = ?',
-            ['LOGISTICA', $idContenedor, 'CONFIRMADO', $idContenedor]
+                AND cc.id_cliente_importacion IS NULL
+                AND cc.deleted_at IS NULL',
+            ['LOGISTICA', $idContenedor, 'CONFIRMADO']
         );
 
         if (!$cotizacionEnContenedor && !$cotizacionConProveedor && !$proveedores && !$pagos && !$imo) {

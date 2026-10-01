@@ -2019,7 +2019,8 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 ->whereNotNull('estado_cliente')
                 ->whereNull('id_cliente_importacion')
                 ->where('estado_cotizador', 'CONFIRMADO')
-                ->orderBy('nombre', 'asc')
+                // Mismo orden que la tabla de factura-guia (getContenedorFacturaGuia)
+                ->orderBy('id', 'asc')
                 ->get();
 
             $cotizacionIds = $cotizaciones->pluck('id')->all();
@@ -2035,12 +2036,14 @@ Cualquier duda nos escribe.  ¡Gracias! */
                 $dni = is_array($form) ? ($form['dni_carnet'] ?? null) : ($form->dni_carnet ?? null);
                 $razonSocial = is_array($form) ? ($form['razon_social'] ?? null) : ($form->razon_social ?? null);
                 $nombreCompleto = is_array($form) ? ($form['nombre_completo'] ?? null) : ($form->nombre_completo ?? null);
+                $domicilioFiscal = is_array($form) ? ($form['domicilio_fiscal'] ?? null) : ($form->domicilio_fiscal ?? null);
 
                 return [
                     'nombre' => $item->nombre,
                     'telefono' => $item->telefono,
                     'tipo_comprobante' => $tipo,
                     'documento' => $tipo === 'FACTURA' ? $ruc : $dni,
+                    'domicilio_fiscal' => $domicilioFiscal,
                     'razon_social' => $tipo === 'FACTURA' ? $razonSocial : $nombreCompleto,
                 ];
             });

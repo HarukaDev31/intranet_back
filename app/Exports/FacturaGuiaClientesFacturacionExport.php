@@ -14,7 +14,7 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 /**
- * Datos de facturación (RUC/DNI, razón social, tipo de comprobante) de todos los
+ * Datos de facturación (RUC/DNI, domicilio fiscal, razón social, tipo de comprobante) de todos los
  * clientes de un contenedor, para el botón "Descargar" de Factura y Guía — Contabilidad.
  */
 class FacturaGuiaClientesFacturacionExport implements FromArray, WithStyles, WithEvents, WithColumnWidths
@@ -32,7 +32,7 @@ class FacturaGuiaClientesFacturacionExport implements FromArray, WithStyles, Wit
 
     public function array(): array
     {
-        $headers = ['Cliente', 'RUC / DNI', 'Razón Social', 'Número de celular', 'Tipo de comprobante'];
+        $headers = ['Cliente', 'RUC / DNI', 'Domicilio fiscal', 'Razón Social', 'Número de celular', 'Tipo de comprobante'];
         $rows = [$headers];
 
         foreach ($this->data as $item) {
@@ -40,13 +40,15 @@ class FacturaGuiaClientesFacturacionExport implements FromArray, WithStyles, Wit
             $rows[] = [
                 $row['nombre'] ?? '',
                 $row['documento'] ?? '',
+                $row['domicilio_fiscal'] ?? '',
                 $row['razon_social'] ?? '',
                 $row['telefono'] ?? '',
                 $row['tipo_comprobante'] ?? '',
             ];
         }
 
-        $this->lastDataRow = count($rows) - 1;
+        // Fila 1 = encabezados; la última fila con datos es count($rows)
+        $this->lastDataRow = count($rows);
 
         return $rows;
     }
@@ -56,9 +58,10 @@ class FacturaGuiaClientesFacturacionExport implements FromArray, WithStyles, Wit
         return [
             'A' => 32,
             'B' => 16,
-            'C' => 36,
-            'D' => 18,
+            'C' => 40,
+            'D' => 36,
             'E' => 18,
+            'F' => 18,
         ];
     }
 
@@ -89,18 +92,18 @@ class FacturaGuiaClientesFacturacionExport implements FromArray, WithStyles, Wit
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
                 $highestRow = $this->lastDataRow;
-                if ($highestRow < 1) {
+                if ($highestRow < 2) {
                     return;
                 }
 
-                $sheet->getStyle('A2:E' . $highestRow)->applyFromArray([
+                $sheet->getStyle('A2:F' . $highestRow)->applyFromArray([
                     'alignment' => [
                         'vertical' => Alignment::VERTICAL_CENTER,
                         'wrapText' => true,
                     ],
                 ]);
 
-                $sheet->getStyle('A1:E' . $highestRow)->applyFromArray([
+                $sheet->getStyle('A1:F' . $highestRow)->applyFromArray([
                     'borders' => [
                         'allBorders' => [
                             'borderStyle' => Border::BORDER_THIN,
@@ -110,7 +113,7 @@ class FacturaGuiaClientesFacturacionExport implements FromArray, WithStyles, Wit
                 ]);
 
                 $sheet->getStyle('B2:B' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle('E2:E' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle('F2:F' . $highestRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             },
         ];
     }
