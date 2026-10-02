@@ -213,7 +213,11 @@ class CotizacionController extends Controller
                 COALESCE(SUM(CASE
                     WHEN cc.estado_cotizador = ? AND cc.id_cliente_importacion IS NULL
                     THEN cc.monto ELSE 0
-                END), 0) AS total_logistica
+                END), 0) AS total_logistica,
+                COALESCE(SUM(CASE
+                    WHEN cc.estado_cotizador = ? AND cc.es_imo = 1
+                    THEN cc.volumen ELSE 0
+                END), 0) AS cbm_imo_cotizacion
             FROM contenedor_consolidado_cotizacion AS cc
             WHERE cc.id_contenedor = ?
               AND cc.deleted_at IS NULL',
@@ -223,6 +227,7 @@ class CotizacionController extends Controller
                 $userId,
                 'CONFIRMADO',
                 $userId,
+                'CONFIRMADO',
                 'CONFIRMADO',
                 'CONFIRMADO',
                 'CONFIRMADO',
@@ -729,19 +734,24 @@ class CotizacionController extends Controller
     }
 
     /**
-     * CBM IMO del header con la misma regla que el listado de contenedores
-     * (ContenedorController::loadCbmImoForContenedores): calculadora (es_imo)
-     * más cbm_imo de proveedores resumen.
+     * CBM IMO del header. Org 1 (misma regla que el listado de contenedores):
+     * volumen completo de las cotizaciones es_imo (sin desglose por proveedor/item).
+     * Resto de orgs: sin cambios (calculadora es_imo).
      *
      * @param  object|null  $headers
-     * @return string
+     * @param  Contenedor  $contenedor
+     * @return mixed
      */
-    private function cbmImoHeaderValue($headers)
+    private function cbmImoHeaderValue($headers, $contenedor)
     {
-        $calc = $headers && isset($headers->cbm_total_imo) ? (float) $headers->cbm_total_imo : 0.0;
-        $prov = $headers && isset($headers->cbm_imo_proveedores) ? (float) $headers->cbm_imo_proveedores : 0.0;
+        if (!$headers) {
+            return 0;
+        }
+        if ((int) $contenedor->getAttribute('organizacion_id') === 1) {
+            return number_format((float) ($headers->cbm_imo_cotizacion ?? 0), 2, '.', '');
+        }
 
-        return number_format($calc + $prov, 2, '.', '');
+        return $headers->cbm_total_imo;
     }
 
     /**
@@ -845,7 +855,7 @@ class CotizacionController extends Controller
                 'icon' => $paisFlags['destino']
             ],
             'cbm_total_imo' => [
-                'value' => $this->cbmImoHeaderValue($headers),
+                'value' => $this->cbmImoHeaderValue($headers, $contenedor),
                 'label' => 'CBM IMO',
                 'icon' => 'mdi:biohazard'
             ],
