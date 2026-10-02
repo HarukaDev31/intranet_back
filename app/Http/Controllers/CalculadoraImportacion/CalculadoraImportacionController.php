@@ -17,6 +17,7 @@ use App\Services\CalculadoraImportacion\CalculadoraImportacionWhatsappService;
 use App\Services\CalculadoraImportacion\CalculadoraImportacionCotizacionSyncService;
 use App\Services\CalculadoraImportacion\CalculadoraImportacionCacheService;
 use App\Services\CalculadoraImportacion\CalculadoraTarifaService;
+use App\Services\CargaConsolidada\CbmImoService;
 use App\Models\CalculadoraTarifasConsolidado;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -508,19 +509,6 @@ class CalculadoraImportacionController extends Controller
     }
 
     /**
-     * Restringe agregados KPI (CBM IMO) a los contenedores del tab.
-     */
-    private function scopeCalculadoraQueryContenedoresTab($query, string $tab)
-    {
-        $clone = clone $query;
-        $clone->whereHas('contenedor', function ($q) use ($tab) {
-            $this->whereContenedorDelTab($q, $tab);
-        });
-
-        return $clone;
-    }
-
-    /**
      * @param $query    Query del listado (con filtro de tab): conteos de cotizaciones.
      * @param $cbmQuery Query sin filtro de tab: KPI de CBM sobre todos los contenedores del tab.
      */
@@ -535,23 +523,11 @@ class CalculadoraImportacionController extends Controller
             $flagDestino = PaisFlag::flagCdnUrl('pe');
         }
 
-        $kpiQuery = $this->scopeCalculadoraQueryContenedoresTab($cbmQuery, $tab);
-
-        $cbmExpr = 'GREATEST(COALESCE(PR.cbm, 0), COALESCE(PR.peso, 0) / 1000)';
-        $idsSub = $this->cloneQueryForAggregate($kpiQuery)->select('calculadora_importacion.id');
-        $cbm = DB::table('calculadora_importacion as CI')
-            ->leftJoin('calculadora_importacion_proveedores as PR', 'PR.id_calculadora_importacion', '=', 'CI.id')
-            ->whereIn('CI.id', $idsSub)
-            ->selectRaw("
-                COALESCE(SUM(CASE WHEN CI.es_imo = 1 THEN {$cbmExpr} ELSE 0 END), 0) as cbm_imo
-            ")
-            ->first();
-
         $fmt = function ($value) {
             return number_format((float) $value, 2, '.', '');
         };
 
-        ['china' => $cbmChina, 'peru' => $cbmPeru, 'pendiente' => $cbmPendiente] = $this->sumCbmTotalesContenedoresTab($cbmQuery, $tab, $anio);
+        ['china' => $cbmChina, 'peru' => $cbmPeru, 'pendiente' => $cbmPendiente, 'imo' => $cbmImo] = $this->sumCbmTotalesContenedoresTab($cbmQuery, $tab, $anio);
 
         // Conteos sobre las mismas filas que lista la tabla (respeta filtros y búsqueda activos).
         $conteoQuery = $this->cloneQueryForAggregate($query);
@@ -597,7 +573,7 @@ class CalculadoraImportacionController extends Controller
                 'icon' => 'mage:box-3d',
             ],
             'cbm_total_imo' => [
-                'value' => $fmt($cbm ? $cbm->cbm_imo : 0),
+                'value' => $fmt($cbmImo),
                 'label' => 'CBM IMO',
                 'icon' => 'mdi:biohazard',
             ],
@@ -630,11 +606,17 @@ class CalculadoraImportacionController extends Controller
         if ($idContenedorFiltro) {
             $contenedoresQuery->where('id', $idContenedorFiltro);
         }
-        $contenedorIds = $contenedoresQuery->pluck('id')->all();
+        $orgByContenedor = $contenedoresQuery->pluck('organizacion_id', 'id')->map(function ($org) {
+            return (int) $org;
+        })->all();
+        $contenedorIds = array_keys($orgByContenedor);
 
         if ($contenedorIds === []) {
-            return ['china' => 0.0, 'peru' => 0.0, 'pendiente' => 0.0];
+            return ['china' => 0.0, 'peru' => 0.0, 'pendiente' => 0.0, 'imo' => 0.0];
         }
+
+        // Misma regla que la columna CBM IMO de Carga Consolidada Abiertos/Completados.
+        $cbmImo = (float) array_sum(app(CbmImoService::class)->forContenedores($contenedorIds, $orgByContenedor));
 
         $cbmPeru = (float) DB::table('contenedor_consolidado_cotizacion')
             ->whereIn('id_contenedor', $contenedorIds)
@@ -655,7 +637,7 @@ class CalculadoraImportacionController extends Controller
             ->where('cc.estado_cotizador', 'CONFIRMADO')
             ->sum('cccp.cbm_total_china');
 
-        return ['china' => $cbmChina, 'peru' => $cbmPeru, 'pendiente' => $cbmPendiente];
+        return ['china' => $cbmChina, 'peru' => $cbmPeru, 'pendiente' => $cbmPendiente, 'imo' => $cbmImo];
     }
 
     /**
