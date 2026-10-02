@@ -169,6 +169,8 @@ class CalculadoraImportacion extends Model
 
     /**
      * Relación con el contenedor de carga consolidada
+     *
+     * @return BelongsTo<\App\Models\CargaConsolidada\Contenedor, $this>
      */
     public function contenedor(): BelongsTo
     {

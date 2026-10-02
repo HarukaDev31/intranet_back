@@ -370,7 +370,7 @@ class CalculadoraImportacionController extends Controller
                     $calculadora->url_cotizacion_pdf = $this->generateUrl($calculadora->url_cotizacion_pdf);
                     $calculadora->nombre_creador = optional($calculadora->creador)->No_Nombres_Apellidos;
                     $calculadora->nombre_vendedor = optional($calculadora->vendedor)->No_Nombres_Apellidos;
-                    $calculadora->carga_contenedor = '  #' . optional($calculadora->contenedor)->carga . '-' . ($calculadora->contenedor ? Carbon::parse($calculadora->contenedor->f_inicio)->format('Y') : '2025');
+                    $calculadora->carga_contenedor = '  #' . ($calculadora->contenedor ? $calculadora->contenedor->cargaConParte() : '') . '-' . ($calculadora->contenedor ? Carbon::parse($calculadora->contenedor->f_inicio)->format('Y') : '2025');
                     $calculadora->estado_cotizador = optional($calculadora->cotizacion)->estado_cotizador;
                     $calculadora->cod_contract = optional($calculadora->cotizacion)->cod_contract;
                     $calculadora->setAttribute('razon_descarte_nombre', optional($calculadora->razonDescarte)->name);
@@ -718,7 +718,7 @@ class CalculadoraImportacionController extends Controller
                 $calculadora->totales = $this->calculadoraImportacionService->calcularTotales($calculadora);
                 $calculadora->nombre_creador = optional($calculadora->creador)->No_Nombres_Apellidos;
                 $calculadora->nombre_vendedor = optional($calculadora->vendedor)->No_Nombres_Apellidos;
-                $calculadora->carga_contenedor = '  #' . optional($calculadora->contenedor)->carga . '-' . ($calculadora->contenedor ? Carbon::parse($calculadora->contenedor->f_inicio)->format('Y') : '2025');
+                $calculadora->carga_contenedor = '  #' . ($calculadora->contenedor ? $calculadora->contenedor->cargaConParte() : '') . '-' . ($calculadora->contenedor ? Carbon::parse($calculadora->contenedor->f_inicio)->format('Y') : '2025');
                 $calculadora->setAttribute('razon_descarte_nombre', optional($calculadora->razonDescarte)->name);
             }
 
