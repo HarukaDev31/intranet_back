@@ -534,9 +534,9 @@ class ContenedorController extends Controller
     }
 
     /**
-     * CBM IMO del listado (cotizaciones CONFIRMADO): calculadora (es_imo + proveedores)
-     * más cbm_imo de proveedores resumen. Org 1 registra el IMO en la calculadora;
-     * los socios en el resumen, así que se suman ambas fuentes para todas las orgs.
+     * CBM IMO del listado (cotizaciones CONFIRMADO). Org 1: volumen completo de las
+     * cotizaciones es_imo. Resto (Socio): calculadora (es_imo + proveedores) más
+     * cbm_imo de proveedores resumen.
      *
      * @param  array<int, int>  $pageIds
      * @param  array<int, int>  $orgByContenedor
@@ -570,11 +570,22 @@ class ContenedorController extends Controller
             ->selectRaw('cccp.id_contenedor, COALESCE(SUM(cccp.cbm_imo), 0) as cbm_imo')
             ->pluck('cbm_imo', 'id_contenedor');
 
+        // Org 1: el IMO es toda la carga de la cotización marcada es_imo (sin desglose por proveedor/item).
+        $imoCotizacion = DB::table('contenedor_consolidado_cotizacion')
+            ->whereIn('id_contenedor', $pageIds)
+            ->whereNull('deleted_at')
+            ->where('estado_cotizador', 'CONFIRMADO')
+            ->where('es_imo', 1)
+            ->groupBy('id_contenedor')
+            ->selectRaw('id_contenedor, COALESCE(SUM(volumen), 0) as cbm_imo')
+            ->pluck('cbm_imo', 'id_contenedor');
+
         $result = [];
         foreach ($pageIds as $id) {
+            $orgId = (int) ($orgByContenedor[$id] ?? 0);
             $calc = (float) ($imoCalculadora[$id] ?? 0);
             $prov = (float) ($imoProveedores[$id] ?? 0);
-            $result[$id] = $calc + $prov;
+            $result[$id] = $orgId === 1 ? (float) ($imoCotizacion[$id] ?? 0) : ($calc + $prov);
         }
 
         return $result;
