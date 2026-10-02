@@ -33,7 +33,9 @@ use App\Models\Pais;
 use App\Support\Organizacion\OrganizacionPaisesHabilitados;
 use App\Services\CargaConsolidada\CargaConsolidadaCacheService;
 use App\Services\CargaConsolidada\CbmImoService;
+use App\Services\CargaConsolidada\ReporteMarketingService;
 use App\Exports\ContenedoresExport;
+use App\Exports\ReporteMarketingContenedorExport;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ContenedorController extends Controller
@@ -148,6 +150,53 @@ class ContenedorController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener contenedores: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Reporte de marketing de un contenedor (Excel): cliente, tipo de cliente, Lima/provincia,
+     * logística de la cotización preliminar (tipo=preliminar) o final (tipo=final) y origen.
+     */
+    public function reporteMarketing($id, Request $request)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user || !in_array($user->getNombreGrupo(), [Usuario::JEFE_MARKETING, Usuario::ROL_MARKETING], true)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No autorizado para descargar el reporte de marketing',
+                ], 403);
+            }
+
+            $contenedor = Contenedor::find((int) $id);
+            if (!$contenedor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no encontrado',
+                ], 404);
+            }
+
+            $tipo = $request->get('tipo') === ReporteMarketingService::TIPO_FINAL
+                ? ReporteMarketingService::TIPO_FINAL
+                : ReporteMarketingService::TIPO_PRELIMINAR;
+            $rows = app(ReporteMarketingService::class)->rows($contenedor->id, $tipo);
+
+            $label = $tipo === ReporteMarketingService::TIPO_FINAL
+                ? 'Logística cotización final'
+                : 'Logística cotización preliminar';
+            $filename = 'reporte_marketing_' . $tipo . '_consolidado_' . $contenedor->cargaConParte() . '.xlsx';
+
+            return Excel::download(new ReporteMarketingContenedorExport(collect($rows), $label), $filename);
+        } catch (\Exception $e) {
+            Log::error('Error en reporteMarketing: ' . $e->getMessage(), [
+                'id_contenedor' => $id,
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al generar el reporte de marketing',
             ], 500);
         }
     }
