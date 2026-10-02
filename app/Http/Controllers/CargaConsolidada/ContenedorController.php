@@ -534,9 +534,9 @@ class ContenedorController extends Controller
     }
 
     /**
-     * CBM IMO del listado: suma cbm_imo de los proveedores (por cotización)
-     * de cotizaciones CONFIRMADO en el contenedor. Org 1 usa solo esa fuente;
-     * el resto (Socio) suma además la calculadora (es_imo + proveedores).
+     * CBM IMO del listado (cotizaciones CONFIRMADO): calculadora (es_imo + proveedores)
+     * más cbm_imo de proveedores resumen. Org 1 registra el IMO en la calculadora;
+     * los socios en el resumen, así que se suman ambas fuentes para todas las orgs.
      *
      * @param  array<int, int>  $pageIds
      * @param  array<int, int>  $orgByContenedor
@@ -572,10 +572,9 @@ class ContenedorController extends Controller
 
         $result = [];
         foreach ($pageIds as $id) {
-            $orgId = (int) ($orgByContenedor[$id] ?? 0);
             $calc = (float) ($imoCalculadora[$id] ?? 0);
             $prov = (float) ($imoProveedores[$id] ?? 0);
-            $result[$id] = $orgId === 1 ? $prov : ($calc + $prov);
+            $result[$id] = $calc + $prov;
         }
 
         return $result;
