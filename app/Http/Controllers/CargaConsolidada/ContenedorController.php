@@ -32,6 +32,7 @@ use App\Models\Organizacion;
 use App\Models\Pais;
 use App\Support\Organizacion\OrganizacionPaisesHabilitados;
 use App\Services\CargaConsolidada\CargaConsolidadaCacheService;
+use App\Services\CargaConsolidada\CbmImoService;
 use App\Exports\ContenedoresExport;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -534,9 +535,7 @@ class ContenedorController extends Controller
     }
 
     /**
-     * CBM IMO del listado (cotizaciones CONFIRMADO). Org 1: volumen completo de las
-     * cotizaciones es_imo. Resto (Socio): calculadora (es_imo + proveedores) más
-     * cbm_imo de proveedores resumen.
+     * CBM IMO del listado: ver CbmImoService (org 1 = volumen completo de cotizaciones es_imo).
      *
      * @param  array<int, int>  $pageIds
      * @param  array<int, int>  $orgByContenedor
@@ -544,51 +543,7 @@ class ContenedorController extends Controller
      */
     private function loadCbmImoForContenedores(array $pageIds, array $orgByContenedor)
     {
-        if ($pageIds === []) {
-            return [];
-        }
-
-        $imoCalculadora = DB::table('contenedor_consolidado_cotizacion as cci')
-            ->join('calculadora_importacion as ci', function ($join) {
-                $join->on('ci.id_cotizacion', '=', 'cci.id')
-                    ->where('ci.es_imo', '=', 1);
-            })
-            ->join('calculadora_importacion_proveedores as cip', 'ci.id', '=', 'cip.id_calculadora_importacion')
-            ->whereIn('cci.id_contenedor', $pageIds)
-            ->whereNull('cci.deleted_at')
-            ->where('cci.estado_cotizador', 'CONFIRMADO')
-            ->groupBy('cci.id_contenedor')
-            ->selectRaw('cci.id_contenedor, COALESCE(SUM(cip.cbm), 0) as cbm_imo')
-            ->pluck('cbm_imo', 'id_contenedor');
-
-        $imoProveedores = DB::table('contenedor_consolidado_cotizacion_proveedores as cccp')
-            ->join('contenedor_consolidado_cotizacion as cc', 'cc.id', '=', 'cccp.id_cotizacion')
-            ->whereIn('cccp.id_contenedor', $pageIds)
-            ->whereNull('cc.deleted_at')
-            ->where('cc.estado_cotizador', 'CONFIRMADO')
-            ->groupBy('cccp.id_contenedor')
-            ->selectRaw('cccp.id_contenedor, COALESCE(SUM(cccp.cbm_imo), 0) as cbm_imo')
-            ->pluck('cbm_imo', 'id_contenedor');
-
-        // Org 1: el IMO es toda la carga de la cotización marcada es_imo (sin desglose por proveedor/item).
-        $imoCotizacion = DB::table('contenedor_consolidado_cotizacion')
-            ->whereIn('id_contenedor', $pageIds)
-            ->whereNull('deleted_at')
-            ->where('estado_cotizador', 'CONFIRMADO')
-            ->where('es_imo', 1)
-            ->groupBy('id_contenedor')
-            ->selectRaw('id_contenedor, COALESCE(SUM(volumen), 0) as cbm_imo')
-            ->pluck('cbm_imo', 'id_contenedor');
-
-        $result = [];
-        foreach ($pageIds as $id) {
-            $orgId = (int) ($orgByContenedor[$id] ?? 0);
-            $calc = (float) ($imoCalculadora[$id] ?? 0);
-            $prov = (float) ($imoProveedores[$id] ?? 0);
-            $result[$id] = $orgId === 1 ? (float) ($imoCotizacion[$id] ?? 0) : ($calc + $prov);
-        }
-
-        return $result;
+        return app(CbmImoService::class)->forContenedores($pageIds, $orgByContenedor);
     }
 
     private function invalidateContenedorListCache(): void
