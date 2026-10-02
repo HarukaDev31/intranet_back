@@ -729,6 +729,24 @@ class CotizacionController extends Controller
     }
 
     /**
+     * CBM IMO del header con la misma regla que el listado de contenedores
+     * (ContenedorController::loadCbmImoForContenedores): org 1 suma solo cbm_imo
+     * de proveedores; el resto suma además la calculadora (es_imo).
+     *
+     * @param  object|null  $headers
+     * @param  Contenedor  $contenedor
+     * @return string
+     */
+    private function cbmImoHeaderValue($headers, $contenedor)
+    {
+        $calc = $headers && isset($headers->cbm_total_imo) ? (float) $headers->cbm_total_imo : 0.0;
+        $prov = $headers && isset($headers->cbm_imo_proveedores) ? (float) $headers->cbm_imo_proveedores : 0.0;
+        $orgId = (int) $contenedor->getAttribute('organizacion_id');
+
+        return number_format($orgId === 1 ? $prov : ($calc + $prov), 2, '.', '');
+    }
+
+    /**
      * Headers de Prospectos y Embarcados para socios: bandera + "CBM",
      * Pendiente, IMO, Fob, Total ISD, Logística e Impuestos. Sin nombre de país.
      */
@@ -829,7 +847,7 @@ class CotizacionController extends Controller
                 'icon' => $paisFlags['destino']
             ],
             'cbm_total_imo' => [
-                'value' => $headers ? $headers->cbm_total_imo : 0,
+                'value' => $this->cbmImoHeaderValue($headers, $contenedor),
                 'label' => 'CBM IMO',
                 'icon' => 'mdi:biohazard'
             ],
@@ -1069,6 +1087,12 @@ class CotizacionController extends Controller
                     'por_usuario' => $embarcadoMapFormatted
                 ];
             }
+
+            $headersData['total_logistica'] = [
+                'value' => $headers ? $headers->total_logistica : 0,
+                'label' => 'Logist.',
+                'icon' => 'cryptocurrency-color:soc',
+            ];
 
             // Format values as currency where applicable before returning
             $headersData = $this->applyCurrencyToHeaders($headersData);
