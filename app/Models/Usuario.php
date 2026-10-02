@@ -25,6 +25,7 @@ class Usuario extends Authenticatable implements JWTSubject
     const ROL_CONTABILIDAD = 'Contabilidad';
     const ROL_GERENCIA = 'GERENCIA';
     const JEFE_MARKETING = 'Jefe Marketing';
+    const ROL_MARKETING = 'Marketing';
     const ROL_SOPORTE = 'Soporte';
     const ROL_PM = 'PM';
     const ROL_FINANZAS = 'Finanzas';
