@@ -730,20 +730,18 @@ class CotizacionController extends Controller
 
     /**
      * CBM IMO del header con la misma regla que el listado de contenedores
-     * (ContenedorController::loadCbmImoForContenedores): org 1 suma solo cbm_imo
-     * de proveedores; el resto suma además la calculadora (es_imo).
+     * (ContenedorController::loadCbmImoForContenedores): calculadora (es_imo)
+     * más cbm_imo de proveedores resumen.
      *
      * @param  object|null  $headers
-     * @param  Contenedor  $contenedor
      * @return string
      */
-    private function cbmImoHeaderValue($headers, $contenedor)
+    private function cbmImoHeaderValue($headers)
     {
         $calc = $headers && isset($headers->cbm_total_imo) ? (float) $headers->cbm_total_imo : 0.0;
         $prov = $headers && isset($headers->cbm_imo_proveedores) ? (float) $headers->cbm_imo_proveedores : 0.0;
-        $orgId = (int) $contenedor->getAttribute('organizacion_id');
 
-        return number_format($orgId === 1 ? $prov : ($calc + $prov), 2, '.', '');
+        return number_format($calc + $prov, 2, '.', '');
     }
 
     /**
@@ -847,7 +845,7 @@ class CotizacionController extends Controller
                 'icon' => $paisFlags['destino']
             ],
             'cbm_total_imo' => [
-                'value' => $this->cbmImoHeaderValue($headers, $contenedor),
+                'value' => $this->cbmImoHeaderValue($headers),
                 'label' => 'CBM IMO',
                 'icon' => 'mdi:biohazard'
             ],
