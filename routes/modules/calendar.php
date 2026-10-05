@@ -78,6 +78,9 @@ Route::group(['prefix' => 'calendar', 'middleware' => 'jwt.auth'], function () {
     // Configuración de calendario (grupos de rol, permisos y colores por grupo)
     Route::get('/config', [CalendarActivityController::class, 'getCalendarConfig']);
 
+    // Exportar a Excel la tabla de progreso (jefe del grupo)
+    Route::get('/progress/export', [CalendarController::class, 'exportProgress']);
+
     // 7. Grupos de roles de calendario (mantenedor y contexto de usuario)
     Route::get('/my-role-groups', [CalendarRoleGroupController::class, 'myRoleGroups']);
     Route::get('/users', [CalendarRoleGroupController::class, 'getIntranetUsers']);
