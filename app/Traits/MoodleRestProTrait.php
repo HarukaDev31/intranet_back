@@ -247,7 +247,7 @@ trait MoodleRestProTrait
 
             // Un reintento ante fallos de red/timeout
             $response = null;
-            for ($attempt = 1; $attempt <= 2; $attempt++) {
+            foreach ([1, 2] as $attempt) {
                 try {
                     $response = Http::timeout(30)
                         ->asForm()
