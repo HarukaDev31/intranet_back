@@ -448,29 +448,92 @@ class CalculadoraImportacionController extends Controller
     /**
      * Tab del listado: "abiertos" (consolidado abierto o sin contenedor asignado)
      * o "embarcados" (contenedor con estado_china = COMPLETADO). Por defecto "abiertos".
+     *
+     * Con cotización vinculada manda el consolidado ACTUAL de la carga (proveedores y destino
+     * del roleo), no el contenedor donde se cotizó. Sin cotización vinculada se usa el contenedor
+     * de la calculadora, como antes.
      */
     private function applyTabFilter($query, Request $request)
     {
         $tab = $request->get('tab') === 'embarcados' ? 'embarcados' : 'abiertos';
 
+        $contenedores = Contenedor::query()->select('id');
+        $abiertos = (clone $contenedores)->where(function ($c) {
+            $c->whereNull('estado_china')
+                ->orWhere('estado_china', '!=', Contenedor::CONTEDOR_CERRADO);
+        });
+        $completados = (clone $contenedores)->where('estado_china', Contenedor::CONTEDOR_CERRADO);
+
         if ($tab === 'embarcados') {
-            $query->whereHas('contenedor', function ($q) {
-                $q->where('estado_china', Contenedor::CONTEDOR_CERRADO);
+            $query->where(function ($q) use ($abiertos, $completados) {
+                $q->whereHas('cotizacion', function ($cot) use ($abiertos, $completados) {
+                    $this->whereCargaSoloEnConsolidados($cot, $completados, $abiertos);
+                })->orWhere(function ($sin) {
+                    $sin->whereDoesntHave('cotizacion')
+                        ->whereHas('contenedor', function ($c) {
+                            $c->where('estado_china', Contenedor::CONTEDOR_CERRADO);
+                        });
+                });
             });
         } else {
-            $query->where(function ($q) {
-                $q->whereNull('id_carga_consolidada_contenedor')
-                    ->orWhereDoesntHave('contenedor')
-                    ->orWhereHas('contenedor', function ($c) {
-                        $c->where(function ($inner) {
-                            $inner->whereNull('estado_china')
-                                ->orWhere('estado_china', '!=', Contenedor::CONTEDOR_CERRADO);
+            $query->where(function ($q) use ($abiertos) {
+                $q->whereHas('cotizacion', function ($cot) use ($abiertos) {
+                    $this->whereCargaEnConsolidados($cot, $abiertos);
+                })->orWhere(function ($sin) {
+                    $sin->whereDoesntHave('cotizacion')
+                        ->where(function ($c) {
+                            $c->whereNull('id_carga_consolidada_contenedor')
+                                ->orWhereDoesntHave('contenedor')
+                                ->orWhereHas('contenedor', function ($inner) {
+                                    $inner->where(function ($e) {
+                                        $e->whereNull('estado_china')
+                                            ->orWhere('estado_china', '!=', Contenedor::CONTEDOR_CERRADO);
+                                    });
+                                });
                         });
-                    });
+                });
             });
         }
 
         return $tab;
+    }
+
+    /**
+     * Cotización cuya carga está asociada a alguno de los consolidados: contenedor de sus
+     * proveedores, destino del roleo o, si aún no tiene proveedores, su propio contenedor.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $cot
+     * @param \Illuminate\Database\Eloquent\Builder $contenedores ids de contenedores
+     */
+    private function whereCargaEnConsolidados($cot, $contenedores): void
+    {
+        $cot->where(function ($x) use ($contenedores) {
+            $x->whereHas('proveedores', function ($p) use ($contenedores) {
+                $p->whereIn('id_contenedor', $contenedores);
+            })->orWhereIn('id_contenedor_destino', $contenedores)
+                ->orWhere(function ($y) use ($contenedores) {
+                    $y->whereDoesntHave('proveedores')->whereIn('id_contenedor', $contenedores);
+                });
+        });
+    }
+
+    /**
+     * Carga asociada a los consolidados completados y a ninguno abierto.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder $cot
+     * @param \Illuminate\Database\Eloquent\Builder $completados
+     * @param \Illuminate\Database\Eloquent\Builder $abiertos
+     */
+    private function whereCargaSoloEnConsolidados($cot, $completados, $abiertos): void
+    {
+        $this->whereCargaEnConsolidados($cot, $completados);
+        $cot->whereDoesntHave('proveedores', function ($p) use ($abiertos) {
+            $p->whereIn('id_contenedor', $abiertos);
+        })->where(function ($x) use ($abiertos) {
+            $x->whereNull('id_contenedor_destino')->orWhereNotIn('id_contenedor_destino', $abiertos);
+        })->where(function ($z) use ($abiertos) {
+            $z->whereHas('proveedores')->orWhereNotIn('id_contenedor', $abiertos);
+        });
     }
 
     /**
