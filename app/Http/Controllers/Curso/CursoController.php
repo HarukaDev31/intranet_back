@@ -1275,7 +1275,6 @@ class CursoController extends Controller
                 
                 Log::error('Datos del usuario: ' . json_encode([
                     'original_username' => $original_username,
-                    'password' => $password,
                     'nombres' => $nombres,
                     'email' => $email,
                 ]));
@@ -1385,7 +1384,7 @@ class CursoController extends Controller
                 }
 
                 // Log detallado para debug
-                Log::error('Datos limpiados para Moodle: ' . json_encode($arrPost));
+                Log::error('Datos limpiados para Moodle: ' . json_encode(array_diff_key($arrPost, ['password' => true])));
 
                 // Verificar cada campo individualmente
                 $this->validateMoodleFields($arrPost);
@@ -1411,9 +1410,6 @@ class CursoController extends Controller
                     Log::error("response_usuario_moodle['username']: " . ($response_usuario_moodle['username'] ?? 'NO DEFINIDO'));
                     Log::error("username (generado): {$username}");
                     Log::error("moodle_username (asignado): {$moodle_username}");
-                    Log::error("Password de respuesta: " . ($response_usuario_moodle['password'] ?? 'NO ENCONTRADO'));
-                    Log::error("cleaned_password: {$cleaned_password}");
-                    Log::error("moodle_password (asignado): {$moodle_password}");
                     Log::error("¿Coinciden las contraseñas? " . ($moodle_password === $cleaned_password ? 'SÍ' : 'NO'));
                     
                     // Si el usuario ya existía, usar su username real; si es nuevo, usar el generado
@@ -1492,7 +1488,6 @@ class CursoController extends Controller
                             Log::info('=== CREDENCIALES A ENVIAR ===');
                             Log::info('Username Moodle: ' . $moodle_username);
                             Log::info('Password a enviar (longitud): ' . strlen($moodle_password) . ' caracteres');
-                            Log::info('Password a enviar (valor completo): ' . $moodle_password);
                             Log::info('Email: ' . $email);
                             Log::info('Password usado en arrPost: ' . ($arrPost['password'] ?? 'NO DEFINIDO'));
                             Log::info('¿Coinciden las contraseñas? ' . ($moodle_password === ($arrPost['password'] ?? '') ? 'SÍ' : 'NO'));
@@ -1566,26 +1561,17 @@ class CursoController extends Controller
                     // Crear array de debug con datos seguros
                     $debugData = [
                         'No_Usuario' => $result->usuario_moodle == "" ? $result->No_Usuario : $result->usuario_moodle,
-                        'No_Password' => $this->ciDecrypt($result->No_Password),
                         'username' => $username ?? 'No generado',
                         'firstname' => $firstname ?? 'No generado',
                         'lastname' => $lastname ?? 'No generado',
                         'email' => $email ?? 'No disponible'
                     ];
 
-                    // Enviar credenciales por email y WhatsApp (usuario ya existe)
-                    $this->enviarCredencialesMoodle(
-                        $username,
-                        $cleaned_password,
-                        $email,
-                        $nombres,
-                        $phoneNumber
-                    );
-
+                    // No se envían credenciales: Moodle falló y la contraseña no fue aplicada
                     return response()->json([
                         'status' => 'error',
-                        'success' => true,
-                        'message' => "El usuario ya existe en Moodle. Credenciales enviadas por email y WhatsApp.",
+                        'success' => false,
+                        'message' => $error_message,
                         'data' => $debugData,
                         'moodle_response' => $response_usuario_moodle
                     ], 200);
@@ -2113,7 +2099,6 @@ class CursoController extends Controller
             Log::info('=== ENVIAR CREDENCIALES MOODLE ===');
             Log::info('Username recibido: ' . $username);
             Log::info('Password recibido (longitud): ' . strlen($password) . ' caracteres');
-            Log::info('Password recibido (valor completo): ' . $password);
             Log::info('Email: ' . $email);
             
             // URL de Moodle desde configuración o variable de entorno

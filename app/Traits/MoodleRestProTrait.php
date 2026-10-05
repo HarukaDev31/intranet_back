@@ -77,7 +77,7 @@ trait MoodleRestProTrait
             $user['maildisplay'] = (int)$arrPost['maildisplay'];
         }
         
-        Log::info('Usuario Moodle preparado: ' . json_encode($user));
+        Log::info('Usuario Moodle preparado: ' . $this->maskMoodleSecrets($user));
         return $user;
     }
 
@@ -98,6 +98,7 @@ trait MoodleRestProTrait
         $response = $this->call_moodle('core_user_create_users', $params, $token);
 
         if ($this->xmlresponse_is_exception($response)) {
+            Log::error('[MOODLE_ERROR] core_user_create_users devolvió excepción: ' . $response);
             return array(
                 'status' => 'error',
                 'message' => "Caught exception: " . $response
@@ -242,15 +243,42 @@ trait MoodleRestProTrait
             Log::info("Llamando a Moodle: {$function_name}");
             Log::info("Token usado: " . substr($token, 0, 8) . '...' . substr($token, -8)); // Mostrar solo parte del token por seguridad
             Log::info("URL completa: {$serverurl}");
-            Log::info("Parámetros enviados a Moodle: " . json_encode($params));
-            
-            $response = Http::timeout(30)
-                ->asForm()
-                ->post($serverurl, $params);
-            
+            Log::info("Parámetros enviados a Moodle: " . $this->maskMoodleSecrets($params));
+
+            // Un reintento ante fallos de red/timeout
+            $response = null;
+            for ($attempt = 1; $attempt <= 2; $attempt++) {
+                try {
+                    $response = Http::timeout(30)
+                        ->asForm()
+                        ->post($serverurl, $params);
+                    break;
+                } catch (\Illuminate\Http\Client\ConnectionException $e) {
+                    Log::error("[MOODLE_ERROR] Fallo de conexión en {$function_name} (intento {$attempt}/2): " . $e->getMessage());
+                    if ($attempt == 2) {
+                        throw $e;
+                    }
+                    usleep(500000);
+                }
+            }
+
             // Log detallado de la respuesta
             Log::info("HTTP Code: " . $response->status());
             Log::info("Respuesta de Moodle (cURL): " . $response->body());
+
+            // Respuesta que no es XML válido (HTML de error, cuerpo vacío, etc.)
+            $trimmedBody = ltrim($response->body());
+            if (!$response->successful() || $trimmedBody === '' || $trimmedBody[0] !== '<') {
+                Log::error("[MOODLE_ERROR] Respuesta no XML en {$function_name}", [
+                    'http_status' => $response->status(),
+                    'body_length' => strlen($response->body()),
+                    'body_preview' => mb_substr($response->body(), 0, 500),
+                    'params' => $this->maskMoodleSecrets($params),
+                ]);
+                return '<EXCEPTION class="non_xml_response"><MESSAGE>'
+                    . htmlspecialchars('Respuesta inválida de Moodle (HTTP ' . $response->status() . ') en ' . $function_name, ENT_XML1)
+                    . '</MESSAGE></EXCEPTION>';
+            }
             
             // Si hay un error de acceso, loggear más detalles
             if (strpos($response->body(), 'accessexception') !== false || 
@@ -265,10 +293,26 @@ trait MoodleRestProTrait
             
             return $response->body();
         } catch (\Exception $e) {
-            Log::error('Error en call_moodle: ' . $e->getMessage());
+            Log::error("[MOODLE_ERROR] Error en call_moodle ({$function_name}): " . $e->getMessage());
             Log::error('Stack trace: ' . $e->getTraceAsString());
-            return '<EXCEPTION>' . $e->getMessage() . '</EXCEPTION>';
+            // Escapar el mensaje: incluye la URL con '&' que invalidaría el XML
+            return '<EXCEPTION class="connection_error"><MESSAGE>'
+                . htmlspecialchars($e->getMessage(), ENT_XML1)
+                . '</MESSAGE></EXCEPTION>';
         }
+    }
+
+    /**
+     * Enmascara contraseñas y tokens para poder loguear parámetros de Moodle
+     */
+    private function maskMoodleSecrets($data)
+    {
+        array_walk_recursive($data, function (&$value, $key) {
+            if (in_array($key, ['password', 'wstoken', 'token'], true)) {
+                $value = '***';
+            }
+        });
+        return json_encode($data);
     }
 
     private function xmlresponse_to_id($xml_string)
@@ -350,7 +394,16 @@ trait MoodleRestProTrait
 
         try {
             $xml_tree = new \SimpleXMLElement($response);
-            
+
+            // Moodle o la red fallaron: NO es "usuario no encontrado"
+            if ($xml_tree->getName() == 'EXCEPTION') {
+                Log::error("[MOODLE_ERROR] get_user_by_field({$field}) devolvió excepción: " . $response);
+                return [
+                    'status' => 'moodle_error',
+                    'message' => 'Moodle devolvió una excepción al buscar usuario: ' . $response
+                ];
+            }
+
             // Verificar si hay resultados
             if ($xml_tree->MULTIPLE && $xml_tree->MULTIPLE->SINGLE) {
                 $user = [];
@@ -381,8 +434,11 @@ trait MoodleRestProTrait
                 'message' => 'Usuario no encontrado'
             ];
         } catch (\Exception $e) {
+            Log::error("[MOODLE_ERROR] get_user_by_field({$field}) no se pudo parsear: " . $e->getMessage(), [
+                'response_preview' => mb_substr((string)$response, 0, 500),
+            ]);
             return [
-                'status' => 'error',
+                'status' => 'moodle_error',
                 'message' => 'Error al parsear respuesta: ' . $e->getMessage()
             ];
         }
@@ -399,7 +455,7 @@ trait MoodleRestProTrait
         // Log detallado antes de intentar actualizar
         Log::info('=== INTENTANDO ACTUALIZAR USUARIO EN MOODLE ===');
         Log::info('Token usado: ' . substr($token, 0, 8) . '...' . substr($token, -8));
-        Log::info('Datos del usuario a actualizar: ' . json_encode($user_data));
+        Log::info('Datos del usuario a actualizar: ' . $this->maskMoodleSecrets($user_data));
         
         $response = $this->call_moodle('core_user_update_users', $params, $token);
 
@@ -438,7 +494,7 @@ trait MoodleRestProTrait
             }
             
             // Para otros errores, retornar error
-            Log::error('Error al actualizar usuario en Moodle (no es de permisos): ' . $response);
+            Log::error('[MOODLE_ERROR] Error al actualizar usuario en Moodle (no es de permisos): ' . $response);
             return [
                 'status' => 'error',
                 'message' => "Error al actualizar: " . $response
@@ -472,7 +528,16 @@ trait MoodleRestProTrait
             
             // Primero intentar encontrar el usuario por email
             $existing_user = $this->get_user_by_field('email', $arrPost['email'], $token);
-            
+
+            // Fallo de Moodle/red: no asumir que el usuario no existe ni intentar crearlo
+            if ($existing_user['status'] == 'moodle_error') {
+                Log::error('[MOODLE_ERROR] createUser abortado: no se pudo consultar Moodle para ' . $arrPost['email'] . ' - ' . $existing_user['message']);
+                return [
+                    'status' => 'error',
+                    'message' => 'No se pudo consultar Moodle: ' . $existing_user['message']
+                ];
+            }
+
             if ($existing_user['status'] == 'success') {
                 // Usuario existe, intentar actualizarlo con nueva contraseña
                 Log::info('Usuario ya existe en Moodle, intentando actualizar contraseña: ' . $arrPost['email']);
@@ -517,7 +582,7 @@ trait MoodleRestProTrait
                         'user_exists' => true // ✅ Indicar que el usuario ya existía
                     ];
                     
-                    Log::info('Resultado que se retorna de createUser: ' . json_encode($result));
+                    Log::info('Resultado que se retorna de createUser: ' . $this->maskMoodleSecrets($result));
                     
                     return $result;
                 }
@@ -530,7 +595,7 @@ trait MoodleRestProTrait
             $user_data_1 = $this->make_test_user($arrPost);
             
             // Log para debug
-            Log::info('Creando nuevo usuario Moodle: ' . json_encode($user_data_1));
+            Log::info('Creando nuevo usuario Moodle: ' . $this->maskMoodleSecrets($user_data_1));
             
             $user_id_1 = $this->create_user($user_data_1, $token);
             
@@ -544,7 +609,7 @@ trait MoodleRestProTrait
             return $user_id_1;
         } 
         catch (\Exception $e) {
-            Log::error('Error de Moodle: ' . $e->getMessage());
+            Log::error('[MOODLE_ERROR] createUser excepción (' . ($arrPost['email'] ?? 'sin email') . '): ' . $e->getMessage());
             Log::error('Error de Moodle: ' . $e->getTraceAsString());
             return array(
                 'status' => 'error',
