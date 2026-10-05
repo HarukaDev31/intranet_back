@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Calendar;
 use App\Http\Controllers\Controller;
 use App\Models\Calendar\Calendar;
 use App\Models\Calendar\CalendarEvent;
+use App\Models\Calendar\CalendarRoleGroup;
+use App\Exports\CalendarProgresoExport;
+use Maatwebsite\Excel\Facades\Excel;
 use App\Services\Calendar\CalendarEventService;
 use App\Services\Calendar\CalendarPermissionService;
 use Illuminate\Http\Request;
@@ -22,6 +25,79 @@ class CalendarController extends Controller
     {
         $this->eventService = $eventService;
         $this->permissionService = $permissionService;
+    }
+
+    /**
+     * GET /api/calendar/progress/export
+     * Excel de la tabla de progreso (todas las filas, mismos filtros que GET /events). Solo jefe del grupo.
+     * Query: role_group_id (obligatorio), start_date, end_date, responsable_ids[], contenedor_ids[], status, priority, event_id.
+     */
+    public function exportProgress(Request $request)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            $roleGroupId = $request->input('role_group_id');
+            $roleGroupId = $roleGroupId !== null && $roleGroupId !== '' ? (int) $roleGroupId : null;
+            if ($roleGroupId === null) {
+                return response()->json(['success' => false, 'message' => 'Falta el grupo de calendario'], 422);
+            }
+            if (!$this->permissionService->userBelongsToRoleGroup($user, $roleGroupId)
+                || !$this->permissionService->isJefeOfRoleGroup($user, $roleGroupId)) {
+                return response()->json(['success' => false, 'message' => 'Solo el jefe del grupo puede exportar'], 403);
+            }
+
+            $eventId = $request->input('event_id');
+            $priority = $request->input('priority');
+
+            $result = $this->eventService->getEventsForUser(
+                $user->getIdUsuario(),
+                $request->input('start_date'),
+                $request->input('end_date'),
+                $this->parseIdList($request->input('responsable_ids')),
+                $this->parseIdList($request->input('contenedor_ids')),
+                $request->input('status'),
+                $priority !== null && $priority !== '' ? (int) $priority : null,
+                false,
+                1,
+                0,
+                $roleGroupId,
+                is_numeric($eventId) ? (int) $eventId : null,
+                true,
+                true,
+                true
+            );
+            $events = is_array($result) ? array_values($result) : $result->values()->all();
+
+            $group = CalendarRoleGroup::find($roleGroupId);
+            $usaConsolidado = $group ? (bool) $group->usa_consolidado : true;
+
+            return Excel::download(
+                new CalendarProgresoExport($events, $usaConsolidado),
+                'progreso_calendario_' . date('Y-m-d') . '.xlsx',
+                \Maatwebsite\Excel\Excel::XLSX
+            );
+        } catch (\Exception $e) {
+            Log::error('CalendarController@exportProgress: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al exportar el progreso',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /** Acepta ids[] o "1,2,3"; null si no hay ninguno. */
+    private function parseIdList($raw): ?array
+    {
+        if (is_string($raw) && $raw !== '') {
+            $raw = explode(',', $raw);
+        }
+        if (!is_array($raw)) {
+            return null;
+        }
+        $ids = array_values(array_filter(array_map('intval', $raw)));
+
+        return $ids === [] ? null : $ids;
     }
 
     /**
