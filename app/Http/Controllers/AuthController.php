@@ -232,6 +232,9 @@ class AuthController extends Controller
                                     'paises_habilitados' => \App\Support\Organizacion\OrganizacionPaisesHabilitados::idsPermitidos(
                                         $usuario->organizacion->ID_Organizacion
                                     ),
+                                    'pais_iso2' => $usuario->organizacion->paisFlag
+                                        ? strtolower((string) $usuario->organizacion->paisFlag->iso2)
+                                        : null,
                                     // Org ≠ 1 sin Meta propio: el front no avisa (sonido/notificación) de mensajes del inbox.
                                     'whatsapp_meta_propio' => (int) $usuario->organizacion->ID_Organizacion === 1
                                         || app(\App\Services\WhatsappInbox\WhatsappInboxOrgConfigService::class)
