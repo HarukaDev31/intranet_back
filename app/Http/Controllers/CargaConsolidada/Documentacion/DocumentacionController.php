@@ -1265,16 +1265,14 @@ class DocumentacionController extends Controller
         $valor_cot = "-";
         $tipoCliente = "No existe en contenedor";
 
-        foreach ($dataSystem as $item) {
-            if ($this->isNameMatch($client, $item->nombre)) {
-                $volumen_cotizacion = $item->volumen;
-                $volumen_china = $item->volumen_china;
-                $volumen_selected = $item->vol_selected ?? '';
-                $volumen_doc = $item->volumen_doc;
-                $valor_doc = $item->valor_doc;
-                $tipoCliente = $item->name;
-                break;
-            }
+        $item = $this->findSystemClient($client, $dataSystem);
+        if ($item !== null) {
+            $volumen_cotizacion = $item->volumen;
+            $volumen_china = $item->volumen_china;
+            $volumen_selected = $item->vol_selected ?? '';
+            $volumen_doc = $item->volumen_doc;
+            $valor_doc = $item->valor_doc;
+            $tipoCliente = $item->name;
         }
 
         // Seleccionar volumen apropiado
@@ -1286,6 +1284,46 @@ class DocumentacionController extends Controller
 
         $sheet->setCellValue('U' . $row, $volumen_cotizacion);
         $sheet->setCellValue('C' . $row, $tipoCliente);
+    }
+
+    /**
+     * Busca el cliente del sistema: primero coincidencia exacta (normalizada) y, si no hay,
+     * la más parecida. Evita que "Jhon Mamani 2" tome los datos de "Jhon Mamani".
+     */
+    private function findSystemClient($client, $dataSystem)
+    {
+        $target = $this->normalizeClientName($client);
+        if ($target === '') {
+            return null;
+        }
+
+        $best = null;
+        $bestSimilarity = 0;
+        foreach ($dataSystem as $item) {
+            $candidate = $this->normalizeClientName($item->nombre);
+            if ($candidate === $target) {
+                return $item;
+            }
+            // Nombres con distintos números (ej. "Jhon Mamani" vs "Jhon Mamani 2") son clientes distintos
+            if ($this->nameDigits($candidate) !== $this->nameDigits($target)) {
+                continue;
+            }
+            $similarity = 0;
+            similar_text($target, $candidate, $similarity);
+            if ($similarity >= 85 && $similarity > $bestSimilarity) {
+                $best = $item;
+                $bestSimilarity = $similarity;
+            }
+        }
+
+        return $best;
+    }
+
+    private function nameDigits($normalizedName)
+    {
+        preg_match_all('/\d+/', (string) $normalizedName, $m);
+
+        return implode(' ', $m[0]);
     }
 
     /**
@@ -1715,6 +1753,11 @@ class DocumentacionController extends Controller
         if ($normalized1 === $normalized2) {
             Log::info('✅ Coincidencia exacta encontrada');
             return true;
+        }
+
+        // Nombres con distintos números (ej. "Jhon Mamani" vs "Jhon Mamani 2") son clientes distintos
+        if ($this->nameDigits($normalized1) !== $this->nameDigits($normalized2)) {
+            return false;
         }
 
         // Comparación de similitud (85% o más)
