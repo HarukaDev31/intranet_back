@@ -288,6 +288,10 @@ class ContenedorController extends Controller
             $query->where('estado_finanzas', $request->estado_finanzas);
         }
 
+        if ($request->filled('estado_china') && strtolower((string) $request->estado_china) !== 'todos') {
+            $query->where('estado_china', strtoupper(trim((string) $request->estado_china)));
+        }
+
         if (!($authUser instanceof Usuario)) {
             $jwtUser = JWTAuth::user();
             $authUser = $jwtUser instanceof Usuario ? $jwtUser : $authUser;
