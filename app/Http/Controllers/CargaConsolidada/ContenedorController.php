@@ -456,6 +456,7 @@ class ContenedorController extends Controller
                 'estado_china' => $c->estado_china,
                 'estado_finanzas' => $c->estado_finanzas,
                 'pais' => $c->pais,
+                'pais_iso2' => $c->paisFlag ? strtolower((string) $c->paisFlag->iso2) : null,
                 'tipo_contenedor' => $c->tipo_contenedor,
                 'canal_control' => $c->canal_control,
                 'naviera' => $c->naviera,
