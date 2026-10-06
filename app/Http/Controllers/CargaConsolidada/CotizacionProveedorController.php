@@ -23,6 +23,7 @@ use App\Jobs\SendInspectionMediaJob;
 use App\Services\CargaConsolidada\CargaConsolidadaCacheService;
 use App\Services\CargaConsolidada\ReminderInicialWhatsappService;
 use App\Jobs\ForceSendRotuladoJob;
+use App\Services\CargaConsolidada\RotuladoDescargaService;
 use App\Jobs\SendRecordatorioDatosProveedorJob;
 use App\Models\ContenedorCotizacion;
 use Illuminate\Support\Facades\Storage;
@@ -1188,6 +1189,48 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
     }
 
     /**
+     * Org socio sin Meta propio: en vez de enviar por WhatsApp se devuelve un ZIP para descargar.
+     *
+     * @param Cotizacion $cotizacion
+     * @param array $idsProveedores
+     * @return \Illuminate\Http\JsonResponse|null null si no aplica (flujo normal por WhatsApp)
+     */
+    private function respuestaRotuladoDescarga($cotizacion, $idsProveedores)
+    {
+        $descarga = app(RotuladoDescargaService::class);
+        if (!$descarga->aplicaDescarga($descarga->organizacionIdDeCotizacion($cotizacion))) {
+            return null;
+        }
+
+        try {
+            $contenedor = Contenedor::find($cotizacion->id_contenedor);
+            if (!$contenedor) {
+                return response()->json(['success' => false, 'message' => 'Contenedor no encontrado'], 404);
+            }
+            $zip = $descarga->generar($cotizacion, (array) $idsProveedores, $contenedor);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Esta organización no tiene WhatsApp (Meta) configurado: se descargarán los archivos de rotulado.',
+                'data' => [
+                    'download_url' => $zip['url'],
+                    'filename' => $zip['filename'],
+                    'proveedores_count' => $zip['proveedores'],
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('[ROTULADO_DESCARGA] Error en respuestaRotuladoDescarga: ' . $e->getMessage(), [
+                'id_cotizacion' => $cotizacion->id,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudieron generar los archivos de rotulado: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * En orgs socio, solo se puede pasar a rotulado si la cotización está confirmada.
      *
      * @param \App\Models\CargaConsolidada\Cotizacion $cotizacion
@@ -1297,12 +1340,17 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 return $bloqueadoConfirmado;
             }
 
+            $idsProveedores = $this->persistirTipoRotuladoProveedores($idCotizacion, $proveedores);
+
+            $descarga = $this->respuestaRotuladoDescarga($cotizacion, $idsProveedores);
+            if ($descarga) {
+                return $descarga;
+            }
+
             $bloqueado = $this->respuestaRotuladoDeshabilitado($cotizacion);
             if ($bloqueado) {
                 return $bloqueado;
             }
-
-            $idsProveedores = $this->persistirTipoRotuladoProveedores($idCotizacion, $proveedores);
 
             $idContenedor = $cotizacion->id_contenedor;
             $carga = Contenedor::where('id', $idContenedor)->first()->carga;
@@ -3643,6 +3691,10 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 if ($bloqueadoConfirmado) {
                     return $bloqueadoConfirmado;
                 }
+                $descarga = $this->respuestaRotuladoDescarga($cotizacion, $idsProveedores);
+                if ($descarga) {
+                    return $descarga;
+                }
                 $bloqueado = $this->respuestaRotuladoDeshabilitado($cotizacion);
                 if ($bloqueado) {
                     return $bloqueado;
@@ -4096,9 +4148,13 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             return $bloqueadoConfirmado;
         }
 
-        $bloqueado = $this->respuestaRotuladoDeshabilitado($cotizacion);
-        if ($bloqueado) {
-            return $bloqueado;
+        // Socio sin Meta propio: el rotulado se descarga, no depende del flag de envíos
+        $descarga = app(RotuladoDescargaService::class);
+        if (!$descarga->aplicaDescarga($descarga->organizacionIdDeCotizacion($cotizacion))) {
+            $bloqueado = $this->respuestaRotuladoDeshabilitado($cotizacion);
+            if ($bloqueado) {
+                return $bloqueado;
+            }
         }
 
         return response()->json([
@@ -4137,6 +4193,9 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
         if ($jobResponse instanceof \Illuminate\Http\JsonResponse) {
             $payload = $jobResponse->getData(true);
             if (is_array($payload) && array_key_exists('success', $payload) && empty($payload['success'])) {
+                return $jobResponse;
+            }
+            if (is_array($payload) && !empty($payload['data']['download_url'])) {
                 return $jobResponse;
             }
         }
