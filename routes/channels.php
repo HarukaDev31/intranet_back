@@ -70,8 +70,11 @@ Broadcast::channel('carga-consolidada.seguimiento-drive.{idContenedor}', functio
 });
 
 // WhatsApp Inbox coordinación — tiempo real del chat Meta
+// Canal legado: solo org 1 (los socios usan whatsapp-inbox.org.{id})
 Broadcast::channel('whatsapp-inbox.coordinacion', function ($user) {
-    return $user instanceof Usuario && $user->puedeAccederWhatsappInbox();
+    return $user instanceof Usuario
+        && $user->puedeAccederWhatsappInbox()
+        && (int) $user->getAttribute('ID_Organizacion') === Usuario::ID_ORGANIZACION_ADMIN;
 });
 
 Broadcast::channel('whatsapp-inbox.org.{organizacionId}', function ($user, $organizacionId) {

@@ -206,7 +206,11 @@ class BroadcastController extends Controller
                 }
 
                 if ($requiredRole === '__wa_inbox__') {
-                    if (!$this->usuarioPuedeAccederWhatsappInbox($user)) {
+                    // Canal legado de la org 1: los socios usan whatsapp-inbox.org.{id}
+                    if (
+                        !$this->usuarioPuedeAccederWhatsappInbox($user)
+                        || (int) $user->getAttribute('ID_Organizacion') !== Usuario::ID_ORGANIZACION_ADMIN
+                    ) {
                         Log::error('User not authorized for whatsapp-inbox channel', [
                             'user_id' => $user->ID_Usuario,
                             'channel' => $channelName,
