@@ -504,15 +504,16 @@ class OrganizacionMensajeriaService
             return 'PRO MUNDO COMEX S.A.C';
         }
 
-        $portal = OrganizacionPortal::query()->where('organizacion_id', $organizacionId)->first();
-        $nombrePublico = $portal ? trim((string) $portal->nombre_publico) : '';
-        if ($nombrePublico !== '') {
-            return $nombrePublico;
+        // Nombre de la organización (panel-acceso/organizaciones); nombre público del portal solo como respaldo.
+        $org = Organizacion::query()->find($organizacionId);
+        $nombre = $org ? trim((string) $org->getAttribute('No_Organizacion')) : '';
+        if ($nombre !== '') {
+            return $nombre;
         }
 
-        $org = Organizacion::query()->find($organizacionId);
+        $portal = OrganizacionPortal::query()->where('organizacion_id', $organizacionId)->first();
 
-        return $org ? (string) $org->getAttribute('No_Organizacion') : '';
+        return $portal ? trim((string) $portal->nombre_publico) : '';
     }
 
     /**
