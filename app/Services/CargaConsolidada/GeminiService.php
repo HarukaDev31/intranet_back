@@ -269,7 +269,8 @@ class GeminiService
             'Reglas: ' .
             '- cliente.nombre: valor del campo CLIENTE. ' .
             '- cliente.whatsapp: valor del campo Telf del cliente (no el teléfono ni el correo de la empresa emisora del pie de página). ' .
-            '- cliente.documento y cliente.correo: null si no aparecen (JSON null, nunca el texto "null"). cliente.tipo_documento: "ID". ' .
+            '- cliente.documento: null si no aparece (JSON null, nunca el texto "null"). cliente.tipo_documento: "ID". ' .
+            '- cliente.correo: SIEMPRE null. El correo del pie de página es de la empresa emisora, no del cliente. ' .
             '- proveedores: UN solo elemento con el producto de la proforma (campo Producto). ' .
             '- proveedores[0].productos: valor del campo Producto. ' .
             '- proveedores[0].cbm_total: valor del campo CBM. ' .
@@ -352,6 +353,8 @@ class GeminiService
         $cliente = ResumenClienteCampos::sanitizar(
             isset($extracted['cliente']) && is_array($extracted['cliente']) ? $extracted['cliente'] : []
         );
+        // El correo no se toma del documento (el que aparece es el de la empresa emisora).
+        $cliente['correo'] = null;
 
         Log::info('GeminiService extractFromCotizacionResumen (Bolivia): datos extraídos', [
             'source' => $source,
