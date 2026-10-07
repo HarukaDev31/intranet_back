@@ -155,8 +155,23 @@ class GeminiService
      * @param string $mimeType  MIME type soportado (ver COTIZACION_RESUMEN_SUPPORTED_MIMES)
      * @return array{success: bool, error: string|null, data: array{cliente: array, proveedores: array}|null}
      */
-    public function extractFromCotizacionResumen($filePath, $mimeType)
+    public function extractFromCotizacionResumen($filePath, $mimeType, $formato = 'default')
     {
+        if ($formato === 'bolivia') {
+            $result = $this->callGemini(
+                $filePath,
+                $mimeType,
+                self::cotizacionResumenBoliviaPrompt(),
+                8192,
+                self::cotizacionResumenBoliviaResponseSchema()
+            );
+            if (!$result['success']) {
+                return ['success' => false, 'error' => $result['error'], 'data' => null];
+            }
+
+            return $this->packCotizacionResumenBolivia($result['data'], basename($filePath));
+        }
+
         $prompt = 'Analiza este documento de cotización de importación (puede ser una cotización de proveedor, ' .
             'una factura proforma o una lista de productos con costos). Extrae los datos del cliente y de cada ' .
             'proveedor/producto que encuentres. ' .
@@ -202,8 +217,22 @@ class GeminiService
      * @param string $spreadsheetText
      * @return array{success: bool, error: string|null, data: array{cliente: array, proveedores: array}|null}
      */
-    public function extractFromCotizacionResumenText($spreadsheetText)
+    public function extractFromCotizacionResumenText($spreadsheetText, $formato = 'default')
     {
+        if ($formato === 'bolivia') {
+            $result = $this->analyzeTextAsJson(
+                self::cotizacionResumenBoliviaPrompt() . "\nContenido:\n" . $spreadsheetText,
+                8192,
+                0.1,
+                self::cotizacionResumenBoliviaResponseSchema()
+            );
+            if (!$result['success']) {
+                return ['success' => false, 'error' => $result['error'], 'data' => null];
+            }
+
+            return $this->packCotizacionResumenBolivia($result['data'], 'spreadsheet');
+        }
+
         $prompt = 'Analiza este documento de cotización de importación extraído de una hoja de cálculo. ' .
             'Extrae los datos del cliente y de cada proveedor/producto. ' .
             'cliente.nombre, cliente.tipo_documento (RUC o ID), cliente.documento (SOLO DNI/cédula/RUC del cliente, nunca teléfono ni N° de boleta/cotización ni ID de usuario), cliente.whatsapp (teléfono, no en documento), cliente.correo (email real o JSON null, nunca el texto "null"). ' .
@@ -225,6 +254,118 @@ class GeminiService
         }
 
         return $this->packCotizacionResumenExtracted($result['data'], 'spreadsheet');
+    }
+
+    /**
+     * Prompt de la proforma LCL de Bolivia (USD + Bs con tipo de cambio).
+     *
+     * @return string
+     */
+    private static function cotizacionResumenBoliviaPrompt()
+    {
+        return 'Analiza esta PROFORMA LCL de una empresa de importaciones de Bolivia (ya sea PDF o texto de hoja de cálculo). ' .
+            'Extrae el cliente y el producto con sus costos. ' .
+            'FORMATO NUMÉRICO BOLIVIANO: el punto es separador de miles y la coma es decimal. "17.430" = 17430, "9,68" = 9.68, "5,3" = 5.3, "22.453" = 22453. Devuelve números planos sin símbolo ni separador de miles. ' .
+            'Reglas: ' .
+            '- cliente.nombre: valor del campo CLIENTE. ' .
+            '- cliente.whatsapp: valor del campo Telf del cliente (no el teléfono ni el correo de la empresa emisora del pie de página). ' .
+            '- cliente.documento y cliente.correo: null si no aparecen (JSON null, nunca el texto "null"). cliente.tipo_documento: "ID". ' .
+            '- proveedores: UN solo elemento con el producto de la proforma (campo Producto). ' .
+            '- proveedores[0].productos: valor del campo Producto. ' .
+            '- proveedores[0].cbm_total: valor del campo CBM. ' .
+            '- proveedores[0].unidades: valor del campo Cantidad. peso_total, qty_cajas, incoterm, logistica, fob, impuesto, isd: null. ' .
+            '- proveedores[0].tipo_cambio: valor del campo Tipo de Cambio (ej. 9.68). ' .
+            '- proveedores[0].costos: una fila por cada concepto de las tablas "EXPRESADO EN DÓLARES AMERICANOS" (moneda "USD") y "EXPRESADO EN BOLIVIANOS" (moneda "BS"), con el concepto tal cual aparece y su valor numérico en esa moneda. ' .
+            'NO incluyas las filas de Sub Total ni TOTAL (Sub Total en USD, TOTAL en USD, TOTAL en BS) ni nada de la hoja "FORMA DE PAGO" ni de las notas. ' .
+            'Responde solo con el JSON del schema (una línea, compacto).';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function cotizacionResumenBoliviaResponseSchema()
+    {
+        $schema = self::cotizacionResumenResponseSchema();
+        $schema['properties']['proveedores']['items']['properties']['tipo_cambio'] = ['type' => 'NUMBER', 'nullable' => true];
+        $schema['properties']['proveedores']['items']['properties']['costos']['items']['properties']['moneda'] = ['type' => 'STRING', 'nullable' => true];
+        $schema['properties']['proveedores']['items']['properties']['costos']['items']['required'][] = 'moneda';
+        $schema['properties']['proveedores']['items']['required'][] = 'tipo_cambio';
+
+        return $schema;
+    }
+
+    /**
+     * Bolivia: cada concepto queda con valor en USD (`valor`), valor en Bs y la tasa del documento.
+     * Los montos en Bs se convierten a USD con el tipo de cambio; los USD se llevan a Bs.
+     *
+     * @param mixed $extracted
+     * @param string $source
+     * @return array{success: bool, error: null, data: array{cliente: array, proveedores: array}}
+     */
+    private function packCotizacionResumenBolivia($extracted, $source)
+    {
+        $extracted = is_array($extracted) ? $extracted : [];
+        $proveedores = isset($extracted['proveedores']) && is_array($extracted['proveedores'])
+            ? array_values($extracted['proveedores'])
+            : [];
+
+        $salida = [];
+        foreach ($proveedores as $prov) {
+            if (!is_array($prov)) {
+                continue;
+            }
+            $tc = isset($prov['tipo_cambio']) && (float) $prov['tipo_cambio'] > 0 ? (float) $prov['tipo_cambio'] : null;
+            $costos = [];
+            foreach (isset($prov['costos']) && is_array($prov['costos']) ? $prov['costos'] : [] as $costo) {
+                if (!is_array($costo)) {
+                    continue;
+                }
+                $concepto = isset($costo['concepto']) ? trim((string) $costo['concepto']) : '';
+                if ($concepto === '' || !isset($costo['valor']) || $costo['valor'] === null) {
+                    continue;
+                }
+                $valor = (float) $costo['valor'];
+                $moneda = strtoupper(trim((string) ($costo['moneda'] ?? 'USD')));
+                $esBs = in_array($moneda, ['BS', 'BOB', 'BOLIVIANOS'], true);
+                if ($esBs) {
+                    $valorBs = round($valor, 2);
+                    $valorUsd = $tc ? round($valor / $tc, 2) : 0.0;
+                } else {
+                    $valorUsd = round($valor, 2);
+                    $valorBs = $tc ? round($valor * $tc, 2) : null;
+                }
+                $costos[] = [
+                    'concepto' => $concepto,
+                    'valor' => $valorUsd,
+                    'valor_bs' => $valorBs,
+                    'tasa_cambio' => $tc,
+                ];
+            }
+            $prov['costos'] = $costos;
+            foreach (['logistica', 'fob', 'impuesto', 'isd'] as $campo) {
+                $prov[$campo] = null;
+            }
+            unset($prov['tipo_cambio']);
+            $salida[] = $prov;
+        }
+
+        $cliente = ResumenClienteCampos::sanitizar(
+            isset($extracted['cliente']) && is_array($extracted['cliente']) ? $extracted['cliente'] : []
+        );
+
+        Log::info('GeminiService extractFromCotizacionResumen (Bolivia): datos extraídos', [
+            'source' => $source,
+            'extracted' => $extracted,
+        ]);
+
+        return [
+            'success' => true,
+            'error' => null,
+            'data' => [
+                'cliente' => $cliente,
+                'proveedores' => $salida,
+            ],
+        ];
     }
 
     /**

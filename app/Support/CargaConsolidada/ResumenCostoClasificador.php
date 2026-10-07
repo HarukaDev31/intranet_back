@@ -20,11 +20,15 @@ class ResumenCostoClasificador
      * @param mixed $concepto
      * @return string
      */
-    public static function tipo($concepto)
+    public static function tipo($concepto, $formato = 'default')
     {
         $c = mb_strtolower(trim((string) $concepto));
         if ($c === '') {
             return self::OTRO;
+        }
+
+        if ($formato === 'bolivia') {
+            return self::tipoBolivia($c);
         }
 
         if (self::esIsd($c)) {
@@ -38,6 +42,28 @@ class ResumenCostoClasificador
         }
         if (self::esLogistica($c)) {
             return self::LOGISTICA;
+        }
+
+        return self::OTRO;
+    }
+
+    /**
+     * Proforma Bolivia: solo cuentan el valor FOB, el transporte marítimo/terrestre (logística)
+     * y los "Impuestos a la Aduana Nacional". Albo/despacho y comisiones no suman.
+     *
+     * @param string $c
+     * @return string
+     */
+    private static function tipoBolivia($c)
+    {
+        if (self::esFob($c)) {
+            return self::FOB;
+        }
+        if (strpos($c, 'transporte') !== false && (strpos($c, 'maritim') !== false || strpos($c, 'marítim') !== false || strpos($c, 'terrestre') !== false)) {
+            return self::LOGISTICA;
+        }
+        if (strpos($c, 'impuest') !== false && strpos($c, 'aduana') !== false) {
+            return self::IMPUESTO;
         }
 
         return self::OTRO;

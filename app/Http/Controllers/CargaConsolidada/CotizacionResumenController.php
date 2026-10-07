@@ -20,10 +20,12 @@ use App\Services\CargaConsolidada\CustomersHeadersService;
 use App\Services\CargaConsolidada\GeminiService;
 use App\Support\CargaConsolidada\ResumenClienteCampos;
 use App\Support\CargaConsolidada\ResumenCostoClasificador;
+use App\Support\CargaConsolidada\ResumenFormato;
 use App\Support\Phone\CountryPhoneHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
@@ -78,6 +80,7 @@ class CotizacionResumenController extends Controller
         }
 
         $orgId = $this->orgIdAutenticada();
+        $formato = ResumenFormato::deOrganizacion($orgId);
 
         $originalName = $file->getClientOriginalName();
         $mimeType = $this->mimeParaExtraccion($file);
@@ -94,10 +97,10 @@ class CotizacionResumenController extends Controller
             if ($esHoja) {
                 $texto = $this->hojaCalculoATexto($localPath);
                 $result = $texto !== ''
-                    ? $gemini->extractFromCotizacionResumenText($texto)
+                    ? $gemini->extractFromCotizacionResumenText($texto, $formato)
                     : ['success' => false, 'error' => 'La hoja está vacía', 'data' => null];
             } else {
-                $result = $gemini->extractFromCotizacionResumen($localPath, $mimeType);
+                $result = $gemini->extractFromCotizacionResumen($localPath, $mimeType, $formato);
             }
 
             if (!empty($result['success'])) {
@@ -126,6 +129,7 @@ class CotizacionResumenController extends Controller
         return response()->json([
             'success' => true,
             'extracted_by_ai' => $extractedByAi,
+            'formato' => $formato,
             'message' => $extractedByAi
                 ? null
                 : ($error ?? 'No se pudo leer el documento automáticamente; completa los datos a mano.'),
@@ -296,7 +300,7 @@ class CotizacionResumenController extends Controller
                     return (float) ($p->getAttribute('cbm_total') ?? 0) + (float) ($p->getAttribute('cbm_imo') ?? 0);
                 });
                 $totalCajas = $proveedores->sum(fn ($p) => (int) ($p->getAttribute('qty_box') ?? 0));
-                $totalesCosto = $this->sumarCostosProveedores($proveedores);
+                $totalesCosto = $this->sumarCostosProveedores($proveedores, ResumenFormato::deOrganizacion($c->getAttribute('organizacion_id')));
                 $fob = (float) ($c->getAttribute('fob') ?? 0);
                 $logistica = (float) ($c->getAttribute('monto') ?? 0);
                 $impuesto = (float) ($c->getAttribute('impuestos') ?? 0);
@@ -431,6 +435,8 @@ class CotizacionResumenController extends Controller
             'proveedores.*.costos' => 'nullable|array',
             'proveedores.*.costos.*.concepto' => 'required_with:proveedores.*.costos|string|max:150',
             'proveedores.*.costos.*.valor' => 'required_with:proveedores.*.costos|numeric|min:0',
+            'proveedores.*.costos.*.valor_bs' => 'nullable|numeric|min:0',
+            'proveedores.*.costos.*.tasa_cambio' => 'nullable|numeric|min:0',
             'qty_proveedores' => 'nullable|integer|min:1',
             'descuento' => 'nullable|numeric|min:0',
             'archivo' => 'nullable|array',
@@ -453,8 +459,9 @@ class CotizacionResumenController extends Controller
         DB::beginTransaction();
         try {
             $cliente = ResumenClienteCampos::sanitizar((array) $request->input('cliente', []), true);
-            $totalesCosto = $this->sumarCostosRequest($request->input('proveedores', []));
             $orgId = (int) $contenedor->getAttribute('organizacion_id') ?: $this->orgIdEfectiva($request);
+            $formato = ResumenFormato::deOrganizacion($orgId);
+            $totalesCosto = $this->sumarCostosRequest($request->input('proveedores', []), $formato);
             $clienteExistente = $this->resolverClienteDeLaOrg($cliente, $orgId);
             if (!empty($cliente['id']) && !$clienteExistente) {
                 DB::rollBack();
@@ -510,7 +517,7 @@ class CotizacionResumenController extends Controller
                 ]);
 
                 $costos = $prov['costos'] ?? [];
-                $inversionTotal = collect($costos)->sum(fn ($c) => (float) $c['valor']);
+                $inversionTotal = $this->inversionTotalCostos($costos, $formato);
                 $unidades = $prov['unidades'] ?? null;
                 $costoUnitarioEstimado = ($unidades && (int) $unidades > 0)
                     ? round($inversionTotal / (int) $unidades, 4)
@@ -535,7 +542,7 @@ class CotizacionResumenController extends Controller
                         'concepto' => $costo['concepto'],
                         'orden' => $orden,
                         'valor' => $costo['valor'],
-                    ]);
+                    ] + $this->camposExtraCosto($costo));
                 }
 
                 if ($primerProveedorId === null) {
@@ -620,6 +627,7 @@ class CotizacionResumenController extends Controller
                 'id_usuario' => $cotizacion->getAttribute('id_usuario'),
                 'descuento' => (float) ($cotizacion->getAttribute('tarifa_descuento') ?? 0),
                 'qty_proveedores' => $this->qtyProveedoresGuardado($cotizacion, $proveedores->count()),
+                'formato' => ResumenFormato::deOrganizacion($cotizacion->getAttribute('organizacion_id')),
                 'tarifa' => (float) ($cotizacion->getAttribute('tarifa') ?? 0),
                 'fob' => (float) ($cotizacion->getAttribute('fob') ?? 0),
                 'isd' => (float) ($cotizacion->getAttribute('isd') ?? 0),
@@ -650,6 +658,8 @@ class CotizacionResumenController extends Controller
                             ? $resumen->getRelation('costos')->map(fn ($costo) => [
                                 'concepto' => $costo->getAttribute('concepto'),
                                 'valor' => $costo->getAttribute('valor'),
+                                'valor_bs' => $costo->getAttribute('valor_bs'),
+                                'tasa_cambio' => $costo->getAttribute('tasa_cambio'),
                             ])->values()
                             : [],
                     ];
@@ -685,6 +695,8 @@ class CotizacionResumenController extends Controller
             'proveedores.*.incoterm' => 'nullable|string|max:50',
             'proveedores.*.moneda' => 'nullable|string|max:3',
             'proveedores.*.costos' => 'nullable|array',
+            'proveedores.*.costos.*.valor_bs' => 'nullable|numeric|min:0',
+            'proveedores.*.costos.*.tasa_cambio' => 'nullable|numeric|min:0',
             'qty_proveedores' => 'nullable|integer|min:1',
             'descuento' => 'nullable|numeric|min:0',
             'archivo' => 'nullable|array',
@@ -717,8 +729,8 @@ class CotizacionResumenController extends Controller
         DB::beginTransaction();
         try {
             $cliente = ResumenClienteCampos::sanitizar((array) $request->input('cliente', []), true);
-            $totalesCosto = $this->sumarCostosRequest($request->input('proveedores', []));
             $orgId = (int) $cotizacion->getAttribute('organizacion_id') ?: $this->orgIdAutenticada();
+            $totalesCosto = $this->sumarCostosRequest($request->input('proveedores', []), ResumenFormato::deOrganizacion($orgId));
             $clienteExistente = $this->resolverClienteDeLaOrg($cliente, $orgId);
             if (!empty($cliente['id']) && !$clienteExistente) {
                 DB::rollBack();
@@ -1236,7 +1248,7 @@ class CotizacionResumenController extends Controller
             ->with('resumen.costos')
             ->get();
 
-        $totales = $this->sumarCostosProveedores($proveedores);
+        $totales = $this->sumarCostosProveedores($proveedores, ResumenFormato::deOrganizacion($cotizacion->getAttribute('organizacion_id')));
         $totalCbm = 0.0;
         $totalCbmImo = 0.0;
         foreach ($proveedores as $p) {
@@ -1358,9 +1370,9 @@ class CotizacionResumenController extends Controller
         return implode("\n", $lines);
     }
 
-    private function clasificarCosto($concepto, $valor, &$fob, &$logistica, &$impuesto, &$isd)
+    private function clasificarCosto($concepto, $valor, &$fob, &$logistica, &$impuesto, &$isd, $formato = ResumenFormato::DEFAULT)
     {
-        $tipo = ResumenCostoClasificador::tipo($concepto);
+        $tipo = ResumenCostoClasificador::tipo($concepto, $formato);
         if ($tipo === ResumenCostoClasificador::ISD) {
             $isd += $valor;
             return;
@@ -1378,7 +1390,7 @@ class CotizacionResumenController extends Controller
         }
     }
 
-    private function sumarCostosRequest(array $proveedores)
+    private function sumarCostosRequest(array $proveedores, $formato = ResumenFormato::DEFAULT)
     {
         $fob = 0.0;
         $logistica = 0.0;
@@ -1386,13 +1398,13 @@ class CotizacionResumenController extends Controller
         $isd = 0.0;
         foreach ($proveedores as $prov) {
             foreach (($prov['costos'] ?? []) as $costo) {
-                $this->clasificarCosto($costo['concepto'] ?? '', (float) ($costo['valor'] ?? 0), $fob, $logistica, $impuesto, $isd);
+                $this->clasificarCosto($costo['concepto'] ?? '', (float) ($costo['valor'] ?? 0), $fob, $logistica, $impuesto, $isd, $formato);
             }
         }
         return ['fob' => $fob, 'logistica' => $logistica, 'impuesto' => $impuesto, 'isd' => $isd];
     }
 
-    private function sumarCostosProveedores($proveedores)
+    private function sumarCostosProveedores($proveedores, $formato = ResumenFormato::DEFAULT)
     {
         $fob = 0.0;
         $logistica = 0.0;
@@ -1410,11 +1422,57 @@ class CotizacionResumenController extends Controller
                     $fob,
                     $logistica,
                     $impuesto,
-                    $isd
+                    $isd,
+                    $formato
                 );
             }
         }
         return ['fob' => $fob, 'logistica' => $logistica, 'impuesto' => $impuesto, 'isd' => $isd];
+    }
+
+    /**
+     * Inversión total del proveedor. Por defecto suma todos los conceptos; en Bolivia solo
+     * FOB + logística + impuestos (comisiones y despacho se muestran pero no entran al cálculo).
+     *
+     * @param array<int, array<string, mixed>> $costos
+     * @param string $formato
+     * @return float
+     */
+    private function inversionTotalCostos(array $costos, $formato = ResumenFormato::DEFAULT)
+    {
+        if (!ResumenFormato::esBolivia($formato)) {
+            return (float) collect($costos)->sum(function ($c) {
+                return (float) $c['valor'];
+            });
+        }
+
+        $fob = 0.0;
+        $logistica = 0.0;
+        $impuesto = 0.0;
+        $isd = 0.0;
+        foreach ($costos as $c) {
+            $this->clasificarCosto($c['concepto'] ?? '', (float) ($c['valor'] ?? 0), $fob, $logistica, $impuesto, $isd, $formato);
+        }
+
+        return $fob + $logistica + $impuesto + $isd;
+    }
+
+    /**
+     * Valor en Bs y tasa de cambio del concepto (Bolivia). Vacío si la columna aún no existe.
+     *
+     * @param array<string, mixed> $costo
+     * @return array<string, mixed>
+     */
+    private function camposExtraCosto(array $costo)
+    {
+        if (!Schema::hasColumn('cotizacion_proveedor_resumen_costo', 'valor_bs')) {
+            return [];
+        }
+
+        return [
+            'valor_bs' => isset($costo['valor_bs']) && $costo['valor_bs'] !== '' ? $costo['valor_bs'] : null,
+            'tasa_cambio' => isset($costo['tasa_cambio']) && $costo['tasa_cambio'] !== '' ? $costo['tasa_cambio'] : null,
+        ];
     }
 
     /**
@@ -1550,6 +1608,7 @@ class CotizacionResumenController extends Controller
                 return (int) $p->getAttribute('id');
             });
 
+        $formato = ResumenFormato::deOrganizacion($orgId);
         $idsKeep = [];
         $totalCbmFull = 0.0;
         $totalCbmImo = 0.0;
@@ -1590,9 +1649,7 @@ class CotizacionResumenController extends Controller
             }
 
             $costos = $prov['costos'] ?? [];
-            $inversionTotal = collect($costos)->sum(function ($c) {
-                return (float) $c['valor'];
-            });
+            $inversionTotal = $this->inversionTotalCostos($costos, $formato);
             $unidades = $prov['unidades'] ?? null;
             $costoUnitarioEstimado = ($unidades && (int) $unidades > 0)
                 ? round($inversionTotal / (int) $unidades, 4)
@@ -1630,7 +1687,7 @@ class CotizacionResumenController extends Controller
                     'concepto' => $costo['concepto'],
                     'orden' => $orden,
                     'valor' => $costo['valor'],
-                ]);
+                ] + $this->camposExtraCosto($costo));
                 $linea->save();
             }
         }
@@ -1651,7 +1708,7 @@ class CotizacionResumenController extends Controller
             $this->eliminarProveedorResumenSiNoTieneCodigo($existente);
         }
 
-        $totalesCosto = $this->sumarCostosRequest($proveedoresPayload);
+        $totalesCosto = $this->sumarCostosRequest($proveedoresPayload, $formato);
         $cotizacion->update([
             'volumen' => $totalCbmFull,
             'es_imo' => $totalCbmImo > 0,
