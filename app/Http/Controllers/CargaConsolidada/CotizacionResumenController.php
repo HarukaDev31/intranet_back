@@ -325,6 +325,9 @@ class CotizacionResumenController extends Controller
                 $carga = optional($contenedor)->getAttribute('carga');
 
                 $clienteVista = $this->clienteResumenParaVista($c);
+                $boliviaCols = ResumenFormato::esBolivia(ResumenFormato::deOrganizacion($c->getAttribute('organizacion_id')))
+                    ? $this->columnasBolivia($proveedores)
+                    : null;
 
                 return [
                     'id' => $c->getAttribute('id'),
@@ -347,6 +350,7 @@ class CotizacionResumenController extends Controller
                     'logistica' => $logistica,
                     'impuesto' => $impuesto,
                     'tarifa' => (float) ($c->getAttribute('tarifa') ?? 0),
+                    'bolivia' => $boliviaCols,
                     'descuento' => (float) ($c->getAttribute('tarifa_descuento') ?? 0),
                     'cod_cotizacion' => $c->getAttribute('cod_contract_calculator'),
                     'cod_contract' => $c->getAttribute('cod_contract'),
@@ -392,6 +396,7 @@ class CotizacionResumenController extends Controller
 
             return response()->json([
                 'success' => true,
+                'formato' => $orgEfectiva > 0 ? ResumenFormato::deOrganizacion($orgEfectiva) : ResumenFormato::DEFAULT,
                 'data' => $data->values(),
                 'headers' => $headers,
                 'pagination' => [
@@ -1428,6 +1433,50 @@ class CotizacionResumenController extends Controller
             }
         }
         return ['fob' => $fob, 'logistica' => $logistica, 'impuesto' => $impuesto, 'isd' => $isd];
+    }
+
+    /**
+     * Montos del listado de Bolivia: fob, comisión de giro y logística en USD;
+     * impuestos, despacho y comisión Genuino en Bs (valor_bs, o USD x tasa si falta).
+     *
+     * @param \Illuminate\Support\Collection $proveedores
+     * @return array<string, float>
+     */
+    private function columnasBolivia($proveedores)
+    {
+        $cols = [
+            'fob_usd' => 0.0,
+            'comision_giro_usd' => 0.0,
+            'logistica_usd' => 0.0,
+            'impuesto_bs' => 0.0,
+            'despacho_bs' => 0.0,
+            'comision_genuino_bs' => 0.0,
+        ];
+        foreach ($proveedores as $p) {
+            $resumen = $p->getRelation('resumen');
+            if (!$resumen || !$resumen->getRelation('costos')) {
+                continue;
+            }
+            foreach ($resumen->getRelation('costos') as $costo) {
+                $col = ResumenCostoClasificador::columnaBolivia($costo->getAttribute('concepto'));
+                if ($col === null) {
+                    continue;
+                }
+                $usd = (float) $costo->getAttribute('valor');
+                $bs = $costo->getAttribute('valor_bs');
+                $tasa = (float) $costo->getAttribute('tasa_cambio');
+                $bs = $bs !== null ? (float) $bs : ($tasa > 0 ? $usd * $tasa : 0.0);
+                if ($col === 'fob' || $col === 'comision_giro' || $col === 'logistica') {
+                    $cols[$col . '_usd'] += $usd;
+                } else {
+                    $cols[$col . '_bs'] += $bs;
+                }
+            }
+        }
+
+        return array_map(function ($v) {
+            return round($v, 2);
+        }, $cols);
     }
 
     /**

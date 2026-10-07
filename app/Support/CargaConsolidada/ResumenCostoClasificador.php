@@ -48,6 +48,43 @@ class ResumenCostoClasificador
     }
 
     /**
+     * Columna del listado de Bolivia a la que pertenece un concepto de la proforma
+     * (null si no corresponde a ninguna). Fob, comisión de giro y logística van en USD;
+     * impuestos, despacho y comisión Genuino van en Bs.
+     *
+     * @param mixed $concepto
+     * @return string|null
+     */
+    public static function columnaBolivia($concepto)
+    {
+        $c = mb_strtolower(trim((string) $concepto));
+        if ($c === '') {
+            return null;
+        }
+        $tipo = self::tipoBolivia($c);
+        if ($tipo === self::FOB) {
+            return 'fob';
+        }
+        if ($tipo === self::LOGISTICA) {
+            return 'logistica';
+        }
+        if ($tipo === self::IMPUESTO) {
+            return 'impuesto';
+        }
+        if (strpos($c, 'giro') !== false || strpos($c, 'alibaba') !== false) {
+            return 'comision_giro';
+        }
+        if (strpos($c, 'albo') !== false || strpos($c, 'despacho') !== false) {
+            return 'despacho';
+        }
+        if (strpos($c, 'comisi') !== false && strpos($c, 'genuino') !== false) {
+            return 'comision_genuino';
+        }
+
+        return null;
+    }
+
+    /**
      * Proforma Bolivia: solo cuentan el valor FOB, el transporte marítimo/terrestre (logística)
      * y los "Impuestos a la Aduana Nacional". Albo/despacho y comisiones no suman.
      *
