@@ -542,12 +542,14 @@ class CotizacionResumenController extends Controller
                 ]);
 
                 foreach ($costos as $orden => $costo) {
-                    CotizacionProveedorResumenCosto::create([
+                    $linea = new CotizacionProveedorResumenCosto();
+                    $linea->fill([
                         'id_cotizacion_proveedor_resumen' => $resumen->getAttribute('id'),
                         'concepto' => $costo['concepto'],
                         'orden' => $orden,
                         'valor' => $costo['valor'],
                     ] + $this->camposExtraCosto($costo));
+                    $linea->save();
                 }
 
                 if ($primerProveedorId === null) {

@@ -322,7 +322,7 @@ class GeminiService
                     continue;
                 }
                 $concepto = isset($costo['concepto']) ? trim((string) $costo['concepto']) : '';
-                if ($concepto === '' || !isset($costo['valor']) || $costo['valor'] === null) {
+                if ($concepto === '' || !isset($costo['valor'])) {
                     continue;
                 }
                 $valor = (float) $costo['valor'];
