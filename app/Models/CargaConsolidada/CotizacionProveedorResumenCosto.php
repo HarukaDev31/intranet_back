@@ -28,11 +28,15 @@ class CotizacionProveedorResumenCosto extends Model
         'concepto',
         'orden',
         'valor',
+        'valor_bs',
+        'tasa_cambio',
     ];
 
     protected $casts = [
         'orden' => 'integer',
         'valor' => 'decimal:2',
+        'valor_bs' => 'decimal:2',
+        'tasa_cambio' => 'decimal:4',
     ];
 
     public function resumen(): BelongsTo
