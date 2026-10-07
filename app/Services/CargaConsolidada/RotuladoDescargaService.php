@@ -2,11 +2,9 @@
 
 namespace App\Services\CargaConsolidada;
 
-use App\Contracts\ObjectStorageConnectorInterface;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
-use App\Services\Organizacion\OrganizacionMensajeriaService;
 use App\Services\WhatsappInbox\WhatsappInboxOrgConfigService;
 use App\Support\WhatsApp\CoordinacionMediaLink;
 use Illuminate\Support\Facades\Log;
@@ -15,7 +13,7 @@ use ZipArchive;
 
 /**
  * Rotulado para organizaciones socio sin Meta propio: en vez de enviar por WhatsApp
- * se arma un ZIP con los mismos archivos y se devuelve un enlace de descarga.
+ * se arma un ZIP solo con los PDF de rotulado (uno por proveedor) y se devuelve un enlace de descarga.
  */
 class RotuladoDescargaService
 {
@@ -71,40 +69,14 @@ class RotuladoDescargaService
             throw new \Exception('No se pudo crear el archivo ZIP de rotulado');
         }
 
-        $temporales = [];
         try {
             $pdfService = app(RotuladoPdfService::class);
-            $mensajeria = app(OrganizacionMensajeriaService::class);
 
             foreach ($proveedores as $proveedor) {
                 $supplierCode = (string) $proveedor->code_supplier;
-                $carpeta = 'Proveedor_' . ($supplierCode !== '' ? Str::slug($supplierCode, '_') : $proveedor->id) . '/';
 
                 $html = $pdfService->buildHtmlForCotizacion($cliente, $supplierCode, $carga, $cotizacion);
-                $zip->addFromString($carpeta . "Rotulado_{$supplierCode}.pdf", $pdfService->renderPdf($html));
-
-                $tipo = strtolower(trim((string) $proveedor->tipo_rotulado));
-                if ($tipo === 'movilidad_personal') {
-                    $this->agregarMovilidadPersonal($zip, $carpeta, $cotizacion, $proveedor, $carga);
-                } elseif (in_array($tipo, ['calzado', 'ropa', 'ropa_interior', 'maquinaria'], true)) {
-                    $this->agregarArchivoLocal(
-                        $zip,
-                        $this->rutaTemplateRotulado($tipo),
-                        $carpeta . $tipo . '_ejemplo.pdf'
-                    );
-                }
-            }
-
-            $this->agregarArchivoLocal(
-                $zip,
-                $mensajeria->localPathImagenConFallback($orgId, OrganizacionMensajeriaService::IMG_DIRECCION),
-                'Direccion_almacen_China.jpeg'
-            );
-            foreach ([OrganizacionMensajeriaService::IMG_PASO1 => 'Rotulado_paso1', OrganizacionMensajeriaService::IMG_PASO2 => 'Rotulado_paso2'] as $slot => $nombre) {
-                $ruta = $mensajeria->localPathImagenConFallback($orgId, $slot);
-                if ($ruta) {
-                    $this->agregarArchivoLocal($zip, $ruta, $nombre . '.' . (pathinfo($ruta, PATHINFO_EXTENSION) ?: 'jpg'));
-                }
+                $zip->addFromString("Rotulado_{$supplierCode}.pdf", $pdfService->renderPdf($html));
             }
 
             if (!$zip->close()) {
@@ -144,39 +116,5 @@ class RotuladoDescargaService
             'filename' => $zipName,
             'proveedores' => $proveedores->count(),
         ];
-    }
-
-    private function rutaTemplateRotulado(string $tipo): string
-    {
-        try {
-            return app(ObjectStorageConnectorInterface::class)->localPath('templates/rotulado/' . $tipo . '.pdf');
-        } catch (\Throwable $e) {
-            return '';
-        }
-    }
-
-    private function agregarArchivoLocal(ZipArchive $zip, ?string $ruta, string $nombreEnZip): void
-    {
-        if ($ruta !== null && $ruta !== '' && is_file($ruta)) {
-            $zip->addFile($ruta, $nombreEnZip);
-        } else {
-            Log::warning('[ROTULADO_DESCARGA] Archivo no encontrado, se omite del ZIP', ['archivo' => $nombreEnZip]);
-        }
-    }
-
-    private function agregarMovilidadPersonal(ZipArchive $zip, string $carpeta, Cotizacion $cotizacion, CotizacionProveedor $proveedor, string $carga): void
-    {
-        $vim = app(MovilidadPersonalVimService::class);
-        $result = $vim->generateForProveedor($cotizacion, $proveedor->toArray(), $carga);
-        if ($result === null) {
-            Log::error('[ROTULADO_DESCARGA] No se generaron códigos VIM', [
-                'id_cotizacion' => $cotizacion->id,
-                'code_supplier' => $proveedor->code_supplier,
-            ]);
-
-            return;
-        }
-        $this->agregarArchivoLocal($zip, $vim->ejemploPdfPath(), $carpeta . 'movilidad_personal_ejemplo.pdf');
-        $this->agregarArchivoLocal($zip, $result['excel_path'] ?? null, $carpeta . 'Codigos_VIN.' . (pathinfo((string) ($result['excel_path'] ?? ''), PATHINFO_EXTENSION) ?: 'xlsx'));
     }
 }
