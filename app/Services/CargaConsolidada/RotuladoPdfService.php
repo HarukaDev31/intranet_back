@@ -261,7 +261,7 @@ class RotuladoPdfService
                 return '';
             }
             $info = @getimagesize($path);
-            $mime = is_array($info) && isset($info['mime']) ? (string) $info['mime'] : '';
+            $mime = is_array($info) ? (string) $info['mime'] : '';
             if (!in_array($mime, array('image/png', 'image/jpeg', 'image/gif'), true)) {
                 Log::warning('RotuladoPdfService: formato de cabecera de organización no soportado, se usa la plantilla', array(
                     'organizacion_id' => $orgId,
