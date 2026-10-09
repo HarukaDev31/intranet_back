@@ -258,23 +258,54 @@ class RotuladoPdfService
         try {
             $path = app(OrganizacionMensajeriaService::class)->localPathImagen($orgId, OrganizacionMensajeriaService::IMG_PASO1);
             if (!$path || !is_file($path)) {
+                Log::info('[ROTULADO_HEADER] la organizacion no tiene imagen de cabecera (o no se pudo leer): se usa la de plantilla', [
+                    'organizacion_id' => $orgId,
+                    'path' => $path,
+                ]);
+
                 return '';
             }
             $info = @getimagesize($path);
             $mime = is_array($info) ? (string) $info['mime'] : '';
+            $data = file_get_contents($path);
+            if ($data === false) {
+                return '';
+            }
+
+            if ($mime === 'image/webp' && function_exists('imagecreatefromwebp')) {
+                $img = @imagecreatefromstring($data);
+                if ($img !== false) {
+                    ob_start();
+                    imagepng($img);
+                    $png = (string) ob_get_clean();
+                    imagedestroy($img);
+                    if ($png !== '') {
+                        Log::info('[ROTULADO_HEADER] cabecera WebP convertida a PNG', ['organizacion_id' => $orgId]);
+
+                        return 'data:image/png;base64,' . base64_encode($png);
+                    }
+                }
+            }
+
             if (!in_array($mime, array('image/png', 'image/jpeg', 'image/gif'), true)) {
-                Log::warning('RotuladoPdfService: formato de cabecera de organización no soportado, se usa la plantilla', array(
+                Log::warning('[ROTULADO_HEADER] formato de cabecera no soportado, se usa la plantilla', array(
                     'organizacion_id' => $orgId,
                     'mime' => $mime,
+                    'path' => $path,
                 ));
 
                 return '';
             }
-            $data = file_get_contents($path);
 
-            return $data !== false ? 'data:' . $mime . ';base64,' . base64_encode($data) : '';
+            Log::info('[ROTULADO_HEADER] usando la cabecera de la organizacion', array(
+                'organizacion_id' => $orgId,
+                'mime' => $mime,
+                'bytes' => strlen($data),
+            ));
+
+            return 'data:' . $mime . ';base64,' . base64_encode($data);
         } catch (\Throwable $e) {
-            Log::warning('RotuladoPdfService: no se pudo cargar la cabecera de la organización', array(
+            Log::warning('[ROTULADO_HEADER] no se pudo cargar la cabecera de la organizacion', array(
                 'organizacion_id' => $orgId,
                 'error' => $e->getMessage(),
             ));
