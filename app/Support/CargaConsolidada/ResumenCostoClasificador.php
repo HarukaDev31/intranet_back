@@ -85,6 +85,46 @@ class ResumenCostoClasificador
     }
 
     /**
+     * Suma por columna Bolivia. Fob, comisión de giro y logística en USD (`valor`);
+     * impuestos, despacho y comisión Genuino en Bs (`valor_bs`, o USD x tasa si falta).
+     *
+     * @param iterable<object|array<string, mixed>> $costos filas con concepto, valor, valor_bs, tasa_cambio
+     * @return array<string, float>
+     */
+    public static function sumarColumnasBolivia($costos)
+    {
+        $cols = [
+            'fob_usd' => 0.0,
+            'comision_giro_usd' => 0.0,
+            'logistica_usd' => 0.0,
+            'impuesto_bs' => 0.0,
+            'despacho_bs' => 0.0,
+            'comision_genuino_bs' => 0.0,
+        ];
+        foreach ($costos as $costo) {
+            $costo = (object) $costo;
+            $col = self::columnaBolivia(isset($costo->concepto) ? $costo->concepto : '');
+            if ($col === null) {
+                continue;
+            }
+            $usd = (float) (isset($costo->valor) ? $costo->valor : 0);
+            $tasa = (float) (isset($costo->tasa_cambio) ? $costo->tasa_cambio : 0);
+            $bs = isset($costo->valor_bs)
+                ? (float) $costo->valor_bs
+                : ($tasa > 0 ? $usd * $tasa : 0.0);
+            if ($col === 'fob' || $col === 'comision_giro' || $col === 'logistica') {
+                $cols[$col . '_usd'] += $usd;
+            } else {
+                $cols[$col . '_bs'] += $bs;
+            }
+        }
+
+        return array_map(function ($v) {
+            return round($v, 2);
+        }, $cols);
+    }
+
+    /**
      * Proforma Bolivia: solo cuentan el valor FOB, el transporte marítimo/terrestre (logística)
      * y los "Impuestos a la Aduana Nacional". Albo/despacho y comisiones no suman.
      *
