@@ -23,11 +23,14 @@ use App\Models\PaisFlag;
 use App\Models\Notificacion;
 use App\Traits\WhatsappTrait;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
+use App\Support\CargaConsolidada\ResumenCostoClasificador;
+use App\Support\CargaConsolidada\ResumenFormato;
 use App\Support\Organizacion\OrganizacionPortalUrls;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -758,7 +761,7 @@ class CotizacionController extends Controller
      * Headers de Prospectos y Embarcados para socios: bandera + "CBM",
      * Pendiente, IMO, Fob, Total ISD, Logística e Impuestos. Sin nombre de país.
      */
-    private function buildSocioHeadersData($headers, array $paisFlags)
+    private function buildSocioHeadersData($headers, array $paisFlags, $contenedor = null)
     {
         $china = 0;
         $destino = 0;
@@ -781,7 +784,7 @@ class CotizacionController extends Controller
             $impuestos = isset($headers->total_impuestos) ? $headers->total_impuestos : 0;
         }
 
-        return [
+        $data = [
             'cbm_total_china' => [
                 'value' => number_format((float) $china, 2, '.', ''),
                 'label' => 'CBM',
@@ -823,6 +826,48 @@ class CotizacionController extends Controller
                 'icon' => 'cryptocurrency-color:soc',
             ],
         ];
+
+        // Bolivia: sin ISD; Fob, Comisión, Logística (USD) e Impuestos, Despacho, Genuino (Bs).
+        if ($contenedor && ResumenFormato::esBolivia(ResumenFormato::deOrganizacion($contenedor->getAttribute('organizacion_id')))) {
+            $cols = $this->columnasBoliviaContenedor((int) $contenedor->getAttribute('id'));
+            unset($data['total_isd'], $data['total_fob'], $data['total_logistica'], $data['total_impuestos']);
+            $icono = 'cryptocurrency-color:soc';
+            $data['total_fob'] = ['value' => $cols['fob_usd'], 'label' => 'Fob', 'icon' => $icono];
+            $data['total_comision'] = ['value' => $this->formatCurrency($cols['comision_giro_usd']), 'label' => 'Comision', 'icon' => $icono];
+            $data['total_logistica'] = ['value' => $cols['logistica_usd'], 'label' => 'Logistica', 'icon' => $icono];
+            $data['total_impuestos_bs'] = ['value' => $this->formatBs($cols['impuesto_bs']), 'label' => 'Impuestos', 'icon' => $icono];
+            $data['total_despacho_bs'] = ['value' => $this->formatBs($cols['despacho_bs']), 'label' => 'Despacho', 'icon' => $icono];
+            $data['total_genuino_bs'] = ['value' => $this->formatBs($cols['comision_genuino_bs']), 'label' => 'Genuino', 'icon' => $icono];
+        }
+
+        return $data;
+    }
+
+    /**
+     * Montos de la proforma de Bolivia del contenedor (todas las cotizaciones resumen no eliminadas).
+     *
+     * @return array<string, float>
+     */
+    private function columnasBoliviaContenedor($idContenedor)
+    {
+        $columnas = ['k.concepto', 'k.valor'];
+        if (Schema::hasColumn('cotizacion_proveedor_resumen_costo', 'valor_bs')) {
+            $columnas[] = 'k.valor_bs';
+            $columnas[] = 'k.tasa_cambio';
+        }
+        $filas = DB::table('cotizacion_proveedor_resumen_costo as k')
+            ->join('cotizacion_proveedor_resumen as r', 'r.id', '=', 'k.id_cotizacion_proveedor_resumen')
+            ->join('contenedor_consolidado_cotizacion as cc', 'cc.id', '=', 'r.id_cotizacion')
+            ->where('cc.id_contenedor', (int) $idContenedor)
+            ->whereNull('cc.deleted_at')
+            ->get($columnas);
+
+        return ResumenCostoClasificador::sumarColumnasBolivia($filas);
+    }
+
+    private function formatBs($value)
+    {
+        return 'Bs ' . number_format((float) $value, 2, ',', '.');
     }
 
     public function getHeadersData($idContenedor)
@@ -971,7 +1016,7 @@ class CotizacionController extends Controller
             || (int) $user->getAttribute('ID_Organizacion') !== 1;
 
         if ($esHeadersSocio) {
-            $headersData = $this->buildSocioHeadersData($headers, $paisFlags);
+            $headersData = $this->buildSocioHeadersData($headers, $paisFlags, $contenedor);
         } elseif (array_key_exists($usergroup, $roleAllowedMap)) {
             $allowedKeys = $roleAllowedMap[$usergroup];
             $headersData = array_filter($headersData, function ($key) use ($allowedKeys) {
