@@ -17,6 +17,9 @@ class ResumenFormato
     const DEFAULT = 'default';
     const BOLIVIA = 'bolivia';
 
+    /** Org 1 (Probusiness): usa siempre el formato por defecto. */
+    const ID_ORGANIZACION_BASE = 1;
+
     /** @var array<int, string> */
     private static $cache = [];
 
