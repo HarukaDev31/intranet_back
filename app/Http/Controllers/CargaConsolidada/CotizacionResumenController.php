@@ -396,7 +396,12 @@ class CotizacionResumenController extends Controller
 
             return response()->json([
                 'success' => true,
-                'formato' => $orgEfectiva > 0 ? ResumenFormato::deOrganizacion($orgEfectiva) : ResumenFormato::DEFAULT,
+                // Org única: su formato. Org 1 sin filtro de org: Bolivia solo si todas las filas son de Bolivia.
+                'formato' => ($orgEfectiva > ResumenFormato::ID_ORGANIZACION_BASE
+                    ? ResumenFormato::deOrganizacion($orgEfectiva)
+                    : ($data->isNotEmpty() && $data->every(function ($fila) {
+                        return !empty($fila['bolivia']);
+                    }) ? ResumenFormato::BOLIVIA : ResumenFormato::DEFAULT)),
                 'data' => $data->values(),
                 'headers' => $headers,
                 'pagination' => [
