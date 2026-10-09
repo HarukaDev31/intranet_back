@@ -614,8 +614,11 @@ class CotizacionController extends Controller
                     });
             }
 
+            // Bolivia: montos de la proforma por cotización (Fob, Comisión, Logística en USD; Impuestos, Despacho, Genuino en Bs)
+            $boliviaPorCotizacion = $this->columnasBoliviaPorCotizacion($results, $contenedoresPorId);
+
             // Transformar los datos para la respuesta
-            $data = $results->map(function ($cotizacion) use ($files, $listaEmbarqueUrl, $estadoPermisoPorCotizacion, $idTramitePorCotizacion, $archivosIaPorCotizacion, $contenedoresPorId) {
+            $data = $results->map(function ($cotizacion) use ($files, $listaEmbarqueUrl, $estadoPermisoPorCotizacion, $idTramitePorCotizacion, $archivosIaPorCotizacion, $contenedoresPorId, $boliviaPorCotizacion) {
                 $contenedorFila = $contenedoresPorId->get($cotizacion->id_contenedor);
                 $archivoIa = optional($archivosIaPorCotizacion->get($cotizacion->id, collect())->first());
                 $archivoPath = $archivoIa ? $archivoIa->getAttribute('archivo_path') : null;
@@ -663,6 +666,7 @@ class CotizacionController extends Controller
                     'qty_item' => $cotizacion->qty_item,
                     'fob' => $cotizacion->fob,
                     'isd' => $cotizacion->isd,
+                    'bolivia' => $boliviaPorCotizacion[$cotizacion->id] ?? null,
                     'cotizacion_file_url' => $this->cdnStorageUrl($excelPath),
                     'impuestos' => $cotizacion->impuestos,
                     'tipo_cliente' => optional($cotizacion->tipoCliente)->name,
@@ -863,6 +867,45 @@ class CotizacionController extends Controller
             ->get($columnas);
 
         return ResumenCostoClasificador::sumarColumnasBolivia($filas);
+    }
+
+    /**
+     * Montos Bolivia por cotización de la página (solo cotizaciones de contenedores de orgs Bolivia).
+     *
+     * @param  iterable  $cotizaciones
+     * @param  \Illuminate\Support\Collection  $contenedoresPorId
+     * @return array<int, array<string, float>>
+     */
+    private function columnasBoliviaPorCotizacion($cotizaciones, $contenedoresPorId)
+    {
+        $ids = [];
+        foreach ($cotizaciones as $c) {
+            $contenedor = $contenedoresPorId->get($c->id_contenedor);
+            if ($contenedor && ResumenFormato::esBolivia(ResumenFormato::deOrganizacion($contenedor->getAttribute('organizacion_id')))) {
+                $ids[] = (int) $c->id;
+            }
+        }
+        if (empty($ids)) {
+            return [];
+        }
+
+        $columnas = ['r.id_cotizacion', 'k.concepto', 'k.valor'];
+        if (Schema::hasColumn('cotizacion_proveedor_resumen_costo', 'valor_bs')) {
+            $columnas[] = 'k.valor_bs';
+            $columnas[] = 'k.tasa_cambio';
+        }
+        $filas = DB::table('cotizacion_proveedor_resumen_costo as k')
+            ->join('cotizacion_proveedor_resumen as r', 'r.id', '=', 'k.id_cotizacion_proveedor_resumen')
+            ->whereIn('r.id_cotizacion', $ids)
+            ->get($columnas)
+            ->groupBy('id_cotizacion');
+
+        $out = [];
+        foreach ($ids as $id) {
+            $out[$id] = ResumenCostoClasificador::sumarColumnasBolivia($filas->get($id, collect()));
+        }
+
+        return $out;
     }
 
     private function formatBs($value)
