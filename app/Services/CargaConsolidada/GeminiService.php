@@ -269,7 +269,7 @@ class GeminiService
             'Reglas: ' .
             '- cliente.nombre: valor del campo CLIENTE. ' .
             '- cliente.whatsapp: valor del campo Telf del cliente (no el teléfono ni el correo de la empresa emisora del pie de página). ' .
-            '- cliente.documento: null si no aparece (JSON null, nunca el texto "null"). cliente.tipo_documento: "ID". ' .
+            '- cliente.documento: SIEMPRE null. La proforma no trae documento de identidad; el campo Telf es un teléfono (7 u 8 dígitos) y NUNCA va en documento. cliente.tipo_documento: null. ' .
             '- cliente.correo: SIEMPRE null. El correo del pie de página es de la empresa emisora, no del cliente. ' .
             '- proveedores: UN solo elemento con el producto de la proforma (campo Producto). ' .
             '- proveedores[0].productos: valor del campo Producto. ' .
@@ -355,6 +355,9 @@ class GeminiService
         );
         // El correo no se toma del documento (el que aparece es el de la empresa emisora).
         $cliente['correo'] = null;
+        // La proforma de Bolivia no trae documento: el Telf (8 dígitos sin código de país) no se debe leer como ID.
+        $cliente['documento'] = null;
+        $cliente['tipo_documento'] = null;
 
         Log::info('GeminiService extractFromCotizacionResumen (Bolivia): datos extraídos', [
             'source' => $source,
