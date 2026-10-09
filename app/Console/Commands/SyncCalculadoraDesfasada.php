@@ -107,8 +107,8 @@ class SyncCalculadoraDesfasada extends Command
                 }
 
                 if (!$provCalc) {
-                    $cbm = $provCot->cbm_total_china !== null ? $provCot->cbm_total_china : ($provCot->cbm_total !== null ? $provCot->cbm_total : 0);
-                    $qty = $provCot->qty_box_china !== null ? $provCot->qty_box_china : ($provCot->qty_box !== null ? $provCot->qty_box : 0);
+                    $cbm = (float) $provCot->cbm_total_china > 0 ? $provCot->cbm_total_china : ((float) $provCot->cbm_total > 0 ? $provCot->cbm_total : 0);
+                    $qty = (float) $provCot->qty_box_china > 0 ? $provCot->qty_box_china : ((float) $provCot->qty_box > 0 ? $provCot->qty_box : 0);
                     $provCalc = CalculadoraImportacionProveedor::create([
                         'id_calculadora_importacion' => $calculadora->id,
                         'id_proveedor' => $provCot->id,
@@ -177,7 +177,7 @@ class SyncCalculadoraDesfasada extends Command
 
                 // Corrección: los items no tienen CBM.
                 // Tomar CBM desde proveedor de cotización (preferir cbm_total, fallback cbm_total_china).
-                $cbmProductos = $provCot->cbm_total !== null ? (float) $provCot->cbm_total : (float) ($provCot->cbm_total_china ?: 0);
+                $cbmProductos = (float) $provCot->cbm_total > 0 ? (float) $provCot->cbm_total : (float) ($provCot->cbm_total_china ?: 0);
                 $cbmProductos = round($cbmProductos, 10);
                 $cbmActual = round((float) ($provCalc->cbm ?: 0), 10);
                 if ($cbmActual !== $cbmProductos) {
