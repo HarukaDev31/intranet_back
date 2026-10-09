@@ -120,7 +120,29 @@ class CotizacionProveedor extends Model
 
     protected $attributes = [
         'tipo_rotulado' => 'pendiente',
+        'estados_proveedor' => 'WAIT',
+        'qty_box' => 0,
+        'cbm_total' => 0,
     ];
+
+    /**
+     * Un NULL explícito (p. ej. `qty_cajas ?? null`) ignora el default de la columna:
+     * estado de proveedor, qty_box y cbm_total nunca se guardan vacíos.
+     */
+    protected static function booted()
+    {
+        static::saving(function ($proveedor) {
+            if ($proveedor->estados_proveedor === null) {
+                $proveedor->estados_proveedor = 'WAIT';
+            }
+            if ($proveedor->qty_box === null) {
+                $proveedor->qty_box = 0;
+            }
+            if ($proveedor->cbm_total === null) {
+                $proveedor->cbm_total = 0;
+            }
+        });
+    }
 
     /**
      * Relación con Cotizacion
