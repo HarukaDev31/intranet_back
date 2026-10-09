@@ -1513,9 +1513,9 @@ class CotizacionFinalController extends Controller
             $proveedoresLoaded = DB::table($this->table_contenedor_cotizacion_proveedores . ' as CP')
                 ->select(
                     'CP.id_cotizacion',
-                    DB::raw('SUM(COALESCE(CP.qty_box_china, CP.qty_box, 0)) as qty_box_china'),
+                    DB::raw('SUM(COALESCE(NULLIF(CP.qty_box_china, 0), CP.qty_box, 0)) as qty_box_china'),
                     DB::raw('SUM(COALESCE(CP.qty_pallet_china, 0)) as qty_pallet_china'),
-                    DB::raw('SUM(COALESCE(CP.cbm_total_china, CP.cbm_total, 0)) as cbm_total_china'),
+                    DB::raw('SUM(COALESCE(NULLIF(CP.cbm_total_china, 0), CP.cbm_total, 0)) as cbm_total_china'),
                     DB::raw('SUM(COALESCE(CP.peso, 0)) as peso_total')
                 )
                 ->whereRaw("UPPER(TRIM(COALESCE(CP.estados_proveedor, ''))) = 'LOADED'")

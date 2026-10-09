@@ -2393,7 +2393,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
             // Preparar datos para mensajes
             $telefono = $this->formatPhoneNumber($cotizacion->telefono);
-            $qtyBoxChina = (int) ($proveedor->qty_box_china ?? $proveedor->qty_box ?? 0);
+            $qtyBoxChina = (int) ((int) $proveedor->qty_box_china > 0 ? $proveedor->qty_box_china : ($proveedor->qty_box ?? 0));
             $qtyPalletChina = (int) ($proveedor->qty_pallet_china ?? 0);
 
             // Preparar mensaje inicial de inspección (solo pb_inspeccion_llegada_v1; 1 vez por proveedor)

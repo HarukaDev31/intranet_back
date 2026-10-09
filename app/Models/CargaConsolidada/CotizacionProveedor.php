@@ -123,11 +123,13 @@ class CotizacionProveedor extends Model
         'estados_proveedor' => 'WAIT',
         'qty_box' => 0,
         'cbm_total' => 0,
+        'qty_box_china' => 0,
+        'cbm_total_china' => 0,
     ];
 
     /**
      * Un NULL explícito (p. ej. `qty_cajas ?? null`) ignora el default de la columna:
-     * estado de proveedor, qty_box y cbm_total nunca se guardan vacíos.
+     * estado de proveedor, qty_box, cbm_total, qty_box_china y cbm_total_china nunca se guardan vacíos.
      */
     protected static function booted()
     {
@@ -140,6 +142,12 @@ class CotizacionProveedor extends Model
             }
             if ($proveedor->cbm_total === null) {
                 $proveedor->cbm_total = 0;
+            }
+            if ($proveedor->qty_box_china === null) {
+                $proveedor->qty_box_china = 0;
+            }
+            if ($proveedor->cbm_total_china === null) {
+                $proveedor->cbm_total_china = 0;
             }
         });
     }

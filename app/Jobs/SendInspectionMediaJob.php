@@ -183,7 +183,7 @@ class SendInspectionMediaJob implements ShouldQueue
             }
 
             // Solo pb_inspeccion_llegada_v1 (máx. 1 vez/proveedor). Sin imagen/video WA.
-            $qtyBoxChina = (int) ($proveedor->qty_box_china ?? $proveedor->qty_box ?? 0);
+            $qtyBoxChina = (int) ((int) $proveedor->qty_box_china > 0 ? $proveedor->qty_box_china : ($proveedor->qty_box ?? 0));
             $qtyPalletChina = (int) ($proveedor->qty_pallet_china ?? 0);
             $inspeccionLink = OrganizacionPortalUrls::inspeccion(
                 OrganizacionPortalUrls::orgIdFromParent($cotizacion),
