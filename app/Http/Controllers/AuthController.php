@@ -1166,32 +1166,6 @@ class AuthController extends Controller
             $exclusiveUserIds = [28911, 28791, 29151, 29450];
 
             if (!in_array($idUsuario, $exclusiveUserIds, true)) {
-                // Regla de negocio: el menú "Cotizador" debe ser visible SOLO para usuarios especiales.
-                // Aunque por error exista en menu_acceso para otros usuarios/grupos, lo ocultamos en el login.
-                $exclusiveRootMenuIdsHard = [301]; // Cotizador
-                $exclusiveTreeIdsHard = [];
-                $queue = $exclusiveRootMenuIdsHard;
-                $guard = 0;
-                while (!empty($queue) && $guard < 25) {
-                    $guard++;
-                    $batch = array_values(array_unique(array_map('intval', $queue)));
-                    $queue = [];
-                    foreach ($batch as $id) {
-                        if ($id > 0) $exclusiveTreeIdsHard[$id] = true;
-                    }
-
-                    $children = DB::table('menu')
-                        ->whereIn('ID_Padre', $batch)
-                        ->pluck('ID_Menu')
-                        ->toArray();
-                    foreach ($children as $cid) {
-                        $cid = (int) $cid;
-                        if ($cid > 0 && !isset($exclusiveTreeIdsHard[$cid])) {
-                            $queue[] = $cid;
-                        }
-                    }
-                }
-
                 // OJO: antes se ocultaban TODOS los menús que tuvieran asignados los usuarios especiales,
                 // pero esos usuarios suelen tener también menús comunes del grupo, lo que “vacía” el menú
                 // del resto (como jocampo). Aquí ocultamos solo los menús que son REALMENTE exclusivos:
@@ -1229,26 +1203,23 @@ class AuthController extends Controller
                     }));
 
                     // Filtrar padres
-                    $arrMenuPadre = array_values(array_filter($arrMenuPadre, function ($m) use ($exclusiveMenuIds, $exclusiveTreeIdsHard) {
+                    $arrMenuPadre = array_values(array_filter($arrMenuPadre, function ($m) use ($exclusiveMenuIds) {
                         $id = (int) ($m->ID_Menu ?? 0);
-                        if ($id && isset($exclusiveTreeIdsHard[$id])) return false;
                         return isset($m->ID_Menu) && !in_array($id, $exclusiveMenuIds, true);
                     }));
 
                     // También filtrar hijos y sub-hijos si existen
                     foreach ($arrMenuPadre as $idx => $rowPadre) {
                         if (!empty($rowPadre->Hijos)) {
-                            $rowPadre->Hijos = array_values(array_filter($rowPadre->Hijos, function ($h) use ($exclusiveMenuIds, $exclusiveTreeIdsHard) {
+                            $rowPadre->Hijos = array_values(array_filter($rowPadre->Hijos, function ($h) use ($exclusiveMenuIds) {
                                 $id = (int) ($h->ID_Menu ?? 0);
-                                if ($id && isset($exclusiveTreeIdsHard[$id])) return false;
                                 return isset($h->ID_Menu) && !in_array($id, $exclusiveMenuIds, true);
                             }));
 
                             foreach ($rowPadre->Hijos as $hIdx => $h) {
                                 if (!empty($h->SubHijos)) {
-                                    $h->SubHijos = array_values(array_filter($h->SubHijos, function ($sh) use ($exclusiveMenuIds, $exclusiveTreeIdsHard) {
+                                    $h->SubHijos = array_values(array_filter($h->SubHijos, function ($sh) use ($exclusiveMenuIds) {
                                         $id = (int) ($sh->ID_Menu ?? 0);
-                                        if ($id && isset($exclusiveTreeIdsHard[$id])) return false;
                                         return isset($sh->ID_Menu) && !in_array($id, $exclusiveMenuIds, true);
                                     }));
                                 }
@@ -1256,12 +1227,6 @@ class AuthController extends Controller
                         }
                         $arrMenuPadre[$idx] = $rowPadre;
                     }
-                } else if (!empty($exclusiveTreeIdsHard)) {
-                    // Si no hay exclusivos "calculados", igual aplicamos los exclusivos hard (Cotizador).
-                    $arrMenuPadre = array_values(array_filter($arrMenuPadre, function ($m) use ($exclusiveTreeIdsHard) {
-                        $id = (int) ($m->ID_Menu ?? 0);
-                        return !($id && isset($exclusiveTreeIdsHard[$id]));
-                    }));
                 }
             }
 
