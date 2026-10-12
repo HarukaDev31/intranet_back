@@ -58,6 +58,8 @@ class VincularSeguimientoConsolidadoExcelJob implements ShouldQueue
                     'duration_ms' => $flow->elapsedMs(),
                 ]));
 
+                $service->markLinkFailed($this->idContenedor, $result['message'] ?? 'No se pudo vincular el Excel a Drive');
+
                 return;
             }
 
