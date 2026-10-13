@@ -1848,7 +1848,15 @@ class CotizacionResumenController extends Controller
             ->orderBy('id')
             ->get();
 
-        $existentes = $proveedores->pluck('code_supplier')->all();
+        // El correlativo -N es único por prefijo en toda la organización (otras cotizaciones del mismo
+        // cliente, otros consolidados con la misma carga y proveedores de cotizaciones eliminadas).
+        // Antes solo miraba la propia cotización y cada cotización nueva volvía a empezar en -1.
+        $existentes = DB::table('contenedor_consolidado_cotizacion_proveedores')
+            ->where('organizacion_id', $orgId)
+            ->where('code_supplier', 'like', $base . '-%')
+            ->lockForUpdate()
+            ->pluck('code_supplier')
+            ->all();
         $next = CodeSupplierHelper::maxSuffixForBase($base, $existentes) + 1;
 
         foreach ($proveedores as $proveedor) {
