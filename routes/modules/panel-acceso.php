@@ -9,6 +9,7 @@ use App\Http\Controllers\PanelAcceso\MenuCatalogoController;
 use App\Http\Controllers\PanelAcceso\PermisoMenuUsuarioController;
 use App\Http\Controllers\PanelAcceso\MenuExternoController;
 use App\Http\Controllers\PanelAcceso\OrganizacionAdminController;
+use App\Http\Controllers\PanelAcceso\ApiClientAdminController;
 
 /*
 |--------------------------------------------------------------------------
@@ -43,6 +44,20 @@ Route::group(['prefix' => 'panel-acceso', 'middleware' => 'jwt.auth'], function 
     Route::match(['put', 'patch', 'post'], 'organizaciones/{id}', [OrganizacionAdminController::class, 'update']);
     Route::post('organizaciones/{id}/rotulado-imagen', [OrganizacionAdminController::class, 'uploadRotuladoImagen']);
     Route::delete('organizaciones/{id}', [OrganizacionAdminController::class, 'destroy']);
+
+    // -----------------------------------------------------------------------
+    // API clients (credenciales de la API de integracion). Solo org 1 con rol
+    // GERENCIA / GERENTE GENERAL (ver ApiClientAdminController::autorizar).
+    // -----------------------------------------------------------------------
+    Route::prefix('api-clients')->group(function () {
+        Route::get('catalogo', [ApiClientAdminController::class, 'catalogo']);
+        Route::get('/', [ApiClientAdminController::class, 'index']);
+        Route::post('/', [ApiClientAdminController::class, 'store'])->middleware('throttle:20,1');
+        Route::put('{id}', [ApiClientAdminController::class, 'update'])->whereNumber('id');
+        Route::post('{id}/rotar-token', [ApiClientAdminController::class, 'rotarToken'])->whereNumber('id')->middleware('throttle:20,1');
+        Route::post('{id}/revocar', [ApiClientAdminController::class, 'revocar'])->whereNumber('id');
+        Route::get('{id}/auditoria', [ApiClientAdminController::class, 'auditoria'])->whereNumber('id');
+    });
 
     // -----------------------------------------------------------------------
     // Usuarios (panel admin)

@@ -79,5 +79,6 @@ class Kernel extends HttpKernel
         'carga-consolidada.cache' => \App\Http\Middleware\CargaConsolidadaHttpCache::class,
         'carga-consolidada.organizacion' => \App\Http\Middleware\CargaConsolidada\EnsureOrganizacionAccess::class,
         'org.key' => \App\Http\Middleware\RequireOrgKey::class,
+        'api.client' => \App\Http\Middleware\AuthenticateApiClient::class,
     ];
 }
