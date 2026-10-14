@@ -292,8 +292,134 @@ class CotizacionResumenIntegracionController extends Controller
     }
 
     // -----------------------------------------------------------------------
+    // PUT /api/integration/v1/cotizaciones-resumen/{id}/estado   body: estado=COTIZADO|CONFIRMADO
+    // Mismas reglas que el panel (CotizacionResumenController::updateEstado): confirmar exige consolidado
+    // y genera los code_supplier que falten.
+    // -----------------------------------------------------------------------
+    public function actualizarEstado(Request $request, $id): JsonResponse
+    {
+        $client = $this->client($request);
+        $orgId = (int) $client->organizacion_id;
+
+        if ($extra = array_diff(array_keys($request->all()), ['estado'])) {
+            return $this->invalido(['campos' => ['Campos no permitidos: ' . implode(', ', array_slice($extra, 0, 5))]]);
+        }
+        $v = Validator::make($request->all(), ['estado' => 'required|string|in:COTIZADO,CONFIRMADO']);
+        if ($v->fails()) {
+            return $this->invalido($v->errors()->toArray());
+        }
+
+        $cotizacion = $this->cotizacionResumenDeLaOrg((int) $id, $orgId);
+        if (!$cotizacion) {
+            return response()->json(['success' => false, 'message' => 'Cotización no encontrada.'], 404);
+        }
+
+        $anterior = (string) ($cotizacion->estado_resumen ?: 'COTIZADO');
+        $nuevo = (string) $request->input('estado');
+
+        try {
+            $interno = Request::create('/api/carga-consolidada/cotizacion-resumen/' . (int) $id . '/estado', 'PUT', ['estado' => $nuevo]);
+            $interno->setUserResolver(function () {
+                return Auth::guard('api')->user();
+            });
+            $respuesta = app(CotizacionResumenController::class)->updateEstado($interno, (int) $id);
+        } catch (ValidationException $e) {
+            return $this->invalido($e->errors());
+        } catch (\Throwable $e) {
+            Log::error('api.integration actualizar estado: ' . $e->getMessage(), ['api_client_id' => $client->id]);
+            $request->attributes->set('audit_error', 'excepcion_estado');
+
+            return response()->json(['success' => false, 'message' => 'No se pudo actualizar el estado.'], 500);
+        }
+
+        $cuerpo = json_decode($respuesta->getContent(), true);
+        $ok = is_array($cuerpo) && !empty($cuerpo['success']);
+        $request->attributes->set('audit_meta', ['id_cotizacion' => (int) $id, 'estado_anterior' => $anterior, 'estado_nuevo' => $nuevo]);
+        if (!$ok) {
+            $request->attributes->set('audit_error', 'estado_rechazado');
+
+            return response()->json([
+                'success' => false,
+                'message' => is_array($cuerpo) && !empty($cuerpo['message']) && is_string($cuerpo['message']) ? $cuerpo['message'] : 'No se pudo actualizar el estado.',
+            ], $respuesta->getStatusCode() >= 400 ? $respuesta->getStatusCode() : 422);
+        }
+
+        // Al confirmar se asignan los code_supplier: se devuelven para que la integración los conozca.
+        $proveedores = CotizacionProveedor::query()
+            ->where('organizacion_id', $orgId)
+            ->where('id_cotizacion', (int) $id)
+            ->orderBy('id')
+            ->get(['id', 'code_supplier'])
+            ->map(function ($p) {
+                return ['id' => $p->id, 'code_supplier' => $p->code_supplier];
+            })->values();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Estado actualizado.',
+            'data' => ['id' => (int) $id, 'estado' => $nuevo, 'proveedores' => $proveedores],
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
+    // DELETE /api/integration/v1/cotizaciones-resumen/{id}
+    // Soft delete, solo en estado COTIZADO (misma regla que CotizacionResumenController::destroy).
+    // -----------------------------------------------------------------------
+    public function eliminar(Request $request, $id): JsonResponse
+    {
+        $client = $this->client($request);
+        $orgId = (int) $client->organizacion_id;
+
+        $cotizacion = $this->cotizacionResumenDeLaOrg((int) $id, $orgId);
+        if (!$cotizacion) {
+            return response()->json(['success' => false, 'message' => 'Cotización no encontrada.'], 404);
+        }
+
+        $estado = (string) ($cotizacion->estado_resumen ?: 'COTIZADO');
+        try {
+            $respuesta = app(CotizacionResumenController::class)->destroy((int) $id);
+        } catch (\Throwable $e) {
+            Log::error('api.integration eliminar cotizacion: ' . $e->getMessage(), ['api_client_id' => $client->id]);
+            $request->attributes->set('audit_error', 'excepcion_eliminar');
+
+            return response()->json(['success' => false, 'message' => 'No se pudo eliminar la cotización.'], 500);
+        }
+
+        $cuerpo = json_decode($respuesta->getContent(), true);
+        $request->attributes->set('audit_meta', ['id_cotizacion' => (int) $id, 'estado_previo' => $estado]);
+        if (!is_array($cuerpo) || empty($cuerpo['success'])) {
+            $request->attributes->set('audit_error', 'eliminar_rechazado');
+
+            return response()->json([
+                'success' => false,
+                'message' => is_array($cuerpo) && !empty($cuerpo['message']) && is_string($cuerpo['message']) ? $cuerpo['message'] : 'No se pudo eliminar la cotización.',
+            ], $respuesta->getStatusCode() >= 400 ? $respuesta->getStatusCode() : 422);
+        }
+
+        return response()->json(['success' => true, 'message' => 'Cotización eliminada.']);
+    }
+
+    // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
+
+    /**
+     * Cotización resumen NO eliminada de la organización del token (otra org = no existe).
+     */
+    private function cotizacionResumenDeLaOrg(int $id, int $orgId): ?Cotizacion
+    {
+        $cotizacion = Cotizacion::query()->where('id', $id)->where('organizacion_id', $orgId)->first();
+        if (!$cotizacion) {
+            return null;
+        }
+        $esResumen = CotizacionProveedor::query()
+            ->where('organizacion_id', $orgId)
+            ->where('id_cotizacion', $id)
+            ->where('modo_cotizacion', 'resumen')
+            ->exists();
+
+        return $esResumen ? $cotizacion : null;
+    }
 
     private function client(Request $request): ApiClient
     {
