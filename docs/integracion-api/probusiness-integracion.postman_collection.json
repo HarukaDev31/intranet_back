@@ -7,14 +7,30 @@
   "auth": {
     "type": "bearer",
     "bearer": [
-      { "key": "token", "value": "{{token}}", "type": "string" }
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
     ]
   },
   "variable": [
-    { "key": "baseUrl", "value": "https://qa-intranetback.probusiness.pe/api/integration/v1" },
-    { "key": "token", "value": "pbk_REEMPLAZA_POR_TU_TOKEN" },
-    { "key": "cotizacionId", "value": "0" },
-    { "key": "proveedorId", "value": "0" }
+    {
+      "key": "baseUrl",
+      "value": "https://qa-intranetback.probusiness.pe/api/integration/v1"
+    },
+    {
+      "key": "token",
+      "value": "pbk_REEMPLAZA_POR_TU_TOKEN"
+    },
+    {
+      "key": "cotizacionId",
+      "value": "0"
+    },
+    {
+      "key": "proveedorId",
+      "value": "0"
+    }
   ],
   "item": [
     {
@@ -24,16 +40,51 @@
         "header": [],
         "url": {
           "raw": "{{baseUrl}}/cotizaciones-resumen?estado=CONFIRMADO&per_page=20&page=1",
-          "host": ["{{baseUrl}}"],
-          "path": ["cotizaciones-resumen"],
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "cotizaciones-resumen"
+          ],
           "query": [
-            { "key": "estado", "value": "CONFIRMADO", "description": "COTIZADO | CONFIRMADO", "disabled": true },
-            { "key": "fecha_inicio", "value": "2026-01-01", "description": "YYYY-MM-DD", "disabled": true },
-            { "key": "fecha_fin", "value": "2026-12-31", "description": "YYYY-MM-DD", "disabled": true },
-            { "key": "id_contenedor", "value": "", "disabled": true },
-            { "key": "search", "value": "", "description": "nombre, documento o telefono", "disabled": true },
-            { "key": "per_page", "value": "20", "description": "maximo 50" },
-            { "key": "page", "value": "1" }
+            {
+              "key": "estado",
+              "value": "CONFIRMADO",
+              "description": "COTIZADO | CONFIRMADO",
+              "disabled": true
+            },
+            {
+              "key": "fecha_inicio",
+              "value": "2026-01-01",
+              "description": "YYYY-MM-DD",
+              "disabled": true
+            },
+            {
+              "key": "fecha_fin",
+              "value": "2026-12-31",
+              "description": "YYYY-MM-DD",
+              "disabled": true
+            },
+            {
+              "key": "id_contenedor",
+              "value": "",
+              "disabled": true
+            },
+            {
+              "key": "search",
+              "value": "",
+              "description": "nombre, documento o telefono",
+              "disabled": true
+            },
+            {
+              "key": "per_page",
+              "value": "20",
+              "description": "maximo 50"
+            },
+            {
+              "key": "page",
+              "value": "1"
+            }
           ]
         },
         "description": "Scope: cotizaciones-resumen:read"
@@ -60,12 +111,21 @@
       "request": {
         "method": "POST",
         "header": [
-          { "key": "Idempotency-Key", "value": "{{$guid}}", "description": "Texto unico (8-64 caracteres). Reintentar con la misma clave NO duplica la cotizacion." }
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}",
+            "description": "Texto unico (8-64 caracteres). Reintentar con la misma clave NO duplica la cotizacion."
+          }
         ],
         "body": {
           "mode": "formdata",
           "formdata": [
-            { "key": "archivo", "type": "file", "src": [], "description": "PDF de respaldo (obligatorio, max 10 MB)" },
+            {
+              "key": "archivo",
+              "type": "file",
+              "src": [],
+              "description": "PDF de respaldo (obligatorio, max 10 MB)"
+            },
             {
               "key": "payload",
               "type": "text",
@@ -76,10 +136,70 @@
         },
         "url": {
           "raw": "{{baseUrl}}/cotizaciones-resumen",
-          "host": ["{{baseUrl}}"],
-          "path": ["cotizaciones-resumen"]
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "cotizaciones-resumen"
+          ]
         },
         "description": "Scope: cotizaciones-resumen:create. Nace en estado COTIZADO y sin codigo de proveedor (se asigna al confirmar). Guarda cotizacionId y proveedorId para las siguientes peticiones."
+      },
+      "response": []
+    },
+    {
+      "name": "Crear cotizacion - varios proveedores (Ecuador)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 201 || pm.response.code === 200) {",
+              "  const d = pm.response.json().data || {};",
+              "  if (d.id) pm.collectionVariables.set('cotizacionId', d.id);",
+              "  if (d.proveedores && d.proveedores[0]) pm.collectionVariables.set('proveedorId', d.proveedores[0].id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}",
+            "description": "Texto unico (8-64 caracteres). Reintentar con la misma clave NO duplica la cotizacion."
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "archivo",
+              "type": "file",
+              "src": [],
+              "description": "PDF de respaldo (obligatorio, max 10 MB)"
+            },
+            {
+              "key": "payload",
+              "type": "text",
+              "value": "{\n  \"id_contenedor\": 180,\n  \"cliente\": {\n    \"nombre\": \"Gladys Cecilia Flores\",\n    \"whatsapp\": \"593983939230\",\n    \"documento\": \"1707878011001\",\n    \"tipo_documento\": \"RUC\",\n    \"correo\": \"cliente@correo.com\"\n  },\n  \"proveedores\": [\n    {\n      \"productos\": \"Pelador de verduras\",\n      \"cbm_total\": 1.2,\n      \"peso_total\": 150,\n      \"qty_cajas\": 12,\n      \"unidades\": 300,\n      \"incoterm\": \"FOB\",\n      \"costos\": [\n        {\n          \"concepto\": \"Valor de Mercadería\",\n          \"valor\": 1500.0\n        },\n        {\n          \"concepto\": \"Costos de Transferencia e ISD (Aprox)\",\n          \"valor\": 273.9\n        },\n        {\n          \"concepto\": \"Servicios de Importación\",\n          \"valor\": 1800.0\n        },\n        {\n          \"concepto\": \"Tributos e Impuestos Aduaneros\",\n          \"valor\": 542.34\n        }\n      ]\n    },\n    {\n      \"productos\": \"Hilos de coser\",\n      \"cbm_total\": 0.46,\n      \"qty_cajas\": 6,\n      \"unidades\": 600,\n      \"incoterm\": \"FOB\",\n      \"costos\": [\n        {\n          \"concepto\": \"Valor de Mercadería\",\n          \"valor\": 626.52\n        }\n      ]\n    },\n    {\n      \"productos\": \"Máquina eléctrica portátil\",\n      \"cbm_total\": 2.3,\n      \"peso_total\": 420,\n      \"qty_cajas\": 8,\n      \"unidades\": 40,\n      \"incoterm\": \"FOB\",\n      \"costos\": [\n        {\n          \"concepto\": \"Valor de Mercadería\",\n          \"valor\": 951.48\n        }\n      ]\n    }\n  ],\n  \"descuento\": 0\n}",
+              "description": "3 proveedores. FOB por proveedor; ISD, logistica e impuestos (toda la cotizacion) en el primero. Totales: FOB 3078.00, ISD 273.90, Logistica 1800.00, Impuestos 542.34. id_contenedor = consolidado de tu organizacion."
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/cotizaciones-resumen",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "cotizaciones-resumen"
+          ]
+        },
+        "description": "Scope: cotizaciones-resumen:create. Conceptos validos Ecuador: Valor de Mercaderia (FOB), Costos de Transferencia e ISD (ISD), Servicios de Importacion / Logistica Internacional (logistica), Tributos e Impuestos Aduaneros (impuestos). Los costos de todos los proveedores se suman: no repitas un costo."
       },
       "response": []
     },
@@ -91,13 +211,23 @@
         "body": {
           "mode": "urlencoded",
           "urlencoded": [
-            { "key": "estado", "value": "CONFIRMADO", "description": "CONFIRMADO | COTIZADO" }
+            {
+              "key": "estado",
+              "value": "CONFIRMADO",
+              "description": "CONFIRMADO | COTIZADO"
+            }
           ]
         },
         "url": {
           "raw": "{{baseUrl}}/cotizaciones-resumen/{{cotizacionId}}/estado",
-          "host": ["{{baseUrl}}"],
-          "path": ["cotizaciones-resumen", "{{cotizacionId}}", "estado"]
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "cotizaciones-resumen",
+            "{{cotizacionId}}",
+            "estado"
+          ]
         },
         "description": "Scope: cotizaciones-resumen:update-state. Al confirmar se asignan los code_supplier (vienen en la respuesta)."
       },
@@ -111,13 +241,22 @@
         "body": {
           "mode": "urlencoded",
           "urlencoded": [
-            { "key": "estado", "value": "COTIZADO" }
+            {
+              "key": "estado",
+              "value": "COTIZADO"
+            }
           ]
         },
         "url": {
           "raw": "{{baseUrl}}/cotizaciones-resumen/{{cotizacionId}}/estado",
-          "host": ["{{baseUrl}}"],
-          "path": ["cotizaciones-resumen", "{{cotizacionId}}", "estado"]
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "cotizaciones-resumen",
+            "{{cotizacionId}}",
+            "estado"
+          ]
         },
         "description": "Scope: cotizaciones-resumen:update-state. Los codigos ya asignados se mantienen."
       },
@@ -131,13 +270,23 @@
         "body": {
           "mode": "urlencoded",
           "urlencoded": [
-            { "key": "code_supplier", "value": "BOL2-JUPE1-1", "description": "Mayusculas, numeros y guiones; 3-60 caracteres; unico en todo el sistema" }
+            {
+              "key": "code_supplier",
+              "value": "BOL2-JUPE1-1",
+              "description": "Mayusculas, numeros y guiones; 3-60 caracteres; unico en todo el sistema"
+            }
           ]
         },
         "url": {
           "raw": "{{baseUrl}}/proveedores/{{proveedorId}}/code-supplier",
-          "host": ["{{baseUrl}}"],
-          "path": ["proveedores", "{{proveedorId}}", "code-supplier"]
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "proveedores",
+            "{{proveedorId}}",
+            "code-supplier"
+          ]
         },
         "description": "Scope: proveedores:update-code. 409 si el codigo ya existe (o lo usa una cotizacion confirmada)."
       },
@@ -150,8 +299,13 @@
         "header": [],
         "url": {
           "raw": "{{baseUrl}}/cotizaciones-resumen/{{cotizacionId}}",
-          "host": ["{{baseUrl}}"],
-          "path": ["cotizaciones-resumen", "{{cotizacionId}}"]
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "cotizaciones-resumen",
+            "{{cotizacionId}}"
+          ]
         },
         "description": "Scope: cotizaciones-resumen:delete. Solo cotizaciones en estado COTIZADO (baja logica)."
       },
