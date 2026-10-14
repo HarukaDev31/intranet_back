@@ -136,6 +136,9 @@ require __DIR__.'/modules/public-landing-consolidado-departures.php';
 // API pública (solo lectura): exportación JSON de cotizaciones para terceros
 require __DIR__.'/modules/public-cotizaciones-export.php';
 
+// API de integración para otras organizaciones (token por organización, scopes y auditoría)
+require __DIR__.'/modules/integration-api.php';
+
 // API pública: lead landing curso (Astro probusiness_curso_landing)
 require __DIR__.'/modules/public-landing-curso-lead.php';
 

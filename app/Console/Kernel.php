@@ -31,6 +31,9 @@ class Kernel extends ConsoleKernel
                 return !empty($url) && is_string($url);
             });
 
+        // Auditoría de la API de integración: conserva solo la retención configurada
+        $schedule->command('api-clients:purge-audit')->dailyAt('03:30')->withoutOverlapping();
+
         // Sincroniza calculadoras COTIZADO -> CONFIRMADO segun estado de cotizacion vinculada
         $schedule->command('calculadora:sync-cotizado-a-confirmado')
             ->everyFiveMinutes()
