@@ -23,6 +23,16 @@ Route::prefix('integration/v1')->group(function () {
         ->middleware('api.client:cotizaciones-resumen:create')
         ->name('integration.cotizaciones-resumen.crear');
 
+    Route::put('cotizaciones-resumen/{id}/estado', [CotizacionResumenIntegracionController::class, 'actualizarEstado'])
+        ->whereNumber('id')
+        ->middleware('api.client:cotizaciones-resumen:update-state')
+        ->name('integration.cotizaciones-resumen.estado');
+
+    Route::delete('cotizaciones-resumen/{id}', [CotizacionResumenIntegracionController::class, 'eliminar'])
+        ->whereNumber('id')
+        ->middleware('api.client:cotizaciones-resumen:delete')
+        ->name('integration.cotizaciones-resumen.eliminar');
+
     Route::put('proveedores/{id}/code-supplier', [ProveedorCodigoIntegracionController::class, 'actualizar'])
         ->whereNumber('id')
         ->middleware('api.client:proveedores:update-code')
