@@ -1,0 +1,161 @@
+{
+  "info": {
+    "name": "Probusiness - API de integracion",
+    "description": "Cotizaciones resumen y codigo de proveedor de TU organizacion. Configura las variables 'baseUrl' y 'token' (en la coleccion o en un Environment).\n\nbaseUrl produccion: https://intranetback.probusiness.pe/api/integration/v1\nbaseUrl pruebas: https://qa-intranetback.probusiness.pe/api/integration/v1",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{token}}", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://qa-intranetback.probusiness.pe/api/integration/v1" },
+    { "key": "token", "value": "pbk_REEMPLAZA_POR_TU_TOKEN" },
+    { "key": "cotizacionId", "value": "0" },
+    { "key": "proveedorId", "value": "0" }
+  ],
+  "item": [
+    {
+      "name": "Listar cotizaciones",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/cotizaciones-resumen?estado=CONFIRMADO&per_page=20&page=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["cotizaciones-resumen"],
+          "query": [
+            { "key": "estado", "value": "CONFIRMADO", "description": "COTIZADO | CONFIRMADO", "disabled": true },
+            { "key": "fecha_inicio", "value": "2026-01-01", "description": "YYYY-MM-DD", "disabled": true },
+            { "key": "fecha_fin", "value": "2026-12-31", "description": "YYYY-MM-DD", "disabled": true },
+            { "key": "id_contenedor", "value": "", "disabled": true },
+            { "key": "search", "value": "", "description": "nombre, documento o telefono", "disabled": true },
+            { "key": "per_page", "value": "20", "description": "maximo 50" },
+            { "key": "page", "value": "1" }
+          ]
+        },
+        "description": "Scope: cotizaciones-resumen:read"
+      },
+      "response": []
+    },
+    {
+      "name": "Crear cotizacion (JSON + PDF)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 201 || pm.response.code === 200) {",
+              "  const d = pm.response.json().data || {};",
+              "  if (d.id) pm.collectionVariables.set('cotizacionId', d.id);",
+              "  if (d.proveedores && d.proveedores[0]) pm.collectionVariables.set('proveedorId', d.proveedores[0].id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Idempotency-Key", "value": "{{$guid}}", "description": "Texto unico (8-64 caracteres). Reintentar con la misma clave NO duplica la cotizacion." }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "archivo", "type": "file", "src": [], "description": "PDF de respaldo (obligatorio, max 10 MB)" },
+            {
+              "key": "payload",
+              "type": "text",
+              "value": "{\n  \"id_contenedor\": 0,\n  \"cliente\": {\n    \"nombre\": \"Juan Perez\",\n    \"whatsapp\": \"59171234567\",\n    \"documento\": \"1234567\",\n    \"tipo_documento\": \"ID\",\n    \"correo\": \"juan@correo.com\"\n  },\n  \"proveedores\": [\n    {\n      \"productos\": \"Bombas de gasolina\",\n      \"cbm_total\": 5.3,\n      \"cbm_imo\": 0,\n      \"peso_total\": 800,\n      \"qty_cajas\": 40,\n      \"unidades\": 5800,\n      \"incoterm\": \"FOB\",\n      \"costos\": [\n        { \"concepto\": \"Valor FOB Mercaderia\", \"valor\": 17430 },\n        { \"concepto\": \"Transporte maritimo y terrestre\", \"valor\": 1166 }\n      ]\n    }\n  ],\n  \"descuento\": 0\n}",
+              "description": "JSON como texto. id_contenedor = consolidado de tu organizacion."
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/cotizaciones-resumen",
+          "host": ["{{baseUrl}}"],
+          "path": ["cotizaciones-resumen"]
+        },
+        "description": "Scope: cotizaciones-resumen:create. Nace en estado COTIZADO y sin codigo de proveedor (se asigna al confirmar). Guarda cotizacionId y proveedorId para las siguientes peticiones."
+      },
+      "response": []
+    },
+    {
+      "name": "Confirmar cotizacion",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            { "key": "estado", "value": "CONFIRMADO", "description": "CONFIRMADO | COTIZADO" }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/cotizaciones-resumen/{{cotizacionId}}/estado",
+          "host": ["{{baseUrl}}"],
+          "path": ["cotizaciones-resumen", "{{cotizacionId}}", "estado"]
+        },
+        "description": "Scope: cotizaciones-resumen:update-state. Al confirmar se asignan los code_supplier (vienen en la respuesta)."
+      },
+      "response": []
+    },
+    {
+      "name": "Volver a COTIZADO",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            { "key": "estado", "value": "COTIZADO" }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/cotizaciones-resumen/{{cotizacionId}}/estado",
+          "host": ["{{baseUrl}}"],
+          "path": ["cotizaciones-resumen", "{{cotizacionId}}", "estado"]
+        },
+        "description": "Scope: cotizaciones-resumen:update-state. Los codigos ya asignados se mantienen."
+      },
+      "response": []
+    },
+    {
+      "name": "Actualizar codigo de proveedor",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            { "key": "code_supplier", "value": "BOL2-JUPE1-1", "description": "Mayusculas, numeros y guiones; 3-60 caracteres; unico en todo el sistema" }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/proveedores/{{proveedorId}}/code-supplier",
+          "host": ["{{baseUrl}}"],
+          "path": ["proveedores", "{{proveedorId}}", "code-supplier"]
+        },
+        "description": "Scope: proveedores:update-code. 409 si el codigo ya existe (o lo usa una cotizacion confirmada)."
+      },
+      "response": []
+    },
+    {
+      "name": "Eliminar cotizacion",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/cotizaciones-resumen/{{cotizacionId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["cotizaciones-resumen", "{{cotizacionId}}"]
+        },
+        "description": "Scope: cotizaciones-resumen:delete. Solo cotizaciones en estado COTIZADO (baja logica)."
+      },
+      "response": []
+    }
+  ]
+}
