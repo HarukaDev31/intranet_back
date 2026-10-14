@@ -1,0 +1,168 @@
+# API de integración Probusiness — guía rápida
+
+Con esta API puedes **crear, listar, confirmar y eliminar cotizaciones** de tu organización y **actualizar el código de proveedor** desde tu sistema.
+
+| | |
+|---|---|
+| Base URL (producción) | `https://intranetback.probusiness.pe/api/integration/v1` |
+| Base URL (pruebas) | `https://qa-intranetback.probusiness.pe/api/integration/v1` |
+| Formato | JSON (la creación usa `multipart/form-data` por el PDF) |
+| Colección Postman | `probusiness-integracion.postman_collection.json` (misma carpeta) |
+
+## 1. Autenticación
+
+Te entregamos **un token por organización**. Envíalo en cada request:
+
+```
+Authorization: Bearer pbk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+- Es secreto: guárdalo en tu servidor (variable de entorno). **Nunca** lo pongas en un frontend ni en un repositorio.
+- Solo ves y modificas **datos de tu organización**.
+- Si crees que se filtró, pídenos rotarlo: el anterior deja de funcionar al instante.
+
+## 2. Límites
+
+Cada token tiene un límite por minuto y una cuota diaria. Cada respuesta trae:
+
+`X-RateLimit-Limit` · `X-RateLimit-Remaining` · `X-Quota-Remaining`
+
+Si te pasas recibes **429** con `Retry-After` (segundos). Reintenta pasado ese tiempo.
+
+## 3. Endpoints
+
+Cada endpoint requiere un *scope* (permiso) habilitado en tu token. Sin él: **403**.
+
+| Método y ruta | Scope | Para qué |
+|---|---|---|
+| `GET /cotizaciones-resumen` | `cotizaciones-resumen:read` | Listar |
+| `POST /cotizaciones-resumen` | `cotizaciones-resumen:create` | Crear (JSON + PDF de respaldo) |
+| `PUT /cotizaciones-resumen/{id}/estado` | `cotizaciones-resumen:update-state` | Confirmar o volver a cotizado |
+| `DELETE /cotizaciones-resumen/{id}` | `cotizaciones-resumen:delete` | Eliminar (solo si está `COTIZADO`) |
+| `PUT /proveedores/{id}/code-supplier` | `proveedores:update-code` | Cambiar el código de proveedor |
+
+### 3.1 Listar — `GET /cotizaciones-resumen`
+
+Filtros (query, todos opcionales): `estado` (`COTIZADO`/`CONFIRMADO`), `fecha_inicio` y `fecha_fin` (`YYYY-MM-DD`), `id_contenedor`, `search` (nombre, documento o teléfono), `page`, `per_page` (máx. 50).
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "$BASE/cotizaciones-resumen?estado=CONFIRMADO&per_page=20"
+```
+
+Respuesta `200`: `data[]` con `id`, `estado`, `id_contenedor`, `cliente`, totales y `proveedores[]` (con `id`, `code_supplier`, `productos`, `cbm_total`, `costos[]`), más `pagination`.
+
+### 3.2 Crear — `POST /cotizaciones-resumen`
+
+`multipart/form-data` con dos campos:
+
+- `archivo`: **PDF** de respaldo (obligatorio, máx. 10 MB). Queda asociado a la cotización. Se rechaza si no es un PDF real o si contiene JavaScript/archivos embebidos.
+- `payload`: el JSON de abajo, **como texto**.
+
+```json
+{
+  "id_contenedor": 183,
+  "cliente": {
+    "nombre": "Juan Pérez",
+    "whatsapp": "59171234567",
+    "documento": "1234567",
+    "tipo_documento": "ID",
+    "correo": "juan@correo.com"
+  },
+  "proveedores": [
+    {
+      "productos": "Bombas de gasolina",
+      "cbm_total": 5.3,
+      "cbm_imo": 0,
+      "peso_total": 800,
+      "qty_cajas": 40,
+      "unidades": 5800,
+      "incoterm": "FOB",
+      "costos": [
+        { "concepto": "Valor FOB Mercadería", "valor": 17430 },
+        { "concepto": "Transporte marítimo y terrestre", "valor": 1166 }
+      ]
+    }
+  ],
+  "descuento": 0
+}
+```
+
+| Campo | Obligatorio | Notas |
+|---|---|---|
+| `id_contenedor` | sí | Consolidado de **tu** organización |
+| `cliente.nombre` | sí | Máx. 150 caracteres |
+| `cliente.whatsapp` / `documento` / `tipo_documento` (`ID`\|`RUC`) / `correo` | no | |
+| `proveedores[]` | sí (1–50) | |
+| `proveedores[].productos` | sí | Máx. 500 caracteres |
+| `proveedores[].cbm_total` | sí | ≥ 0. `cbm_imo` no puede superarlo |
+| `proveedores[].peso_total`, `qty_cajas`, `unidades`, `incoterm` | no | |
+| `proveedores[].costos[]` | no (máx. 50) | `concepto` + `valor` (USD). Opcionales: `valor_bs`, `tasa_cambio` |
+
+Envía **solo** estos campos; cualquier otro devuelve `422`. El vendedor lo asigna el sistema (no se envía).
+
+**Recomendado:** agrega el header `Idempotency-Key: <texto único de 8–64 caracteres>`. Si reintentas con la misma clave (p. ej. por un timeout) recibes la misma respuesta con `Idempotent-Replay: true` y **no se duplica**.
+
+```bash
+curl -X POST "$BASE/cotizaciones-resumen" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Idempotency-Key: pedido-12345" \
+  -F "archivo=@respaldo.pdf;type=application/pdf" \
+  -F 'payload={"id_contenedor":183,"cliente":{"nombre":"Juan Pérez"},"proveedores":[{"productos":"Bombas","cbm_total":5.3}]}'
+```
+
+Respuesta `201`:
+
+```json
+{ "success": true, "message": "Cotización registrada",
+  "data": { "id": 10892, "estado": "COTIZADO",
+            "proveedores": [ { "id": 5150, "productos": "Bombas" } ],
+            "archivo": { "nombre_original": "respaldo.pdf", "sha256": "…", "bytes": 46 } } }
+```
+
+La cotización nace en `COTIZADO` y **sin** código de proveedor: el código se asigna al confirmarla.
+
+### 3.3 Cambiar estado — `PUT /cotizaciones-resumen/{id}/estado`
+
+```bash
+curl -X PUT "$BASE/cotizaciones-resumen/10892/estado" \
+  -H "Authorization: Bearer $TOKEN" -d "estado=CONFIRMADO"
+```
+
+- `estado`: `CONFIRMADO` o `COTIZADO`.
+- Al **confirmar** se asignan los códigos de proveedor y se devuelven en `data.proveedores[].code_supplier`.
+- Volver a `COTIZADO` mantiene los códigos ya asignados.
+
+### 3.4 Eliminar — `DELETE /cotizaciones-resumen/{id}`
+
+Solo cotizaciones en `COTIZADO`. Una confirmada responde `422` (primero devuélvela a `COTIZADO`). Es una baja lógica: deja de aparecer en el listado.
+
+### 3.5 Actualizar código de proveedor — `PUT /proveedores/{id}/code-supplier`
+
+```bash
+curl -X PUT "$BASE/proveedores/5150/code-supplier" \
+  -H "Authorization: Bearer $TOKEN" -d "code_supplier=BOL2-JUPE1-1"
+```
+
+Reglas del código: letras **mayúsculas**, números y guiones (`ABC1-XYZ2-1`), 3–60 caracteres. No puede existir en **ningún** otro proveedor del sistema; si lo usa una cotización confirmada no se puede reutilizar (`409`).
+
+## 4. Errores
+
+Todas las respuestas de error traen `{ "success": false, "message": "…" }` (y `errors` en validaciones).
+
+| HTTP | Significado |
+|---|---|
+| `401` | Token ausente, inválido o revocado |
+| `403` | El token no tiene el scope, o la integración está deshabilitada |
+| `404` | El recurso no existe **para tu organización** (también si es de otra) |
+| `409` | Conflicto (p. ej. código de proveedor ya en uso) |
+| `422` | Datos inválidos o regla de negocio (campo extra, PDF no válido, eliminar una confirmada…) |
+| `429` | Límite por minuto o cuota diaria excedidos (`Retry-After`) |
+| `500` | Error nuestro: reintenta con la misma `Idempotency-Key` y avísanos si persiste |
+
+## 5. Flujo típico
+
+1. `POST /cotizaciones-resumen` → guarda el `id` (estado `COTIZADO`).
+2. `PUT /cotizaciones-resumen/{id}/estado` con `CONFIRMADO` → recibes los `code_supplier`.
+3. (Opcional) `PUT /proveedores/{id}/code-supplier` si necesitas otro código (debe ser único).
+4. `GET /cotizaciones-resumen` cuando quieras consultar el estado.
