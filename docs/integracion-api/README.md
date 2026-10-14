@@ -122,6 +122,80 @@ Respuesta `201`:
 
 La cotización nace en `COTIZADO` y **sin** código de proveedor: el código se asigna al confirmarla.
 
+#### Conceptos de costo válidos (organizaciones de Ecuador)
+
+El `concepto` de cada costo se clasifica por su texto. Usa estos nombres (los que ya maneja Ecuador) para que los totales de la cotización salgan bien:
+
+| Concepto recomendado | Se suma a | Se reconoce si el texto contiene |
+|---|---|---|
+| `Valor de Mercadería` | **FOB** | "mercader", "mercanc", "fob" o "exw" |
+| `Costos de Transferencia e ISD (Aprox)` | **ISD** | "isd" o "salida de divisa" |
+| `Servicios de Importación` | **Logística** | "servicio" + "import", o "logist" |
+| `Logística Internacional` | **Logística** | "logist" |
+| `Tributos e Impuestos Aduaneros` | **Impuestos** | "impuest", "tribut" o "aduana" |
+
+- Cualquier otro concepto (por ejemplo flete, seguro o una transferencia sin ISD) **se guarda pero no suma** a FOB, ISD, Logística ni Impuestos.
+- Si un texto encaja en varias reglas, gana este orden: ISD, FOB, Impuestos, Logística.
+- `valor` va en **USD**. (`valor_bs` y `tasa_cambio` solo aplican a organizaciones de Bolivia.)
+- Los costos de **todos** los proveedores se **suman** en los totales: escribe cada costo una sola vez (los de toda la cotización, como ISD, logística e impuestos, van en el primer proveedor).
+
+#### Ejemplo con varios proveedores (Ecuador)
+
+Tres proveedores; el FOB de cada uno va en su proveedor y los costos de toda la cotización en el primero. Totales resultantes: FOB 3 078,00 · ISD 273,90 · Logística 1 800,00 · Impuestos 542,34.
+
+```json
+{
+  "id_contenedor": 180,
+  "cliente": {
+    "nombre": "Gladys Cecilia Flores",
+    "whatsapp": "593983939230",
+    "documento": "1707878011001",
+    "tipo_documento": "RUC",
+    "correo": "cliente@correo.com"
+  },
+  "proveedores": [
+    {
+      "productos": "Pelador de verduras",
+      "cbm_total": 1.2,
+      "peso_total": 150,
+      "qty_cajas": 12,
+      "unidades": 300,
+      "incoterm": "FOB",
+      "costos": [
+        { "concepto": "Valor de Mercadería", "valor": 1500.00 },
+        { "concepto": "Costos de Transferencia e ISD (Aprox)", "valor": 273.90 },
+        { "concepto": "Servicios de Importación", "valor": 1800.00 },
+        { "concepto": "Tributos e Impuestos Aduaneros", "valor": 542.34 }
+      ]
+    },
+    {
+      "productos": "Hilos de coser",
+      "cbm_total": 0.46,
+      "qty_cajas": 6,
+      "unidades": 600,
+      "incoterm": "FOB",
+      "costos": [
+        { "concepto": "Valor de Mercadería", "valor": 626.52 }
+      ]
+    },
+    {
+      "productos": "Máquina eléctrica portátil",
+      "cbm_total": 2.3,
+      "peso_total": 420,
+      "qty_cajas": 8,
+      "unidades": 40,
+      "incoterm": "FOB",
+      "costos": [
+        { "concepto": "Valor de Mercadería", "valor": 951.48 }
+      ]
+    }
+  ],
+  "descuento": 0
+}
+```
+
+La respuesta trae un `id` por proveedor, en el mismo orden en que los enviaste.
+
 ### 3.3 Cambiar estado — `PUT /cotizaciones-resumen/{id}/estado`
 
 ```bash
