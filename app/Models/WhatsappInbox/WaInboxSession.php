@@ -15,6 +15,7 @@ class WaInboxSession extends Model
 
     protected $fillable = [
         'organizacion_id',
+        'config_id',
         'phone_number_id',
         'display_number',
         'label',

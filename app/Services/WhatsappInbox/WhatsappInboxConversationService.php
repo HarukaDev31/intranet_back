@@ -21,12 +21,17 @@ class WhatsappInboxConversationService
     /** @var WhatsappInboxWindowService */
     protected $windowService;
 
+    /** @var WhatsappInboxOrgConfigService */
+    protected $orgConfig;
+
     public function __construct(
         WhatsappInboxSessionService $sessionService,
-        WhatsappInboxWindowService $windowService
+        WhatsappInboxWindowService $windowService,
+        WhatsappInboxOrgConfigService $orgConfig
     ) {
         $this->sessionService = $sessionService;
         $this->windowService = $windowService;
+        $this->orgConfig = $orgConfig;
     }
 
     /**
@@ -62,6 +67,26 @@ class WhatsappInboxConversationService
             ->orderByDesc('last_message_at')
             ->orderByDesc('id');
 
+        if (array_key_exists('visible_phone_ids', $params)) {
+            $phones = array_values(array_filter(array_map('strval', (array) $params['visible_phone_ids'])));
+            if ($phones === []) {
+                return [
+                    'success' => true,
+                    'data' => [],
+                    'configured' => false,
+                    'pagination' => [
+                        'current_page' => 1,
+                        'last_page' => 1,
+                        'per_page' => $perPage,
+                        'total' => 0,
+                    ],
+                ];
+            }
+            $query->whereHas('session', function ($s) use ($phones) {
+                $s->whereIn('phone_number_id', $phones);
+            });
+        }
+
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
                 $q->where('contact_name', 'like', '%' . $search . '%')
@@ -93,11 +118,17 @@ class WhatsappInboxConversationService
                 }
             }
             if (!$found) {
-                $extra = WaInboxConversation::query()
+                $extraQuery = WaInboxConversation::query()
                     ->with('session')
                     ->where('organizacion_id', $orgId)
-                    ->where('id', $includeId)
-                    ->first();
+                    ->where('id', $includeId);
+                if (array_key_exists('visible_phone_ids', $params)) {
+                    $phonesExtra = array_values(array_filter(array_map('strval', (array) $params['visible_phone_ids'])));
+                    $extraQuery->whereHas('session', function ($s) use ($phonesExtra) {
+                        $s->whereIn('phone_number_id', $phonesExtra);
+                    });
+                }
+                $extra = $extraQuery->first();
                 if ($extra) {
                     $rows[] = $this->formatConversation($extra);
                 }
@@ -304,9 +335,33 @@ class WhatsappInboxConversationService
     public function createManualContact(array $params = [])
     {
         $orgId = isset($params['organizacion_id']) ? (int) $params['organizacion_id'] : 0;
-        $session = $this->sessionService->ensureSessionForOutboundOrganizacion(
-            $orgId > 0 ? $orgId : Usuario::ID_ORGANIZACION_ADMIN
-        );
+        $phones = isset($params['visible_phone_ids']) && is_array($params['visible_phone_ids'])
+            ? array_values(array_filter(array_map('strval', $params['visible_phone_ids'])))
+            : null;
+        if (is_array($phones) && $phones === []) {
+            return [
+                'success' => false,
+                'message' => 'Tu rol no tiene un número de WhatsApp asignado.',
+            ];
+        }
+        if (is_array($phones)) {
+            $session = WaInboxSession::query()
+                ->where('organizacion_id', $orgId)
+                ->whereIn('phone_number_id', $phones)
+                ->orderByDesc('is_active')
+                ->orderBy('id')
+                ->first();
+            if (!$session) {
+                return [
+                    'success' => false,
+                    'message' => 'Tu rol no tiene un número de WhatsApp asignado.',
+                ];
+            }
+        } else {
+            $session = $this->sessionService->ensureSessionForOutboundOrganizacion(
+                $orgId > 0 ? $orgId : Usuario::ID_ORGANIZACION_ADMIN
+            );
+        }
         $phoneE164 = $this->phoneManualConPrefijoOrganizacion(
             isset($params['phone']) ? $params['phone'] : '',
             $orgId > 0 ? $orgId : (int) $session->organizacion_id
@@ -621,7 +676,17 @@ class WhatsappInboxConversationService
             return false;
         }
 
-        return $this->organizacionIdOf($conversation) === (int) $user->getAttribute('ID_Organizacion');
+        if ($this->organizacionIdOf($conversation) !== (int) $user->getAttribute('ID_Organizacion')) {
+            return false;
+        }
+
+        $phones = $this->orgConfig->visiblePhoneNumberIds($user);
+        if (!$conversation->relationLoaded('session')) {
+            $conversation->load('session');
+        }
+        $phone = $conversation->session ? trim((string) $conversation->session->phone_number_id) : '';
+
+        return $phone !== '' && in_array($phone, $phones, true);
     }
 
     /**

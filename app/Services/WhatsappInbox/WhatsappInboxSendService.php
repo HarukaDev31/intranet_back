@@ -553,6 +553,19 @@ class WhatsappInboxSendService
             }
         }
 
+        $phoneNumberId = '';
+        if ($conversation) {
+            if (!$conversation->relationLoaded('session')) {
+                $conversation->load('session');
+            }
+            if ($conversation->session) {
+                $phoneNumberId = trim((string) $conversation->session->phone_number_id);
+            }
+        }
+        if ($phoneNumberId !== '') {
+            return $this->orgConfig->credentialsForPhoneNumber($phoneNumberId, $orgId);
+        }
+
         return $this->orgConfig->credentialsForOutbound($orgId);
     }
 }

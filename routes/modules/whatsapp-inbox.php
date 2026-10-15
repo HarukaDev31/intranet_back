@@ -20,6 +20,8 @@ Route::group([
 ], function () {
     Route::get('/config', [WhatsappInboxConfigController::class, 'show']);
     Route::put('/config', [WhatsappInboxConfigController::class, 'update']);
+    Route::post('/config/lineas', [WhatsappInboxConfigController::class, 'storeLinea']);
+    Route::put('/config/lineas/{id}', [WhatsappInboxConfigController::class, 'updateLinea']);
     Route::get('/session', [WhatsappInboxController::class, 'session']);
     Route::get('/conversations', [WhatsappInboxController::class, 'conversations']);
     Route::post('/conversations', [WhatsappInboxController::class, 'storeConversation']);

@@ -28,7 +28,50 @@ class WhatsappInboxConfigController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $this->orgConfig->adminPayload($orgId),
+            'data' => $this->orgConfig->adminIndex($orgId),
+        ]);
+    }
+
+    public function storeLinea(Request $request)
+    {
+        return $this->guardarLinea($request, null);
+    }
+
+    public function updateLinea(Request $request, $id)
+    {
+        return $this->guardarLinea($request, (int) $id);
+    }
+
+    /**
+     * @param  int|null  $lineaId
+     */
+    private function guardarLinea(Request $request, $lineaId)
+    {
+        $user = JWTAuth::parseToken()->authenticate();
+        if (!$user || !$user->puedeConfigurarWhatsappInbox()) {
+            return response()->json(['success' => false, 'message' => 'No autorizado'], 403);
+        }
+
+        $orgId = (int) $user->getAttribute('ID_Organizacion');
+
+        try {
+            $this->orgConfig->saveLinea($orgId, $lineaId, $request->all());
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo guardar el número',
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Número guardado',
+            'data' => $this->orgConfig->adminIndex($orgId),
         ]);
     }
 
