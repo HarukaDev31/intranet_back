@@ -4,6 +4,7 @@ namespace App\Models\WhatsappInbox;
 
 use App\Support\WhatsApp\WaInboxSecretCrypt;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class WaInboxOrganizacionConfig extends Model
 {
@@ -11,6 +12,8 @@ class WaInboxOrganizacionConfig extends Model
 
     protected $fillable = [
         'organizacion_id',
+        'nombre',
+        'is_default',
         'enabled',
         'access_token',
         'phone_number_id',
@@ -33,11 +36,17 @@ class WaInboxOrganizacionConfig extends Model
 
     protected $casts = [
         'enabled' => 'boolean',
+        'is_default' => 'boolean',
         'legacy_fallback' => 'boolean',
         'preview_from_template' => 'boolean',
         'session_when_window_open' => 'boolean',
         'organizacion_id' => 'integer',
     ];
+
+    public function roles(): HasMany
+    {
+        return $this->hasMany(WaInboxConfigRole::class, 'config_id');
+    }
 
     public function getAccessTokenAttribute($value)
     {

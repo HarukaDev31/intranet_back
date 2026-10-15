@@ -56,20 +56,6 @@ class WhatsappInboxSessionService
             return $byPhone;
         }
 
-        $session = WaInboxSession::query()
-            ->where('organizacion_id', $organizacionId)
-            ->first();
-        if ($session) {
-            $session->phone_number_id = $phoneNumberId;
-            $display = (string) $creds['display_number'];
-            if ($display !== '') {
-                $session->display_number = $display;
-            }
-            $session->save();
-
-            return $session;
-        }
-
         return WaInboxSession::create([
             'organizacion_id' => $organizacionId,
             'phone_number_id' => $phoneNumberId,
@@ -117,6 +103,21 @@ class WhatsappInboxSessionService
         $organizacionId = (int) $organizacionId;
         $own = $this->orgConfig->credentials($organizacionId);
         $outbound = $this->orgConfig->credentialsForOutbound($organizacionId);
+        if ($user instanceof Usuario) {
+            $visible = $this->orgConfig->visiblePhoneNumberIds($user);
+            if ($visible !== [] && !in_array((string) $own['phone_number_id'], $visible, true)) {
+                $linea = \App\Models\WhatsappInbox\WaInboxOrganizacionConfig::query()
+                    ->where('organizacion_id', $organizacionId)
+                    ->whereIn('phone_number_id', $visible)
+                    ->orderByDesc('is_default')
+                    ->orderBy('id')
+                    ->first();
+                if ($linea && trim((string) $linea->phone_number_id) !== '') {
+                    $own = $this->orgConfig->credentialsForPhoneNumber($linea->phone_number_id, $organizacionId);
+                    $outbound = $own;
+                }
+            }
+        }
         $org = Organizacion::query()->find($organizacionId);
         $canConfigure = $user instanceof Usuario ? $user->puedeConfigurarWhatsappInbox() : false;
 
@@ -141,7 +142,12 @@ class WhatsappInboxSessionService
             ];
         }
 
-        $session = $this->ensureSessionForOrganizacion($organizacionId);
+        $session = WaInboxSession::query()
+            ->where('phone_number_id', (string) $own['phone_number_id'])
+            ->first();
+        if (!$session) {
+            $session = $this->ensureSessionForOrganizacion($organizacionId);
+        }
 
         return $base + [
             'id' => (int) $session->id,

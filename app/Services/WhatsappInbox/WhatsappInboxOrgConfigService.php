@@ -2,8 +2,10 @@
 
 namespace App\Services\WhatsappInbox;
 
+use App\Models\Grupo;
 use App\Models\Organizacion;
 use App\Models\Usuario;
+use App\Models\WhatsappInbox\WaInboxConfigRole;
 use App\Models\WhatsappInbox\WaInboxOrganizacionConfig;
 use App\Models\WhatsappInbox\WaInboxSession;
 
@@ -17,6 +19,8 @@ class WhatsappInboxOrgConfigService
     {
         return WaInboxOrganizacionConfig::query()
             ->where('organizacion_id', (int) $organizacionId)
+            ->orderByDesc('is_default')
+            ->orderBy('id')
             ->first();
     }
 
@@ -299,36 +303,351 @@ class WhatsappInboxOrgConfigService
         }
 
         $orgId = (int) $row->organizacion_id;
-        $byPhone = WaInboxSession::query()->where('phone_number_id', $phone)->first();
-        $byOrg = WaInboxSession::query()->where('organizacion_id', $orgId)->first();
-
-        if ($byPhone) {
-            if ($byOrg && (int) $byOrg->id === (int) $byPhone->id) {
-                $byPhone->display_number = (string) $row->display_number;
-                $byPhone->is_active = (bool) $row->enabled;
-                $byPhone->save();
-            }
-
-            return;
+        $label = trim((string) $row->nombre);
+        if ($label === '') {
+            $label = 'WhatsApp';
         }
 
-        if ($byOrg) {
-            $byOrg->phone_number_id = $phone;
-            $byOrg->display_number = (string) $row->display_number;
-            $byOrg->label = 'WhatsApp';
-            $byOrg->is_active = (bool) $row->enabled;
-            $byOrg->save();
+        $session = WaInboxSession::query()->where('config_id', $row->id)->first();
+        if (!$session) {
+            $session = WaInboxSession::query()
+                ->where('phone_number_id', $phone)
+                ->where(function ($q) use ($orgId) {
+                    $q->where('organizacion_id', $orgId)->orWhereNull('organizacion_id');
+                })
+                ->first();
+        }
+
+        if ($session) {
+            $session->organizacion_id = $orgId;
+            $session->config_id = (int) $row->id;
+            $session->phone_number_id = $phone;
+            $session->display_number = (string) $row->display_number;
+            $session->label = $label;
+            $session->is_active = (bool) $row->enabled;
+            $session->save();
 
             return;
         }
 
         WaInboxSession::create([
             'organizacion_id' => $orgId,
+            'config_id' => (int) $row->id,
             'phone_number_id' => $phone,
             'display_number' => (string) $row->display_number,
-            'label' => 'WhatsApp',
+            'label' => $label,
             'is_active' => (bool) $row->enabled,
         ]);
+    }
+
+    /**
+     * Listado del mantenedor: varios números de la org y los roles que pueden verlos.
+     *
+     * @param  int  $organizacionId
+     * @return array<string, mixed>
+     */
+    public function adminIndex($organizacionId)
+    {
+        $organizacionId = (int) $organizacionId;
+        $org = Organizacion::query()->find($organizacionId);
+        $lineas = WaInboxOrganizacionConfig::query()
+            ->with('roles')
+            ->where('organizacion_id', $organizacionId)
+            ->orderByDesc('is_default')
+            ->orderBy('id')
+            ->get();
+
+        $items = [];
+        foreach ($lineas as $row) {
+            $items[] = $this->lineaPayload($row);
+        }
+
+        return [
+            'organizacion_id' => $organizacionId,
+            'organizacion_nombre' => $org ? (string) $org->No_Organizacion : '',
+            'roles' => $this->rolesDeOrganizacion($organizacionId),
+            'lineas' => $items,
+        ];
+    }
+
+    /**
+     * @param  int  $organizacionId
+     * @param  int|null  $lineaId
+     * @param  array<string, mixed>  $input
+     * @return WaInboxOrganizacionConfig
+     */
+    public function saveLinea($organizacionId, $lineaId, array $input)
+    {
+        $organizacionId = (int) $organizacionId;
+        $row = null;
+        if ($lineaId) {
+            $row = WaInboxOrganizacionConfig::query()
+                ->where('organizacion_id', $organizacionId)
+                ->where('id', (int) $lineaId)
+                ->first();
+            if (!$row) {
+                throw new \InvalidArgumentException('Ese número no pertenece a tu organización');
+            }
+        } else {
+            $row = new WaInboxOrganizacionConfig();
+            $row->organizacion_id = $organizacionId;
+            $row->legacy_fallback = true;
+            $row->preview_from_template = true;
+            $row->session_when_window_open = true;
+        }
+
+        $nombre = trim((string) ($input['nombre'] ?? $row->nombre ?? ''));
+        if ($nombre === '') {
+            throw new \InvalidArgumentException('Indica un nombre para el número');
+        }
+        if (mb_strlen($nombre) > 80) {
+            throw new \InvalidArgumentException('El nombre es demasiado largo');
+        }
+
+        $phone = trim((string) ($input['phone_number_id'] ?? $row->phone_number_id ?? ''));
+        if (!empty($input['enabled']) && $phone === '') {
+            throw new \InvalidArgumentException('Actívalo solo cuando ya tengas el ID del número de Meta');
+        }
+        if ($phone !== '') {
+            $duplicado = WaInboxOrganizacionConfig::query()
+                ->where('phone_number_id', $phone)
+                ->where('id', '!=', (int) $row->id)
+                ->exists();
+            if ($duplicado) {
+                throw new \InvalidArgumentException('Ese ID de número ya está configurado');
+            }
+        }
+
+        $tokenNuevo = isset($input['access_token']) ? trim((string) $input['access_token']) : '';
+        $tokenActual = trim((string) $row->access_token);
+        if (!empty($input['enabled']) && $tokenNuevo === '' && $tokenActual === '') {
+            throw new \InvalidArgumentException('Pega el token de acceso para activar este número');
+        }
+
+        $esDefault = !empty($input['is_default']);
+        $hayOtras = WaInboxOrganizacionConfig::query()
+            ->where('organizacion_id', $organizacionId)
+            ->where('id', '!=', (int) $row->id)
+            ->exists();
+        if (!$hayOtras) {
+            $esDefault = true;
+        }
+        if (!$esDefault) {
+            $otraPrincipal = WaInboxOrganizacionConfig::query()
+                ->where('organizacion_id', $organizacionId)
+                ->where('id', '!=', (int) $row->id)
+                ->where('is_default', true)
+                ->exists();
+            if (!$otraPrincipal) {
+                $esDefault = true;
+            }
+        }
+
+        $row->nombre = $nombre;
+        $row->is_default = $esDefault;
+        $row->enabled = !empty($input['enabled']);
+        $row->phone_number_id = $phone !== '' ? $phone : null;
+        $row->waba_id = $this->nullableString($input, 'waba_id', $row->waba_id);
+        $row->display_number = $this->nullableString($input, 'display_number', $row->display_number);
+        $row->graph_api_version = $this->presentString($input, 'graph_api_version', $row->graph_api_version ?: 'v19.0');
+        $row->default_language = $this->presentString($input, 'default_language', $row->default_language ?: 'es_PE');
+
+        $verifyToken = isset($input['webhook_verify_token']) ? trim((string) $input['webhook_verify_token']) : '';
+        if ($verifyToken !== '') {
+            $row->webhook_verify_token = $verifyToken;
+        }
+        if ($tokenNuevo !== '') {
+            $row->access_token = $tokenNuevo;
+        }
+        $secret = isset($input['app_secret']) ? trim((string) $input['app_secret']) : '';
+        if ($secret !== '') {
+            $row->app_secret = $secret;
+        }
+
+        $row->save();
+
+        if ($esDefault) {
+            WaInboxOrganizacionConfig::query()
+                ->where('organizacion_id', $organizacionId)
+                ->where('id', '!=', (int) $row->id)
+                ->update(['is_default' => false]);
+        }
+
+        if (array_key_exists('roles', $input)) {
+            $this->syncRoles($row, $input['roles']);
+        }
+
+        $this->syncSession($row);
+
+        return $row->load('roles');
+    }
+
+    /**
+     * Números cuyo chat puede ver este usuario.
+     * Una línea sin roles la ve toda la organización. Con roles, solo esos.
+     *
+     * @param  \App\Models\Usuario|null  $user
+     * @return array<int, string>
+     */
+    public function visiblePhoneNumberIds($user)
+    {
+        if (!$user) {
+            return [];
+        }
+
+        $orgId = (int) $user->getAttribute('ID_Organizacion');
+        $rolesUsuario = $this->roleNamesOfUser($user);
+        $lineas = WaInboxOrganizacionConfig::query()
+            ->with('roles')
+            ->where('organizacion_id', $orgId)
+            ->get();
+
+        $phones = [];
+        foreach ($lineas as $linea) {
+            $phone = trim((string) $linea->phone_number_id);
+            if ($phone === '') {
+                continue;
+            }
+            $asignados = [];
+            foreach ($linea->roles as $role) {
+                $nombre = trim((string) $role->role_name);
+                if ($nombre !== '') {
+                    $asignados[] = $nombre;
+                }
+            }
+            if ($asignados === [] || count(array_intersect($asignados, $rolesUsuario)) > 0) {
+                $phones[] = $phone;
+            }
+        }
+
+        return array_values(array_unique($phones));
+    }
+
+    /**
+     * Credenciales del número de la conversación (no el único de la org).
+     *
+     * @param  string  $phoneNumberId
+     * @param  int  $organizacionId
+     * @return array<string, mixed>
+     */
+    public function credentialsForPhoneNumber($phoneNumberId, $organizacionId)
+    {
+        $config = $this->findByPhoneNumberId($phoneNumberId);
+        if ($config && (int) $config->organizacion_id === (int) $organizacionId && $this->rowEstaConfigurada($config)) {
+            return $this->credentialsFromRow($config);
+        }
+
+        return $this->credentialsForOutbound($organizacionId);
+    }
+
+    /**
+     * @param  int  $organizacionId
+     * @return array<int, array{label: string, value: string}>
+     */
+    private function rolesDeOrganizacion($organizacionId)
+    {
+        $nombres = Grupo::query()
+            ->where('ID_Organizacion', (int) $organizacionId)
+            ->orderBy('No_Grupo')
+            ->pluck('No_Grupo')
+            ->all();
+
+        $items = [];
+        $vistos = [];
+        foreach ($nombres as $nombre) {
+            $nombre = trim((string) $nombre);
+            if ($nombre === '' || isset($vistos[$nombre])) {
+                continue;
+            }
+            $vistos[$nombre] = true;
+            $items[] = ['label' => $nombre, 'value' => $nombre];
+        }
+
+        if (!isset($vistos[Usuario::ROL_COORDINACION])) {
+            array_unshift($items, [
+                'label' => Usuario::ROL_COORDINACION,
+                'value' => Usuario::ROL_COORDINACION,
+            ]);
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param  \App\Models\Usuario  $user
+     * @return array<int, string>
+     */
+    private function roleNamesOfUser($user)
+    {
+        $nombres = [];
+        $grupos = $user->getAllGrupos();
+        foreach ($grupos as $grupo) {
+            if (!$grupo) {
+                continue;
+            }
+            $nombre = trim((string) $grupo->No_Grupo);
+            if ($nombre !== '') {
+                $nombres[] = $nombre;
+            }
+        }
+
+        return array_values(array_unique($nombres));
+    }
+
+    /**
+     * @param  WaInboxOrganizacionConfig  $row
+     * @param  mixed  $roles
+     */
+    private function syncRoles(WaInboxOrganizacionConfig $row, $roles)
+    {
+        $nombres = [];
+        if (is_array($roles)) {
+            foreach ($roles as $role) {
+                $nombre = trim((string) $role);
+                if ($nombre !== '' && mb_strlen($nombre) <= 80) {
+                    $nombres[$nombre] = true;
+                }
+            }
+        }
+
+        WaInboxConfigRole::query()->where('config_id', $row->id)->delete();
+        foreach (array_keys($nombres) as $nombre) {
+            WaInboxConfigRole::query()->create([
+                'config_id' => $row->id,
+                'role_name' => $nombre,
+            ]);
+        }
+    }
+
+    /**
+     * @param  WaInboxOrganizacionConfig  $row
+     * @return array<string, mixed>
+     */
+    private function lineaPayload(WaInboxOrganizacionConfig $row)
+    {
+        $roles = [];
+        foreach ($row->roles as $role) {
+            $nombre = trim((string) $role->role_name);
+            if ($nombre !== '') {
+                $roles[] = $nombre;
+            }
+        }
+
+        return [
+            'id' => (int) $row->id,
+            'nombre' => (string) $row->nombre,
+            'is_default' => (bool) $row->is_default,
+            'enabled' => (bool) $row->enabled,
+            'phone_number_id' => (string) $row->phone_number_id,
+            'waba_id' => (string) $row->waba_id,
+            'display_number' => (string) $row->display_number,
+            'graph_api_version' => $row->graph_api_version ?: 'v19.0',
+            'default_language' => $row->default_language ?: 'es_PE',
+            'roles' => $roles,
+            'access_token_set' => trim((string) $row->access_token) !== '',
+            'app_secret_set' => trim((string) $row->app_secret) !== '',
+            'webhook_verify_token_set' => trim((string) $row->webhook_verify_token) !== '',
+        ];
     }
 
     /**

@@ -78,6 +78,8 @@ class WhatsappInboxController extends Controller
             $params = $request->all();
             $params['auth_user_id'] = $user ? (int) $user->getIdUsuario() : 0;
             $params['organizacion_id'] = $user ? (int) $user->getAttribute('ID_Organizacion') : 0;
+            $params['visible_phone_ids'] = app(\App\Services\WhatsappInbox\WhatsappInboxOrgConfigService::class)
+                ->visiblePhoneNumberIds($user);
 
             return response()->json($this->conversationService->listConversations($params));
         } catch (\Exception $e) {
@@ -97,6 +99,8 @@ class WhatsappInboxController extends Controller
                 'contact_name' => $request->input('contact_name'),
                 'assigned_user_id' => (int) $request->input('assigned_user_id', 0),
                 'organizacion_id' => $user ? (int) $user->getAttribute('ID_Organizacion') : 0,
+                'visible_phone_ids' => app(\App\Services\WhatsappInbox\WhatsappInboxOrgConfigService::class)
+                    ->visiblePhoneNumberIds($user),
             ]);
 
             $status = !empty($result['success']) ? 200 : 422;
