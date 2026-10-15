@@ -17,6 +17,7 @@ use App\Models\CargaConsolidada\Contenedor;
 use App\Services\Calendar\CalendarActivityService;
 use App\Services\Calendar\CalendarEventService;
 use App\Services\Calendar\CalendarPermissionService;
+use App\Services\Calendar\CalendarProgressExportService;
 use App\Services\Calendar\CalendarResponsablesCacheService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -980,6 +981,117 @@ class CalendarActivityController extends Controller
             $roleGroupMemberIds
         );
         return response()->json(['success' => true, 'data' => $data, 'message' => 'Progreso obtenido correctamente']);
+    }
+
+    /**
+     * GET /api/calendar/progress/export
+     * Excel de la tabla de progreso, sin paginar. Jefe del grupo y coordinación 2.
+     * Coordinación 2 descarga el equipo completo (mismo alcance que el jefe), no solo sus filas.
+     */
+    public function exportProgress(Request $request)
+    {
+        $user = JWTAuth::parseToken()->authenticate();
+        $roleGroupId = $request->input('role_group_id');
+        $roleGroupId = $roleGroupId !== null && $roleGroupId !== '' ? (int) $roleGroupId : null;
+        if ($roleGroupId !== null && !$this->permissionService->userBelongsToRoleGroup($user, $roleGroupId)) {
+            return response()->json(['success' => false, 'message' => 'No perteneces a ese grupo de calendario'], 403);
+        }
+        if ($roleGroupId === null) {
+            $membership = CalendarRoleGroupMember::where('user_id', $user->getIdUsuario())->first();
+            if ($membership !== null) {
+                $roleGroupId = (int) $membership->role_group_id;
+            }
+        }
+        if (!$this->permissionService->canExportTeamProgress($user, $roleGroupId)) {
+            return response()->json(['success' => false, 'message' => 'No tienes permiso para exportar el progreso'], 403);
+        }
+
+        try {
+            $fullTeam = $this->permissionService->exportsFullTeamProgress($user, $roleGroupId);
+
+            $responsableIds = null;
+            if (!$fullTeam) {
+                $rawIds = $request->input('responsable_ids');
+                if (is_array($rawIds)) {
+                    $responsableIds = array_values(array_filter(array_map('intval', $rawIds)));
+                } elseif (is_string($rawIds) && $rawIds !== '') {
+                    $responsableIds = array_values(array_filter(array_map('intval', explode(',', $rawIds))));
+                }
+                if ($responsableIds !== null && empty($responsableIds)) {
+                    $responsableIds = null;
+                }
+            }
+
+            $contenedorIds = null;
+            $rawContenedores = $request->input('contenedor_ids');
+            if (is_array($rawContenedores)) {
+                $contenedorIds = array_values(array_filter(array_map('intval', $rawContenedores)));
+            } elseif (is_string($rawContenedores) && $rawContenedores !== '') {
+                $contenedorIds = array_values(array_filter(array_map('intval', explode(',', $rawContenedores))));
+            }
+            if ($contenedorIds !== null && empty($contenedorIds)) {
+                $contenedorIds = null;
+            }
+
+            $eventId = $request->input('event_id');
+            $eventId = is_numeric($eventId) ? (int) $eventId : null;
+            $hasCharges = (bool) $request->input('has_charges', false);
+            $orderDesc = (bool) $request->input('order_desc', false);
+            $priority = $request->input('priority');
+            $priority = ($priority !== null && $priority !== '') ? (int) $priority : null;
+
+            $userId = (int) $user->getIdUsuario();
+            $result = $this->eventService->getEventsForUser(
+                $userId,
+                $request->input('start_date'),
+                $request->input('end_date'),
+                $responsableIds,
+                $contenedorIds,
+                $request->input('status'),
+                $priority,
+                false,
+                1,
+                0,
+                $roleGroupId,
+                $eventId,
+                $hasCharges,
+                $orderDesc,
+                true
+            );
+
+            $events = is_array($result) ? array_values($result) : array();
+            if ($hasCharges) {
+                $events = array_values(array_filter($events, function ($event) {
+                    return is_array($event) && !empty($event['charges']);
+                }));
+            }
+            if ($orderDesc) {
+                usort($events, function ($a, $b) {
+                    $dateA = isset($a['start_date']) ? (string) $a['start_date'] : '';
+                    $dateB = isset($b['start_date']) ? (string) $b['start_date'] : '';
+                    if ($dateA !== $dateB) {
+                        return strcmp($dateB, $dateA);
+                    }
+                    $idA = isset($a['id']) ? (int) $a['id'] : 0;
+                    $idB = isset($b['id']) ? (int) $b['id'] : 0;
+
+                    return $idB - $idA;
+                });
+            }
+
+            $usaConsolidado = true;
+            if ($roleGroupId !== null) {
+                $group = CalendarRoleGroup::find($roleGroupId);
+                if ($group) {
+                    $usaConsolidado = (bool) $group->usa_consolidado;
+                }
+            }
+
+            return (new CalendarProgressExportService())->download($events, $usaConsolidado);
+        } catch (\Exception $e) {
+            Log::error('CalendarActivityController@exportProgress: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'No se pudo exportar el progreso'], 500);
+        }
     }
 
     /**

@@ -69,6 +69,7 @@ Route::group(['prefix' => 'calendar', 'middleware' => 'jwt.auth'], function () {
     Route::get('/consolidados-dropdown', [CalendarActivityController::class, 'getConsolidadosDropdown']);
 
     // 6. Progreso
+    Route::get('/progress/export', [CalendarActivityController::class, 'exportProgress']);
     Route::get('/progress', [CalendarActivityController::class, 'getProgress']);
 
     // Formulario "Nueva actividad"
