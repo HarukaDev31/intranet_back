@@ -510,6 +510,7 @@ class WhatsappInboxOrgConfigService
             }
             $asignados = [];
             foreach ($linea->roles as $role) {
+                /** @var WaInboxConfigRole $role */
                 $nombre = trim((string) $role->role_name);
                 if ($nombre !== '') {
                     $asignados[] = $nombre;
@@ -627,6 +628,7 @@ class WhatsappInboxOrgConfigService
     {
         $roles = [];
         foreach ($row->roles as $role) {
+            /** @var WaInboxConfigRole $role */
             $nombre = trim((string) $role->role_name);
             if ($nombre !== '') {
                 $roles[] = $nombre;
