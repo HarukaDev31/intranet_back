@@ -6,6 +6,7 @@ use App\Models\Usuario;
 use App\Models\Calendar\Calendar;
 use App\Models\Calendar\CalendarRoleGroup;
 use App\Models\Calendar\CalendarRoleGroupMember;
+use App\Support\CargaConsolidada\DocumentStatusSync;
 use Illuminate\Support\Facades\Log;
 class CalendarPermissionService
 {
@@ -110,6 +111,33 @@ class CalendarPermissionService
     public function canViewTeamProgress(Usuario $user): bool
     {
         return $this->isJefeImportaciones($user) || $this->isGerencia($user);
+    }
+
+    /**
+     * Excel de la tabla de progreso: jefe del grupo, o coordinación 2 (descarga el equipo completo).
+     */
+    public function canExportTeamProgress(Usuario $user, $roleGroupId = null): bool
+    {
+        if ($this->isJefeOfRoleGroup($user, $roleGroupId)) {
+            return true;
+        }
+        if (!DocumentStatusSync::isCoord2User($user)) {
+            return false;
+        }
+        if ($roleGroupId === null || $roleGroupId === '') {
+            return CalendarRoleGroupMember::where('user_id', $user->getIdUsuario())->exists();
+        }
+
+        return $this->userBelongsToRoleGroup($user, (int) $roleGroupId);
+    }
+
+    /**
+     * Coordinación 2 no es jefe: su Excel no se recorta a sus propias filas.
+     */
+    public function exportsFullTeamProgress(Usuario $user, $roleGroupId = null): bool
+    {
+        return DocumentStatusSync::isCoord2User($user)
+            && !$this->isJefeOfRoleGroup($user, $roleGroupId);
     }
 
     /**
