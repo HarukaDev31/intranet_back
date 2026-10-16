@@ -108,12 +108,15 @@ class WhatsappInboxSessionService
         }
         $org = Organizacion::query()->find($organizacionId);
         $canConfigure = $user instanceof Usuario ? $user->puedeConfigurarWhatsappInbox() : false;
-        $phone = $linea ? trim((string) $linea->phone_number_id) : '';
+        $phone = $linea ? $this->orgConfig->telefonoDeLinea($linea) : '';
         $label = $linea ? trim((string) $linea->nombre) : '';
         if ($label === '') {
             $label = 'WhatsApp';
         }
         $display = $linea ? trim((string) $linea->display_number) : '';
+        if ($display === '' && $phone !== '' && $phone === trim((string) config('meta_whatsapp.phone_number_id', ''))) {
+            $display = trim((string) config('meta_whatsapp.inbox_display_number', ''));
+        }
         $enabled = $linea ? (bool) $linea->enabled : false;
 
         $base = [
