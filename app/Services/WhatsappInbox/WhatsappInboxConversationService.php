@@ -63,7 +63,12 @@ class WhatsappInboxConversationService
 
         $query = WaInboxConversation::query()
             ->with('session')
-            ->where('organizacion_id', $orgId)
+            ->where(function ($q) use ($orgId) {
+                $q->where('organizacion_id', $orgId);
+                if ($orgId === \App\Models\Usuario::ID_ORGANIZACION_ADMIN) {
+                    $q->orWhereNull('organizacion_id');
+                }
+            })
             ->orderByDesc('last_message_at')
             ->orderByDesc('id');
 
