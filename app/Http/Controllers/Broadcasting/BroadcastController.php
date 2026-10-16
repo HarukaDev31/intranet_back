@@ -70,6 +70,68 @@ class BroadcastController extends Controller
      */
     public function authenticate(Request $request)
     {
+        $names = $request->input('channel_names');
+        if (is_array($names) && count($names) > 0) {
+            return $this->authenticateMany($request, $names);
+        }
+
+        return $this->authenticateSingle($request);
+    }
+
+    /**
+     * Una sola ida autoriza los canales que el front abre juntos (chat, campana, calendario).
+     *
+     * @param  array<int, mixed>  $names
+     * @return \Illuminate\Http\JsonResponse
+     */
+    protected function authenticateMany(Request $request, array $names)
+    {
+        $unique = [];
+        foreach ($names as $name) {
+            if (!is_string($name) || $name === '' || isset($unique[$name])) {
+                continue;
+            }
+            $unique[$name] = true;
+            if (count($unique) >= 20) {
+                break;
+            }
+        }
+
+        $channels = [];
+        foreach (array_keys($unique) as $name) {
+            $sub = $request->duplicate();
+            $sub->merge([
+                'channel_name' => $name,
+                'socket_id' => $request->input('socket_id'),
+            ]);
+            $response = $this->authenticateSingle($sub);
+            if ($response->getStatusCode() === 401) {
+                return $response;
+            }
+
+            $body = json_decode($response->getContent(), true);
+            if (!is_array($body)) {
+                $body = [];
+            }
+
+            if ($response->getStatusCode() === 200 && !empty($body['auth'])) {
+                $channels[$name] = $body;
+                continue;
+            }
+
+            $channels[$name] = [
+                'error' => isset($body['message']) ? $body['message'] : 'No autorizado',
+            ];
+        }
+
+        return response()->json(['channels' => $channels]);
+    }
+
+    /**
+     * @return \Illuminate\Http\JsonResponse
+     */
+    protected function authenticateSingle(Request $request)
+    {
         Log::info('Authenticate request', [
             'channel' => $request->channel_name,
             'socket_id' => $request->socket_id,
