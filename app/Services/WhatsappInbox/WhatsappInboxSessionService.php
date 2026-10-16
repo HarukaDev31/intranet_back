@@ -191,24 +191,40 @@ class WhatsappInboxSessionService
      */
     public function findByPhoneNumberId($phoneNumberId)
     {
+        $phoneNumberId = trim((string) $phoneNumberId);
+        if ($phoneNumberId === '') {
+            return null;
+        }
+
         $session = WaInboxSession::query()
-            ->where('phone_number_id', (string) $phoneNumberId)
-            ->where('is_active', true)
+            ->where('phone_number_id', $phoneNumberId)
             ->first();
         if ($session) {
             return $session;
         }
 
         $config = $this->orgConfig->findByPhoneNumberId($phoneNumberId);
-        if (!$config || empty($config->enabled) || trim((string) $config->phone_number_id) === '') {
+        $configPhone = $config ? trim((string) $config->phone_number_id) : '';
+        if ($config && $configPhone !== '' && $configPhone === $phoneNumberId) {
+            $this->orgConfig->syncSession($config);
+
+            return WaInboxSession::query()
+                ->where('phone_number_id', $phoneNumberId)
+                ->first();
+        }
+
+        $envPhone = trim((string) config('meta_whatsapp.phone_number_id', ''));
+        if ($envPhone === '' || $envPhone !== $phoneNumberId) {
             return null;
         }
 
-        $this->orgConfig->syncSession($config);
-
-        return WaInboxSession::query()
-            ->where('phone_number_id', (string) $phoneNumberId)
-            ->where('is_active', true)
-            ->first();
+        return WaInboxSession::create([
+            'organizacion_id' => Usuario::ID_ORGANIZACION_ADMIN,
+            'config_id' => ($config && $configPhone === '') ? (int) $config->id : null,
+            'phone_number_id' => $envPhone,
+            'display_number' => (string) config('meta_whatsapp.inbox_display_number', ''),
+            'label' => 'Coordinación',
+            'is_active' => true,
+        ]);
     }
 }
