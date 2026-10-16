@@ -39,7 +39,7 @@ class AnalyzeWaCopilotoInboundMessageJob implements ShouldQueue
 
     public function handle(WaCopilotoMessageAnalysisService $analysisService)
     {
-        if (!config('meta_whatsapp_copiloto.analysis_enabled', true)) {
+        if (!config('meta_whatsapp_copiloto.enabled') || !config('meta_whatsapp_copiloto.analysis_enabled', true)) {
             return;
         }
 

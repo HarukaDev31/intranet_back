@@ -2,7 +2,8 @@
 
 return [
 
-    'enabled' => filter_var(env('META_WHATSAPP_COPILOTO_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+    /** Apagado: el número de ventas entra al chat, no a Copiloto. */
+    'enabled' => false,
 
     'graph_api_version' => env('META_WHATSAPP_COPILOTO_GRAPH_VERSION', env('META_WHATSAPP_GRAPH_VERSION', 'v19.0')),
 
@@ -108,7 +109,7 @@ return [
     ),
 
     /** Análisis IA (Gemini) de mensajes entrantes del cliente. */
-    'analysis_enabled' => filter_var(env('META_WHATSAPP_COPILOTO_ANALYSIS_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+    'analysis_enabled' => false,
 
     'analysis_queue' => env('META_WHATSAPP_COPILOTO_ANALYSIS_QUEUE', env('META_WHATSAPP_COPILOTO_QUEUE', env('META_WHATSAPP_QUEUE', 'notificaciones'))),
 

@@ -5,7 +5,9 @@ namespace App\Http\Controllers\WaCopiloto;
 use App\Http\Controllers\Controller;
 use App\Jobs\WaCopiloto\ProcessWaCopilotoInboundJob;
 use App\Models\WaCopiloto\WaCopilotoWebhookLog;
+use App\Support\WhatsApp\MetaWhatsappWebhookRouter;
 use App\Support\WhatsApp\WaCopilotoJobContext;
+use App\Support\WhatsApp\WaInboxJobContext;
 use Illuminate\Http\Request;
 
 class MetaCopilotoWebhookController extends Controller
@@ -47,6 +49,12 @@ class MetaCopilotoWebhookController extends Controller
         }
 
         $payload = $request->all();
+        if (!config('meta_whatsapp_copiloto.enabled')) {
+            MetaWhatsappWebhookRouter::dispatch($payload, WaInboxJobContext::resolveJobDomain());
+
+            return response()->json(['success' => true]);
+        }
+
         $log = WaCopilotoWebhookLog::create([
             'payload' => $payload,
             'processed_at' => null,
