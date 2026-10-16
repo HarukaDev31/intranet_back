@@ -42,12 +42,19 @@ class WhatsappInboxOrgConfigService
             return $row;
         }
 
-        $envPhone = trim((string) config('meta_whatsapp.phone_number_id', ''));
-        if ($envPhone !== '' && $envPhone === $phoneNumberId) {
-            return $this->findByOrganizacion(Usuario::ID_ORGANIZACION_ADMIN);
+        $envPhone = $this->phoneNumberIdDesdeEnv();
+        if ($envPhone === '' || $envPhone !== $phoneNumberId) {
+            return null;
         }
 
-        return null;
+        $default = $this->findByOrganizacion(Usuario::ID_ORGANIZACION_ADMIN);
+        if (!$default) {
+            return null;
+        }
+
+        $rowPhone = trim((string) $default->phone_number_id);
+
+        return ($rowPhone === '' || $rowPhone === $envPhone) ? $default : null;
     }
 
     /**
@@ -412,15 +419,25 @@ class WhatsappInboxOrgConfigService
             $duplicado = WaInboxOrganizacionConfig::query()
                 ->where('phone_number_id', $phone)
                 ->where('id', '!=', (int) $row->id)
-                ->exists();
+                ->first();
             if ($duplicado) {
-                throw new \InvalidArgumentException('Ese ID de número ya está configurado');
+                $nombreOtro = trim((string) $duplicado->nombre);
+                if ($nombreOtro === '') {
+                    $nombreOtro = 'otro número';
+                }
+                throw new \InvalidArgumentException('Ese ID ya está en «' . $nombreOtro . '». Edita esa tarjeta o quítale el ID.');
             }
         }
 
         $tokenNuevo = isset($input['access_token']) ? trim((string) $input['access_token']) : '';
         $tokenActual = trim((string) $row->access_token);
-        if (!empty($input['enabled']) && $tokenNuevo === '' && $tokenActual === '') {
+        $usaTokenDeEnv = $tokenNuevo === ''
+            && $tokenActual === ''
+            && $organizacionId === Usuario::ID_ORGANIZACION_ADMIN
+            && $phone !== ''
+            && $phone === $this->phoneNumberIdDesdeEnv()
+            && trim((string) config('meta_whatsapp.access_token')) !== '';
+        if (!empty($input['enabled']) && $tokenNuevo === '' && $tokenActual === '' && !$usaTokenDeEnv) {
             throw new \InvalidArgumentException('Pega el token de acceso para activar este número');
         }
 
@@ -504,7 +521,7 @@ class WhatsappInboxOrgConfigService
 
         $phones = [];
         foreach ($lineas as $linea) {
-            $phone = trim((string) $linea->phone_number_id);
+            $phone = $this->phoneDeLinea($linea);
             if ($phone === '') {
                 continue;
             }
@@ -516,7 +533,7 @@ class WhatsappInboxOrgConfigService
                     $asignados[] = $nombre;
                 }
             }
-            if ($asignados === [] || count(array_intersect($asignados, $rolesUsuario)) > 0) {
+            if ($this->rolesCoinciden($asignados, $rolesUsuario)) {
                 $phones[] = $phone;
             }
         }
@@ -546,24 +563,32 @@ class WhatsappInboxOrgConfigService
         $lineas = WaInboxOrganizacionConfig::query()
             ->with('roles')
             ->where('organizacion_id', $orgId)
-            ->whereIn('phone_number_id', $phones)
             ->orderByDesc('is_default')
             ->orderBy('id')
             ->get();
+        $visibles = [];
+        foreach ($lineas as $linea) {
+            if (in_array($this->phoneDeLinea($linea), $phones, true)) {
+                $visibles[] = $linea;
+            }
+        }
+        if ($visibles === []) {
+            return null;
+        }
 
-        $principal = trim((string) $user->getNombreGrupo());
-        if ($principal !== '' && $principal !== 'Sin grupo') {
-            foreach ($lineas as $linea) {
+        $principal = Usuario::normalizarRol($user->getNombreGrupo());
+        if ($principal !== '' && $principal !== Usuario::normalizarRol('Sin grupo')) {
+            foreach ($visibles as $linea) {
                 foreach ($linea->roles as $role) {
                     /** @var WaInboxConfigRole $role */
-                    if (trim((string) $role->role_name) === $principal) {
+                    if (Usuario::normalizarRol($role->role_name) === $principal) {
                         return $linea;
                     }
                 }
             }
         }
 
-        return $lineas->first();
+        return $visibles[0];
     }
 
     /**
@@ -635,6 +660,72 @@ class WhatsappInboxOrgConfigService
         }
 
         return array_values(array_unique($nombres));
+    }
+
+    /**
+     * ID de Meta de la línea. Si Coordinación aún no está en la base, usa el del entorno.
+     *
+     * @param  WaInboxOrganizacionConfig  $linea
+     * @return string
+     */
+    private function phoneDeLinea(WaInboxOrganizacionConfig $linea)
+    {
+        $phone = trim((string) $linea->phone_number_id);
+        if ($phone !== '') {
+            return $phone;
+        }
+        if (!(bool) $linea->is_default || (int) $linea->organizacion_id !== Usuario::ID_ORGANIZACION_ADMIN) {
+            return '';
+        }
+
+        $envPhone = $this->phoneNumberIdDesdeEnv();
+        if ($envPhone === '') {
+            return '';
+        }
+
+        $yaEnOtra = WaInboxOrganizacionConfig::query()
+            ->where('phone_number_id', $envPhone)
+            ->where('id', '!=', (int) $linea->id)
+            ->exists();
+
+        return $yaEnOtra ? '' : $envPhone;
+    }
+
+    /**
+     * @return string
+     */
+    private function phoneNumberIdDesdeEnv()
+    {
+        return trim((string) config('meta_whatsapp.phone_number_id', ''));
+    }
+
+    /**
+     * @param  array<int, string>  $asignados
+     * @param  array<int, string>  $rolesUsuario
+     * @return bool
+     */
+    private function rolesCoinciden(array $asignados, array $rolesUsuario)
+    {
+        if ($asignados === []) {
+            return true;
+        }
+
+        $izquierda = [];
+        foreach ($asignados as $nombre) {
+            $normalizado = Usuario::normalizarRol($nombre);
+            if ($normalizado !== '') {
+                $izquierda[] = $normalizado;
+            }
+        }
+        $derecha = [];
+        foreach ($rolesUsuario as $nombre) {
+            $normalizado = Usuario::normalizarRol($nombre);
+            if ($normalizado !== '') {
+                $derecha[] = $normalizado;
+            }
+        }
+
+        return count(array_intersect($izquierda, $derecha)) > 0;
     }
 
     /**
@@ -712,13 +803,18 @@ class WhatsappInboxOrgConfigService
             'nombre' => (string) $row->nombre,
             'is_default' => (bool) $row->is_default,
             'enabled' => (bool) $row->enabled,
-            'phone_number_id' => (string) $row->phone_number_id,
+            'phone_number_id' => $this->phoneDeLinea($row),
             'waba_id' => (string) $row->waba_id,
             'display_number' => (string) $row->display_number,
             'graph_api_version' => $row->graph_api_version ?: 'v19.0',
             'default_language' => $row->default_language ?: 'es_PE',
             'roles' => $roles,
-            'access_token_set' => trim((string) $row->access_token) !== '',
+            'access_token_set' => trim((string) $row->access_token) !== ''
+                || (
+                    $this->phoneDeLinea($row) !== ''
+                    && $this->phoneDeLinea($row) === $this->phoneNumberIdDesdeEnv()
+                    && trim((string) config('meta_whatsapp.access_token')) !== ''
+                ),
             'app_secret_set' => trim((string) $row->app_secret) !== '',
             'webhook_verify_token_set' => trim((string) $row->webhook_verify_token) !== '',
         ];
