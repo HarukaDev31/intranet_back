@@ -10,6 +10,7 @@ class SystemConfigService
 {
     public const KEY_EXCEL_SEGUIMIENTO_HORA_CORTE = 'excel_seguimiento_hora_corte';
     public const KEY_EXCEL_SEGUIMIENTO_TIMEZONE = 'excel_seguimiento_timezone';
+    public const KEY_LANDING_CONSOLIDADO_COUNTDOWN_ENDS_AT = 'landing_consolidado_countdown_ends_at';
 
     private const CACHE_PREFIX = 'system_config:';
     private const CACHE_TTL_SECONDS = 3600;

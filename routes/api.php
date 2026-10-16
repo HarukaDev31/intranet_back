@@ -133,6 +133,9 @@ require __DIR__.'/modules/public-landing-consolidado-lead.php';
 // API pública (solo lectura): próximas fechas de cierre de contenedores (Astro probusiness_consolidado_landing)
 require __DIR__.'/modules/public-landing-consolidado-departures.php';
 
+// API pública (solo lectura): fecha fin del contador (Astro probusiness_consolidado_landing)
+require __DIR__.'/modules/public-landing-consolidado-countdown.php';
+
 // API pública (solo lectura): exportación JSON de cotizaciones para terceros
 require __DIR__.'/modules/public-cotizaciones-export.php';
 
