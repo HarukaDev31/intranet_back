@@ -292,6 +292,165 @@ class CotizacionResumenIntegracionController extends Controller
     }
 
     // -----------------------------------------------------------------------
+    // PUT /api/integration/v1/cotizaciones-resumen/{id}
+    // Reemplaza cliente, proveedores y costos de una cotización en COTIZADO (misma lógica que el panel:
+    // CotizacionResumenController::update). El PDF es opcional: si no se envía se conserva el actual.
+    //  - JSON (application/json): el body es el payload.
+    //  - multipart: POST con _method=PUT, campos payload (texto) y archivo (PDF opcional).
+    // El consolidado y el vendedor no se pueden cambiar por la API.
+    // -----------------------------------------------------------------------
+    public function actualizar(Request $request, $id): JsonResponse
+    {
+        $client = $this->client($request);
+        $orgId = (int) $client->organizacion_id;
+
+        $cotizacion = $this->cotizacionResumenDeLaOrg((int) $id, $orgId);
+        if (!$cotizacion) {
+            return response()->json(['success' => false, 'message' => 'Cotización no encontrada.'], 404);
+        }
+
+        if ($request->isJson()) {
+            $json = json_encode($request->json()->all());
+            $file = null;
+        } else {
+            $v = Validator::make($request->all(), [
+                'archivo' => ['nullable', 'file', 'mimes:pdf', 'max:' . (int) config('api_clients.pdf_max_kb', 10240)],
+                'payload' => ['required', 'string', 'max:' . (int) config('api_clients.payload_max_bytes', 262144)],
+            ], ['payload.required' => 'Falta payload. Con PDF usa POST multipart con _method=PUT; sin PDF envía JSON.']);
+            if ($v->fails()) {
+                return $this->invalido($v->errors()->toArray());
+            }
+            $json = (string) $request->input('payload');
+            $file = $request->file('archivo');
+        }
+        if (!is_string($json) || strlen($json) > (int) config('api_clients.payload_max_bytes', 262144)) {
+            return $this->invalido(['payload' => ['Payload inválido o demasiado grande.']]);
+        }
+
+        $errorPdf = $file instanceof UploadedFile ? $this->validarPdf($file) : null;
+        if ($errorPdf !== null) {
+            return $this->invalido(['archivo' => [$errorPdf]]);
+        }
+
+        [$payload, $errorPayload] = $this->payloadLimpio($json, true);
+        if ($errorPayload !== null || $payload === null) {
+            return $this->invalido(['payload' => [$errorPayload ?: 'Payload inválido.']]);
+        }
+
+        // El update del panel no valida concepto/valor de los costos: se exige aquí (igual que en crear).
+        $vCostos = Validator::make($payload, [
+            'proveedores.*.id' => 'nullable|integer',
+            'proveedores.*.costos.*.concepto' => 'required|string|max:150',
+            'proveedores.*.costos.*.valor' => 'required|numeric|min:0',
+        ]);
+        if ($vCostos->fails()) {
+            return $this->invalido($vCostos->errors()->toArray());
+        }
+
+        $estado =(string) ($cotizacion->estado_resumen ?: 'COTIZADO');
+        if ($estado !== 'COTIZADO') {
+            $request->attributes->set('audit_error', 'actualizar_no_cotizado');
+
+            return response()->json(['success' => false, 'message' => 'Solo se puede actualizar una cotización en estado COTIZADO.'], 422);
+        }
+
+        $idContenedor = (int) $cotizacion->id_contenedor;
+        if (isset($payload['id_contenedor']) && (int) $payload['id_contenedor'] !== $idContenedor) {
+            return $this->invalido(['id_contenedor' => ['No se puede cambiar el consolidado de una cotización existente.']]);
+        }
+        unset($payload['id_contenedor']);
+
+        // Cada proveedor con id debe ser de esta cotización (un id ajeno no crea ni toca nada).
+        $idsPropios = CotizacionProveedor::query()
+            ->where('organizacion_id', $orgId)
+            ->where('id_cotizacion', (int) $id)
+            ->where('modo_cotizacion', 'resumen')
+            ->pluck('id')
+            ->map(function ($v) {
+                return (int) $v;
+            })->all();
+        foreach ($payload['proveedores'] as $i => $prov) {
+            if (isset($prov['id']) && !in_array((int) $prov['id'], $idsPropios, true)) {
+                return $this->invalido(['proveedores' => ['El proveedor #' . ($i + 1) . ' no pertenece a esta cotización.']]);
+            }
+        }
+
+        $storage = app(ObjectStorageConnectorInterface::class);
+        $rutaPdf = null;
+        $nombreOriginal = null;
+        $sha256 = null;
+        $bytes = null;
+
+        try {
+            // Vendedor y consolidado los fija el servidor: se conservan los actuales.
+            $datos = $payload + ['id_contenedor' => $idContenedor, 'id_usuario' => (int) $cotizacion->id_usuario];
+            if ($file instanceof UploadedFile) {
+                $nombreOriginal = $this->nombreSeguro($file->getClientOriginalName());
+                $sha256 = hash_file('sha256', $file->getRealPath());
+                $bytes = (int) $file->getSize();
+                $rutaPdf = $storage->storeUploadedFile(
+                    $file,
+                    'assets/images/agentecompra/' . $orgId,
+                    Str::uuid()->toString() . '.pdf'
+                );
+                $datos['archivo'] = ['path' => $rutaPdf, 'nombre_original' => $nombreOriginal, 'mime_type' => 'application/pdf'];
+            }
+
+            $interno = Request::create('/api/carga-consolidada/cotizacion-resumen/' . (int) $id, 'PUT', $datos);
+            $interno->setUserResolver(function () {
+                return Auth::guard('api')->user();
+            });
+            $respuesta = app(CotizacionResumenController::class)->update($interno, (int) $id);
+        } catch (ValidationException $e) {
+            $this->borrarPdf($storage, $rutaPdf);
+
+            return $this->invalido($e->errors());
+        } catch (\Throwable $e) {
+            $this->borrarPdf($storage, $rutaPdf);
+            Log::error('api.integration actualizar cotizacion resumen: ' . $e->getMessage(), ['api_client_id' => $client->id]);
+            $request->attributes->set('audit_error', 'excepcion_actualizar');
+
+            return response()->json(['success' => false, 'message' => 'No se pudo actualizar la cotización.'], 500);
+        }
+
+        $cuerpo = json_decode($respuesta->getContent(), true);
+        if (!is_array($cuerpo) || empty($cuerpo['success'])) {
+            $this->borrarPdf($storage, $rutaPdf);
+            $request->attributes->set('audit_error', 'actualizar_rechazado');
+            $status = $respuesta->getStatusCode() >= 400 ? $respuesta->getStatusCode() : 422;
+            // Un 500 interno no expone detalle.
+            $mensaje = $status < 500 && is_array($cuerpo) && !empty($cuerpo['message']) && is_string($cuerpo['message'])
+                ? $cuerpo['message']
+                : 'No se pudo actualizar la cotización.';
+
+            return response()->json(['success' => false, 'message' => $mensaje], $status);
+        }
+
+        $proveedores = CotizacionProveedor::query()
+            ->where('organizacion_id', $orgId)
+            ->where('id_cotizacion', (int) $id)
+            ->where('modo_cotizacion', 'resumen')
+            ->orderBy('id')
+            ->get(['id', 'products', 'code_supplier'])
+            ->map(function ($p) {
+                return ['id' => $p->id, 'productos' => $p->products, 'code_supplier' => $p->code_supplier];
+            })->values();
+
+        $data = ['id' => (int) $id, 'estado' => 'COTIZADO', 'proveedores' => $proveedores];
+        if ($rutaPdf !== null) {
+            $data['archivo'] = ['nombre_original' => $nombreOriginal, 'sha256' => $sha256, 'bytes' => $bytes];
+        }
+        $request->attributes->set('audit_meta', [
+            'id_cotizacion' => (int) $id,
+            'proveedores' => count($proveedores),
+            'pdf_reemplazado' => $rutaPdf !== null,
+            'pdf_sha256' => $sha256,
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Cotización actualizada', 'data' => $data]);
+    }
+
+    // -----------------------------------------------------------------------
     // PUT /api/integration/v1/cotizaciones-resumen/{id}/estado   body: estado=COTIZADO|CONFIRMADO
     // Mismas reglas que el panel (CotizacionResumenController::updateEstado): confirmar exige consolidado
     // y genera los code_supplier que falten.
@@ -489,7 +648,7 @@ class CotizacionResumenIntegracionController extends Controller
      *
      * @return array{0: array<string, mixed>|null, 1: string|null}
      */
-    private function payloadLimpio(string $json): array
+    private function payloadLimpio(string $json, bool $conIdProveedor = false): array
     {
         $data = json_decode($json, true, 8);
         if (!is_array($data) || ($data !== [] && array_keys($data) === range(0, count($data) - 1))) {
@@ -513,7 +672,8 @@ class CotizacionResumenIntegracionController extends Controller
             if (!is_array($prov)) {
                 return [null, 'El proveedor #' . ($i + 1) . ' no es válido.'];
             }
-            if ($extra = array_diff(array_keys($prov), self::CLAVES_PROVEEDOR)) {
+            $permitidas = $conIdProveedor ? array_merge(self::CLAVES_PROVEEDOR, ['id']) : self::CLAVES_PROVEEDOR;
+            if ($extra = array_diff(array_keys($prov), $permitidas)) {
                 return [null, 'Campos no permitidos en el proveedor #' . ($i + 1) . ': ' . implode(', ', array_slice($extra, 0, 5))];
             }
             $costos = isset($prov['costos']) ? $prov['costos'] : [];
