@@ -6,6 +6,7 @@ use App\Models\Grupo;
 use App\Models\Organizacion;
 use App\Models\Usuario;
 use App\Models\WhatsappInbox\WaInboxConfigRole;
+use App\Models\WhatsappInbox\WaInboxConversation;
 use App\Models\WhatsappInbox\WaInboxOrganizacionConfig;
 use App\Models\WhatsappInbox\WaInboxSession;
 
@@ -309,6 +310,9 @@ class WhatsappInboxOrgConfigService
     {
         $phone = trim((string) $row->phone_number_id);
         if ($phone === '') {
+            $phone = $this->phoneDeLinea($row);
+        }
+        if ($phone === '') {
             return;
         }
 
@@ -318,36 +322,36 @@ class WhatsappInboxOrgConfigService
             $label = 'WhatsApp';
         }
 
-        $session = WaInboxSession::query()->where('config_id', $row->id)->first();
-        if (!$session) {
-            $session = WaInboxSession::query()
-                ->where('phone_number_id', $phone)
-                ->where(function ($q) use ($orgId) {
-                    $q->where('organizacion_id', $orgId)->orWhereNull('organizacion_id');
-                })
-                ->first();
+        $porTelefono = WaInboxSession::query()->where('phone_number_id', $phone)->first();
+        $porConfig = WaInboxSession::query()->where('config_id', $row->id)->first();
+        if ($porTelefono && $porConfig && (int) $porTelefono->id !== (int) $porConfig->id) {
+            $porConfig->config_id = null;
+            $porConfig->save();
         }
+        $session = $porTelefono ?: $porConfig;
 
         if ($session) {
             $session->organizacion_id = $orgId;
             $session->config_id = (int) $row->id;
             $session->phone_number_id = $phone;
-            $session->display_number = (string) $row->display_number;
-            $session->label = $label;
+            $session->display_number = $this->recortar((string) $row->display_number, 32);
+            $session->label = $this->recortar($label, 64);
             $session->is_active = (bool) $row->enabled;
             $session->save();
+            $this->traerConversacionesAOrganizacion($session, $orgId);
 
             return;
         }
 
-        WaInboxSession::create([
+        $creada = WaInboxSession::create([
             'organizacion_id' => $orgId,
             'config_id' => (int) $row->id,
             'phone_number_id' => $phone,
-            'display_number' => (string) $row->display_number,
-            'label' => $label,
+            'display_number' => $this->recortar((string) $row->display_number, 32),
+            'label' => $this->recortar($label, 64),
             'is_active' => (bool) $row->enabled,
         ]);
+        $this->traerConversacionesAOrganizacion($creada, $orgId);
     }
 
     /**
@@ -415,6 +419,12 @@ class WhatsappInboxOrgConfigService
         }
 
         $phone = trim((string) ($input['phone_number_id'] ?? $row->phone_number_id ?? ''));
+        if ($phone === '' && $this->esLineaCoordinacion($row, $input)) {
+            $phone = $this->phoneNumberIdDesdeEnv();
+        }
+        if (strlen($phone) > 32) {
+            throw new \InvalidArgumentException('El ID del número es demasiado largo');
+        }
         if (!empty($input['enabled']) && $phone === '') {
             throw new \InvalidArgumentException('Actívalo solo cuando ya tengas el ID del número de Meta');
         }
@@ -467,8 +477,14 @@ class WhatsappInboxOrgConfigService
         $row->phone_number_id = $phone !== '' ? $phone : null;
         $row->waba_id = $this->nullableString($input, 'waba_id', $row->waba_id);
         $row->display_number = $this->nullableString($input, 'display_number', $row->display_number);
-        $row->graph_api_version = $this->presentString($input, 'graph_api_version', $row->graph_api_version ?: 'v19.0');
-        $row->default_language = $this->presentString($input, 'default_language', $row->default_language ?: 'es_PE');
+        $row->graph_api_version = $this->recortar(
+            $this->presentString($input, 'graph_api_version', $row->graph_api_version ?: 'v19.0'),
+            16
+        ) ?: 'v19.0';
+        $row->default_language = $this->recortar(
+            $this->presentString($input, 'default_language', $row->default_language ?: 'es_PE'),
+            16
+        ) ?: 'es_PE';
 
         $verifyToken = isset($input['webhook_verify_token']) ? trim((string) $input['webhook_verify_token']) : '';
         if ($verifyToken !== '') {
@@ -480,6 +496,14 @@ class WhatsappInboxOrgConfigService
         $secret = isset($input['app_secret']) ? trim((string) $input['app_secret']) : '';
         if ($secret !== '') {
             $row->app_secret = $secret;
+        }
+
+        $this->completarLineaCoordinacionDesdeEnv($row);
+        if ($row->display_number !== null) {
+            $row->display_number = $this->recortar((string) $row->display_number, 32) ?: null;
+        }
+        if ($row->waba_id !== null) {
+            $row->waba_id = $this->recortar((string) $row->waba_id, 32) ?: null;
         }
 
         $row->save();
@@ -668,6 +692,187 @@ class WhatsappInboxOrgConfigService
     }
 
     /**
+     * @param  WaInboxOrganizacionConfig  $linea
+     * @return string
+     */
+    public function telefonoDeLinea(WaInboxOrganizacionConfig $linea)
+    {
+        return $this->phoneDeLinea($linea);
+    }
+
+    /**
+     * @param  WaInboxSession  $session
+     * @param  int  $orgId
+     * @return void
+     */
+    private function traerConversacionesAOrganizacion(WaInboxSession $session, $orgId)
+    {
+        WaInboxConversation::query()
+            ->where('session_id', $session->id)
+            ->where(function ($q) use ($orgId) {
+                $q->whereNull('organizacion_id')->orWhere('organizacion_id', '!=', (int) $orgId);
+            })
+            ->update(['organizacion_id' => (int) $orgId]);
+    }
+
+    /**
+     * @param  WaInboxOrganizacionConfig  $row
+     * @param  array<string, mixed>  $input
+     * @return bool
+     */
+    private function esLineaCoordinacion(WaInboxOrganizacionConfig $row, array $input)
+    {
+        if ((int) $row->organizacion_id !== Usuario::ID_ORGANIZACION_ADMIN) {
+            return false;
+        }
+
+        return !empty($input['is_default']) || (bool) $row->is_default;
+    }
+
+    /**
+     * Si Coordinación usa el número del entorno y el campo está vacío, copia token, WABA y número visible.
+     *
+     * @param  WaInboxOrganizacionConfig  $row
+     * @return void
+     */
+    private function completarLineaCoordinacionDesdeEnv(WaInboxOrganizacionConfig $row)
+    {
+        if ((int) $row->organizacion_id !== Usuario::ID_ORGANIZACION_ADMIN || !(bool) $row->is_default) {
+            return;
+        }
+        $phone = trim((string) $row->phone_number_id);
+        $envPhone = $this->phoneNumberIdDesdeEnv();
+        if ($phone === '' || $envPhone === '' || $phone !== $envPhone) {
+            return;
+        }
+
+        $this->copiarTokenSiVacio($row, 'access_token', 'meta_whatsapp.access_token');
+        $this->copiarTokenSiVacio($row, 'app_secret', 'meta_whatsapp.app_secret');
+        $this->copiarTokenSiVacio($row, 'webhook_verify_token', 'meta_whatsapp.webhook_verify_token');
+        if (trim((string) $row->waba_id) === '') {
+            $waba = $this->recortar((string) config('meta_whatsapp.waba_id', ''), 32);
+            if ($waba !== '') {
+                $row->waba_id = $waba;
+            }
+        }
+        if (trim((string) $row->display_number) === '') {
+            $display = $this->recortar((string) config('meta_whatsapp.inbox_display_number', ''), 32);
+            if ($display !== '') {
+                $row->display_number = $display;
+            }
+        }
+    }
+
+    /**
+     * @param  WaInboxOrganizacionConfig  $row
+     * @param  string  $campo
+     * @param  string  $configKey
+     * @return void
+     */
+    private function copiarTokenSiVacio(WaInboxOrganizacionConfig $row, $campo, $configKey)
+    {
+        $actual = '';
+        if ($campo === 'access_token') {
+            $actual = trim((string) $row->access_token);
+        } elseif ($campo === 'app_secret') {
+            $actual = trim((string) $row->app_secret);
+        } elseif ($campo === 'webhook_verify_token') {
+            $actual = trim((string) $row->webhook_verify_token);
+        }
+        if ($actual !== '') {
+            return;
+        }
+        $valor = trim((string) config($configKey, ''));
+        if ($valor === '') {
+            return;
+        }
+        if ($campo === 'access_token') {
+            $row->access_token = $valor;
+        } elseif ($campo === 'app_secret') {
+            $row->app_secret = $valor;
+        } elseif ($campo === 'webhook_verify_token') {
+            $row->webhook_verify_token = $valor;
+        }
+    }
+
+    /**
+     * @param  string  $texto
+     * @param  int  $max
+     * @return string
+     */
+    private function recortar($texto, $max)
+    {
+        $texto = trim((string) $texto);
+        if ($texto === '') {
+            return '';
+        }
+
+        return mb_substr($texto, 0, (int) $max);
+    }
+
+    /**
+     * @param  WaInboxOrganizacionConfig  $linea
+     * @return bool
+     */
+    private function lineaUsaTelefonoDeEnv(WaInboxOrganizacionConfig $linea)
+    {
+        if ((int) $linea->organizacion_id !== Usuario::ID_ORGANIZACION_ADMIN || !(bool) $linea->is_default) {
+            return false;
+        }
+        $phone = $this->phoneDeLinea($linea);
+        $envPhone = $this->phoneNumberIdDesdeEnv();
+
+        return $phone !== '' && $phone === $envPhone;
+    }
+
+    /**
+     * @param  WaInboxOrganizacionConfig  $linea
+     * @param  string  $campo
+     * @param  string  $configKey
+     * @return string
+     */
+    private function textoVisibleDeLinea(WaInboxOrganizacionConfig $linea, $campo, $configKey)
+    {
+        $valor = '';
+        if ($campo === 'waba_id') {
+            $valor = trim((string) $linea->waba_id);
+        } elseif ($campo === 'display_number') {
+            $valor = trim((string) $linea->display_number);
+        }
+        if ($valor !== '') {
+            return $valor;
+        }
+        if (!$this->lineaUsaTelefonoDeEnv($linea)) {
+            return '';
+        }
+
+        return trim((string) config($configKey, ''));
+    }
+
+    /**
+     * @param  WaInboxOrganizacionConfig  $row
+     * @param  string  $campo
+     * @param  string  $configKey
+     * @return bool
+     */
+    private function secretoConfigurado(WaInboxOrganizacionConfig $row, $campo, $configKey)
+    {
+        $actual = '';
+        if ($campo === 'access_token') {
+            $actual = trim((string) $row->access_token);
+        } elseif ($campo === 'app_secret') {
+            $actual = trim((string) $row->app_secret);
+        } elseif ($campo === 'webhook_verify_token') {
+            $actual = trim((string) $row->webhook_verify_token);
+        }
+        if ($actual !== '') {
+            return true;
+        }
+
+        return $this->lineaUsaTelefonoDeEnv($row) && trim((string) config($configKey, '')) !== '';
+    }
+
+    /**
      * ID de Meta de la línea. Si Coordinación aún no está en la base, usa el del entorno.
      *
      * @param  WaInboxOrganizacionConfig  $linea
@@ -810,19 +1015,14 @@ class WhatsappInboxOrgConfigService
             'is_default' => (bool) $row->is_default,
             'enabled' => (bool) $row->enabled,
             'phone_number_id' => $this->phoneDeLinea($row),
-            'waba_id' => (string) $row->waba_id,
-            'display_number' => (string) $row->display_number,
+            'waba_id' => $this->textoVisibleDeLinea($row, 'waba_id', 'meta_whatsapp.waba_id'),
+            'display_number' => $this->textoVisibleDeLinea($row, 'display_number', 'meta_whatsapp.inbox_display_number'),
             'graph_api_version' => $row->graph_api_version ?: 'v19.0',
             'default_language' => $row->default_language ?: 'es_PE',
             'roles' => $roles,
-            'access_token_set' => trim((string) $row->access_token) !== ''
-                || (
-                    $this->phoneDeLinea($row) !== ''
-                    && $this->phoneDeLinea($row) === $this->phoneNumberIdDesdeEnv()
-                    && trim((string) config('meta_whatsapp.access_token')) !== ''
-                ),
-            'app_secret_set' => trim((string) $row->app_secret) !== '',
-            'webhook_verify_token_set' => trim((string) $row->webhook_verify_token) !== '',
+            'access_token_set' => $this->secretoConfigurado($row, 'access_token', 'meta_whatsapp.access_token'),
+            'app_secret_set' => $this->secretoConfigurado($row, 'app_secret', 'meta_whatsapp.app_secret'),
+            'webhook_verify_token_set' => $this->secretoConfigurado($row, 'webhook_verify_token', 'meta_whatsapp.webhook_verify_token'),
         ];
     }
 
