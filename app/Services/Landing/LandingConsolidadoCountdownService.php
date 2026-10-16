@@ -51,7 +51,7 @@ class LandingConsolidadoCountdownService
         $this->systemConfigService->set(
             self::CONFIG_KEY,
             $normalized,
-            'Fecha/hora fin del contador de la landing consolidado (America/Lima)'
+            'Fecha/hora fin del contador de la landing curso (America/Lima)'
         );
 
         Cache::forget(self::CACHE_KEY);
