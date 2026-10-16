@@ -420,12 +420,12 @@ class WhatsappInboxOrgConfigService
                 ->where('phone_number_id', $phone)
                 ->where('id', '!=', (int) $row->id)
                 ->first();
+            if ($duplicado && (int) $duplicado->organizacion_id !== $organizacionId) {
+                throw new \InvalidArgumentException('Ese ID de número ya está configurado');
+            }
             if ($duplicado) {
-                $nombreOtro = trim((string) $duplicado->nombre);
-                if ($nombreOtro === '') {
-                    $nombreOtro = 'otro número';
-                }
-                throw new \InvalidArgumentException('Ese ID ya está en «' . $nombreOtro . '». Edita esa tarjeta o quítale el ID.');
+                $duplicado->phone_number_id = null;
+                $duplicado->save();
             }
         }
 
@@ -514,6 +514,9 @@ class WhatsappInboxOrgConfigService
 
         $orgId = (int) $user->getAttribute('ID_Organizacion');
         $rolesUsuario = $this->roleNamesOfUser($user);
+        $veLineaCoordinacion = $this->rolesCoinciden([Usuario::ROL_COORDINACION], $rolesUsuario)
+            || ($user instanceof Usuario && $user->puedeConfigurarWhatsappInbox());
+        $envPhone = $this->phoneNumberIdDesdeEnv();
         $lineas = WaInboxOrganizacionConfig::query()
             ->with('roles')
             ->where('organizacion_id', $orgId)
@@ -533,7 +536,8 @@ class WhatsappInboxOrgConfigService
                     $asignados[] = $nombre;
                 }
             }
-            if ($this->rolesCoinciden($asignados, $rolesUsuario)) {
+            $esNumeroCoordinacion = (bool) $linea->is_default || ($envPhone !== '' && $phone === $envPhone);
+            if ($this->rolesCoinciden($asignados, $rolesUsuario) || ($veLineaCoordinacion && $esNumeroCoordinacion)) {
                 $phones[] = $phone;
             }
         }
