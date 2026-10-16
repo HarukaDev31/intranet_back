@@ -37,6 +37,9 @@ class WhatsappInboxOrgConfigService
 
         $row = WaInboxOrganizacionConfig::query()
             ->where('phone_number_id', $phoneNumberId)
+            ->orderByRaw('CASE WHEN organizacion_id = ' . (int) Usuario::ID_ORGANIZACION_ADMIN . ' THEN 0 ELSE 1 END')
+            ->orderByDesc('is_default')
+            ->orderBy('id')
             ->first();
         if ($row) {
             return $row;
@@ -417,12 +420,10 @@ class WhatsappInboxOrgConfigService
         }
         if ($phone !== '') {
             $duplicado = WaInboxOrganizacionConfig::query()
+                ->where('organizacion_id', $organizacionId)
                 ->where('phone_number_id', $phone)
                 ->where('id', '!=', (int) $row->id)
                 ->first();
-            if ($duplicado && (int) $duplicado->organizacion_id !== $organizacionId) {
-                throw new \InvalidArgumentException('Ese ID de número ya está configurado');
-            }
             if ($duplicado) {
                 $duplicado->phone_number_id = null;
                 $duplicado->save();
@@ -688,6 +689,7 @@ class WhatsappInboxOrgConfigService
         }
 
         $yaEnOtra = WaInboxOrganizacionConfig::query()
+            ->where('organizacion_id', (int) $linea->organizacion_id)
             ->where('phone_number_id', $envPhone)
             ->where('id', '!=', (int) $linea->id)
             ->exists();
