@@ -14,6 +14,7 @@ return [
         'cotizaciones-resumen:create' => 'Crear cotizaciones resumen (JSON + PDF de respaldo)',
         'cotizaciones-resumen:read' => 'Listar cotizaciones resumen de su organización',
         'proveedores:update-code' => 'Actualizar el code_supplier de proveedores de su organización',
+        'cotizaciones-resumen:update' => 'Actualizar (cliente, proveedores, costos y PDF) cotizaciones resumen en estado COTIZADO de su organización',
         'cotizaciones-resumen:update-state' => 'Cambiar el estado (COTIZADO/CONFIRMADO) de cotizaciones resumen de su organización',
         'cotizaciones-resumen:delete' => 'Eliminar (soft delete) cotizaciones resumen en estado COTIZADO de su organización',
     ],

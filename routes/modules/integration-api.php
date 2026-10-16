@@ -23,6 +23,12 @@ Route::prefix('integration/v1')->group(function () {
         ->middleware('api.client:cotizaciones-resumen:create')
         ->name('integration.cotizaciones-resumen.crear');
 
+    // PUT (JSON, sin PDF) o POST con _method=PUT (multipart, con PDF): PHP no lee multipart en PUT real.
+    Route::match(['put', 'post'], 'cotizaciones-resumen/{id}', [CotizacionResumenIntegracionController::class, 'actualizar'])
+        ->whereNumber('id')
+        ->middleware('api.client:cotizaciones-resumen:update')
+        ->name('integration.cotizaciones-resumen.actualizar');
+
     Route::put('cotizaciones-resumen/{id}/estado', [CotizacionResumenIntegracionController::class, 'actualizarEstado'])
         ->whereNumber('id')
         ->middleware('api.client:cotizaciones-resumen:update-state')

@@ -1,6 +1,6 @@
 # API de integración Probusiness — guía rápida
 
-Con esta API puedes **crear, listar, confirmar y eliminar cotizaciones** de tu organización y **actualizar el código de proveedor** desde tu sistema.
+Con esta API puedes **crear, listar, actualizar, confirmar y eliminar cotizaciones** de tu organización y **actualizar el código de proveedor** desde tu sistema.
 
 | | |
 |---|---|
@@ -37,6 +37,7 @@ Cada endpoint requiere un *scope* (permiso) habilitado en tu token. Sin él: **4
 |---|---|---|
 | `GET /cotizaciones-resumen` | `cotizaciones-resumen:read` | Listar |
 | `POST /cotizaciones-resumen` | `cotizaciones-resumen:create` | Crear (JSON + PDF de respaldo) |
+| `PUT /cotizaciones-resumen/{id}` | `cotizaciones-resumen:update` | Actualizar cliente, proveedores, costos y PDF (solo si está `COTIZADO`) |
 | `PUT /cotizaciones-resumen/{id}/estado` | `cotizaciones-resumen:update-state` | Confirmar o volver a cotizado |
 | `DELETE /cotizaciones-resumen/{id}` | `cotizaciones-resumen:delete` | Eliminar (solo si está `COTIZADO`) |
 | `PUT /proveedores/{id}/code-supplier` | `proveedores:update-code` | Cambiar el código de proveedor |
@@ -196,7 +197,41 @@ Tres proveedores; el FOB de cada uno va en su proveedor y los costos de toda la 
 
 La respuesta trae un `id` por proveedor, en el mismo orden en que los enviaste.
 
-### 3.3 Cambiar estado — `PUT /cotizaciones-resumen/{id}/estado`
+### 3.3 Actualizar — `PUT /cotizaciones-resumen/{id}`
+
+Corrige una cotización **sin borrarla**: cliente, CBM, peso, unidades, costos y (opcional) el PDF. Solo si está en `COTIZADO`; si ya está confirmada responde `422` (vuélvela a `COTIZADO` con 3.4 y reintenta).
+
+Es un **reemplazo completo** del contenido: envía cliente, **todos** los proveedores y **todos** sus costos tal como deben quedar (mismo formato que al crear).
+
+- Para **conservar** un proveedor (y su código) incluye su `id` (el que te devolvió el POST). Un proveedor sin `id` se crea nuevo.
+- Un proveedor existente que **no** envíes se elimina, salvo que ya tenga código asignado (esos se conservan).
+- El `id` debe ser de esa cotización; si no, `422`.
+- `id_contenedor` es opcional y debe ser el mismo de la cotización (el consolidado no se puede cambiar). El vendedor tampoco.
+- El PDF es **opcional**: si no lo envías se conserva el actual; si lo envías, reemplaza al anterior (mismas validaciones que al crear).
+
+**Sin PDF** — JSON directo:
+
+```bash
+curl -X PUT "$BASE/cotizaciones-resumen/10892" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"cliente":{"nombre":"Juan Pérez"},
+       "proveedores":[{"id":5150,"productos":"Bombas","cbm_total":5.5,
+         "costos":[{"concepto":"Valor de Mercadería","valor":18000}]}]}'
+```
+
+**Con PDF** — `multipart/form-data` enviado como **POST con el campo `_method=PUT`** (PHP no lee multipart en un PUT real), con `payload` (texto) y `archivo`:
+
+```bash
+curl -X POST "$BASE/cotizaciones-resumen/10892" \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "_method=PUT" \
+  -F "archivo=@respaldo-corregido.pdf;type=application/pdf" \
+  -F 'payload={"cliente":{"nombre":"Juan Pérez"},"proveedores":[{"id":5150,"productos":"Bombas","cbm_total":5.5}]}'
+```
+
+Respuesta `200`: `data` con `id`, `estado` y `proveedores[]` (`id`, `productos`, `code_supplier`); si enviaste PDF, también `archivo` (`nombre_original`, `sha256`, `bytes`).
+
+### 3.4 Cambiar estado — `PUT /cotizaciones-resumen/{id}/estado`
 
 ```bash
 curl -X PUT "$BASE/cotizaciones-resumen/10892/estado" \
@@ -207,11 +242,11 @@ curl -X PUT "$BASE/cotizaciones-resumen/10892/estado" \
 - Al **confirmar** se asignan los códigos de proveedor y se devuelven en `data.proveedores[].code_supplier`.
 - Volver a `COTIZADO` mantiene los códigos ya asignados.
 
-### 3.4 Eliminar — `DELETE /cotizaciones-resumen/{id}`
+### 3.5 Eliminar — `DELETE /cotizaciones-resumen/{id}`
 
 Solo cotizaciones en `COTIZADO`. Una confirmada responde `422` (primero devuélvela a `COTIZADO`). Es una baja lógica: deja de aparecer en el listado.
 
-### 3.5 Actualizar código de proveedor — `PUT /proveedores/{id}/code-supplier`
+### 3.6 Actualizar código de proveedor — `PUT /proveedores/{id}/code-supplier`
 
 ```bash
 curl -X PUT "$BASE/proveedores/5150/code-supplier" \
@@ -237,6 +272,7 @@ Todas las respuestas de error traen `{ "success": false, "message": "…" }` (y 
 ## 5. Flujo típico
 
 1. `POST /cotizaciones-resumen` → guarda el `id` (estado `COTIZADO`).
+   Si corriges algo, `PUT /cotizaciones-resumen/{id}` mientras siga en `COTIZADO`.
 2. `PUT /cotizaciones-resumen/{id}/estado` con `CONFIRMADO` → recibes los `code_supplier`.
 3. (Opcional) `PUT /proveedores/{id}/code-supplier` si necesitas otro código (debe ser único).
 4. `GET /cotizaciones-resumen` cuando quieras consultar el estado.

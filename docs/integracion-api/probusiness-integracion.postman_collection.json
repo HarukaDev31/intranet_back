@@ -204,6 +204,81 @@
       "response": []
     },
     {
+      "name": "Actualizar cotizacion (JSON, sin PDF)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cliente\": {\n    \"nombre\": \"Juan Pérez\",\n    \"whatsapp\": \"59171234567\"\n  },\n  \"proveedores\": [\n    {\n      \"id\": 5150,\n      \"productos\": \"Bombas de gasolina\",\n      \"cbm_total\": 5.5,\n      \"peso_total\": 800,\n      \"qty_cajas\": 40,\n      \"unidades\": 5800,\n      \"incoterm\": \"FOB\",\n      \"costos\": [\n        {\n          \"concepto\": \"Valor FOB Mercadería\",\n          \"valor\": 18000\n        }\n      ]\n    }\n  ],\n  \"descuento\": 0\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/cotizaciones-resumen/{{cotizacionId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "cotizaciones-resumen",
+            "{{cotizacionId}}"
+          ]
+        },
+        "description": "Scope: cotizaciones-resumen:update. Solo en COTIZADO. Reemplazo completo: incluye el id de cada proveedor que quieras conservar. Conserva el PDF actual."
+      },
+      "response": []
+    },
+    {
+      "name": "Actualizar cotizacion (con PDF nuevo)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "_method",
+              "value": "PUT",
+              "type": "text",
+              "description": "Obligatorio: PHP no lee multipart en un PUT real"
+            },
+            {
+              "key": "archivo",
+              "type": "file",
+              "src": [],
+              "description": "PDF de respaldo corregido (opcional)"
+            },
+            {
+              "key": "payload",
+              "value": "{\"cliente\": {\"nombre\": \"Juan Pérez\", \"whatsapp\": \"59171234567\"}, \"proveedores\": [{\"id\": 5150, \"productos\": \"Bombas de gasolina\", \"cbm_total\": 5.5, \"peso_total\": 800, \"qty_cajas\": 40, \"unidades\": 5800, \"incoterm\": \"FOB\", \"costos\": [{\"concepto\": \"Valor FOB Mercadería\", \"valor\": 18000}]}], \"descuento\": 0}",
+              "type": "text",
+              "description": "JSON como texto"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/cotizaciones-resumen/{{cotizacionId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "cotizaciones-resumen",
+            "{{cotizacionId}}"
+          ]
+        },
+        "description": "Scope: cotizaciones-resumen:update. POST con _method=PUT para poder enviar el PDF. Reemplaza el PDF anterior."
+      },
+      "response": []
+    },
+    {
       "name": "Confirmar cotizacion",
       "request": {
         "method": "PUT",
