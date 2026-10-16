@@ -17,8 +17,8 @@ class LandingConsolidadoCountdownController extends Controller
     }
 
     /**
-     * Fecha fin del contador para la landing consolidado.
-     * Protegido con middleware landing.consolidado.form_token (Bearer).
+     * Fecha fin del contador para la landing curso.
+     * Protegido con middleware landing.curso.form_token (Bearer).
      * Resultado cacheado en Redis vía Cache::remember.
      */
     public function show(): JsonResponse
