@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Landing\LandingCountdownAdminController;
 use App\Http\Controllers\Landing\LandingLeadAdminController;
 use Illuminate\Support\Facades\Route;
 
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\Route;
 | - landing_consolidado_leads
 | - landing_curso_leads
 |
+| Y mantener el contador de la landing consolidado.
+|
 */
 
 Route::group(['prefix' => 'landing-leads', 'middleware' => 'jwt.auth'], function () {
@@ -19,5 +22,8 @@ Route::group(['prefix' => 'landing-leads', 'middleware' => 'jwt.auth'], function
     Route::get('curso', [LandingLeadAdminController::class, 'curso']);
     Route::get('consolidado/export', [LandingLeadAdminController::class, 'exportConsolidado']);
     Route::get('curso/export', [LandingLeadAdminController::class, 'exportCurso']);
+
+    Route::get('countdown', [LandingCountdownAdminController::class, 'show']);
+    Route::put('countdown', [LandingCountdownAdminController::class, 'update']);
 });
 
