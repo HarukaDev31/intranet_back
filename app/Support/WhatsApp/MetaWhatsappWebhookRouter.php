@@ -37,7 +37,7 @@ class MetaWhatsappWebhookRouter
             if ($inboxSessions->findByPhoneNumberId($phoneNumberId)) {
                 $inboxMatch = true;
             }
-            if ($copilotoSessions->findByPhoneNumberId($phoneNumberId)) {
+            if (config('meta_whatsapp_copiloto.enabled') && $copilotoSessions->findByPhoneNumberId($phoneNumberId)) {
                 $copilotoMatch = true;
             }
         }

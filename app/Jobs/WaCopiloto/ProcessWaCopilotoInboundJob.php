@@ -35,6 +35,10 @@ class ProcessWaCopilotoInboundJob implements ShouldQueue
 
     public function handle(WaCopilotoMessageService $messageService)
     {
+        if (!config('meta_whatsapp_copiloto.enabled')) {
+            return;
+        }
+
         $domain = WaCopilotoJobContext::resolveJobDomain($this->domain);
         $connection = $this->setDatabaseConnection($domain);
 
