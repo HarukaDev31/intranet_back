@@ -72,6 +72,7 @@ class Kernel extends HttpKernel
         'telescope.session' => \App\Http\Middleware\TelescopeSessionAuth::class,
         'landing.consolidado.form_token' => \App\Http\Middleware\VerifyLandingConsolidadoFormToken::class,
         'landing.curso.form_token' => \App\Http\Middleware\VerifyLandingCursoFormToken::class,
+        'landing.countdown.form_token' => \App\Http\Middleware\VerifyLandingCountdownFormToken::class,
         'role.coordinacion' => \App\Http\Middleware\EnsureCoordinacionRole::class,
         'role.whatsapp_inbox' => \App\Http\Middleware\EnsureWhatsappInboxAccess::class,
         'role.copiloto_wa' => \App\Http\Middleware\EnsureCopilotoWaAccess::class,
