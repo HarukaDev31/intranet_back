@@ -2425,11 +2425,19 @@ class CotizacionFinalController extends Controller
             'PRICE'
         ];
 
-        $clientNameUpper = strtoupper(trim($clientName));
+        // Solo palabras completas. "PRODUCTOS" no es el encabezado "PRODUCTO".
+        $normalized = strtoupper(trim((string) $clientName));
+        $normalized = preg_replace('/[^A-Z0-9]+/', ' ', $normalized);
+        if (!is_string($normalized) || trim($normalized) === '') {
+            return false;
+        }
 
-        // Si el nombre del cliente contiene palabras tÃ­picas de header, es probablemente un header
-        foreach ($headerKeywords as $keyword) {
-            if (strpos($clientNameUpper, $keyword) !== false) {
+        $words = array_filter(explode(' ', $normalized), function ($word) {
+            return $word !== '';
+        });
+
+        foreach ($words as $word) {
+            if (in_array($word, $headerKeywords, true)) {
                 return true;
             }
         }
