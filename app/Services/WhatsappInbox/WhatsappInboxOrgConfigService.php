@@ -525,6 +525,48 @@ class WhatsappInboxOrgConfigService
     }
 
     /**
+     * Línea que debe mostrar el chat de este usuario.
+     * Si su rol no tiene ningún número, no se usa el de coordinación.
+     *
+     * @param  \App\Models\Usuario|null  $user
+     * @return WaInboxOrganizacionConfig|null
+     */
+    public function lineaVisibleParaUsuario($user)
+    {
+        if (!$user) {
+            return null;
+        }
+
+        $phones = $this->visiblePhoneNumberIds($user);
+        if ($phones === []) {
+            return null;
+        }
+
+        $orgId = (int) $user->getAttribute('ID_Organizacion');
+        $lineas = WaInboxOrganizacionConfig::query()
+            ->with('roles')
+            ->where('organizacion_id', $orgId)
+            ->whereIn('phone_number_id', $phones)
+            ->orderByDesc('is_default')
+            ->orderBy('id')
+            ->get();
+
+        $principal = trim((string) $user->getNombreGrupo());
+        if ($principal !== '' && $principal !== 'Sin grupo') {
+            foreach ($lineas as $linea) {
+                foreach ($linea->roles as $role) {
+                    /** @var WaInboxConfigRole $role */
+                    if (trim((string) $role->role_name) === $principal) {
+                        return $linea;
+                    }
+                }
+            }
+        }
+
+        return $lineas->first();
+    }
+
+    /**
      * Credenciales del número de la conversación (no el único de la org).
      *
      * @param  string  $phoneNumberId
@@ -596,6 +638,36 @@ class WhatsappInboxOrgConfigService
     }
 
     /**
+     * @param  mixed  $role
+     * @return string
+     */
+    private function nombreDeRol($role)
+    {
+        if (is_array($role)) {
+            if (isset($role['value'])) {
+                return trim((string) $role['value']);
+            }
+            if (isset($role['label'])) {
+                return trim((string) $role['label']);
+            }
+
+            return '';
+        }
+        if (is_object($role)) {
+            if (isset($role->value)) {
+                return trim((string) $role->value);
+            }
+            if (isset($role->label)) {
+                return trim((string) $role->label);
+            }
+
+            return '';
+        }
+
+        return trim((string) $role);
+    }
+
+    /**
      * @param  WaInboxOrganizacionConfig  $row
      * @param  mixed  $roles
      */
@@ -604,7 +676,7 @@ class WhatsappInboxOrgConfigService
         $nombres = [];
         if (is_array($roles)) {
             foreach ($roles as $role) {
-                $nombre = trim((string) $role);
+                $nombre = $this->nombreDeRol($role);
                 if ($nombre !== '' && mb_strlen($nombre) <= 80) {
                     $nombres[$nombre] = true;
                 }

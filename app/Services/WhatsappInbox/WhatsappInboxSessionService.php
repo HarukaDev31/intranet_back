@@ -101,61 +101,66 @@ class WhatsappInboxSessionService
     public function getSessionPayloadForOrganizacion($organizacionId, $user = null)
     {
         $organizacionId = (int) $organizacionId;
-        $own = $this->orgConfig->credentials($organizacionId);
-        $outbound = $this->orgConfig->credentialsForOutbound($organizacionId);
         if ($user instanceof Usuario) {
-            $visible = $this->orgConfig->visiblePhoneNumberIds($user);
-            if ($visible !== [] && !in_array((string) $own['phone_number_id'], $visible, true)) {
-                $linea = \App\Models\WhatsappInbox\WaInboxOrganizacionConfig::query()
-                    ->where('organizacion_id', $organizacionId)
-                    ->whereIn('phone_number_id', $visible)
-                    ->orderByDesc('is_default')
-                    ->orderBy('id')
-                    ->first();
-                if ($linea && trim((string) $linea->phone_number_id) !== '') {
-                    $own = $this->orgConfig->credentialsForPhoneNumber($linea->phone_number_id, $organizacionId);
-                    $outbound = $own;
-                }
-            }
+            $linea = $this->orgConfig->lineaVisibleParaUsuario($user);
+        } else {
+            $linea = $this->orgConfig->findByOrganizacion($organizacionId);
         }
         $org = Organizacion::query()->find($organizacionId);
         $canConfigure = $user instanceof Usuario ? $user->puedeConfigurarWhatsappInbox() : false;
+        $phone = $linea ? trim((string) $linea->phone_number_id) : '';
+        $label = $linea ? trim((string) $linea->nombre) : '';
+        if ($label === '') {
+            $label = 'WhatsApp';
+        }
+        $display = $linea ? trim((string) $linea->display_number) : '';
+        $enabled = $linea ? (bool) $linea->enabled : false;
 
         $base = [
             'organizacion_id' => $organizacionId,
             'organizacion_nombre' => $org ? (string) $org->No_Organizacion : '',
-            'configured' => (string) $outbound['phone_number_id'] !== '',
-            'enabled' => !empty($outbound['enabled']),
+            'configured' => $phone !== '',
+            'enabled' => $enabled,
             'can_configure' => $canConfigure,
             // Prefijo que se antepone a numeros sin codigo de pais (alta manual de contactos)
             'phone_code' => self::phoneCodeForOrganizacion($organizacionId),
         ];
 
-        if ((string) $own['phone_number_id'] === '') {
+        if ($phone === '') {
             return $base + [
                 'id' => null,
-                'phone_number_id' => (string) $outbound['phone_number_id'],
-                'display_number' => (string) ($outbound['display_number'] ?: $outbound['phone_number_id']),
-                'label' => 'WhatsApp',
-                'is_active' => !empty($outbound['enabled']),
+                'phone_number_id' => '',
+                'display_number' => '',
+                'label' => $label,
+                'is_active' => false,
                 'last_webhook_at' => null,
             ];
         }
 
         $session = WaInboxSession::query()
-            ->where('phone_number_id', (string) $own['phone_number_id'])
+            ->where('phone_number_id', $phone)
             ->first();
         if (!$session) {
-            $session = $this->ensureSessionForOrganizacion($organizacionId);
+            $this->orgConfig->syncSession($linea);
+            $session = WaInboxSession::query()
+                ->where('phone_number_id', $phone)
+                ->first();
+        }
+
+        if ($display === '' && $session) {
+            $display = trim((string) $session->display_number);
+        }
+        if ($display === '') {
+            $display = $phone;
         }
 
         return $base + [
-            'id' => (int) $session->id,
-            'phone_number_id' => $session->phone_number_id,
-            'display_number' => $session->display_number ?: $session->phone_number_id,
-            'label' => $session->label,
-            'is_active' => (bool) $session->is_active,
-            'last_webhook_at' => $session->last_webhook_at,
+            'id' => $session ? (int) $session->id : null,
+            'phone_number_id' => $phone,
+            'display_number' => $display,
+            'label' => $label,
+            'is_active' => $session ? (bool) $session->is_active : $enabled,
+            'last_webhook_at' => $session ? $session->last_webhook_at : null,
         ];
     }
 
