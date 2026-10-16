@@ -491,6 +491,23 @@ class WhatsappInboxController extends Controller
         }
     }
 
+    public function markUnread($id)
+    {
+        try {
+            $denied = $this->denyIfConversationOutsideOrg((int) $id);
+            if ($denied) {
+                return $denied;
+            }
+
+            return response()->json($this->conversationService->markUnread((int) $id));
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function templates()
     {
         try {

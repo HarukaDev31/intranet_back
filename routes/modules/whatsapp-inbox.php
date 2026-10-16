@@ -31,6 +31,7 @@ Route::group([
     Route::patch('/conversations/{id}/assign', [WhatsappInboxController::class, 'assign']);
     Route::patch('/conversations/{id}/contact-name', [WhatsappInboxController::class, 'renameContact']);
     Route::patch('/conversations/{id}/read', [WhatsappInboxController::class, 'markRead']);
+    Route::patch('/conversations/{id}/unread', [WhatsappInboxController::class, 'markUnread']);
     Route::get('/templates', [WhatsappInboxController::class, 'templates']);
     Route::get('/users/assignable', [WhatsappInboxController::class, 'assignableUsers']);
 });

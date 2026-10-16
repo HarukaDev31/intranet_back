@@ -275,6 +275,26 @@ class WhatsappInboxConversationService
     }
 
     /**
+     * Deja el chat como no leído (al menos 1) hasta que se abra o se marque leído.
+     *
+     * @param  int  $conversationId
+     * @return array<string, mixed>
+     */
+    public function markUnread($conversationId)
+    {
+        $conversation = WaInboxConversation::query()->findOrFail($conversationId);
+        if ((int) $conversation->unread_count < 1) {
+            $conversation->unread_count = 1;
+            $conversation->save();
+        }
+
+        $formatted = $this->formatConversation($conversation);
+        $this->broadcastConversationRead($formatted);
+
+        return ['success' => true, 'data' => $formatted];
+    }
+
+    /**
      * @param  array<string, mixed>  $conversation
      */
     private function broadcastConversationRead(array $conversation)
