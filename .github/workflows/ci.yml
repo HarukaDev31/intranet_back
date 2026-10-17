@@ -13,6 +13,11 @@ on:
         required: false
         type: boolean
         default: false
+      phpstan_base:
+        description: 'SHA anterior del push. PHPStan solo mira el diff contra este commit.'
+        required: false
+        type: string
+        default: ''
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -31,6 +36,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -69,8 +76,11 @@ jobs:
       - name: PHP syntax check (php -l)
         run: composer lint:php-syntax
 
-      - name: PHPStan static analysis
-        run: composer phpstan
+      - name: PHPStan (solo archivos del PR o del deploy)
+        env:
+          PHPSTAN_BASE: ${{ inputs.phpstan_base != '' && inputs.phpstan_base || github.event.pull_request.base.sha || github.event.before }}
+          PHPSTAN_MODE: ${{ github.event_name == 'pull_request' && 'pr' || 'range' }}
+        run: bash scripts/phpstan-changed.sh
 
       - name: Smoke check (about + routes)
         env:
