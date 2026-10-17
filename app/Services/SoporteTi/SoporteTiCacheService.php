@@ -138,6 +138,28 @@ class SoporteTiCacheService
     }
 
     /**
+     * Indicadores del panel. La clave incluye el epoch de staff y el de SLA,
+     * así que un cambio de solicitud o de plazos deja de servir esta copia.
+     *
+     * @param string   $mes  Y-m
+     * @param string   $area
+     * @param callable $resolver
+     * @return array
+     */
+    public function rememberIndicadores($mes, $area, callable $resolver)
+    {
+        $key = $this->key(sprintf(
+            'kpi:%s:%s:%s:%s',
+            $this->staffEpoch(),
+            $this->catalogEpoch('sla'),
+            (string) $mes,
+            md5((string) $area)
+        ));
+
+        return $this->rememberTagged($key, $this->ttlList(), $resolver);
+    }
+
+    /**
      * @param int $userId
      */
     public function invalidateUsuario($userId)
