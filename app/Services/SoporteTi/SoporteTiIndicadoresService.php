@@ -216,8 +216,8 @@ class SoporteTiIndicadoresService
                 'total' => $counts[$codigo],
             );
         }
-        $pendientes = isset($counts['pendiente']) ? $counts['pendiente'] : 0;
-        $operativas = isset($counts['operativo']) ? $counts['operativo'] : 0;
+        $pendientes = $counts['pendiente'];
+        $operativas = $counts['operativo'];
 
         return array(
             'sla_pct' => $sla['pct'],
