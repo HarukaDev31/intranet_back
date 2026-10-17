@@ -152,6 +152,7 @@ class SoporteTiIndicadoresService
                 'tipo_a' => $this->bloqueTipo($delMes, $resueltas, $abiertas, 'A', $metas),
                 'tipo_b' => $this->bloqueTipo($delMes, $resueltas, $abiertas, 'B', $metas),
                 'atencion' => $this->atencion($abiertas),
+                'finalizadas' => $this->finalizadas($resueltas),
                 'mensual' => $evolucion,
             ),
         );
@@ -646,6 +647,53 @@ class SoporteTiIndicadoresService
         }
 
         return 'pendiente';
+    }
+
+    /**
+     * Solicitudes finalizadas en el mes. El plazo es el guardado en la solicitud
+     * (sla_horas), no el catálogo vigente: un cambio de 3 h a 2 h no reescribe las anteriores.
+     *
+     * @param Collection $resueltas
+     * @return array
+     */
+    protected function finalizadas(Collection $resueltas)
+    {
+        $items = array();
+        foreach ($resueltas as $s) {
+            $fecha = $this->fechaCompletada($s);
+            if (!$fecha) {
+                continue;
+            }
+            $tipo = $s->tipo_solicitud === 'A' ? 'A' : 'B';
+            $horas = round($this->horas($s), 1);
+            $sla = (int) $s->sla_horas;
+            $items[] = array(
+                'id' => (int) $s->id,
+                'codigo' => $s->codigo,
+                'titulo' => (string) $s->titulo,
+                'area' => (string) $s->area,
+                'tipo' => $tipo,
+                'estado' => $this->nombreEstado($s, $tipo),
+                'complejidad' => $this->nivelDe($s, $tipo) ?: 'Sin nivel',
+                'finalizado_en' => $fecha->timezone(self::TZ)->format('d/m/Y H:i'),
+                'finalizado_ts' => $fecha->timezone(self::TZ)->getTimestamp(),
+                'horas' => $horas,
+                'sla_horas' => $sla,
+                'a_tiempo' => $sla > 0 && $horas <= $sla,
+            );
+        }
+
+        usort($items, function ($a, $b) {
+            return $b['finalizado_ts'] - $a['finalizado_ts'];
+        });
+
+        $out = array();
+        foreach ($items as $item) {
+            unset($item['finalizado_ts']);
+            $out[] = $item;
+        }
+
+        return $out;
     }
 
     /**
