@@ -149,7 +149,7 @@ class SoporteTiCacheService
     public function rememberIndicadores($mes, $area, callable $resolver)
     {
         $key = $this->key(sprintf(
-            'kpi:fin:%s:%s:%s:%s',
+            'kpi:avance:%s:%s:%s:%s',
             $this->staffEpoch(),
             $this->catalogEpoch('sla'),
             (string) $mes,

@@ -107,9 +107,9 @@ class SoporteTiIndicadoresService
         $sla = $this->cumplimiento($resueltas, null);
         $slaA = $this->cumplimiento($resueltas, 'A');
         $slaB = $this->cumplimiento($resueltas, 'B');
-        $vencidas = $this->vencidas($abiertas, null);
-        $vencidasA = $this->vencidas($abiertas, 'A');
-        $vencidasB = $this->vencidas($abiertas, 'B');
+        $vencidas = $this->vencidas($abiertas, null, $corte);
+        $vencidasA = $this->vencidas($abiertas, 'A', $corte);
+        $vencidasB = $this->vencidas($abiertas, 'B', $corte);
         $cierre = $this->cierre($delMes, null);
         $cierreA = $this->cierre($delMes, 'A');
         $cierreB = $this->cierre($delMes, 'B');
@@ -143,15 +143,16 @@ class SoporteTiIndicadoresService
             ),
             'por_area' => $this->porArea($delMesTodas),
             'comparacion' => array(
-                'proyectos' => $this->tarjetaTipo($delMes, $resueltas, $abiertas, 'A'),
-                'requerimientos' => $this->tarjetaTipo($delMes, $resueltas, $abiertas, 'B'),
+                'proyectos' => $this->tarjetaTipo($delMes, $resueltas, $abiertas, 'A', $corte),
+                'requerimientos' => $this->tarjetaTipo($delMes, $resueltas, $abiertas, 'B', $corte),
             ),
             'evolucion' => $evolucion,
             'detalle' => array(
                 'por_tipo' => $this->porTipo($delMes),
-                'tipo_a' => $this->bloqueTipo($delMes, $resueltas, $abiertas, 'A', $metas),
-                'tipo_b' => $this->bloqueTipo($delMes, $resueltas, $abiertas, 'B', $metas),
+                'tipo_a' => $this->bloqueTipo($delMes, $resueltas, $abiertas, 'A', $metas, $corte),
+                'tipo_b' => $this->bloqueTipo($delMes, $resueltas, $abiertas, 'B', $metas, $corte),
                 'atencion' => $this->atencion($abiertas),
+                'tiempos' => $this->tiempos($abiertas, $corte),
                 'finalizadas' => $this->finalizadas($resueltas),
                 'mensual' => $evolucion,
             ),
@@ -171,7 +172,7 @@ class SoporteTiIndicadoresService
         $resueltas = $this->resueltasEn($solicitudes, $mes, $area, $corte);
         $abiertas = $this->abiertasAlCorte($solicitudes, $area, $corte);
         $sla = $this->cumplimiento($resueltas, null);
-        $vencidas = $this->vencidas($abiertas, null);
+        $vencidas = $this->vencidas($abiertas, null, $corte);
         $cierre = $this->cierre($delMes, null);
 
         return array(
@@ -192,10 +193,10 @@ class SoporteTiIndicadoresService
      * @param array $metas
      * @return array
      */
-    protected function bloqueTipo(Collection $delMes, Collection $resueltas, Collection $abiertas, $tipo, array $metas)
+    protected function bloqueTipo(Collection $delMes, Collection $resueltas, Collection $abiertas, $tipo, array $metas, Carbon $corte)
     {
         $sla = $this->cumplimiento($resueltas, $tipo);
-        $vencidas = $this->vencidas($abiertas, $tipo);
+        $vencidas = $this->vencidas($abiertas, $tipo, $corte);
         $cierre = $this->cierre($delMes, $tipo);
         $estados = $tipo === 'A' ? self::ESTADOS_A : self::ESTADOS_B;
         $cohort = $this->deTipo($delMes, $tipo);
@@ -411,10 +412,10 @@ class SoporteTiIndicadoresService
      * @param string $tipo
      * @return array
      */
-    protected function tarjetaTipo(Collection $delMes, Collection $resueltas, Collection $abiertas, $tipo)
+    protected function tarjetaTipo(Collection $delMes, Collection $resueltas, Collection $abiertas, $tipo, Carbon $corte)
     {
         $sla = $this->cumplimiento($resueltas, $tipo);
-        $vencidas = $this->vencidas($abiertas, $tipo);
+        $vencidas = $this->vencidas($abiertas, $tipo, $corte);
         $cierre = $this->cierre($delMes, $tipo);
 
         return array(
@@ -456,13 +457,18 @@ class SoporteTiIndicadoresService
     }
 
     /**
+     * Vencida: En progreso o Hecho, y el tiempo laboral ya superó el plazo guardado.
+     *
      * @param Collection $abiertas
      * @param string|null $tipo
+     * @param Carbon $corte
      * @return array
      */
-    protected function vencidas(Collection $abiertas, $tipo)
+    protected function vencidas(Collection $abiertas, $tipo, Carbon $corte)
     {
-        $lista = $this->deTipo($abiertas, $tipo);
+        $lista = $this->deTipo($abiertas, $tipo)->filter(function (SoporteTiSolicitud $s) use ($corte) {
+            return $this->estaEnAvance($this->codigoAlCorte($s, $corte));
+        });
         $cantidad = 0;
         foreach ($lista as $s) {
             $sla = (int) $s->sla_horas;
@@ -647,6 +653,62 @@ class SoporteTiIndicadoresService
         }
 
         return 'pendiente';
+    }
+
+    /**
+     * En progreso o Hecho al corte, con su tiempo laboral y el plazo guardado.
+     *
+     * @param Collection $abiertas
+     * @param Carbon $corte
+     * @return array
+     */
+    protected function tiempos(Collection $abiertas, Carbon $corte)
+    {
+        $items = array();
+        foreach ($abiertas as $s) {
+            $codigo = $this->codigoAlCorte($s, $corte);
+            if (!$this->estaEnAvance($codigo)) {
+                continue;
+            }
+            $tipo = $s->tipo_solicitud === 'A' ? 'A' : 'B';
+            $mapa = $tipo === 'A' ? self::ESTADOS_A : self::ESTADOS_B;
+            $horas = round($this->horas($s), 1);
+            $sla = (int) $s->sla_horas;
+            $items[] = array(
+                'id' => (int) $s->id,
+                'codigo' => $s->codigo,
+                'titulo' => (string) $s->titulo,
+                'area' => (string) $s->area,
+                'tipo' => $tipo,
+                'estado' => isset($mapa[$codigo]) ? $mapa[$codigo] : $codigo,
+                'complejidad' => $this->nivelDe($s, $tipo) ?: 'Sin nivel',
+                'horas' => $horas,
+                'sla_horas' => $sla,
+                'vencida' => $sla > 0 && $horas > $sla,
+            );
+        }
+
+        usort($items, function ($a, $b) {
+            if ($a['vencida'] !== $b['vencida']) {
+                return $a['vencida'] ? -1 : 1;
+            }
+            if ($a['horas'] === $b['horas']) {
+                return 0;
+            }
+
+            return $a['horas'] < $b['horas'] ? 1 : -1;
+        });
+
+        return $items;
+    }
+
+    /**
+     * @param string $codigo
+     * @return bool
+     */
+    protected function estaEnAvance($codigo)
+    {
+        return $codigo === 'en_progreso' || $codigo === 'hecho';
     }
 
     /**
