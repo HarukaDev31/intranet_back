@@ -217,7 +217,7 @@ class SoporteTiIndicadoresService
             );
         }
         $pendientes = $counts['pendiente'];
-        $operativas = $counts['operativo'];
+        $completadas = $counts['operativo'] + $counts['desplegado'];
 
         return array(
             'sla_pct' => $sla['pct'],
@@ -230,8 +230,8 @@ class SoporteTiIndicadoresService
             'cierre_pct' => $cierre['pct'],
             'cierre_estado' => $cierre['estado'],
             'pendientes' => $pendientes,
-            'en_curso' => $cohort->count() - $pendientes - $operativas,
-            'operativas' => $operativas,
+            'en_curso' => $cohort->count() - $pendientes - $completadas,
+            'operativas' => $completadas,
             'recibidas' => $cohort->count(),
             'niveles' => $this->niveles($this->deTipo($resueltas, $tipo), $tipo, $metas),
             'por_estado' => $porEstado,
@@ -490,7 +490,7 @@ class SoporteTiIndicadoresService
         $lista = $this->deTipo($delMes, $tipo);
         $operativas = 0;
         foreach ($lista as $s) {
-            if ($this->codigoActual($s) === 'operativo') {
+            if ($this->estaCompletada($this->codigoActual($s))) {
                 $operativas++;
             }
         }
@@ -568,7 +568,7 @@ class SoporteTiIndicadoresService
     }
 
     /**
-     * Resueltas = pasaron a Operativo en el mes y siguen en ese estado.
+     * Resueltas = pasaron a Desplegado u Operativo en el mes y siguen en uno de esos estados.
      *
      * @param Collection $solicitudes
      * @param string $mes
@@ -582,10 +582,10 @@ class SoporteTiIndicadoresService
             if ($area !== '' && trim((string) $s->area) !== $area) {
                 return false;
             }
-            if ($this->codigoActual($s) !== 'operativo') {
+            if (!$this->estaCompletada($this->codigoActual($s))) {
                 return false;
             }
-            $fecha = $this->fechaOperativo($s);
+            $fecha = $this->fechaCompletada($s);
             if (!$fecha || $fecha->gt($corte)) {
                 return false;
             }
@@ -595,7 +595,7 @@ class SoporteTiIndicadoresService
     }
 
     /**
-     * Abiertas al corte: ya existían y todavía no estaban Operativo.
+     * Abiertas al corte: ya existían y no estaban Desplegado ni Operativo.
      *
      * @param Collection $solicitudes
      * @param string $area
@@ -614,7 +614,7 @@ class SoporteTiIndicadoresService
             }
             $codigo = $this->codigoAlCorte($s, $corte);
 
-            return $codigo !== 'operativo';
+            return !$this->estaCompletada($codigo);
         })->values();
     }
 
@@ -649,21 +649,23 @@ class SoporteTiIndicadoresService
     }
 
     /**
+     * Primera vez que llegó a Desplegado u Operativo.
+     *
      * @param SoporteTiSolicitud $s
      * @return Carbon|null
      */
-    protected function fechaOperativo(SoporteTiSolicitud $s)
+    protected function fechaCompletada(SoporteTiSolicitud $s)
     {
         $fecha = null;
         foreach ($s->historialEstados as $h) {
-            if (!$h->estado || $h->estado->codigo !== 'operativo' || !$h->created_at) {
+            if (!$h->estado || !$this->estaCompletada($h->estado->codigo) || !$h->created_at) {
                 continue;
             }
             if ($fecha === null || $h->created_at->lt($fecha)) {
                 $fecha = $h->created_at->copy();
             }
         }
-        if ($fecha === null && $this->codigoActual($s) === 'operativo') {
+        if ($fecha === null && $this->estaCompletada($this->codigoActual($s))) {
             $marca = $s->ultima_actualizacion ?: $s->updated_at;
             if ($marca) {
                 return Carbon::parse($marca);
@@ -671,6 +673,15 @@ class SoporteTiIndicadoresService
         }
 
         return $fecha;
+    }
+
+    /**
+     * @param string $codigo
+     * @return bool
+     */
+    protected function estaCompletada($codigo)
+    {
+        return $codigo === 'operativo' || $codigo === 'desplegado';
     }
 
     /**
@@ -856,7 +867,7 @@ class SoporteTiIndicadoresService
         $vistos = array(Carbon::now(self::TZ)->format('Y-m') => true);
         foreach ($solicitudes as $s) {
             $vistos[Carbon::parse($s->created_at)->timezone(self::TZ)->format('Y-m')] = true;
-            $fz = $this->fechaOperativo($s);
+            $fz = $this->fechaCompletada($s);
             if ($fz) {
                 $vistos[$fz->timezone(self::TZ)->format('Y-m')] = true;
             }
