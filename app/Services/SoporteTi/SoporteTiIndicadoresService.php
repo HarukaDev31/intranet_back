@@ -55,10 +55,14 @@ class SoporteTiIndicadoresService
     /**
      * @param string|null $mes  Y-m
      * @param string|null $area
+     * @param string|null $tab  resumen|detalle|tiempos
+     * @param int         $page
+     * @param int         $pageFin
+     * @param int         $perPage
      * @param Authenticatable|null $user
      * @return array
      */
-    public function obtener($mes, $area, ?Authenticatable $user = null)
+    public function obtener($mes, $area, $tab = 'resumen', $page = 1, $pageFin = 1, $perPage = 15, ?Authenticatable $user = null)
     {
         if (!$this->esStaff($user)) {
             throw new AuthorizationException('No autorizado para ver los indicadores.');
@@ -66,21 +70,44 @@ class SoporteTiIndicadoresService
 
         $mes = $this->normalizarMes($mes);
         $area = trim((string) $area);
-        if ($area === '') {
-            $area = '';
+        $tab = $this->normalizarTab($tab);
+        $perPage = (int) $perPage;
+        if ($perPage < 5 || $perPage > 50) {
+            $perPage = 15;
         }
 
-        return $this->cache->rememberIndicadores($mes, $area, function () use ($mes, $area) {
-            return $this->calcular($mes, $area);
+        $data = $this->cache->rememberIndicadores($mes, $area, $tab, function () use ($mes, $area, $tab) {
+            return $this->calcular($mes, $area, $tab);
         });
+
+        if ($tab === 'tiempos') {
+            $data = $this->recortarTiempos($data, (int) $page, (int) $pageFin, $perPage);
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param string|null $tab
+     * @return string
+     */
+    protected function normalizarTab($tab)
+    {
+        $tab = trim((string) $tab);
+        if (in_array($tab, array('resumen', 'detalle', 'tiempos'), true)) {
+            return $tab;
+        }
+
+        return 'resumen';
     }
 
     /**
      * @param string $mes
      * @param string $area
+     * @param string $tab
      * @return array
      */
-    protected function calcular($mes, $area)
+    protected function calcular($mes, $area, $tab)
     {
         $solicitudes = SoporteTiSolicitud::with(array(
             'estadoActual',
@@ -88,73 +115,143 @@ class SoporteTiIndicadoresService
             'historialEstados.estadoAnterior',
         ))->get();
 
-        $metas = $this->metasSla();
-        $mesesSerie = $this->mesesAtras($mes, 6);
-        $evolucion = array();
-        foreach ($mesesSerie as $punto) {
-            $evolucion[] = $this->puntoEvolucion($solicitudes, $punto, $area);
-        }
-
-        $corte = $this->corteMes($mes);
-        $delMes = $this->creadasEn($solicitudes, $mes, $area);
-        $delMesTodas = $this->creadasEn($solicitudes, $mes, '');
-        $total = $delMes->count();
-        $promedio = $this->promedioPrevio($solicitudes, $mes, $area);
-
-        $resueltas = $this->resueltasEn($solicitudes, $mes, $area, $corte);
-        $abiertas = $this->abiertasAlCorte($solicitudes, $area, $corte);
-
-        $sla = $this->cumplimiento($resueltas, null);
-        $slaA = $this->cumplimiento($resueltas, 'A');
-        $slaB = $this->cumplimiento($resueltas, 'B');
-        $vencidas = $this->vencidas($abiertas, null, $corte);
-        $vencidasA = $this->vencidas($abiertas, 'A', $corte);
-        $vencidasB = $this->vencidas($abiertas, 'B', $corte);
-        $cierre = $this->cierre($delMes, null);
-        $cierreA = $this->cierre($delMes, 'A');
-        $cierreB = $this->cierre($delMes, 'B');
-
-        $variacion = $this->variacionTotal($total, $promedio);
-
-        return array(
+        $base = array(
+            'tab' => $tab,
             'mes' => $mes,
             'mes_label' => $this->etiquetaMes($mes),
             'area' => $area !== '' ? $area : null,
             'actualizado_en' => Carbon::now(self::TZ)->format('d/m/Y H:i'),
             'meses' => $this->opcionesMes($solicitudes),
             'areas' => $this->nombresAreas($solicitudes),
-            'resumen' => array(
-                'total' => $total,
-                'total_estado' => $variacion['estado'],
-                'total_etiqueta' => $variacion['etiqueta'],
-                'total_detalle' => $variacion['detalle'],
-                'sla_pct' => $sla['pct'],
-                'sla_estado' => $sla['estado'],
-                'sla_resueltas' => $sla['total'],
-                'vencidas' => $vencidas['cantidad'],
-                'vencidas_pct' => $vencidas['pct'],
-                'vencidas_estado' => $vencidas['estado'],
-                'abiertas' => $vencidas['abiertas'],
-                'cierre_pct' => $cierre['pct'],
-                'cierre_estado' => $cierre['estado'],
-                'cierre_operativas' => $cierre['operativas'],
-                'cierre_total' => $cierre['total'],
-                'alertas' => $this->alertas($variacion, $sla, $vencidas, $cierre),
-            ),
-            'por_area' => $this->porArea($delMesTodas),
-            'comparacion' => array(
-                'proyectos' => $this->tarjetaTipo($delMes, $resueltas, $abiertas, 'A', $corte),
-                'requerimientos' => $this->tarjetaTipo($delMes, $resueltas, $abiertas, 'B', $corte),
-            ),
-            'evolucion' => $evolucion,
-            'detalle' => array(
+        );
+
+        $corte = $this->corteMes($mes);
+        $delMes = $this->creadasEn($solicitudes, $mes, $area);
+        $resueltas = $this->resueltasEn($solicitudes, $mes, $area, $corte);
+        $abiertas = $this->abiertasAlCorte($solicitudes, $area, $corte);
+
+        if ($tab === 'tiempos') {
+            $base['detalle'] = array(
+                'tiempos' => $this->tiempos($abiertas, $corte),
+                'finalizadas' => $this->finalizadas($resueltas),
+            );
+
+            return $base;
+        }
+
+        if ($tab === 'detalle') {
+            $metas = $this->metasSla();
+            $evolucion = $this->serieEvolucion($solicitudes, $mes, $area);
+            $base['detalle'] = array(
                 'por_tipo' => $this->porTipo($delMes),
                 'tipo_a' => $this->bloqueTipo($delMes, $resueltas, $abiertas, 'A', $metas, $corte),
                 'tipo_b' => $this->bloqueTipo($delMes, $resueltas, $abiertas, 'B', $metas, $corte),
                 'atencion' => $this->atencion($abiertas),
-                'tiempos' => $this->tiempos($abiertas, $corte),
-                'finalizadas' => $this->finalizadas($resueltas),
                 'mensual' => $evolucion,
+            );
+
+            return $base;
+        }
+
+        $delMesTodas = $this->creadasEn($solicitudes, $mes, '');
+        $total = $delMes->count();
+        $promedio = $this->promedioPrevio($solicitudes, $mes, $area);
+        $sla = $this->cumplimiento($resueltas, null);
+        $vencidas = $this->vencidas($abiertas, null, $corte);
+        $cierre = $this->cierre($delMes, null);
+        $variacion = $this->variacionTotal($total, $promedio);
+
+        $base['resumen'] = array(
+            'total' => $total,
+            'total_estado' => $variacion['estado'],
+            'total_etiqueta' => $variacion['etiqueta'],
+            'total_detalle' => $variacion['detalle'],
+            'sla_pct' => $sla['pct'],
+            'sla_estado' => $sla['estado'],
+            'sla_resueltas' => $sla['total'],
+            'vencidas' => $vencidas['cantidad'],
+            'vencidas_pct' => $vencidas['pct'],
+            'vencidas_estado' => $vencidas['estado'],
+            'abiertas' => $vencidas['abiertas'],
+            'cierre_pct' => $cierre['pct'],
+            'cierre_estado' => $cierre['estado'],
+            'cierre_operativas' => $cierre['operativas'],
+            'cierre_total' => $cierre['total'],
+            'alertas' => $this->alertas($variacion, $sla, $vencidas, $cierre),
+        );
+        $base['por_area'] = $this->porArea($delMesTodas);
+        $base['comparacion'] = array(
+            'proyectos' => $this->tarjetaTipo($delMes, $resueltas, $abiertas, 'A', $corte),
+            'requerimientos' => $this->tarjetaTipo($delMes, $resueltas, $abiertas, 'B', $corte),
+        );
+        $base['evolucion'] = $this->serieEvolucion($solicitudes, $mes, $area);
+
+        return $base;
+    }
+
+    /**
+     * @param Collection $solicitudes
+     * @param string $mes
+     * @param string $area
+     * @return array
+     */
+    protected function serieEvolucion(Collection $solicitudes, $mes, $area)
+    {
+        $evolucion = array();
+        foreach ($this->mesesAtras($mes, 6) as $punto) {
+            $evolucion[] = $this->puntoEvolucion($solicitudes, $punto, $area);
+        }
+
+        return $evolucion;
+    }
+
+    /**
+     * La caché guarda las listas completas. La respuesta solo lleva la página pedida.
+     *
+     * @param array $data
+     * @param int $page
+     * @param int $pageFin
+     * @param int $perPage
+     * @return array
+     */
+    protected function recortarTiempos(array $data, $page, $pageFin, $perPage)
+    {
+        $detalle = isset($data['detalle']) && is_array($data['detalle']) ? $data['detalle'] : array();
+        $tiempos = $this->paginarLista(isset($detalle['tiempos']) ? $detalle['tiempos'] : array(), $page, $perPage);
+        $finalizadas = $this->paginarLista(isset($detalle['finalizadas']) ? $detalle['finalizadas'] : array(), $pageFin, $perPage);
+        $data['detalle'] = array(
+            'tiempos' => $tiempos['items'],
+            'tiempos_paginacion' => $tiempos['paginacion'],
+            'finalizadas' => $finalizadas['items'],
+            'finalizadas_paginacion' => $finalizadas['paginacion'],
+        );
+
+        return $data;
+    }
+
+    /**
+     * @param array $items
+     * @param int $page
+     * @param int $perPage
+     * @return array
+     */
+    protected function paginarLista(array $items, $page, $perPage)
+    {
+        $total = count($items);
+        $last = $total > 0 ? (int) ceil($total / $perPage) : 1;
+        $page = max(1, (int) $page);
+        if ($page > $last) {
+            $page = $last;
+        }
+        $offset = ($page - 1) * $perPage;
+
+        return array(
+            'items' => array_values(array_slice($items, $offset, $perPage)),
+            'paginacion' => array(
+                'page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => $last,
             ),
         );
     }
