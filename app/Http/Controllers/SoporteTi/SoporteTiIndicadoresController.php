@@ -25,6 +25,10 @@ class SoporteTiIndicadoresController extends Controller
         $request->validate(array(
             'mes' => 'nullable|date_format:Y-m',
             'area' => 'nullable|string|max:80',
+            'tab' => 'nullable|in:resumen,detalle,tiempos',
+            'page' => 'nullable|integer|min:1',
+            'page_fin' => 'nullable|integer|min:1',
+            'per_page' => 'nullable|integer|min:5|max:50',
         ));
 
         try {
@@ -32,6 +36,10 @@ class SoporteTiIndicadoresController extends Controller
                 $this->indicadores->obtener(
                     $request->input('mes'),
                     $request->input('area'),
+                    $request->input('tab', 'resumen'),
+                    $request->input('page', 1),
+                    $request->input('page_fin', 1),
+                    $request->input('per_page', 15),
                     Auth::user()
                 )
             );

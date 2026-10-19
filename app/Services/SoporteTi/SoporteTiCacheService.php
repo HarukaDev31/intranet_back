@@ -143,17 +143,19 @@ class SoporteTiCacheService
      *
      * @param string   $mes  Y-m
      * @param string   $area
+     * @param string   $tab  resumen|detalle|tiempos
      * @param callable $resolver
      * @return array
      */
-    public function rememberIndicadores($mes, $area, callable $resolver)
+    public function rememberIndicadores($mes, $area, $tab, callable $resolver)
     {
         $key = $this->key(sprintf(
-            'kpi:avance:%s:%s:%s:%s',
+            'kpi:avance:%s:%s:%s:%s:%s',
             $this->staffEpoch(),
             $this->catalogEpoch('sla'),
             (string) $mes,
-            md5((string) $area)
+            md5((string) $area),
+            (string) $tab
         ));
 
         return $this->rememberTagged($key, $this->ttlList(), $resolver);
