@@ -39,7 +39,7 @@ class RotuladoOrg1CaracteresTest extends TestCase
     {
         $this->assertTrue(
             RotuladoPdfService::fontInstalled(),
-            'Falta public/assets/fonts/NotoSansSC-Regular.ttf'
+            'Falta la fuente Noto Sans SC'
         );
 
         $service = new RotuladoPdfService();
