@@ -8,6 +8,7 @@
     <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; font-src 'self' https://fonts.gstatic.com data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; script-src 'self' 'unsafe-inline';">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet">
+    <style>{{noto_face}}</style>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rotulado Consolidado</title>
     <style>
@@ -108,9 +109,14 @@
             color: #ffffff;
             text-align: center;
             font-size: 26pt;
-            font-weight: bold;
+            font-weight: normal;
             padding: 8px 8px 10px 8px;
             letter-spacing: 1px;
+        }
+
+        .banner-es {
+            font-family: 'DejaVu Sans', sans-serif;
+            font-weight: bold;
         }
 
         .fields {
@@ -149,6 +155,13 @@
             font-size: 9pt;
             font-weight: bold;
             white-space: nowrap;
+            font-family: 'DejaVu Sans', sans-serif;
+        }
+
+        .zh {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-weight: normal;
+            font-style: normal;
         }
 
         .col-value {
@@ -158,6 +171,8 @@
         }
 
         .item-cn {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-weight: normal;
             font-size: 8.5pt;
             text-align: left;
             padding-left: 12px;
@@ -211,7 +226,7 @@
 
                 <table class="banner" width="100%" cellspacing="0" cellpadding="0">
                     <tr>
-                        <td>{{pais_banner}} {{pais_zh}}</td>
+                        <td><span class="banner-es">{{pais_banner}}</span> <span class="zh">{{pais_zh}}</span></td>
                     </tr>
                 </table>
 
@@ -221,7 +236,7 @@
                             <table class="icon-label" cellspacing="0" cellpadding="0">
                                 <tr>
                                     <td class="icon-cell"><img src="{{icon_company}}" width="16" height="16" alt=""></td>
-                                    <td class="col-label">COMPANY 公司：</td>
+                                    <td class="col-label">COMPANY <span class="zh">公司：</span></td>
                                 </tr>
                             </table>
                         </td>
@@ -232,7 +247,7 @@
                             <table class="icon-label" cellspacing="0" cellpadding="0">
                                 <tr>
                                     <td class="icon-cell"><img src="{{icon_contact}}" width="16" height="16" alt=""></td>
-                                    <td class="col-label">CONTACT 联系人：</td>
+                                    <td class="col-label">CONTACT <span class="zh">联系人：</span></td>
                                 </tr>
                             </table>
                         </td>
@@ -243,7 +258,7 @@
                             <table class="icon-label" cellspacing="0" cellpadding="0">
                                 <tr>
                                     <td class="icon-cell"><img src="{{icon_location}}" width="16" height="16" alt=""></td>
-                                    <td class="col-label">TO 目的国：</td>
+                                    <td class="col-label">TO <span class="zh">目的国：</span></td>
                                 </tr>
                             </table>
                         </td>
@@ -254,18 +269,18 @@
                             <table class="icon-label" cellspacing="0" cellpadding="0">
                                 <tr>
                                     <td class="icon-cell"><img src="{{icon_box}}" width="16" height="16" alt=""></td>
-                                    <td class="col-label">ITEM NRO 货号：</td>
+                                    <td class="col-label">ITEM NRO <span class="zh">货号：</span></td>
                                 </tr>
                             </table>
                         </td>
-                        <td class="col-value item-cn">这里写产品货号（多款式写每款货号和数量）</td>
+                        <td class="col-value item-cn"><span class="zh">这里写产品货号（多款式写每款货号和数量）</span></td>
                     </tr>
                     <tr>
                         <td>
                             <table class="icon-label" cellspacing="0" cellpadding="0">
                                 <tr>
                                     <td class="icon-cell"><img src="{{icon_qty}}" width="16" height="16" alt=""></td>
-                                    <td class="col-label">QTY 装箱数：</td>
+                                    <td class="col-label">QTY <span class="zh">装箱数：</span></td>
                                 </tr>
                             </table>
                         </td>
@@ -276,7 +291,7 @@
                             <table class="icon-label" cellspacing="0" cellpadding="0">
                                 <tr>
                                     <td class="icon-cell"><img src="{{icon_weight}}" width="16" height="16" alt=""></td>
-                                    <td class="col-label">N.W 净重：</td>
+                                    <td class="col-label">N.W <span class="zh">净重：</span></td>
                                 </tr>
                             </table>
                         </td>
@@ -287,7 +302,7 @@
                             <table class="icon-label" cellspacing="0" cellpadding="0">
                                 <tr>
                                     <td class="icon-cell"><img src="{{icon_weight}}" width="16" height="16" alt=""></td>
-                                    <td class="col-label">G.W 毛重：</td>
+                                    <td class="col-label">G.W <span class="zh">毛重：</span></td>
                                 </tr>
                             </table>
                         </td>
@@ -298,7 +313,7 @@
                             <table class="icon-label" cellspacing="0" cellpadding="0">
                                 <tr>
                                     <td class="icon-cell"><img src="{{icon_measure}}" width="16" height="16" alt=""></td>
-                                    <td class="col-label">MEASURE 箱子规格：</td>
+                                    <td class="col-label">MEASURE <span class="zh">箱子规格：</span></td>
                                 </tr>
                             </table>
                         </td>
@@ -309,7 +324,7 @@
                             <table class="icon-label" cellspacing="0" cellpadding="0">
                                 <tr>
                                     <td class="icon-cell"><img src="{{icon_barcode}}" width="16" height="16" alt=""></td>
-                                    <td class="col-label">SUPPLIER CODE 供应商编号：</td>
+                                    <td class="col-label">SUPPLIER CODE <span class="zh">供应商编号：</span></td>
                                 </tr>
                             </table>
                         </td>

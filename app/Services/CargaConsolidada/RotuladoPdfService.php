@@ -100,6 +100,7 @@ class RotuladoPdfService
         $htmlContent = str_replace('{{pais_banner}}', htmlspecialchars($paisBanner, ENT_QUOTES, 'UTF-8'), $htmlContent);
         $htmlContent = str_replace('{{pais_zh}}', htmlspecialchars($this->paisZh($iso2), ENT_QUOTES, 'UTF-8'), $htmlContent);
         $htmlContent = str_replace('{{socio_nombre}}', 'PROBUSINESS', $htmlContent);
+        $htmlContent = str_replace('{{noto_face}}', $this->notoFaceCss(), $htmlContent);
 
         return $this->embedAssets($htmlContent, $iso2, $orgId);
     }
@@ -174,11 +175,60 @@ class RotuladoPdfService
         $options->set('defaultFont', 'DejaVu Sans');
 
         $dompdf = new Dompdf($options);
+        $this->registerNoto($dompdf);
         $dompdf->loadHtml($htmlContent, 'UTF-8');
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
 
         return $dompdf->output();
+    }
+
+    /**
+     * Noto Sans SC en peso normal y bold apuntando al mismo TTF.
+     * DomPDF, si pide negrita y no hay archivo bold, cambia a DejaVu y el chino sale en blanco.
+     *
+     * @return string
+     */
+    private function notoFaceCss()
+    {
+        if (!self::fontInstalled()) {
+            return '';
+        }
+
+        $src = "src:url('" . self::fontFileUrl() . "') format('truetype');";
+
+        return "@font-face{font-family:'Noto Sans SC';font-style:normal;font-weight:400;{$src}}"
+            . "@font-face{font-family:'Noto Sans SC';font-style:normal;font-weight:700;{$src}}";
+    }
+
+    /**
+     * @param Dompdf $dompdf
+     * @return void
+     */
+    private function registerNoto(Dompdf $dompdf)
+    {
+        if (!self::fontInstalled()) {
+            return;
+        }
+
+        $url = self::fontFileUrl();
+        $metrics = $dompdf->getFontMetrics();
+        foreach (array('normal', 'bold') as $weight) {
+            $metrics->registerFont(
+                array('family' => 'Noto Sans SC', 'weight' => $weight, 'style' => 'normal'),
+                $url
+            );
+        }
+    }
+
+    /**
+     * file://C:/... en Windows. file:///C: hace que DomPDF tome "C" como host.
+     *
+     * @return string
+     */
+    public static function fontFileUrl()
+    {
+        return 'file://' . str_replace('\\', '/', self::fontAbsolutePath());
     }
 
     /**
