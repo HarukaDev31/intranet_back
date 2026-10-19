@@ -54,6 +54,7 @@ class Notificacion extends Model
     const MODULO_CALCULADORA_IMPORTACION = 'CalculadoraImportacion';
     const MODULO_ADMINISTRACION = 'Administracion';
     const MODULO_CALENDARIO = 'Calendario';
+    const MODULO_SOPORTE_TI = 'SoporteTi';
 
     // Constantes para tipos
     const TIPO_INFO = 'info';
