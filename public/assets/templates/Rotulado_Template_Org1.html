@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; font-src 'self' https://fonts.gstatic.com data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; script-src 'self' 'unsafe-inline';">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rotulado Consolidado</title>
+    <style>
+        html {
+            margin: 8px;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Noto Sans SC', 'DejaVu Sans', sans-serif;
+            font-size: 11pt;
+            color: #111111;
+        }
+
+        table {
+            border-collapse: collapse;
+        }
+
+        .header-banner {
+            width: 100%;
+            display: block;
+            margin: 0 0 10px 0;
+        }
+
+        .sheet {
+            width: 100%;
+            border: 14px solid #E10613;
+        }
+
+        .head-table td {
+            background: #ffffff;
+            vertical-align: middle;
+        }
+
+        .brand-wrap {
+            padding: 14px 10px 14px 14px;
+            width: 34%;
+        }
+
+        .brand-box {
+            background: #111111;
+            width: 100%;
+        }
+
+        .brand-box td {
+            background: #111111;
+            color: #ffffff;
+            text-align: center;
+            font-family: 'DejaVu Sans', sans-serif;
+            padding: 0;
+        }
+
+        .brand-kicker {
+            font-size: 11pt;
+            font-weight: bold;
+            letter-spacing: 1px;
+            padding: 10px 8px 0 8px;
+        }
+
+        .brand-num {
+            font-size: 32pt;
+            font-weight: bold;
+            line-height: 1;
+            padding: 0 8px 8px 8px;
+        }
+
+        .iso-cell {
+            text-align: center;
+            padding: 6px 8px 8px 8px;
+        }
+
+        .iso-code {
+            font-family: 'DejaVu Sans', sans-serif;
+            font-size: 52pt;
+            font-weight: bold;
+            line-height: 0.85;
+            color: #111111;
+        }
+
+        .socio {
+            font-family: 'DejaVu Sans', sans-serif;
+            font-size: 9pt;
+            font-weight: bold;
+            letter-spacing: 0.6px;
+            color: #111111;
+            padding-top: 2px;
+        }
+
+        .flag-cell {
+            width: 22%;
+            text-align: right;
+            padding: 12px 14px 12px 0;
+        }
+
+        .banner td {
+            background: #E10613;
+            color: #ffffff;
+            text-align: center;
+            font-size: 26pt;
+            font-weight: bold;
+            padding: 8px 8px 10px 8px;
+            letter-spacing: 1px;
+        }
+
+        .fields {
+            width: 100%;
+            background: #ffffff;
+        }
+
+        .fields td {
+            background: #ffffff;
+            border-bottom: 1px solid #C8CDD4;
+            padding: 5px 8px 5px 10px;
+            vertical-align: middle;
+        }
+
+        .icon-label {
+            border-collapse: collapse;
+        }
+
+        .icon-label td {
+            border: 0;
+            padding: 0;
+            vertical-align: middle;
+        }
+
+        .icon-cell {
+            width: 22px;
+            padding: 0 6px 0 0;
+        }
+
+        .icon-cell img {
+            width: 16px;
+            height: 16px;
+        }
+
+        .col-label {
+            font-size: 9pt;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+
+        .col-value {
+            font-size: 9pt;
+            font-weight: normal;
+            text-align: right;
+        }
+
+        .item-cn {
+            font-size: 8.5pt;
+            text-align: left;
+            padding-left: 12px;
+        }
+
+        .blanks {
+            font-family: 'DejaVu Sans', sans-serif;
+            letter-spacing: 1px;
+        }
+
+        .footer td {
+            background: #111111;
+            color: #ffffff;
+            text-align: center;
+            font-family: 'DejaVu Sans', sans-serif;
+            font-size: 18pt;
+            font-weight: bold;
+            letter-spacing: 1px;
+            padding: 10px 8px 12px 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <img src="{{header_image}}" alt="" class="header-banner">
+
+    <table class="sheet" cellspacing="0" cellpadding="0">
+        <tr>
+            <td style="padding: 0;">
+                <table class="head-table" width="100%" cellspacing="0" cellpadding="0">
+                    <tr>
+                        <td class="brand-wrap">
+                            <table class="brand-box" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td class="brand-kicker">CONSOLIDADO</td>
+                                </tr>
+                                <tr>
+                                    <td class="brand-num">#{{carga}}</td>
+                                </tr>
+                            </table>
+                        </td>
+                        <td class="iso-cell">
+                            <div class="iso-code">{{iso_code}}</div>
+                            <div class="socio">SOCIO · {{socio_nombre}}</div>
+                        </td>
+                        <td class="flag-cell">
+                            <img src="{{icon_pais_flag}}" width="86" height="58" alt="" style="border: 2px solid #111111;">
+                        </td>
+                    </tr>
+                </table>
+
+                <table class="banner" width="100%" cellspacing="0" cellpadding="0">
+                    <tr>
+                        <td>{{pais_banner}} {{pais_zh}}</td>
+                    </tr>
+                </table>
+
+                <table class="fields" width="100%" cellspacing="0" cellpadding="0">
+                    <tr>
+                        <td width="46%">
+                            <table class="icon-label" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td class="icon-cell"><img src="{{icon_company}}" width="16" height="16" alt=""></td>
+                                    <td class="col-label">COMPANY 公司：</td>
+                                </tr>
+                            </table>
+                        </td>
+                        <td class="col-value">{{company}}</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <table class="icon-label" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td class="icon-cell"><img src="{{icon_contact}}" width="16" height="16" alt=""></td>
+                                    <td class="col-label">CONTACT 联系人：</td>
+                                </tr>
+                            </table>
+                        </td>
+                        <td class="col-value">{{cliente}}</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <table class="icon-label" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td class="icon-cell"><img src="{{icon_location}}" width="16" height="16" alt=""></td>
+                                    <td class="col-label">TO 目的国：</td>
+                                </tr>
+                            </table>
+                        </td>
+                        <td class="col-value">{{pais_banner}}</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <table class="icon-label" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td class="icon-cell"><img src="{{icon_box}}" width="16" height="16" alt=""></td>
+                                    <td class="col-label">ITEM NRO 货号：</td>
+                                </tr>
+                            </table>
+                        </td>
+                        <td class="col-value item-cn">这里写产品货号（多款式写每款货号和数量）</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <table class="icon-label" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td class="icon-cell"><img src="{{icon_qty}}" width="16" height="16" alt=""></td>
+                                    <td class="col-label">QTY 装箱数：</td>
+                                </tr>
+                            </table>
+                        </td>
+                        <td class="col-value blanks">______ PCS</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <table class="icon-label" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td class="icon-cell"><img src="{{icon_weight}}" width="16" height="16" alt=""></td>
+                                    <td class="col-label">N.W 净重：</td>
+                                </tr>
+                            </table>
+                        </td>
+                        <td class="col-value blanks">______ KGS</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <table class="icon-label" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td class="icon-cell"><img src="{{icon_weight}}" width="16" height="16" alt=""></td>
+                                    <td class="col-label">G.W 毛重：</td>
+                                </tr>
+                            </table>
+                        </td>
+                        <td class="col-value blanks">______ KGS</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <table class="icon-label" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td class="icon-cell"><img src="{{icon_measure}}" width="16" height="16" alt=""></td>
+                                    <td class="col-label">MEASURE 箱子规格：</td>
+                                </tr>
+                            </table>
+                        </td>
+                        <td class="col-value blanks">____ &times; ____ &times; ____ CM</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <table class="icon-label" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td class="icon-cell"><img src="{{icon_barcode}}" width="16" height="16" alt=""></td>
+                                    <td class="col-label">SUPPLIER CODE 供应商编号：</td>
+                                </tr>
+                            </table>
+                        </td>
+                        <td class="col-value">{{supplier_code}}</td>
+                    </tr>
+                </table>
+
+                <table class="footer" width="100%" cellspacing="0" cellpadding="0">
+                    <tr>
+                        <td>HECHO EN CHINA</td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+
+</html>

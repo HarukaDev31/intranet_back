@@ -10,7 +10,8 @@ use Dompdf\Options;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Generación del PDF de rotulado consolidado (plantilla Rotulado_Template.html).
+     * Generación del PDF de rotulado consolidado.
+     * Org 1 usa Rotulado_Template_Org1.html; el resto, Rotulado_Template.html.
  *
  * Usa el mismo enfoque estable de antes (DejaVu + Noto remoto via Google Fonts)
  * y embebe el header completo a resolución original.
@@ -58,7 +59,11 @@ class RotuladoPdfService
      */
     public function buildHtml($cliente, $supplierCode, $carga, array $opts = array())
     {
-        $htmlFilePath = public_path('assets/templates/Rotulado_Template.html');
+        $orgId = isset($opts['organizacion_id']) ? (int) $opts['organizacion_id'] : 0;
+        $esOrg1 = $orgId <= 0 || $orgId === OrganizacionMensajeriaService::ID_ORGANIZACION_ADMIN;
+        $htmlFilePath = public_path($esOrg1
+            ? 'assets/templates/Rotulado_Template_Org1.html'
+            : 'assets/templates/Rotulado_Template.html');
         if (!is_file($htmlFilePath)) {
             throw new \RuntimeException('No se encontró la plantilla de rotulado general');
         }
@@ -80,14 +85,21 @@ class RotuladoPdfService
             ? strtoupper(trim((string) $opts['pais_destino']))
             : 'PERU';
         $iso2 = isset($opts['iso2']) ? strtolower(trim((string) $opts['iso2'])) : 'pe';
+        $iso2 = strtolower(preg_replace('/[^a-z]/', '', $iso2));
+        if (strlen($iso2) !== 2) {
+            $iso2 = 'pe';
+        }
+        $paisBanner = $iso2 === 'pe' ? 'PERÚ' : $paisDestino;
 
         $htmlContent = str_replace('{{cliente}}', htmlspecialchars((string) $cliente, ENT_QUOTES, 'UTF-8'), $htmlContent);
         $htmlContent = str_replace('{{supplier_code}}', htmlspecialchars((string) $supplierCode, ENT_QUOTES, 'UTF-8'), $htmlContent);
         $htmlContent = str_replace('{{carga}}', htmlspecialchars((string) $carga, ENT_QUOTES, 'UTF-8'), $htmlContent);
         $htmlContent = str_replace('{{company}}', htmlspecialchars($company, ENT_QUOTES, 'UTF-8'), $htmlContent);
         $htmlContent = str_replace('{{pais_destino}}', htmlspecialchars($paisDestino, ENT_QUOTES, 'UTF-8'), $htmlContent);
-
-        $orgId = isset($opts['organizacion_id']) ? (int) $opts['organizacion_id'] : 0;
+        $htmlContent = str_replace('{{iso_code}}', htmlspecialchars(strtoupper($iso2), ENT_QUOTES, 'UTF-8'), $htmlContent);
+        $htmlContent = str_replace('{{pais_banner}}', htmlspecialchars($paisBanner, ENT_QUOTES, 'UTF-8'), $htmlContent);
+        $htmlContent = str_replace('{{pais_zh}}', htmlspecialchars($this->paisZh($iso2), ENT_QUOTES, 'UTF-8'), $htmlContent);
+        $htmlContent = str_replace('{{socio_nombre}}', 'PROBUSINESS', $htmlContent);
 
         return $this->embedAssets($htmlContent, $iso2, $orgId);
     }
@@ -330,6 +342,30 @@ class RotuladoPdfService
         $data = file_get_contents($path);
 
         return $data !== false ? 'data:image/png;base64,' . base64_encode($data) : '';
+    }
+
+    /**
+     * Nombre del país en chino para la franja del rótulo de la org 1.
+     *
+     * @param string $iso2
+     * @return string
+     */
+    private function paisZh($iso2)
+    {
+        $nombres = array(
+            'pe' => '秘鲁',
+            'bo' => '玻利维亚',
+            'cl' => '智利',
+            'ec' => '厄瓜多尔',
+            'co' => '哥伦比亚',
+            'mx' => '墨西哥',
+            'ar' => '阿根廷',
+            'br' => '巴西',
+            'uy' => '乌拉圭',
+            'py' => '巴拉圭',
+        );
+
+        return isset($nombres[$iso2]) ? $nombres[$iso2] : '';
     }
 
     /**
