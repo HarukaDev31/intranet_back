@@ -22,6 +22,11 @@ class RotuladoPdfService
 
     public const FONT_RELATIVE_PATH = 'assets/fonts/NotoSansSC-Regular.ttf';
 
+    /**
+     * Copia versionada. public/assets/fonts/*.ttf está en .gitignore.
+     */
+    public const FONT_CACHE_FILE = 'noto_sans_sc_normal_14952c46f80d9c9df18834d87b82870c.ttf';
+
     public const FONT_DOWNLOAD_URL = 'https://cdn.jsdelivr.net/fontsource/fonts/noto-sans-sc@5.2.5/chinese-simplified-400-normal.ttf';
 
     private const HEADER_IMAGE_RELATIVE_PATH = 'assets/templates/ROTULADO_HEADER.png';
@@ -71,6 +76,10 @@ class RotuladoPdfService
         $htmlContent = file_get_contents($htmlFilePath);
         if ($htmlContent === false) {
             throw new \RuntimeException('No se pudo leer la plantilla de rotulado');
+        }
+
+        if (self::fontInstalled()) {
+            $htmlContent = preg_replace('#<link[^>]+fonts\.(googleapis|gstatic)\.com[^>]*>#i', '', $htmlContent);
         }
 
         $encoding = mb_detect_encoding($htmlContent, array('UTF-8', 'ISO-8859-1', 'Windows-1252'), true);
@@ -171,7 +180,9 @@ class RotuladoPdfService
         $options->set('isFontSubsettingEnabled', true);
         $options->set('isRemoteEnabled', true);
         $options->set('isPhpEnabled', true);
-        $options->set('chroot', public_path());
+        $options->set('chroot', array(public_path(), storage_path('fonts')));
+        $options->set('fontDir', storage_path('fonts'));
+        $options->set('fontCache', storage_path('fonts'));
         $options->set('defaultFont', 'DejaVu Sans');
 
         $dompdf = new Dompdf($options);
@@ -191,7 +202,7 @@ class RotuladoPdfService
      */
     private function notoFaceCss()
     {
-        if (!self::fontInstalled()) {
+        if (!self::fontInstalled() || self::usesCommittedFont()) {
             return '';
         }
 
@@ -207,7 +218,7 @@ class RotuladoPdfService
      */
     private function registerNoto(Dompdf $dompdf)
     {
-        if (!self::fontInstalled()) {
+        if (!self::fontInstalled() || self::usesCommittedFont()) {
             return;
         }
 
@@ -236,7 +247,39 @@ class RotuladoPdfService
      */
     public static function fontAbsolutePath()
     {
-        return public_path(self::FONT_RELATIVE_PATH);
+        $public = public_path(self::FONT_RELATIVE_PATH);
+        if (self::fontFileOk($public)) {
+            return $public;
+        }
+
+        $committed = storage_path('fonts/' . self::FONT_CACHE_FILE);
+        if (self::fontFileOk($committed)) {
+            return $committed;
+        }
+
+        return $public;
+    }
+
+    /**
+     * La copia de storage/fonts ya está en installed-fonts.json.
+     *
+     * @return bool
+     */
+    private static function usesCommittedFont()
+    {
+        $path = self::fontAbsolutePath();
+
+        return self::fontFileOk($path)
+            && basename($path) === self::FONT_CACHE_FILE;
+    }
+
+    /**
+     * @param string $path
+     * @return bool
+     */
+    private static function fontFileOk($path)
+    {
+        return is_file($path) && filesize($path) >= self::MIN_FONT_BYTES;
     }
 
     /**
@@ -244,9 +287,7 @@ class RotuladoPdfService
      */
     public static function fontInstalled()
     {
-        $path = self::fontAbsolutePath();
-
-        return is_file($path) && filesize($path) >= self::MIN_FONT_BYTES;
+        return self::fontFileOk(self::fontAbsolutePath());
     }
 
     /**
