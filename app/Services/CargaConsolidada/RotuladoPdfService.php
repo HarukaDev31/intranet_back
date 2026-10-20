@@ -376,7 +376,7 @@ class RotuladoPdfService
      */
     private function headerCssSize($dataUri)
     {
-        $maxW = 600;
+        $maxW = 760;
         $maxH = 635;
         $pxW = 642;
         $pxH = 627;
