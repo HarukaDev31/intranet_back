@@ -3632,9 +3632,10 @@ class CotizacionFinalController extends Controller
     }
 
     /**
-     * Calcula el MAX del % AD VALOREM leyendo directamente la fila 26 de la hoja de cÃ¡lculos ('2').
-     * Es la fuente de la verdad cuando J20 (=MAX('2'!C26:X26)) trae un valor en cachÃ© stale o
-     * cuando alguien sobrescribió manualmente J20/I20 en la hoja 1.
+     * MAX del % AD VALOREM en la fila 26 de la hoja de cálculos ('2').
+     * La última columna de esa fila es =SUM de los productos; el Excel de la hoja 1
+     * usa MAX solo sobre las columnas de producto. Si se incluye el SUM, tres ítems
+     * al 11% se leen como 33%.
      */
     private function boletaFinalGetAdValoremMaxPercentFromCalcSheet(
         \PhpOffice\PhpSpreadsheet\Spreadsheet $spreadsheet
@@ -3653,9 +3654,11 @@ class CotizacionFinalController extends Controller
             $maxPct = 0.0;
             for ($c = 3; $c <= $maxCol; $c++) {
                 $coord = Coordinate::stringFromColumnIndex($c) . $rowAdValoremPercent;
+                $raw = $calcSheet->getCell($coord)->getValue();
+                if (is_string($raw) && strncmp(ltrim($raw), '=', 1) === 0) {
+                    continue;
+                }
                 $val = $calcSheet->getCell($coord)->getCalculatedValue();
-                Log::info('val: ' . $val);
-                Log::info('coord: ' . $coord);
                 if (!is_numeric($val)) {
                     continue;
                 }
