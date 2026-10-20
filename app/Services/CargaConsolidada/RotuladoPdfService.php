@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Log;
 
 /**
      * Generación del PDF de rotulado consolidado.
-     * Org 1 usa Rotulado_Template_Org1.html; el resto, Rotulado_Template.html.
+     * Las orgs 1, 2 y 3 usan Rotulado_Template_Org1.html; el resto, Rotulado_Template.html.
  *
  * Usa el mismo enfoque estable de antes (DejaVu + Noto remoto via Google Fonts)
  * y embebe el header completo a resolución original.
@@ -65,8 +65,8 @@ class RotuladoPdfService
     public function buildHtml($cliente, $supplierCode, $carga, array $opts = array())
     {
         $orgId = isset($opts['organizacion_id']) ? (int) $opts['organizacion_id'] : 0;
-        $esOrg1 = $orgId <= 0 || $orgId === OrganizacionMensajeriaService::ID_ORGANIZACION_ADMIN;
-        $htmlFilePath = public_path($esOrg1
+        $tema = $this->temaTarjeta($orgId);
+        $htmlFilePath = public_path($tema !== null
             ? 'assets/templates/Rotulado_Template_Org1.html'
             : 'assets/templates/Rotulado_Template.html');
         if (!is_file($htmlFilePath)) {
@@ -99,6 +99,21 @@ class RotuladoPdfService
             $iso2 = 'pe';
         }
         $paisBanner = $iso2 === 'pe' ? 'PERÚ' : $paisDestino;
+        $marca = strtoupper($iso2);
+        $marcaSize = '36pt';
+        $socio = 'PROBUSINESS';
+        $sheetColor = '#E10613';
+        if ($tema !== null) {
+            $sheetColor = $tema['color'];
+            $marca = $tema['marca'] !== '' ? $tema['marca'] : $marca;
+            $marcaSize = $tema['marca_size'];
+            $socio = $tema['socio'];
+            if ($tema['iso2'] !== '') {
+                $iso2 = $tema['iso2'];
+                $paisBanner = $tema['banner'];
+                $paisDestino = $tema['banner'];
+            }
+        }
 
         $htmlContent = str_replace('{{cliente}}', htmlspecialchars((string) $cliente, ENT_QUOTES, 'UTF-8'), $htmlContent);
         $htmlContent = str_replace('{{supplier_code}}', htmlspecialchars((string) $supplierCode, ENT_QUOTES, 'UTF-8'), $htmlContent);
@@ -106,9 +121,12 @@ class RotuladoPdfService
         $htmlContent = str_replace('{{company}}', htmlspecialchars($company, ENT_QUOTES, 'UTF-8'), $htmlContent);
         $htmlContent = str_replace('{{pais_destino}}', htmlspecialchars($paisDestino, ENT_QUOTES, 'UTF-8'), $htmlContent);
         $htmlContent = str_replace('{{iso_code}}', htmlspecialchars(strtoupper($iso2), ENT_QUOTES, 'UTF-8'), $htmlContent);
+        $htmlContent = str_replace('{{marca}}', htmlspecialchars($marca, ENT_QUOTES, 'UTF-8'), $htmlContent);
+        $htmlContent = str_replace('{{marca_size}}', $marcaSize, $htmlContent);
+        $htmlContent = str_replace('{{sheet_color}}', $sheetColor, $htmlContent);
         $htmlContent = str_replace('{{pais_banner}}', htmlspecialchars($paisBanner, ENT_QUOTES, 'UTF-8'), $htmlContent);
         $htmlContent = str_replace('{{pais_zh}}', htmlspecialchars($this->paisZh($iso2), ENT_QUOTES, 'UTF-8'), $htmlContent);
-        $htmlContent = str_replace('{{socio_nombre}}', 'PROBUSINESS', $htmlContent);
+        $htmlContent = str_replace('{{socio_nombre}}', htmlspecialchars($socio, ENT_QUOTES, 'UTF-8'), $htmlContent);
         $htmlContent = str_replace('{{noto_face}}', $this->notoFaceCss(), $htmlContent);
 
         return $this->embedAssets($htmlContent, $iso2, $orgId);
@@ -339,10 +357,43 @@ class RotuladoPdfService
             }
         }
 
+        $size = $this->headerCssSize($headerImageSrc);
+
         $htmlContent = str_replace('{{header_image}}', $headerImageSrc, $htmlContent);
+        $htmlContent = str_replace('{{header_width}}', (string) $size[0], $htmlContent);
+        $htmlContent = str_replace('{{header_height}}', (string) $size[1], $htmlContent);
         $htmlContent = str_replace('{{base_url}}/assets/templates/ROTULADO_HEADER.png', $headerImageSrc, $htmlContent);
 
         return $htmlContent;
+    }
+
+    /**
+     * Escala la cabecera para que, junto con la etiqueta, quepa en una hoja A4.
+     * Los atributos width/height de DomPDF van en pixeles CSS (96 dpi).
+     *
+     * @param string $dataUri
+     * @return array{0:int,1:int}
+     */
+    private function headerCssSize($dataUri)
+    {
+        $maxW = 860;
+        $maxH = 635;
+        $pxW = 642;
+        $pxH = 627;
+        $comma = strpos((string) $dataUri, 'base64,');
+        if ($comma !== false) {
+            $binary = base64_decode(substr($dataUri, $comma + 7), true);
+            if ($binary !== false) {
+                $info = @getimagesizefromstring($binary);
+                if (is_array($info) && $info[0] > 0 && $info[1] > 0) {
+                    $pxW = (int) $info[0];
+                    $pxH = (int) $info[1];
+                }
+            }
+        }
+        $scale = min($maxW / $pxW, $maxH / $pxH);
+
+        return array((int) round($pxW * $scale), (int) round($pxH * $scale));
     }
 
     /**
@@ -460,6 +511,49 @@ class RotuladoPdfService
     }
 
     /**
+     * Tarjeta del paso 3. Org 1 roja, org 2 azul (Ecuador / David), org 3 verde (Bolivia / Genuino).
+     * null = plantilla anterior, para el resto de socios.
+     *
+     * @param int $orgId
+     * @return array{color:string,marca:string,marca_size:string,socio:string,iso2:string,banner:string}|null
+     */
+    private function temaTarjeta($orgId)
+    {
+        if ($orgId <= 0 || $orgId === OrganizacionMensajeriaService::ID_ORGANIZACION_ADMIN) {
+            return array(
+                'color' => '#E10613',
+                'marca' => '',
+                'marca_size' => '50pt',
+                'socio' => 'PROBUSINESS',
+                'iso2' => '',
+                'banner' => '',
+            );
+        }
+        if ($orgId === 2) {
+            return array(
+                'color' => '#0455C3',
+                'marca' => 'ECU-DAV',
+                'marca_size' => '32pt',
+                'socio' => 'DAVID',
+                'iso2' => 'ec',
+                'banner' => 'ECUADOR',
+            );
+        }
+        if ($orgId === 3) {
+            return array(
+                'color' => '#00AA4E',
+                'marca' => 'BOG',
+                'marca_size' => '50pt',
+                'socio' => 'GENUINO',
+                'iso2' => 'bo',
+                'banner' => 'BOLIVIA',
+            );
+        }
+
+        return null;
+    }
+
+    /**
      * Bandera PNG (flagcdn) embebida. Fallback a peru_flag.png.
      *
      * @param string $iso2
@@ -473,6 +567,16 @@ class RotuladoPdfService
         }
         if ($iso2 === 'pe') {
             return $this->pngDataUri('peru_flag.png');
+        }
+        $locales = array(
+            'ec' => 'ecuador_flag.png',
+            'bo' => 'bolivia_flag.png',
+        );
+        if (isset($locales[$iso2])) {
+            $local = $this->pngDataUri($locales[$iso2]);
+            if ($local !== '') {
+                return $local;
+            }
         }
 
         $cacheDir = storage_path('app/rotulado_flags');

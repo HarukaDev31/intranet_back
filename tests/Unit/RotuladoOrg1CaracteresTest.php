@@ -52,10 +52,47 @@ class RotuladoOrg1CaracteresTest extends TestCase
         $pdf = $service->renderPdf($html);
 
         $this->assertStringContainsString('NotoSansSC', $pdf);
+        $this->assertSame(1, $this->paginasDelPdf($pdf), 'La cabecera y la etiqueta deben entrar en una hoja');
         $text = $this->textoDelPdf($pdf);
         foreach ($this->frases() as $frase) {
             $this->assertTrue(mb_strpos($text, $frase) !== false, 'Falta en el PDF: ' . $frase);
         }
+    }
+
+    public function test_org2_y_org3_usan_la_tarjeta_de_su_pais()
+    {
+        $service = new RotuladoPdfService();
+
+        $ecuador = $service->buildHtml('CONTACTO', 'COD-1', '11', array(
+            'organizacion_id' => 2,
+            'company' => 'DAVID SAC',
+            'pais_destino' => 'PERU',
+            'iso2' => 'pe',
+        ));
+        $this->assertStringContainsString('ECU-DAV', $ecuador);
+        $this->assertStringContainsString('SOCIO', $ecuador);
+        $this->assertStringContainsString('DAVID', $ecuador);
+        $this->assertStringContainsString('#0455C3', $ecuador);
+        $this->assertStringContainsString('ECUADOR', $ecuador);
+        $this->assertStringContainsString('厄瓜多尔', $ecuador);
+
+        $bolivia = $service->buildHtml('CONTACTO', 'COD-1', '11', array(
+            'organizacion_id' => 3,
+            'company' => 'GENUINO SAC',
+            'pais_destino' => 'PERU',
+            'iso2' => 'pe',
+        ));
+        $this->assertStringContainsString('>BOG<', $bolivia);
+        $this->assertStringContainsString('GENUINO', $bolivia);
+        $this->assertStringContainsString('#00AA4E', $bolivia);
+        $this->assertStringContainsString('BOLIVIA', $bolivia);
+        $this->assertStringContainsString('玻利维亚', $bolivia);
+
+        $otra = $service->buildHtml('CONTACTO', 'COD-1', '11', array(
+            'organizacion_id' => 4,
+        ));
+        $this->assertStringNotContainsString('ECU-DAV', $otra);
+        $this->assertStringNotContainsString('{{sheet_color}}', $otra);
     }
 
     /**
@@ -118,5 +155,16 @@ class RotuladoOrg1CaracteresTest extends TestCase
         }
 
         return $text;
+    }
+
+    /**
+     * @param string $pdf
+     * @return int
+     */
+    private function paginasDelPdf($pdf)
+    {
+        preg_match_all('/\/Type\s*\/Page(?!s)/', $pdf, $pages);
+
+        return count($pages[0]);
     }
 }
