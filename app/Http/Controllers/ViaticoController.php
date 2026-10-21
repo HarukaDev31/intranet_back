@@ -456,21 +456,26 @@ class ViaticoController extends Controller
                         'creado_por' => $usuarioAdministracion->ID_Usuario,
                     ]);
 
-                    // Un viático puede tener varias retribuciones; enviamos 1 WhatsApp por cada retribución nueva (job actualiza sended_at)
-                    if ($nuevaRetribucion && $userPhone) {
-                        $messageWhatsapp = "Administración ha efectuado el depósito de tu reintegro de viáticos por el monto de S/.{$viatico->total_amount} ";
-                        SendViaticoWhatsappNotificationJob::dispatch(
-                            $messageWhatsapp,
-                            $usuarioCreador->ID_Usuario,
-                            $nuevaRetribucion->file_path,
-                            $userPhone,
-                            $nuevaRetribucion->id
-                        )->afterResponse();
-                    }
-
                     ViaticoActualizado::dispatch($viatico, $usuarioAdministracion, $usuarioCreador, $message);
                 } catch (\Exception $e) {
                     Log::error('Error al crear notificación o disparar evento ViaticoActualizado: ' . $e->getMessage());
+                }
+            }
+
+            // Un viático puede tener varias retribuciones; enviamos 1 WhatsApp por cada retribución nueva (job actualiza sended_at).
+            // Se envía también cuando Administración paga su propio viático (fuera del filtro creador !== administración).
+            if ($usuarioCreador && $nuevaRetribucion && $userPhone) {
+                try {
+                    $messageWhatsapp = "Administración ha efectuado el depósito de tu reintegro de viáticos por el monto de S/.{$viatico->total_amount} ";
+                    SendViaticoWhatsappNotificationJob::dispatch(
+                        $messageWhatsapp,
+                        $usuarioCreador->ID_Usuario,
+                        $nuevaRetribucion->file_path,
+                        $userPhone,
+                        $nuevaRetribucion->id
+                    )->afterResponse();
+                } catch (\Exception $e) {
+                    Log::error('Error al despachar WhatsApp de reintegro de viático: ' . $e->getMessage());
                 }
             }
 
