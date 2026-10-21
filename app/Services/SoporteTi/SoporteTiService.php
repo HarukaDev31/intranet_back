@@ -2749,6 +2749,45 @@ class SoporteTiService
     }
 
     /**
+     * Elimina un mensaje del chat (y su evidencia asociada). Solo staff de Soporte TI o el autor del mensaje.
+     *
+     * @param string $chatUuid
+     * @param int    $mensajeId
+     * @param Authenticatable|null $user
+     * @return array
+     */
+    public function eliminarMensaje($chatUuid, $mensajeId, ?Authenticatable $user = null)
+    {
+        $user = $user ?: Auth::user();
+        $sala = SoporteTiChatSala::where('chat_uuid', $chatUuid)->with('solicitud')->firstOrFail();
+        if (!$sala->solicitud) {
+            throw new \RuntimeException('Solicitud no encontrada');
+        }
+        $this->asegurarAccesoSolicitudModel($sala->solicitud, $user);
+
+        $mensaje = SoporteTiMensaje::where('sala_id', $sala->id)
+            ->where('id', (int) $mensajeId)
+            ->where('es_sistema', false)
+            ->firstOrFail();
+
+        $uid = $this->authUserId($user);
+        if (!$this->usuarioEsStaffSoporteTi($user) && (int) $mensaje->usuario_id !== (int) $uid) {
+            throw new AuthorizationException('Solo el staff de Soporte TI o el autor pueden eliminar el mensaje');
+        }
+
+        DB::transaction(function () use ($sala, $mensaje) {
+            SoporteTiSolicitudEvidencia::where('solicitud_id', (int) $sala->solicitud->id)
+                ->where('mensaje_id', (int) $mensaje->id)
+                ->delete();
+            $mensaje->delete();
+        });
+
+        $this->cache->invalidateAfterMensajeWrite($sala->solicitud, $sala->chat_uuid);
+
+        return array('id' => (int) $mensajeId);
+    }
+
+    /**
      * @param int $salaId
      * @return int
      */
