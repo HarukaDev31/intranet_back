@@ -43,6 +43,7 @@ Route::group(['prefix' => 'panel-acceso', 'middleware' => 'jwt.auth'], function 
     Route::post('organizaciones', [OrganizacionAdminController::class, 'store']);
     Route::match(['put', 'patch', 'post'], 'organizaciones/{id}', [OrganizacionAdminController::class, 'update']);
     Route::post('organizaciones/{id}/rotulado-imagen', [OrganizacionAdminController::class, 'uploadRotuladoImagen']);
+    Route::get('organizaciones/{id}/rotulado-prueba', [OrganizacionAdminController::class, 'descargarRotuladoPrueba']);
     Route::delete('organizaciones/{id}', [OrganizacionAdminController::class, 'destroy']);
 
     // -----------------------------------------------------------------------

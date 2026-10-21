@@ -4,6 +4,7 @@ namespace App\Services\CargaConsolidada;
 
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\Organizacion;
 use App\Services\Organizacion\OrganizacionMensajeriaService;
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -183,6 +184,45 @@ class RotuladoPdfService
         }
 
         return $opts;
+    }
+
+    /**
+     * PDF de prueba de una organización. Usa la cabecera subida en panel-acceso
+     * (slot paso1); si no hay, queda la de plantilla.
+     *
+     * @param int $orgId
+     * @return string PDF binario
+     */
+    public function renderPrueba($orgId)
+    {
+        $orgId = (int) $orgId;
+        $mensajeria = app(OrganizacionMensajeriaService::class);
+        $company = trim($mensajeria->companyRotulado($orgId));
+        if ($company === '') {
+            $company = 'PRO MUNDO COMEX S.A.C';
+        }
+
+        $opts = array(
+            'company' => $company,
+            'pais_destino' => 'PERU',
+            'iso2' => 'pe',
+            'organizacion_id' => $orgId,
+        );
+
+        $org = Organizacion::query()->find($orgId);
+        if ($org && $orgId !== OrganizacionMensajeriaService::ID_ORGANIZACION_ADMIN) {
+            $pais = $mensajeria->paisDesdeContenedor($org);
+            if ($pais['nombre'] !== '') {
+                $opts['pais_destino'] = $pais['nombre'];
+            }
+            if ($pais['iso2'] !== '') {
+                $opts['iso2'] = $pais['iso2'];
+            }
+        }
+
+        $html = $this->buildHtml('Cliente de prueba', 'PRUEBA-1', '11', $opts);
+
+        return $this->renderPdf($html);
     }
 
     /**
