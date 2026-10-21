@@ -7,6 +7,7 @@ use App\Events\SoporteTi\SoporteTiSolicitudCreada;
 use App\Events\UsuarioDatosFacturacionImportFinished;
 use App\Listeners\CreateContabilidadNotificationForUsuarioDatosFacturacionImportFinished;
 use App\Listeners\SoporteTi\CrearNotificacionSolicitudCreada;
+use App\Listeners\SoporteTi\DispararAgenteSoporteTi;
 use App\Listeners\SoporteTi\NotificarPushMensajeSoporteTi;
 use App\Listeners\SoporteTi\NotificarPushSolicitudCreada;
 use Illuminate\Auth\Events\Registered;
@@ -34,6 +35,7 @@ class EventServiceProvider extends ServiceProvider
         SoporteTiSolicitudCreada::class => [
             CrearNotificacionSolicitudCreada::class,
             NotificarPushSolicitudCreada::class,
+            DispararAgenteSoporteTi::class,
         ],
     ];
 
