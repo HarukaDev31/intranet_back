@@ -1633,6 +1633,18 @@ parameters:
 			path: app/Http/Controllers/BaseDatos/Regulaciones/PermisoController.php
 
 		-
+			message: '#^Access to an undefined property App\\Models\\Usuario\:\:\$grupo\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Http/Controllers/Broadcasting/BroadcastController.php
+
+		-
+			message: '#^Method App\\Http\\Controllers\\Broadcasting\\BroadcastController\:\:authenticate\(\) should return Illuminate\\Http\\Response but returns Illuminate\\Http\\JsonResponse\.$#'
+			identifier: return.type
+			count: 22
+			path: app/Http/Controllers/Broadcasting/BroadcastController.php
+
+		-
 			message: '#^Access to an undefined property App\\Models\\CalculadoraImportacion\:\:\$carga_contenedor\.$#'
 			identifier: property.notFound
 			count: 2

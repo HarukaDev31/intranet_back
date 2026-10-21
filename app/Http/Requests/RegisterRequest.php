@@ -122,7 +122,6 @@ class RegisterRequest extends FormRequest
             'distrito_id.exists' => 'El distrito seleccionado no es válido',
         ];
     }
-
     protected function failedValidation(Validator $validator)
     {
         throw new HttpResponseException(response()->json([
