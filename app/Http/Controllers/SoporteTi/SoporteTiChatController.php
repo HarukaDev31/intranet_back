@@ -99,6 +99,25 @@ class SoporteTiChatController extends Controller
         }
     }
 
+    public function eliminarMensaje($chatUuid, $mensajeId)
+    {
+        try {
+            $data = $this->service->eliminarMensaje($chatUuid, (int) $mensajeId, Auth::user());
+
+            return response()->json(array(
+                'success' => true,
+                'data' => $data,
+            ));
+        } catch (AuthorizationException $e) {
+            return response()->json(
+                array('success' => false, 'message' => $e->getMessage() ?: 'No autorizado'),
+                403
+            );
+        } catch (\Exception $e) {
+            return response()->json(array('success' => false, 'message' => $e->getMessage()), 404);
+        }
+    }
+
     public function infoMensaje($chatUuid, $mensajeId)
     {
         try {
