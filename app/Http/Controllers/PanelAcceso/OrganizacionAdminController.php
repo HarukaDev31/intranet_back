@@ -7,6 +7,7 @@ use App\Models\Organizacion;
 use App\Models\OrganizacionPortal;
 use App\Models\Pais;
 use App\Models\PaisFlag;
+use App\Services\CargaConsolidada\RotuladoPdfService;
 use App\Services\Organizacion\OrganizacionMensajeriaService;
 use App\Support\Organizacion\OrganizacionPaisesHabilitados;
 use App\Support\Organizacion\OrganizacionPortalUrls;
@@ -340,6 +341,37 @@ class OrganizacionAdminController extends Controller
         } catch (\Exception $e) {
             Log::error('OrganizacionAdminController@uploadRotuladoImagen: ' . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Error al subir la imagen'], 500);
+        }
+    }
+
+    /**
+     * GET /api/panel-acceso/organizaciones/{id}/rotulado-prueba
+     * PDF de muestra con la cabecera subida en este apartado.
+     */
+    public function descargarRotuladoPrueba($id)
+    {
+        if ($denegado = $this->autorizarAdmin()) {
+            return $denegado;
+        }
+
+        try {
+            $organizacion = Organizacion::find($id);
+            if (!$organizacion) {
+                return response()->json(['success' => false, 'message' => 'Organización no encontrada'], 404);
+            }
+
+            $pdf = app(RotuladoPdfService::class)->renderPrueba((int) $organizacion->getAttribute('ID_Organizacion'));
+            $slug = preg_replace('/[^A-Za-z0-9_-]+/', '_', (string) $organizacion->getAttribute('No_Organizacion'));
+            $nombre = 'Rotulado_prueba_' . ($slug !== '' ? $slug : $id) . '.pdf';
+
+            return response($pdf, 200, array(
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="' . $nombre . '"',
+            ));
+        } catch (\Exception $e) {
+            Log::error('OrganizacionAdminController@descargarRotuladoPrueba: ' . $e->getMessage());
+
+            return response()->json(['success' => false, 'message' => 'No se pudo generar el rotulado de prueba'], 500);
         }
     }
 
