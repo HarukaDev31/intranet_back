@@ -32,7 +32,7 @@ class SeedPaisesFaltantesConPhoneCode extends Migration
                 }
             }
             if ($idPais === null) {
-                $idPais = (int) DB::table('pais')->insertGetId(['No_Pais' => $data['nombre']], 'ID_Pais');
+                $idPais = (int) DB::table('pais')->insertGetId($this->filaPais($data['nombre']), 'ID_Pais');
             }
 
             $flag = DB::table('pais_flags')->where('id_pais', $idPais)->first();
@@ -64,6 +64,37 @@ class SeedPaisesFaltantesConPhoneCode extends Migration
         } catch (\Throwable $e) {
             // la caché expira sola (7 días); no bloquea la migración
         }
+    }
+
+    /**
+     * pais tiene columnas NOT NULL sin default (ej. Nu_Codigo_Sunat_Pais): se rellenan con un valor neutro.
+     *
+     * @return array<string, mixed>
+     */
+    private function filaPais($nombre)
+    {
+        $fila = ['No_Pais' => $nombre];
+        $cols = DB::select(
+            "SELECT COLUMN_NAME AS nombre, DATA_TYPE AS tipo FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pais'
+             AND IS_NULLABLE = 'NO' AND COLUMN_DEFAULT IS NULL AND EXTRA NOT LIKE '%auto_increment%'"
+        );
+        foreach ($cols as $col) {
+            if ($col->nombre === 'No_Pais' || isset($fila[$col->nombre])) {
+                continue;
+            }
+            if (in_array($col->tipo, ['datetime', 'timestamp'], true)) {
+                $fila[$col->nombre] = date('Y-m-d H:i:s');
+            } elseif ($col->tipo === 'date') {
+                $fila[$col->nombre] = date('Y-m-d');
+            } elseif (in_array($col->tipo, ['char', 'varchar', 'text', 'tinytext', 'mediumtext', 'longtext'], true)) {
+                $fila[$col->nombre] = '';
+            } else {
+                $fila[$col->nombre] = 0;
+            }
+        }
+
+        return $fila;
     }
 
     public function down()
