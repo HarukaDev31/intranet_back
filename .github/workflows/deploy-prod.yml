@@ -118,7 +118,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${TOKEN}" ] || [ -z "${FIRE_URL}" ]; then
-            echo "Sin SOPORTE_TI_AGENTE_TOKEN / SOPORTE_TI_AGENTE_FIRE_URL: no se avisa al agente."
+            echo "::warning title=Agente soporte::Falta vars.SOPORTE_TI_AGENTE_FIRE_URL ($([ -n "${FIRE_URL}" ] && echo ok || echo FALTA)) o secrets.SOPORTE_TI_AGENTE_TOKEN ($([ -n "${TOKEN}" ] && echo ok || echo FALTA)): no se avisó al agente."
             exit 0
           fi
 
@@ -130,15 +130,22 @@ jobs:
             | grep -oE '(INC|CFG)-[0-9]{2}-[0-9]{4}' | sort -u | paste -sd, - || true)"
 
           if [ -z "${CODIGOS}" ]; then
-            echo "Ningún ticket de soporte en este deploy."
+            echo "::notice title=Agente soporte::Ningún ticket INC-/CFG- en este deploy."
             exit 0
           fi
 
           echo "Tickets desplegados: ${CODIGOS}"
           jq -n --arg t "Deploy PROD OK repo=intranet_back sha=${GITHUB_SHA} tickets=${CODIGOS}" '{text: $t}' \
-            | curl -fsS -X POST "${FIRE_URL}" \
+            | curl -sS -X POST "${FIRE_URL}" \
                 -H "Authorization: Bearer ${TOKEN}" \
                 -H "anthropic-beta: experimental-cc-routine-2026-04-01" \
                 -H "anthropic-version: 2023-06-01" \
                 -H "Content-Type: application/json" \
-                -d @- > /dev/null
+                -d @- -o /tmp/fire.json -w "%{http_code}" > /tmp/fire.code || true
+          CODE="$(cat /tmp/fire.code 2>/dev/null || echo 000)"
+          if [ "${CODE}" = "200" ]; then
+            echo "::notice title=Agente soporte::Agente avisado (${CODIGOS}). Sesión: $(jq -r '.claude_code_session_url // "?"' /tmp/fire.json)"
+          else
+            echo "::error title=Agente soporte::El agente rechazó el aviso (HTTP ${CODE}) para ${CODIGOS}. Revisa el token."
+            exit 1
+          fi
