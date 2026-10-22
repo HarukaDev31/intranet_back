@@ -1270,9 +1270,10 @@ class SoporteTiService
         }
 
         $activosTotal = $this->calcularSegundosSlaActivosDesdeHistorial($solicitud);
-        $necesitaSync = (int) $solicitud->sla_segundos_acumulados === 0
-            && $solicitud->sla_reanudado_en === null
-            && $activosTotal > 0;
+        $necesitaSync = self::slaContadorDesfasado(
+            $this->segundosSlaTranscurridosRaw($solicitud),
+            $activosTotal
+        );
 
         if (!$necesitaSync) {
             return;
@@ -1283,7 +1284,7 @@ class SoporteTiService
         if (in_array($codigo, self::ESTADOS_SLA_CORRE, true)) {
             $inicioSegmento = $this->obtenerInicioSegmentoSlaActual($solicitud);
             if ($inicioSegmento) {
-                $enSegmento = max(0, Carbon::now()->getTimestamp() - $inicioSegmento->getTimestamp());
+                $enSegmento = $this->bhHelper()->segundosHabilesEntre($inicioSegmento, Carbon::now());
                 $solicitud->sla_segundos_acumulados = max(0, $activosTotal - $enSegmento);
                 $solicitud->sla_reanudado_en = $inicioSegmento;
             } else {
@@ -1296,6 +1297,20 @@ class SoporteTiService
 
         $this->persistirHorasTranscurridasSla($solicitud);
         $solicitud->save();
+    }
+
+    /**
+     * El contador quedó por debajo de lo que dice el historial (p. ej. el ticket pasó por
+     * En progreso/Hecho antes de tener complejidad y luego se abrió un segmento nuevo con
+     * acumulado 0): hay que reconstruir para no perder el tiempo ya consumido.
+     *
+     * @param int $segundosContador Acumulado + segmento abierto.
+     * @param int $segundosHistorial Segundos hábiles en estados donde el SLA corre.
+     * @return bool
+     */
+    public static function slaContadorDesfasado($segundosContador, $segundosHistorial)
+    {
+        return (int) $segundosHistorial - (int) $segundosContador > 300;
     }
 
     /**
