@@ -220,6 +220,20 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
         return $this->legacyAppStorageUrl($storagePath);
     }
 
+    public function cdnUrlSinVerificar(string $relativePath): ?string
+    {
+        if (!$this->shouldServeViaCdn()) {
+            return null;
+        }
+
+        $lookupPath = $this->resolveInputForLookup($relativePath);
+        if ($lookupPath === null) {
+            return null;
+        }
+
+        return $this->buildCdnUrl($lookupPath);
+    }
+
     public function temporaryUrl(string $relativePath, ?int $minutes = null): string
     {
         $lookupPath = $this->resolveInputForLookup($relativePath);
