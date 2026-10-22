@@ -543,6 +543,22 @@ class CustomersHeadersService
     }
 
     /**
+     * Sublíneas "60 CBM" / "65 CBM" con la fecha proyectada, para el header CBM China.
+     *
+     * @param int $idContenedor
+     * @return array<int, array<string, string>>
+     */
+    public function sublineasProyeccionCbm($idContenedor)
+    {
+        $proy = $this->fechasProyeccionCbm($idContenedor);
+
+        return [
+            ['label' => '60 CBM', 'value' => $this->headerFechaCbm(60, $proy['fecha_60'])['value']],
+            ['label' => '65 CBM', 'value' => $this->headerFechaCbm(65, $proy['fecha_65'])['value']],
+        ];
+    }
+
+    /**
      * @param int $umbral
      * @param string|null $fechaIso
      * @return array<string, string>

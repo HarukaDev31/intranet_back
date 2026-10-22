@@ -831,6 +831,14 @@ class CotizacionController extends Controller
             ],
         ];
 
+        // Org 3 (Bolivia): proyección 60/65 CBM por Arrive Date China, igual que el header de almacén.
+        if ($contenedor && (int) $contenedor->getAttribute('organizacion_id') === 3) {
+            $data['cbm_total_china']['sublines'] = array_merge(
+                [['label' => 'CBM ' . $paisFlags['nombre_destino'], 'value' => $data['cbm_total_peru']['value']]],
+                app(CustomersHeadersService::class)->sublineasProyeccionCbm((int) $contenedor->getAttribute('id'))
+            );
+        }
+
         // Bolivia: sin ISD; Fob, Comisión, Logística (USD) e Impuestos, Despacho, Genuino (Bs).
         if ($contenedor && ResumenFormato::esBolivia(ResumenFormato::deOrganizacion($contenedor->getAttribute('organizacion_id')))) {
             $cols = $this->columnasBoliviaContenedor((int) $contenedor->getAttribute('id'));
