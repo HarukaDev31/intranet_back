@@ -3651,7 +3651,7 @@ class SoporteTiService
 
     /**
      * URL de una evidencia del listado. Resolverla consulta el almacenamiento (exists por disco),
-     * así que se cachea por ruta: las firmadas duran 120 min y se guardan 30; las no encontradas, 5.
+     * así que se cachea por ruta: las firmadas duran 120 min y se guardan 90; las no encontradas, 5.
      *
      * @param string|null $ruta
      * @return string|null
@@ -3669,7 +3669,7 @@ class SoporteTiService
         }
 
         $url = $this->generateImageUrl($ruta);
-        Cache::put($key, $url !== null ? $url : '', $url !== null ? 1800 : 300);
+        Cache::put($key, $url !== null ? $url : '', $url !== null ? 5400 : 300);
 
         return $url;
     }
