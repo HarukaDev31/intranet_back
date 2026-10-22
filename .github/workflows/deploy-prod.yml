@@ -112,13 +112,13 @@ jobs:
 
       - name: Disparar agente con los tickets desplegados
         env:
-          FIRE_URL: ${{ vars.SOPORTE_TI_AGENTE_FIRE_URL }}
+          FIRE_URL: ${{ vars.SOPORTE_TI_AGENTE_FIRE_URL || secrets.SOPORTE_TI_AGENTE_FIRE_URL }}
           TOKEN: ${{ secrets.SOPORTE_TI_AGENTE_TOKEN }}
           BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
           if [ -z "${TOKEN}" ] || [ -z "${FIRE_URL}" ]; then
-            echo "::warning title=Agente soporte::Falta vars.SOPORTE_TI_AGENTE_FIRE_URL ($([ -n "${FIRE_URL}" ] && echo ok || echo FALTA)) o secrets.SOPORTE_TI_AGENTE_TOKEN ($([ -n "${TOKEN}" ] && echo ok || echo FALTA)): no se avisó al agente."
+            echo "::warning title=Agente soporte::Falta SOPORTE_TI_AGENTE_FIRE_URL (variable o secret) ($([ -n "${FIRE_URL}" ] && echo ok || echo FALTA)) o secrets.SOPORTE_TI_AGENTE_TOKEN ($([ -n "${TOKEN}" ] && echo ok || echo FALTA)): no se avisó al agente."
             exit 0
           fi
 
