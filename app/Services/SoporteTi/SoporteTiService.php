@@ -31,6 +31,7 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Contracts\ObjectStorageConnectorInterface;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -3650,7 +3651,7 @@ class SoporteTiService
     }
 
     /**
-     * URL de una evidencia del listado. Resolverla consulta el almacenamiento (exists por disco),
+     * URL de una evidencia del listado. Sin CDN, resolverla consulta el almacenamiento (exists por disco),
      * así que se cachea por ruta: las firmadas duran 120 min y se guardan 90; las no encontradas, 5.
      *
      * @param string|null $ruta
@@ -3660,6 +3661,12 @@ class SoporteTiService
     {
         if (empty($ruta)) {
             return null;
+        }
+
+        // Con CDN la URL se arma con la ruta, sin consultar el almacenamiento.
+        $cdn = app(ObjectStorageConnectorInterface::class)->cdnUrlSinVerificar((string) $ruta);
+        if ($cdn !== null) {
+            return $cdn;
         }
 
         $key = 'soporte_ti:evidencia_url:' . md5((string) $ruta);

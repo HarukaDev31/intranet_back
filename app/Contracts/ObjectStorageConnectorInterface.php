@@ -34,6 +34,12 @@ interface ObjectStorageConnectorInterface
      */
     public function url(string $relativePath): ?string;
 
+    /**
+     * URL del CDN armada solo con la ruta, sin consultar si el archivo existe.
+     * Devuelve null si el CDN no está disponible (el llamador debe usar url()).
+     */
+    public function cdnUrlSinVerificar(string $relativePath): ?string;
+
     public function temporaryUrl(string $relativePath, ?int $minutes = null): string;
 
     /**
