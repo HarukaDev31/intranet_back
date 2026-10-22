@@ -31,6 +31,8 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Contracts\ObjectStorageConnectorInterface;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -72,6 +74,13 @@ class SoporteTiService
     /** @var SoporteTiCacheService */
     protected $cache;
 
+    /**
+     * Memo de consultas repetidas por fila; solo existe mientras se arma el listado (null fuera de él).
+     *
+     * @var array<string, mixed>|null
+     */
+    protected $memoListado = null;
+
     public function __construct(SoporteTiCacheService $cache = null)
     {
         $this->cache = $cache ?: app(SoporteTiCacheService::class);
@@ -90,6 +99,14 @@ class SoporteTiService
      */
     protected function tipoASla()
     {
+        if ($this->memoListado !== null) {
+            if (!isset($this->memoListado['helper_tipo_a'])) {
+                $this->memoListado['helper_tipo_a'] = (new SoporteTiTipoASlaHelper())->activarMemo();
+            }
+
+            return $this->memoListado['helper_tipo_a'];
+        }
+
         return new SoporteTiTipoASlaHelper();
     }
 
@@ -250,15 +267,52 @@ class SoporteTiService
 
             $rows = $query->get();
             $resumen = $this->resumenListadoSolicitudes($rows);
-            $solicitudes = $rows->map(function (SoporteTiSolicitud $s) use ($authUser) {
-                return $this->mapSolicitud($s, $authUser);
-            })->values()->all();
+
+            $this->memoListado = array();
+            try {
+                $this->precargarInicioEnProgreso($rows);
+                $solicitudes = $rows->map(function (SoporteTiSolicitud $s) use ($authUser) {
+                    return $this->mapSolicitud($s, $authUser);
+                })->values()->all();
+            } finally {
+                $this->memoListado = null;
+            }
 
             return array(
                 'solicitudes' => $solicitudes,
                 'resumen' => $resumen,
             );
         });
+    }
+
+    /**
+     * Carga en una sola consulta la última entrada a En progreso de cada ticket del listado
+     * (evita 2 consultas por fila en obtenerInicioEnProgreso).
+     *
+     * @param \Illuminate\Support\Collection $rows
+     * @return void
+     */
+    protected function precargarInicioEnProgreso($rows)
+    {
+        $inicios = array();
+        $enProgreso = SoporteTiEstado::where('activo', true)->where('codigo', 'en_progreso')->first();
+        if ($enProgreso && $rows->isNotEmpty()) {
+            $ids = $rows->pluck('id')->map(function ($id) {
+                return (int) $id;
+            })->all();
+            $agrupado = SoporteTiSolicitudEstado::query()
+                ->selectRaw('solicitud_id, MAX(created_at) as ultima_entrada')
+                ->where('estado_id', (int) $enProgreso->id)
+                ->whereIn('solicitud_id', $ids)
+                ->groupBy('solicitud_id')
+                ->pluck('ultima_entrada', 'solicitud_id');
+            foreach ($agrupado as $solicitudId => $ultimaEntrada) {
+                $inicios[(int) $solicitudId] = $ultimaEntrada;
+            }
+        }
+
+        $this->memoListado['en_progreso_existe'] = (bool) $enProgreso;
+        $this->memoListado['inicio_en_progreso'] = $inicios;
     }
 
     /**
@@ -797,13 +851,21 @@ class SoporteTiService
         $c = trim((string) $criticidad);
         $tipo = $tipoSolicitud === 'A' ? 'A' : 'B';
 
-        $query = SoporteTiSlaHoras::where('tipo_solicitud', $tipo)->where('criticidad', $c);
-        if ($tipo === 'A') {
-            $query->where(function ($q) {
-                $q->where('ambito', 'analista_config')->orWhereNull('ambito');
-            });
+        $memoKey = 'sla_horas:' . $tipo . ':' . $c;
+        if ($this->memoListado !== null && array_key_exists($memoKey, $this->memoListado)) {
+            $row = $this->memoListado[$memoKey];
+        } else {
+            $query = SoporteTiSlaHoras::where('tipo_solicitud', $tipo)->where('criticidad', $c);
+            if ($tipo === 'A') {
+                $query->where(function ($q) {
+                    $q->where('ambito', 'analista_config')->orWhereNull('ambito');
+                });
+            }
+            $row = $query->first();
+            if ($this->memoListado !== null) {
+                $this->memoListado[$memoKey] = $row;
+            }
         }
-        $row = $query->first();
         if ($row) {
             return (int) $row->horas;
         }
@@ -1049,6 +1111,15 @@ class SoporteTiService
      */
     protected function obtenerInicioEnProgreso(SoporteTiSolicitud $solicitud)
     {
+        if ($this->memoListado !== null && isset($this->memoListado['inicio_en_progreso'])) {
+            $id = (int) $solicitud->id;
+            if (!$this->memoListado['en_progreso_existe'] || !isset($this->memoListado['inicio_en_progreso'][$id])) {
+                return null;
+            }
+
+            return Carbon::parse($this->memoListado['inicio_en_progreso'][$id]);
+        }
+
         $enProgreso = SoporteTiEstado::where('activo', true)->where('codigo', 'en_progreso')->first();
         if (!$enProgreso) {
             return null;
@@ -1558,6 +1629,11 @@ class SoporteTiService
         $esCreador = $this->esCreadorSolicitud($solicitud, $user);
         $esStaff = $this->usuarioEsStaffSoporteTi($user);
 
+        $memoKey = 'estados_usuario:' . (string) $solicitud->tipo_solicitud . ':' . (int) $esStaff . ':' . (int) $esCreador;
+        if ($this->memoListado !== null && isset($this->memoListado[$memoKey])) {
+            return $this->memoListado[$memoKey];
+        }
+
         $staff = collect();
         if ($esStaff) {
             $staff = SoporteTiEstado::where('activo', true)
@@ -1578,7 +1654,12 @@ class SoporteTiService
                 ->get();
         }
 
-        return $staff->concat($creador)->unique('id')->sortBy('orden_kanban')->values();
+        $estados = $staff->concat($creador)->unique('id')->sortBy('orden_kanban')->values();
+        if ($this->memoListado !== null) {
+            $this->memoListado[$memoKey] = $estados;
+        }
+
+        return $estados;
     }
 
     /**
@@ -1623,6 +1704,25 @@ class SoporteTiService
      * @return array{activo: bool, fin: string|null, vencido: bool}
      */
     protected function contadorSla(SoporteTiSolicitud $solicitud)
+    {
+        // Dentro del listado se pide dos veces por fila (término estimado y gestión).
+        if ($this->memoListado !== null) {
+            $memoKey = 'contador_sla:' . (int) $solicitud->id;
+            if (!array_key_exists($memoKey, $this->memoListado)) {
+                $this->memoListado[$memoKey] = $this->calcularContadorSla($solicitud);
+            }
+
+            return $this->memoListado[$memoKey];
+        }
+
+        return $this->calcularContadorSla($solicitud);
+    }
+
+    /**
+     * @param SoporteTiSolicitud $solicitud
+     * @return array{activo: bool, pausado: bool, fin: string|null, restante_segundos: int|null, vencido: bool}
+     */
+    protected function calcularContadorSla(SoporteTiSolicitud $solicitud)
     {
         $inactivo = array(
             'activo' => false,
@@ -3536,7 +3636,7 @@ class SoporteTiService
                     'id' => (int) $ev->id,
                     'tipo' => $ev->tipo,
                     'texto' => $ev->texto,
-                    'url' => $this->generateImageUrl($ev->url),
+                    'url' => $this->urlEvidenciaCacheada($ev->url),
                     'nombre' => $ev->nombre,
                     'tamano' => $ev->tamano,
                     'mime' => $ev->mime,
@@ -3548,6 +3648,37 @@ class SoporteTiService
         $out['gestion'] = $this->mapGestion($s, $viewer);
 
         return $out;
+    }
+
+    /**
+     * URL de una evidencia del listado. Sin CDN, resolverla consulta el almacenamiento (exists por disco),
+     * así que se cachea por ruta: las firmadas duran 120 min y se guardan 90; las no encontradas, 5.
+     *
+     * @param string|null $ruta
+     * @return string|null
+     */
+    protected function urlEvidenciaCacheada($ruta)
+    {
+        if (empty($ruta)) {
+            return null;
+        }
+
+        // Con CDN la URL se arma con la ruta, sin consultar el almacenamiento.
+        $cdn = app(ObjectStorageConnectorInterface::class)->cdnUrlSinVerificar((string) $ruta);
+        if ($cdn !== null) {
+            return $cdn;
+        }
+
+        $key = 'soporte_ti:evidencia_url:' . md5((string) $ruta);
+        $cached = Cache::get($key);
+        if (is_string($cached)) {
+            return $cached !== '' ? $cached : null;
+        }
+
+        $url = $this->generateImageUrl($ruta);
+        Cache::put($key, $url !== null ? $url : '', $url !== null ? 5400 : 300);
+
+        return $url;
     }
 
     public function mapMensaje(SoporteTiMensaje $m, ?Authenticatable $viewer = null, $lecturasCtx = null)
