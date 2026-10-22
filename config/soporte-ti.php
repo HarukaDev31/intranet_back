@@ -31,4 +31,12 @@ return array(
     'whatsapp_from_number' => env('SOPORTE_TI_WHATSAPP_FROM', 'soporte'),
     'whatsapp_group_id' => env('SOPORTE_TI_WHATSAPP_GROUP', '120363402844775385@g.us'),
     'whatsapp_queue' => env('SOPORTE_TI_WHATSAPP_QUEUE', 'notificaciones'),
+
+    /*
+    | Agente de soporte (scheduled task de Claude Code): al crear un ticket Tipo B se le hace
+    | POST a su API trigger. URL y token salen de claude.ai/code/routines → Edit → API.
+    */
+    'agente_enabled' => (bool) env('SOPORTE_TI_AGENTE_ENABLED', false),
+    'agente_fire_url' => (string) env('SOPORTE_TI_AGENTE_FIRE_URL', ''),
+    'agente_token' => (string) env('SOPORTE_TI_AGENTE_TOKEN', ''),
 );
