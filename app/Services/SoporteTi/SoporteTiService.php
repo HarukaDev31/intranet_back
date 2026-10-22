@@ -303,9 +303,9 @@ class SoporteTiService
                 ->where('estado_id', (int) $enProgreso->id)
                 ->whereIn('solicitud_id', $ids)
                 ->groupBy('solicitud_id')
-                ->get();
-            foreach ($agrupado as $fila) {
-                $inicios[(int) $fila->solicitud_id] = $fila->ultima_entrada;
+                ->pluck('ultima_entrada', 'solicitud_id');
+            foreach ($agrupado as $solicitudId => $ultimaEntrada) {
+                $inicios[(int) $solicitudId] = $ultimaEntrada;
             }
         }
 
