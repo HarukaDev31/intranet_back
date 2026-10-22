@@ -31,6 +31,7 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -3634,7 +3635,7 @@ class SoporteTiService
                     'id' => (int) $ev->id,
                     'tipo' => $ev->tipo,
                     'texto' => $ev->texto,
-                    'url' => $this->generateImageUrl($ev->url),
+                    'url' => $this->urlEvidenciaCacheada($ev->url),
                     'nombre' => $ev->nombre,
                     'tamano' => $ev->tamano,
                     'mime' => $ev->mime,
@@ -3646,6 +3647,31 @@ class SoporteTiService
         $out['gestion'] = $this->mapGestion($s, $viewer);
 
         return $out;
+    }
+
+    /**
+     * URL de una evidencia del listado. Resolverla consulta el almacenamiento (exists por disco),
+     * así que se cachea por ruta: las firmadas duran 120 min y se guardan 30; las no encontradas, 5.
+     *
+     * @param string|null $ruta
+     * @return string|null
+     */
+    protected function urlEvidenciaCacheada($ruta)
+    {
+        if (empty($ruta)) {
+            return null;
+        }
+
+        $key = 'soporte_ti:evidencia_url:' . md5((string) $ruta);
+        $cached = Cache::get($key);
+        if (is_string($cached)) {
+            return $cached !== '' ? $cached : null;
+        }
+
+        $url = $this->generateImageUrl($ruta);
+        Cache::put($key, $url !== null ? $url : '', $url !== null ? 1800 : 300);
+
+        return $url;
     }
 
     public function mapMensaje(SoporteTiMensaje $m, ?Authenticatable $viewer = null, $lecturasCtx = null)
