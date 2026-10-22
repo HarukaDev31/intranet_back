@@ -28,32 +28,12 @@ class SoporteTiSolicitudController extends Controller
     public function index(Request $request)
     {
         try {
-            $perf = array('n' => 0, 'ms' => 0.0, 'top' => array());
-            \Illuminate\Support\Facades\DB::listen(function ($q) use (&$perf) {
-                $perf['n']++;
-                $perf['ms'] += $q->time;
-                $k = substr(preg_replace('/\s+/', ' ', $q->sql), 0, 110);
-                if (!isset($perf['top'][$k])) {
-                    $perf['top'][$k] = array(0, 0.0);
-                }
-                $perf['top'][$k][0]++;
-                $perf['top'][$k][1] += $q->time;
-            });
-            $t0 = microtime(true);
             $payload = $this->service->listarSolicitudes($request->all(), Auth::user());
-            $total = round((microtime(true) - $t0) * 1000);
-            $mq = \App\Models\SoporteTi\SoporteTiMaqueta::first();
-            $tm = microtime(true);
-            $mqUrl = $mq ? app(\App\Contracts\ObjectStorageConnectorInterface::class)->url($mq->url_preview ?: $mq->ruta_archivo) : null;
-            $perf['maqueta_ms'] = round((microtime(true) - $tm) * 1000);
-            $perf['maqueta_path'] = $mq ? substr((string) ($mq->url_preview ?: $mq->ruta_archivo), 0, 20) : null;
-            uasort($perf['top'], function ($x, $y) { return $y[1] <=> $x[1]; });
 
             return response()->json(array(
                 'success' => true,
                 'data' => $payload['solicitudes'],
                 'resumen' => $payload['resumen'],
-                'perf' => array('total_ms' => $total, 'queries' => $perf['n'], 'db_ms' => round($perf['ms']), 'maqueta_ms' => $perf['maqueta_ms'], 'maqueta_path' => $perf['maqueta_path'], 'top' => array_slice($perf['top'], 0, 12, true)),
             ));
         } catch (\Throwable $e) {
             return $this->soporteTiFail($e);
