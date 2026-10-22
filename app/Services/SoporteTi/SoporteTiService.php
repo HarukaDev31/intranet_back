@@ -72,6 +72,13 @@ class SoporteTiService
     /** @var SoporteTiCacheService */
     protected $cache;
 
+    /**
+     * Memo de consultas repetidas por fila; solo existe mientras se arma el listado (null fuera de él).
+     *
+     * @var array<string, mixed>|null
+     */
+    protected $memoListado = null;
+
     public function __construct(SoporteTiCacheService $cache = null)
     {
         $this->cache = $cache ?: app(SoporteTiCacheService::class);
@@ -90,6 +97,14 @@ class SoporteTiService
      */
     protected function tipoASla()
     {
+        if ($this->memoListado !== null) {
+            if (!isset($this->memoListado['helper_tipo_a'])) {
+                $this->memoListado['helper_tipo_a'] = (new SoporteTiTipoASlaHelper())->activarMemo();
+            }
+
+            return $this->memoListado['helper_tipo_a'];
+        }
+
         return new SoporteTiTipoASlaHelper();
     }
 
@@ -250,15 +265,52 @@ class SoporteTiService
 
             $rows = $query->get();
             $resumen = $this->resumenListadoSolicitudes($rows);
-            $solicitudes = $rows->map(function (SoporteTiSolicitud $s) use ($authUser) {
-                return $this->mapSolicitud($s, $authUser);
-            })->values()->all();
+
+            $this->memoListado = array();
+            try {
+                $this->precargarInicioEnProgreso($rows);
+                $solicitudes = $rows->map(function (SoporteTiSolicitud $s) use ($authUser) {
+                    return $this->mapSolicitud($s, $authUser);
+                })->values()->all();
+            } finally {
+                $this->memoListado = null;
+            }
 
             return array(
                 'solicitudes' => $solicitudes,
                 'resumen' => $resumen,
             );
         });
+    }
+
+    /**
+     * Carga en una sola consulta la última entrada a En progreso de cada ticket del listado
+     * (evita 2 consultas por fila en obtenerInicioEnProgreso).
+     *
+     * @param \Illuminate\Support\Collection $rows
+     * @return void
+     */
+    protected function precargarInicioEnProgreso($rows)
+    {
+        $inicios = array();
+        $enProgreso = SoporteTiEstado::where('activo', true)->where('codigo', 'en_progreso')->first();
+        if ($enProgreso && $rows->isNotEmpty()) {
+            $ids = $rows->pluck('id')->map(function ($id) {
+                return (int) $id;
+            })->all();
+            $agrupado = SoporteTiSolicitudEstado::query()
+                ->selectRaw('solicitud_id, MAX(created_at) as ultima_entrada')
+                ->where('estado_id', (int) $enProgreso->id)
+                ->whereIn('solicitud_id', $ids)
+                ->groupBy('solicitud_id')
+                ->get();
+            foreach ($agrupado as $fila) {
+                $inicios[(int) $fila->solicitud_id] = $fila->ultima_entrada;
+            }
+        }
+
+        $this->memoListado['en_progreso_existe'] = (bool) $enProgreso;
+        $this->memoListado['inicio_en_progreso'] = $inicios;
     }
 
     /**
@@ -797,13 +849,21 @@ class SoporteTiService
         $c = trim((string) $criticidad);
         $tipo = $tipoSolicitud === 'A' ? 'A' : 'B';
 
-        $query = SoporteTiSlaHoras::where('tipo_solicitud', $tipo)->where('criticidad', $c);
-        if ($tipo === 'A') {
-            $query->where(function ($q) {
-                $q->where('ambito', 'analista_config')->orWhereNull('ambito');
-            });
+        $memoKey = 'sla_horas:' . $tipo . ':' . $c;
+        if ($this->memoListado !== null && array_key_exists($memoKey, $this->memoListado)) {
+            $row = $this->memoListado[$memoKey];
+        } else {
+            $query = SoporteTiSlaHoras::where('tipo_solicitud', $tipo)->where('criticidad', $c);
+            if ($tipo === 'A') {
+                $query->where(function ($q) {
+                    $q->where('ambito', 'analista_config')->orWhereNull('ambito');
+                });
+            }
+            $row = $query->first();
+            if ($this->memoListado !== null) {
+                $this->memoListado[$memoKey] = $row;
+            }
         }
-        $row = $query->first();
         if ($row) {
             return (int) $row->horas;
         }
@@ -1049,6 +1109,15 @@ class SoporteTiService
      */
     protected function obtenerInicioEnProgreso(SoporteTiSolicitud $solicitud)
     {
+        if ($this->memoListado !== null && isset($this->memoListado['inicio_en_progreso'])) {
+            $id = (int) $solicitud->id;
+            if (!$this->memoListado['en_progreso_existe'] || !isset($this->memoListado['inicio_en_progreso'][$id])) {
+                return null;
+            }
+
+            return Carbon::parse($this->memoListado['inicio_en_progreso'][$id]);
+        }
+
         $enProgreso = SoporteTiEstado::where('activo', true)->where('codigo', 'en_progreso')->first();
         if (!$enProgreso) {
             return null;
@@ -1558,6 +1627,11 @@ class SoporteTiService
         $esCreador = $this->esCreadorSolicitud($solicitud, $user);
         $esStaff = $this->usuarioEsStaffSoporteTi($user);
 
+        $memoKey = 'estados_usuario:' . (string) $solicitud->tipo_solicitud . ':' . (int) $esStaff . ':' . (int) $esCreador;
+        if ($this->memoListado !== null && isset($this->memoListado[$memoKey])) {
+            return $this->memoListado[$memoKey];
+        }
+
         $staff = collect();
         if ($esStaff) {
             $staff = SoporteTiEstado::where('activo', true)
@@ -1578,7 +1652,12 @@ class SoporteTiService
                 ->get();
         }
 
-        return $staff->concat($creador)->unique('id')->sortBy('orden_kanban')->values();
+        $estados = $staff->concat($creador)->unique('id')->sortBy('orden_kanban')->values();
+        if ($this->memoListado !== null) {
+            $this->memoListado[$memoKey] = $estados;
+        }
+
+        return $estados;
     }
 
     /**
@@ -1623,6 +1702,25 @@ class SoporteTiService
      * @return array{activo: bool, fin: string|null, vencido: bool}
      */
     protected function contadorSla(SoporteTiSolicitud $solicitud)
+    {
+        // Dentro del listado se pide dos veces por fila (término estimado y gestión).
+        if ($this->memoListado !== null) {
+            $memoKey = 'contador_sla:' . (int) $solicitud->id;
+            if (!array_key_exists($memoKey, $this->memoListado)) {
+                $this->memoListado[$memoKey] = $this->calcularContadorSla($solicitud);
+            }
+
+            return $this->memoListado[$memoKey];
+        }
+
+        return $this->calcularContadorSla($solicitud);
+    }
+
+    /**
+     * @param SoporteTiSolicitud $solicitud
+     * @return array{activo: bool, pausado: bool, fin: string|null, restante_segundos: int|null, vencido: bool}
+     */
+    protected function calcularContadorSla(SoporteTiSolicitud $solicitud)
     {
         $inactivo = array(
             'activo' => false,

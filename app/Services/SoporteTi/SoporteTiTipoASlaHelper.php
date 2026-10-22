@@ -27,6 +27,48 @@ class SoporteTiTipoASlaHelper
     4 => 'capacitacion',
   );
 
+  /** @var array<string, mixed>|null Memo por instancia (solo si se activó con activarMemo). */
+  protected $memo = null;
+
+  /**
+   * Evita repetir las mismas consultas de catálogo (horas SLA, existencia de tabla) dentro de un listado.
+   *
+   * @return $this
+   */
+  public function activarMemo()
+  {
+    $this->memo = array();
+
+    return $this;
+  }
+
+  /**
+   * @param string   $key
+   * @param callable $resolver
+   * @return mixed
+   */
+  protected function memorizar($key, callable $resolver)
+  {
+    if ($this->memo === null) {
+      return $resolver();
+    }
+    if (!array_key_exists($key, $this->memo)) {
+      $this->memo[$key] = $resolver();
+    }
+
+    return $this->memo[$key];
+  }
+
+  /**
+   * @return bool
+   */
+  protected function tablaFaseHorasExiste()
+  {
+    return $this->memorizar('tabla_fase_horas', function () {
+      return \Schema::hasTable('soporte_ti_fase_horas_a');
+    });
+  }
+
   /**
    * @param string|null $criticidad
    * @return bool
@@ -45,13 +87,15 @@ class SoporteTiTipoASlaHelper
   public function horasFasesPmPorComplejidad($criticidad)
   {
     $c = trim((string) $criticidad);
-    if (!\Schema::hasTable('soporte_ti_fase_horas_a')) {
+    if (!$this->tablaFaseHorasExiste()) {
       return $this->horasFasesPmPorComplejidadFallback($c);
     }
-    $sum = (int) DB::table('soporte_ti_fase_horas_a')
-      ->whereIn('fase_codigo', self::FASES_PM)
-      ->where('criticidad', $c)
-      ->sum('horas');
+    $sum = (int) $this->memorizar('pm_suma:' . $c, function () use ($c) {
+      return DB::table('soporte_ti_fase_horas_a')
+        ->whereIn('fase_codigo', self::FASES_PM)
+        ->where('criticidad', $c)
+        ->sum('horas');
+    });
     if ($sum > 0) {
       return $sum;
     }
@@ -98,7 +142,7 @@ class SoporteTiTipoASlaHelper
    */
   public function listarFaseHorasCeldas()
   {
-    if (!\Schema::hasTable('soporte_ti_fase_horas_a')) {
+    if (!$this->tablaFaseHorasExiste()) {
       return array();
     }
     $labels = $this->labelsFasesPm();
@@ -212,13 +256,15 @@ class SoporteTiTipoASlaHelper
   {
     $c = trim((string) $criticidad);
     $fc = trim((string) $faseCodigo);
-    if (!\Schema::hasTable('soporte_ti_fase_horas_a')) {
+    if (!$this->tablaFaseHorasExiste()) {
       return $this->horasFasePmFallback($fc, $c);
     }
-    $row = DB::table('soporte_ti_fase_horas_a')
-      ->where('fase_codigo', $fc)
-      ->where('criticidad', $c)
-      ->first();
+    $row = $this->memorizar('pm_fase:' . $fc . ':' . $c, function () use ($fc, $c) {
+      return DB::table('soporte_ti_fase_horas_a')
+        ->where('fase_codigo', $fc)
+        ->where('criticidad', $c)
+        ->first();
+    });
     if ($row && (int) $row->horas > 0) {
       return (int) $row->horas;
     }
@@ -300,12 +346,14 @@ class SoporteTiTipoASlaHelper
   public function horasConfigAnalista($criticidad)
   {
     $c = trim((string) $criticidad);
-    $row = SoporteTiSlaHoras::where('tipo_solicitud', 'A')
-      ->where('criticidad', $c)
-      ->where(function ($q) {
-        $q->where('ambito', self::AMBITO_ANALISTA_CONFIG)->orWhereNull('ambito');
-      })
-      ->first();
+    $row = $this->memorizar('config_analista:' . $c, function () use ($c) {
+      return SoporteTiSlaHoras::where('tipo_solicitud', 'A')
+        ->where('criticidad', $c)
+        ->where(function ($q) {
+          $q->where('ambito', self::AMBITO_ANALISTA_CONFIG)->orWhereNull('ambito');
+        })
+        ->first();
+    });
     if ($row) {
       return (int) $row->horas;
     }
@@ -321,11 +369,13 @@ class SoporteTiTipoASlaHelper
    */
   public function rangoHorasConfigAnalista()
   {
-    $rows = SoporteTiSlaHoras::where('tipo_solicitud', 'A')
-      ->where(function ($q) {
-        $q->where('ambito', self::AMBITO_ANALISTA_CONFIG)->orWhereNull('ambito');
-      })
-      ->pluck('horas');
+    $rows = $this->memorizar('rango_config_analista', function () {
+      return SoporteTiSlaHoras::where('tipo_solicitud', 'A')
+        ->where(function ($q) {
+          $q->where('ambito', self::AMBITO_ANALISTA_CONFIG)->orWhereNull('ambito');
+        })
+        ->pluck('horas');
+    });
     if ($rows->isEmpty()) {
       return array('min' => 12, 'max' => 48);
     }
