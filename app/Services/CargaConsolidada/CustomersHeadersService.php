@@ -543,8 +543,8 @@ class CustomersHeadersService
     }
 
     /**
-     * Sublínea "Total CBM" con el CBM total proyectado y la fecha estimada en que se llega a ese total
-     * (misma proyección por Arrive Date China de 60/65 CBM), para el header CBM China.
+     * Sublíneas "60 CBM" / "65 CBM" con la fecha proyectada y "Total CBM" con el CBM total proyectado
+     * y la fecha estimada en que se llega a ese total, para el header CBM China.
      *
      * @param int $idContenedor
      * @return array<int, array<string, string>>
@@ -556,6 +556,8 @@ class CustomersHeadersService
         $fecha = $this->headerFechaCbm(0, $proy['fecha_total'])['value'];
 
         return [
+            ['label' => '60 CBM', 'value' => $this->headerFechaCbm(60, $proy['fecha_60'])['value']],
+            ['label' => '65 CBM', 'value' => $this->headerFechaCbm(65, $proy['fecha_65'])['value']],
             ['label' => 'Total CBM', 'value' => $total . ' CBM ' . $fecha],
         ];
     }
