@@ -543,7 +543,8 @@ class CustomersHeadersService
     }
 
     /**
-     * Sublíneas "60 CBM" / "65 CBM" con la fecha proyectada, para el header CBM China.
+     * Sublíneas "60 CBM" / "65 CBM" con la fecha proyectada y "Total CBM" con el CBM total proyectado
+     * y la fecha estimada en que se llega a ese total, para el header CBM China.
      *
      * @param int $idContenedor
      * @return array<int, array<string, string>>
@@ -551,10 +552,13 @@ class CustomersHeadersService
     public function sublineasProyeccionCbm($idContenedor)
     {
         $proy = $this->fechasProyeccionCbm($idContenedor);
+        $total = rtrim(rtrim(number_format((float) $proy['total'], 2, '.', ''), '0'), '.');
+        $fecha = $this->headerFechaCbm(0, $proy['fecha_total'])['value'];
 
         return [
             ['label' => '60 CBM', 'value' => $this->headerFechaCbm(60, $proy['fecha_60'])['value']],
             ['label' => '65 CBM', 'value' => $this->headerFechaCbm(65, $proy['fecha_65'])['value']],
+            ['label' => 'Total CBM', 'value' => $total . ' CBM ' . $fecha],
         ];
     }
 
@@ -586,7 +590,7 @@ class CustomersHeadersService
      * si el proveedor ya tiene CBM China, usa ese valor en su lugar.
      *
      * @param int $idContenedor
-     * @return array{fecha_60: string|null, fecha_65: string|null}
+     * @return array{fecha_60: string|null, fecha_65: string|null, total: float, fecha_total: string|null}
      */
     private function fechasProyeccionCbm($idContenedor)
     {
@@ -628,6 +632,11 @@ class CustomersHeadersService
         });
 
         $cum = $sinFecha;
+        $total = $sinFecha;
+        foreach ($items as $item) {
+            $total += $item['cbm'];
+        }
+        $fechaTotal = count($items) > 0 ? $items[count($items) - 1]['fecha'] : null;
         $fecha60 = null;
         $fecha65 = null;
         $i = 0;
@@ -650,6 +659,8 @@ class CustomersHeadersService
         return [
             'fecha_60' => $fecha60,
             'fecha_65' => $fecha65,
+            'total' => $total,
+            'fecha_total' => $fechaTotal,
         ];
     }
 
