@@ -49,6 +49,7 @@ use App\Support\CargaConsolidada\CargaLabel;
  * @property string|null $observaciones
  * @property string|null $fecha_documentacion_max
  * @property string|null $lista_embarque_url
+ * @property \Illuminate\Support\Carbon|string|null $lista_embarque_uploaded_at
  * @property string|null $lista_embarque_real_url
  * @property string|null $bl_file_url
  * @property string|null $factura_general_url
