@@ -24,6 +24,7 @@ class DocumentacionFolder extends Model
         'folder_name',
         'description',
         'only_doc_profile',
+        'organizacion_id',
         'created_at',
         'updated_at'
     ];

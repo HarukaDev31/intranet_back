@@ -368,7 +368,11 @@ class ContenedorController extends Controller
             $query->whereRaw('LOWER(TRIM(empresa)) = ?', [mb_strtolower(trim((string) $empresaFiltro))]);
         }
 
-        if ($authOrg > 0) {
+        // Almacén China opera cross-org: no empujar socios (Ecuador) al final.
+        // El resto de roles admin siguen viendo primero su organización.
+        $esVisibilidadGlobal = in_array($effectiveRole, Usuario::ROLES_VISIBILIDAD_GLOBAL, true)
+            || ($authUser instanceof Usuario && in_array($authUser->getNombreGrupo(), Usuario::ROLES_VISIBILIDAD_GLOBAL, true));
+        if ($authOrg > 0 && !$esVisibilidadGlobal) {
             $query->orderByRaw('CASE WHEN organizacion_id = ? THEN 0 ELSE 1 END', [$authOrg]);
         }
         $query->orderBy(DB::raw('YEAR(f_inicio)'), 'DESC');
@@ -1877,8 +1881,8 @@ Le estaré informando cualquier avance 🫡.";
      * @OA\Post(
      *     path="/carga-consolidada/contenedor/packing-list",
      *     tags={"Contenedor"},
-     *     summary="Subir packing list",
-     *     description="Sube un archivo de packing list para un contenedor",
+     *     summary="Subir Packing China",
+     *     description="Sube el Packing China (antes packing list). Cierra el contenedor en China.",
      *     operationId="uploadPackingListContenedor",
      *     security={{"bearerAuth":{}}},
      *     @OA\RequestBody(
@@ -1931,8 +1935,7 @@ Le estaré informando cualquier avance 🫡.";
                 ], 404);
             }
 
-            // Se guarda al instante para que el front vea el archivo y el cierre sin esperar a la cola;
-            // el job repite estos updates (idempotente) y se encarga de clientes, sheet y notificaciones.
+            // Packing China: cierra el contenedor. Packing Real es opcional y no cierra.
             $contenedor->update([
                 'lista_embarque_url' => $fileUrl,
                 'lista_embarque_uploaded_at' => now(),
@@ -1955,18 +1958,80 @@ Le estaré informando cualquier avance 🫡.";
 
             return response()->json([
                 'success' => true,
-                'message' => 'Lista de embarque recibida. Procesaremos la información en segundo plano.',
-                'data' => [
+                'message' => 'Packing China recibido. Procesaremos la información en segundo plano.',
+                'data' => array_merge([
                     'file_url' => $fileUrl,
                     'file_name' => $file->getClientOriginalName(),
                     'file_size' => $file->getSize(),
-                ],
+                    'label' => 'Packing China',
+                ], $contenedor->fresh()->packingEmbarquePayload(fn ($u) => $this->generateImageUrl($u))),
             ]);
         } catch (\Exception $e) {
             Log::error('Error en uploadListaEmbarque: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Error al subir la lista de embarque: ' . $e->getMessage(),
+                'message' => 'Error al subir Packing China: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Sube Packing Real (opcional). No cierra el contenedor.
+     */
+    public function uploadPackingReal(Request $request)
+    {
+        try {
+            $idContenedor = (int) $request->input('idContenedor');
+
+            if (!$request->hasFile('file')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'No se ha enviado ningún archivo',
+                ], 400);
+            }
+
+            $file = $request->file('file');
+            $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'];
+            $fileExtension = strtolower($file->getClientOriginalExtension());
+
+            if (!in_array($fileExtension, $allowedExtensions)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Tipo de archivo no permitido',
+                ], 400);
+            }
+
+            $contenedor = Contenedor::find($idContenedor);
+            if (!$contenedor) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Contenedor no encontrado',
+                ], 404);
+            }
+
+            $filename = time() . '_' . uniqid() . '.' . $fileExtension;
+            $path = 'assets/images/agentecompra/';
+            $fileUrl = $this->storageStoreUpload($file, $path, $filename);
+
+            $contenedor->update([
+                'lista_embarque_real_url' => $fileUrl,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Packing Real subido correctamente',
+                'data' => array_merge([
+                    'file_url' => $fileUrl,
+                    'file_name' => $file->getClientOriginalName(),
+                    'file_size' => $file->getSize(),
+                    'label' => 'Packing Real',
+                ], $contenedor->fresh()->packingEmbarquePayload(fn ($u) => $this->generateImageUrl($u))),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en uploadPackingReal: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error al subir Packing Real: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -2052,19 +2117,50 @@ Le estaré informando cualquier avance 🫡.";
     public function deletePackingList($idContenedor)
     {
         try {
-            $idContenedor = $idContenedor;
             $contenedor = Contenedor::find($idContenedor);
+            if (!$contenedor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no encontrado',
+                ], 404);
+            }
             $contenedor->lista_embarque_url = null;
+            $contenedor->lista_embarque_uploaded_at = null;
             $contenedor->save();
             $this->verifyContainerIsCompleted($idContenedor);
             return response()->json([
                 'success' => true,
-                'message' => 'Packing list eliminada correctamente'
+                'message' => 'Packing China eliminado correctamente',
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error al eliminar packing list: ' . $e->getMessage()
+                'message' => 'Error al eliminar Packing China: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function deletePackingReal($idContenedor)
+    {
+        try {
+            $contenedor = Contenedor::find($idContenedor);
+            if (!$contenedor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Contenedor no encontrado',
+                ], 404);
+            }
+            $contenedor->lista_embarque_real_url = null;
+            $contenedor->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Packing Real eliminado correctamente',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar Packing Real: ' . $e->getMessage(),
             ], 500);
         }
     }

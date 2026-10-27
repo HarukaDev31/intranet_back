@@ -49,6 +49,7 @@ use App\Support\CargaConsolidada\CargaLabel;
  * @property string|null $observaciones
  * @property string|null $fecha_documentacion_max
  * @property string|null $lista_embarque_url
+ * @property string|null $lista_embarque_real_url
  * @property string|null $bl_file_url
  * @property string|null $factura_general_url
  * @property-read Pais|null $pais
@@ -101,6 +102,7 @@ class Contenedor extends Model
         'f_cierre',
         'lista_embarque_url',
         'lista_embarque_uploaded_at',
+        'lista_embarque_real_url',
         'bl_file_url',
         'factura_general_url',
         'estado_china',
@@ -134,6 +136,52 @@ class Contenedor extends Model
     ];
 
     /** @see \App\Enums\CargaConsolidada\ExcelSeguimientoLinkStatus */
+
+    /**
+     * Archivos de packing para tab embarque / documentación.
+     * Packing China cierra el contenedor; Packing Real es opcional.
+     *
+     * @param  callable(string|null): (string|null)|null  $urlResolver
+     * @return array<string, mixed>
+     */
+    public function packingEmbarquePayload($urlResolver = null): array
+    {
+        $resolve = is_callable($urlResolver)
+            ? $urlResolver
+            : static function ($url) {
+                return $url;
+            };
+
+        $chinaUrl = $resolve($this->lista_embarque_url);
+        $realUrl = $resolve($this->lista_embarque_real_url);
+
+        return [
+            'lista_embarque_url' => $chinaUrl,
+            'lista_embarque_label' => 'Packing China',
+            'lista_embarque_required' => true,
+            'lista_embarque_real_url' => $realUrl,
+            'lista_embarque_real_label' => 'Packing Real',
+            'lista_embarque_real_required' => false,
+            'packing_files' => [
+                [
+                    'key' => 'packing_china',
+                    'label' => 'Packing China',
+                    'url' => $chinaUrl,
+                    'required' => true,
+                    'upload_endpoint' => 'packing-china',
+                    'delete_endpoint' => 'packing-china',
+                ],
+                [
+                    'key' => 'packing_real',
+                    'label' => 'Packing Real',
+                    'url' => $realUrl,
+                    'required' => false,
+                    'upload_endpoint' => 'packing-real',
+                    'delete_endpoint' => 'packing-real',
+                ],
+            ],
+        ];
+    }
 
     /**
      * Los atributos que deben ser convertidos a tipos nativos.
