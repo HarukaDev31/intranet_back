@@ -784,7 +784,7 @@ class CotizacionProveedorController extends Controller
                     ->update(['volumen_china' => $volumenChina]);
             }
             // Manejo de estados específicos
-            else if (in_array($estado, ["NC", "C", "R", "NS", "NO LOADED", "INSPECTION", 'WAIT', "NP"])) {
+            else if (in_array($estado, ["NC", "C", "R", "NS", "NO LOADED", "INSPECTION", 'WAIT', "NP", "WN"])) {
                 DB::table($this->table_contenedor_cotizacion_proveedores)
                     ->where('id_cotizacion', $idCotizacion)
                     ->where('id', $idProveedor)
