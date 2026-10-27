@@ -368,6 +368,12 @@ class ContenedorController extends Controller
             $query->whereRaw('LOWER(TRIM(empresa)) = ?', [mb_strtolower(trim((string) $empresaFiltro))]);
         }
 
+        // Completados: primero por fecha de cierre (más reciente primero).
+        if ($completado) {
+            $query->orderByRaw('CASE WHEN f_cierre IS NULL THEN 1 ELSE 0 END ASC');
+            $query->orderBy('f_cierre', 'desc');
+        }
+
         // Almacén China opera cross-org: no empujar socios (Ecuador) al final.
         // El resto de roles admin siguen viendo primero su organización.
         $esVisibilidadGlobal = in_array($effectiveRole, Usuario::ROLES_VISIBILIDAD_GLOBAL, true)
@@ -375,7 +381,9 @@ class ContenedorController extends Controller
         if ($authOrg > 0 && !$esVisibilidadGlobal) {
             $query->orderByRaw('CASE WHEN organizacion_id = ? THEN 0 ELSE 1 END', [$authOrg]);
         }
-        $query->orderBy(DB::raw('YEAR(f_inicio)'), 'DESC');
+        if (!$completado) {
+            $query->orderBy(DB::raw('YEAR(f_inicio)'), 'DESC');
+        }
         $query->orderByRaw('CAST(carga AS UNSIGNED) DESC');
         $query->orderByRaw("CASE WHEN parte IS NULL OR parte = '' THEN 0 ELSE 1 END ASC");
         $query->orderByRaw('parte DESC');
