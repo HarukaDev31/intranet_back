@@ -367,9 +367,19 @@ class GoogleDriveExcelConfirmacionService
         try {
             $this->bootDrive();
 
-            $response = $this->drive->files->get($fileId, array_merge($this->driveListParams(), [
-                'alt' => 'media',
-            ]));
+            // Si el archivo fue convertido a Google Sheets, alt=media falla: hay que exportarlo a xlsx.
+            $meta = $this->getDriveFileMeta($fileId);
+            if ($meta !== null && ($meta['mimeType'] ?? '') === 'application/vnd.google-apps.spreadsheet') {
+                $response = $this->drive->files->export(
+                    $fileId,
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    ['alt' => 'media']
+                );
+            } else {
+                $response = $this->drive->files->get($fileId, array_merge($this->driveListParams(), [
+                    'alt' => 'media',
+                ]));
+            }
 
             if (is_string($response)) {
                 $content = $response;
