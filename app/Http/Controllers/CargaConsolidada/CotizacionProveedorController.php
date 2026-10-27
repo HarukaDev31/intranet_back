@@ -2205,7 +2205,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 ->select([
                     'id',
                     'file_name',
-                    'file_path as file_url',
+                    'file_path',
                     'file_type as type',
                     'file_size as size',
                     'last_modified as lastModified',
@@ -2213,7 +2213,10 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 ])
                 ->get();
             $files = $files->map(function ($file) {
-                $file->file_url = $this->generateImageUrl($file->file_url);
+                $path = $file->file_path;
+                $file->file_url = $this->cdnStorageUrl($path) ?: $this->generateImageUrl($path);
+                unset($file->file_path);
+
                 return $file;
             });
             return response()->json([
@@ -2334,7 +2337,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 ->select([
                     'id',
                     'file_name',
-                    'file_path as file_url',
+                    'file_path',
                     'file_type as type',
                     'file_size as size',
                     'last_modified as lastModified',
@@ -2343,7 +2346,11 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 ])
                 ->get();
             $files = $files->map(function ($file) {
-                $file->file_url = $this->generateImageUrl($file->file_url);
+                // Listado: URL CDN sin exigir exists() en disco/S3 (archivos viejos inspection/).
+                $path = $file->file_path;
+                $file->file_url = $this->cdnStorageUrl($path) ?: $this->generateImageUrl($path);
+                unset($file->file_path);
+
                 return $file;
             });
             return response()->json([
