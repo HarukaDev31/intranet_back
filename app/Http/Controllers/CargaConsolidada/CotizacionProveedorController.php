@@ -37,6 +37,7 @@ use App\Models\CargaConsolidada\Contenedor;
 use Illuminate\Support\Str;
 use App\Traits\UserGroupsTrait;
 use App\Traits\FileTrait;
+use App\Support\Storage\StoragePathSanitizer;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Support\Organizacion\OrganizacionPortalUrls;
 use App\Support\BrandLogoPaths;
@@ -2213,8 +2214,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 ])
                 ->get();
             $files = $files->map(function ($file) {
-                $path = $file->file_path;
-                $file->file_url = $this->cdnStorageUrl($path) ?: $this->generateImageUrl($path);
+                $file->file_url = $this->resolveAlmacenMediaPublicUrl($file->file_path);
                 unset($file->file_path);
 
                 return $file;
@@ -2346,9 +2346,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 ])
                 ->get();
             $files = $files->map(function ($file) {
-                // Listado: URL CDN sin exigir exists() en disco/S3 (archivos viejos inspection/).
-                $path = $file->file_path;
-                $file->file_url = $this->cdnStorageUrl($path) ?: $this->generateImageUrl($path);
+                $file->file_url = $this->resolveAlmacenMediaPublicUrl($file->file_path);
                 unset($file->file_path);
 
                 return $file;
@@ -2367,6 +2365,37 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * URL pública de media de almacén (inspección / documentación).
+     * Legacy: assets/... vive en el front (intranet.probusiness.pe).
+     * Nuevo: inspection/... u otras rutas → CDN/S3.
+     */
+    private function resolveAlmacenMediaPublicUrl(?string $path): ?string
+    {
+        if ($path === null || trim($path) === '') {
+            return null;
+        }
+
+        $path = trim(str_replace('\\', '/', $path));
+        if (filter_var($path, FILTER_VALIDATE_URL)) {
+            return $path;
+        }
+
+        $relative = ltrim($path, '/');
+
+        // No pasar por normalizeRelativePath: sanitiza caracteres chinos y rompe el nombre en disco.
+        if (stripos($relative, 'assets/') === 0) {
+            $front = rtrim((string) config('manual_usuario.front_public_url', ''), '/');
+            if ($front === '') {
+                $front = 'https://intranet.probusiness.pe';
+            }
+
+            return $front . '/' . StoragePathSanitizer::encodeRelativePathForUrl($relative);
+        }
+
+        return $this->cdnStorageUrl($relative) ?: $this->generateImageUrl($relative);
     }
 
     /**
