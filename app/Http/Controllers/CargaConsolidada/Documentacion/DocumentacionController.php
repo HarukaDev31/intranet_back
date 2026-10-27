@@ -136,6 +136,8 @@ class DocumentacionController extends Controller
             $contenedor = Contenedor::find($id);
             $listaEmbarqueUrl = $contenedor ? $contenedor->lista_embarque_url : null;
             $listaEmbarquePublicUrl = $this->resolveDocumentationPublicUrl($listaEmbarqueUrl);
+            $listaEmbarqueRealUrl = $contenedor ? ($contenedor->lista_embarque_real_url ?? null) : null;
+            $listaEmbarqueRealPublicUrl = $this->resolveDocumentationPublicUrl($listaEmbarqueRealUrl);
             $esContenedorSocio = $this->esContenedorSocio($contenedor);
             $puedeEditar = $this->puedeEditarDocumentacionContenedor($user, $contenedor);
 
@@ -149,67 +151,81 @@ class DocumentacionController extends Controller
                     ->get();
                 $folders = $this->sortSocioDocumentacionFolders($folders);
             } else {
+                $this->ensureGlobalPackingRealFolder();
                 $folders = DocumentacionFolder::with(['files' => function ($query) use ($id) {
                     $query->where('id_contenedor', $id);
                 }])
                     ->forContenedor($id)
                     ->forUserGroup($userGrupo, $roleDocumentacion)
                     ->get();
+                $folders = $this->sortAdminDocumentacionFolders($folders);
             }
 
             $result = [];
             foreach ($folders as $folder) {
-                $esPackingList = $this->esFolderPackingListChina($folder, $esContenedorSocio);
+                $esPackingChina = $this->esFolderPackingListChina($folder, $esContenedorSocio);
+                $esPackingReal = $this->esFolderPackingReal($folder, $esContenedorSocio);
                 $folderData = $folder->toArray();
 
+                if ($esPackingChina) {
+                    $folderData['folder_name'] = 'Packing China';
+                } elseif ($esPackingReal) {
+                    $folderData['folder_name'] = 'Packing Real';
+                }
+
                 $folderData['lista_embarque_url'] = $listaEmbarquePublicUrl;
-                $folderData['es_packing_list_china'] = $esPackingList;
+                $folderData['lista_embarque_real_url'] = $listaEmbarqueRealPublicUrl;
+                $folderData['es_packing_list_china'] = $esPackingChina;
+                $folderData['es_packing_china'] = $esPackingChina;
+                $folderData['es_packing_real'] = $esPackingReal;
+                $folderData['required'] = $esPackingChina ? true : ($esPackingReal ? false : null);
                 if (!empty($folderData['files']) && is_array($folderData['files'])) {
                     $folderData['files'] = $this->mapDocumentationFilesPublicUrls($folderData['files']);
                 }
 
-                if ($folder->id == 1 || $esPackingList) {
+                if ($esPackingChina) {
                     $folderData['file_url'] = $listaEmbarquePublicUrl;
+                } elseif ($esPackingReal) {
+                    $folderData['file_url'] = $listaEmbarqueRealPublicUrl;
                 }
 
-                if ($folder->files->count() > 0 && !$esPackingList) {
+                $esVirtualPacking = $esPackingChina || $esPackingReal;
+                if ($folder->files->count() > 0 && !$esVirtualPacking) {
                     foreach ($folder->files as $file) {
                         $fileData = [
                             'id' => $folder->id,
                             'id_file' => $file->id,
                             'type' => $file->file_type,
                             'lista_embarque_url' => $listaEmbarquePublicUrl,
-                            'es_packing_list_china' => $esPackingList,
+                            'lista_embarque_real_url' => $listaEmbarqueRealPublicUrl,
+                            'es_packing_list_china' => $esPackingChina,
+                            'es_packing_china' => $esPackingChina,
+                            'es_packing_real' => $esPackingReal,
                         ];
-                        if ($folder->id == 1) {
-                            $fileData['file_url'] = $listaEmbarquePublicUrl;
-                        } else {
-                            $fileData['file_url'] = $this->resolveDocumentationPublicUrl($file->file_url);
-                        }
+                        $fileData['file_url'] = $this->resolveDocumentationPublicUrl($file->file_url);
 
                         $result[] = array_merge($folderData, $fileData);
                     }
                 } else {
                     $folderData['id_file'] = null;
-                    if (!$esPackingList && $folder->id != 1) {
+                    if (!$esVirtualPacking) {
                         $folderData['file_url'] = null;
-                    }
-                    if ($folder->id == 1 || $esPackingList) {
-                        $folderData['file_url'] = $listaEmbarquePublicUrl;
                     }
                     $folderData['type'] = null;
                     $result[] = $folderData;
                 }
             }
 
-            return response()->json([
+            return response()->json(array_merge([
                 'success' => true,
                 'data' => $result,
                 'es_contenedor_socio' => $esContenedorSocio,
                 'puede_editar' => $puedeEditar,
                 'organizacion_id' => $contenedor ? (int) $contenedor->organizacion_id : null,
-                'message' => 'Carpetas de documentación obtenidas exitosamente'
-            ]);
+                'message' => 'Carpetas de documentación obtenidas exitosamente',
+            ], $contenedor
+                ? $contenedor->packingEmbarquePayload(fn ($u) => $this->resolveDocumentationPublicUrl($u))
+                : []));
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -224,7 +240,8 @@ class DocumentacionController extends Controller
     private function socioDocumentacionFolderNames()
     {
         return [
-            'Packing list china',
+            'Packing China',
+            'Packing Real',
             'BL draft',
             'Resumen de pago',
         ];
@@ -270,11 +287,51 @@ class DocumentacionController extends Controller
             return true;
         }
 
-        return $esContenedorSocio && strtolower(trim((string) $folder->folder_name)) === 'packing list china';
+        $name = strtolower(trim((string) $folder->folder_name));
+
+        return in_array($name, ['packing china', 'packing list china'], true);
+    }
+
+    private function esFolderPackingReal($folder, $esContenedorSocio = false)
+    {
+        if (!$folder) {
+            return false;
+        }
+
+        return strtolower(trim((string) $folder->folder_name)) === 'packing real';
+    }
+
+    private function ensureGlobalPackingRealFolder()
+    {
+        $folder = DocumentacionFolder::withoutGlobalScopes()
+            ->whereNull('id_contenedor')
+            ->whereRaw("LOWER(TRIM(folder_name)) = 'packing real'")
+            ->first();
+
+        if ($folder) {
+            if ((int) ($folder->organizacion_id ?? 0) !== Usuario::ID_ORGANIZACION_ADMIN) {
+                DocumentacionFolder::withoutGlobalScopes()
+                    ->where('id', $folder->id)
+                    ->update(['organizacion_id' => Usuario::ID_ORGANIZACION_ADMIN]);
+            }
+            return;
+        }
+
+        DocumentacionFolder::withoutGlobalScopes()->create([
+            'id_contenedor' => null,
+            'folder_name' => 'Packing Real',
+            'only_doc_profile' => 0,
+            'organizacion_id' => Usuario::ID_ORGANIZACION_ADMIN,
+        ]);
     }
 
     private function ensureSocioDocumentacionFolders($contenedor)
     {
+        // Renombrar legado "Packing list china" → "Packing China"
+        DocumentacionFolder::where('id_contenedor', $contenedor->id)
+            ->whereRaw("LOWER(TRIM(folder_name)) = 'packing list china'")
+            ->update(['folder_name' => 'Packing China']);
+
         foreach ($this->socioDocumentacionFolderNames() as $folderName) {
             $exists = DocumentacionFolder::where('id_contenedor', $contenedor->id)
                 ->whereRaw('LOWER(TRIM(folder_name)) = ?', [strtolower($folderName)])
@@ -294,15 +351,32 @@ class DocumentacionController extends Controller
     private function sortSocioDocumentacionFolders($folders)
     {
         $order = [
+            'packing china' => 0,
             'packing list china' => 0,
-            'bl draft' => 1,
-            'resumen de pago' => 2,
+            'packing real' => 1,
+            'bl draft' => 2,
+            'resumen de pago' => 3,
         ];
 
         return $folders->sortBy(function ($folder) use ($order) {
             $key = strtolower(trim((string) $folder->folder_name));
             if (isset($order[$key])) {
                 return $order[$key];
+            }
+
+            return 100 + (int) $folder->id;
+        })->values();
+    }
+
+    private function sortAdminDocumentacionFolders($folders)
+    {
+        return $folders->sortBy(function ($folder) {
+            $name = strtolower(trim((string) $folder->folder_name));
+            if ((int) $folder->id === 1 || in_array($name, ['packing china', 'packing list china'], true)) {
+                return 0;
+            }
+            if ($name === 'packing real') {
+                return 1;
             }
 
             return 100 + (int) $folder->id;
@@ -561,10 +635,11 @@ class DocumentacionController extends Controller
             }
 
             $folder = DocumentacionFolder::find($idFolder);
-            if ($this->esFolderPackingListChina($folder, $this->esContenedorSocio($contenedor))) {
+            $esSocio = $this->esContenedorSocio($contenedor);
+            if ($this->esFolderPackingListChina($folder, $esSocio)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'El packing list de China se carga automáticamente y no se puede reemplazar aquí.',
+                    'message' => 'El Packing China se carga desde embarque y no se puede ree    mplazar aquí.',
                 ], 403);
             }
 
@@ -581,7 +656,32 @@ class DocumentacionController extends Controller
             // Validar extensión del archivo
             $fileExtension = strtolower($file->getClientOriginalExtension());
 
+            // Packing Real (opcional): se guarda en el contenedor, no cierra China
+            if ($this->esFolderPackingReal($folder, $esSocio)) {
+                if (!$contenedor) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Contenedor no encontrado',
+                    ], 404);
+                }
 
+                $filename = time() . '_' . uniqid() . '.' . $fileExtension;
+                $path = 'agentecompra/documentacion/';
+                $fileUrl = $this->storageStoreUpload($file, $path, $filename);
+                $contenedor->update(['lista_embarque_real_url' => $fileUrl]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Packing Real subido correctamente',
+                    'data' => array_merge([
+                        'file_url' => $this->resolveDocumentationPublicUrl($fileUrl),
+                        'label' => 'Packing Real',
+                        'required' => false,
+                    ], $contenedor->fresh()->packingEmbarquePayload(
+                        fn ($u) => $this->resolveDocumentationPublicUrl($u)
+                    )),
+                ]);
+            }
 
             // Generar nombre único para el archivo
             $filename = time() . '_' . uniqid() . '.' . $fileExtension;
@@ -1875,7 +1975,7 @@ class DocumentacionController extends Controller
         if ($this->esFolderPackingListChina($folder, $this->esContenedorSocio($contenedor))) {
             return response()->json([
                 'success' => false,
-                'message' => 'El packing list de China no se elimina desde esta vista.',
+                'message' => 'El Packing China no se elimina desde esta vista.',
             ], 403);
         }
 

@@ -78,6 +78,8 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
     // Contenedores
     Route::group(['prefix' => 'contenedor'], function () {
         Route::post('packing-list', [ContenedorController::class, 'uploadPackingList']);
+        Route::post('packing-china', [ContenedorController::class, 'uploadPackingList']);
+        Route::post('packing-real', [ContenedorController::class, 'uploadPackingReal']);
         Route::get('export-list', [ContenedorController::class, 'exportList']);
         Route::get('{id}/reporte-marketing', [ContenedorController::class, 'reporteMarketing']);
         Route::get('valid-containers', [ContenedorController::class, 'getValidContainers']);
@@ -98,6 +100,8 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
         Route::post('/estado-documentacion', [ContenedorController::class, 'updateEstadoDocumentacion']);
         Route::post('/estado-finanzas', [ContenedorController::class, 'updateEstadoFinanzas']);
         Route::delete('packing-list/{idContenedor}', [ContenedorController::class, 'deletePackingList']);
+        Route::delete('packing-china/{idContenedor}', [ContenedorController::class, 'deletePackingList']);
+        Route::delete('packing-real/{idContenedor}', [ContenedorController::class, 'deletePackingReal']);
         Route::post('update-fecha-documentacion/{idContenedor}', [ContenedorController::class, 'updateFechaDocumentacionMax']);
 
         // Vista Jefe de Ventas: cotizaciones de todos los contenedores (alcance=abiertos|completados, por defecto abiertos)

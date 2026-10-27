@@ -585,7 +585,7 @@ class CotizacionController extends Controller
             $files = $esAgregado
                 ? null
                 : Contenedor::where('id', $idContenedor)
-                    ->select('bl_file_url', 'lista_embarque_url')
+                    ->select('bl_file_url', 'lista_embarque_url', 'lista_embarque_real_url')
                     ->first();
 
             $contenedoresPorId = Contenedor::query()
@@ -597,10 +597,12 @@ class CotizacionController extends Controller
                 $files = (object) [
                     'bl_file_url' => null,
                     'lista_embarque_url' => null,
+                    'lista_embarque_real_url' => null,
                 ];
             }
 
             $listaEmbarqueUrl = $this->cdnStorageUrl($files->lista_embarque_url);
+            $listaEmbarqueRealUrl = $this->cdnStorageUrl($files->lista_embarque_real_url ?? null);
 
             $archivosIaPorCotizacion = collect();
             $idsPagina = $results->pluck('id')->filter()->values()->all();
@@ -618,7 +620,7 @@ class CotizacionController extends Controller
             $boliviaPorCotizacion = $this->columnasBoliviaPorCotizacion($results, $contenedoresPorId);
 
             // Transformar los datos para la respuesta
-            $data = $results->map(function ($cotizacion) use ($files, $listaEmbarqueUrl, $estadoPermisoPorCotizacion, $idTramitePorCotizacion, $archivosIaPorCotizacion, $contenedoresPorId, $boliviaPorCotizacion) {
+            $data = $results->map(function ($cotizacion) use ($files, $listaEmbarqueUrl, $listaEmbarqueRealUrl, $estadoPermisoPorCotizacion, $idTramitePorCotizacion, $archivosIaPorCotizacion, $contenedoresPorId, $boliviaPorCotizacion) {
                 $contenedorFila = $contenedoresPorId->get($cotizacion->id_contenedor);
                 $archivoIa = optional($archivosIaPorCotizacion->get($cotizacion->id, collect())->first());
                 $archivoPath = $archivoIa ? $archivoIa->getAttribute('archivo_path') : null;
@@ -673,6 +675,10 @@ class CotizacionController extends Controller
                     'origen_marketing' => $cotizacion->origen_marketing,
                     'bl_file_url' => $files->bl_file_url ? $files->bl_file_url : null,
                     'lista_embarque_url' => $listaEmbarqueUrl,
+                    'lista_embarque_label' => 'Packing China',
+                    'lista_embarque_real_url' => $listaEmbarqueRealUrl,
+                    'lista_embarque_real_label' => 'Packing Real',
+                    'lista_embarque_real_required' => false,
                     'url_cotizacion_pdf' => $urlCotizacionPdf,
                     'from_calculator' => $cotizacion->from_calculator,
                     'cod_contract_calculator' => optional($cotizacion->calculadoraImportacion)->cod_cotizacion,
@@ -684,7 +690,11 @@ class CotizacionController extends Controller
             });
 
 
-            return response()->json([
+            $contenedorPacking = !$esAgregado
+                ? Contenedor::find($idContenedor)
+                : null;
+
+            return response()->json(array_merge([
                 'success' => true,
                 'data' => $data,
                 'pagination' => [
@@ -693,9 +703,18 @@ class CotizacionController extends Controller
                     'total' => $results->total(),
                     'last_page' => $results->lastPage()
                 ],
-                'lista_embarque_url' => $files->lista_embarque_url,
                 'bl_file_url' => $files->bl_file_url,
-            ]);
+            ], $contenedorPacking
+                ? $contenedorPacking->packingEmbarquePayload(fn ($u) => $this->cdnStorageUrl($u))
+                : [
+                    'lista_embarque_url' => $listaEmbarqueUrl,
+                    'lista_embarque_label' => 'Packing China',
+                    'lista_embarque_required' => true,
+                    'lista_embarque_real_url' => $listaEmbarqueRealUrl,
+                    'lista_embarque_real_label' => 'Packing Real',
+                    'lista_embarque_real_required' => false,
+                    'packing_files' => [],
+                ]));
         } catch (\Exception $e) {
             Log::error('Error en index de cotizaciones: ' . $e->getMessage());
             return response()->json([
@@ -1034,18 +1053,17 @@ class CotizacionController extends Controller
                 $headersData['cbm_pais']['icon'] = $paisFlags['destino'];
             }
 
-            return response()->json([
+            return response()->json(array_merge([
                 'success' => true,
                 'data' => $headersData,
                 'data_pagos' => [],
                 'f_cierre' => $contenedor->fecha_cierre ?? $contenedor->f_cierre,
                 'carga' => $contenedor->cargaConParte(),
-                'lista_embarque_url' => $this->cdnStorageUrl($contenedor->lista_embarque_url),
                 'excel_seguimiento_drive' => $this->excelSeguimientoDrivePayload($idContenedor, $user),
                 'url_clientes' => OrganizacionPortalUrls::urlClientes(
                     OrganizacionPortalUrls::orgIdFromParent($contenedor)
                 ),
-            ]);
+            ], $contenedor->packingEmbarquePayload(fn ($u) => $this->cdnStorageUrl($u))));
         }
 
         $roleAllowedMap = [
@@ -1198,34 +1216,32 @@ class CotizacionController extends Controller
 
             // Format values as currency where applicable before returning
             $headersData = $this->applyCurrencyToHeaders($headersData);
-            return response()->json([
+            return response()->json(array_merge([
                 'success' => true,
                 'data' => $headersData,
                 'data_pagos' => $headersDataPagos,
                 'carga' => $contenedor->cargaConParte(),
                 'f_cierre' => $contenedor->fecha_cierre??$contenedor->f_cierre,
-                'lista_embarque_url' => $this->cdnStorageUrl($contenedor->lista_embarque_url),
                 'excel_seguimiento_drive' => $this->excelSeguimientoDrivePayload($idContenedor, $user),
                 'url_clientes' => OrganizacionPortalUrls::urlClientes(
                     OrganizacionPortalUrls::orgIdFromParent($contenedor)
                 ),
-            ]);
+            ], $contenedor->packingEmbarquePayload(fn ($u) => $this->cdnStorageUrl($u))));
         }
 
         // Format values as currency where applicable before returning
         $headersData = $this->applyCurrencyToHeaders($headersData);
-        return response()->json([
+        return response()->json(array_merge([
             'success' => true,
             'data' => $headersData,
             'data_pagos' => $headersDataPagos,
             'f_cierre' => $contenedor->fecha_cierre??$contenedor->f_cierre,
             'carga' => $contenedor->cargaConParte(),
-            'lista_embarque_url' => $this->cdnStorageUrl($contenedor->lista_embarque_url),
             'excel_seguimiento_drive' => $this->excelSeguimientoDrivePayload($idContenedor, $user),
             'url_clientes' => OrganizacionPortalUrls::urlClientes(
                 OrganizacionPortalUrls::orgIdFromParent($contenedor)
             ),
-        ]);
+        ], $contenedor->packingEmbarquePayload(fn ($u) => $this->cdnStorageUrl($u))));
     }
 
     /**
