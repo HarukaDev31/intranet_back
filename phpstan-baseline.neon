@@ -4143,7 +4143,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Models\\CargaConsolidada\\AlmacenDocumentacion\:\:\$file_path\.$#'
 			identifier: property.notFound
-			count: 1
+			count: 2
 			path: app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php
 
 		-
@@ -4203,7 +4203,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Models\\CargaConsolidada\\AlmacenInspection\:\:\$file_path\.$#'
 			identifier: property.notFound
-			count: 5
+			count: 6
 			path: app/Http/Controllers/CargaConsolidada/CotizacionProveedorController.php
 
 		-
