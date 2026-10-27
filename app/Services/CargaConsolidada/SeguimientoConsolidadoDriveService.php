@@ -35,7 +35,7 @@ class SeguimientoConsolidadoDriveService
 
     /** Estados China/coordinación que mueven filas entre tablas del Excel. */
     private const ESTADOS_SEGUIMIENTO_EXCEL = [
-        'LOADED', 'WAIT', 'NC', 'C', 'R', 'NS', 'NO LOADED', 'INSPECTION', 'NP',
+        'LOADED', 'WAIT', 'NC', 'C', 'R', 'NS', 'NO LOADED', 'INSPECTION', 'NP', 'WN',
         'ROTULADO', 'RESERVADO', 'COBRANDO', 'DATOS PROVEEDOR', 'INSPECCIONADO',
         'NO RESERVADO', 'EMBARCADO', 'NO EMBARCADO',
     ];
