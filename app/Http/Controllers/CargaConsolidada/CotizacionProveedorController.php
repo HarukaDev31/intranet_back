@@ -37,6 +37,7 @@ use App\Models\CargaConsolidada\Contenedor;
 use Illuminate\Support\Str;
 use App\Traits\UserGroupsTrait;
 use App\Traits\FileTrait;
+use App\Support\Storage\LegacyInspectionAssets;
 use App\Support\Storage\StoragePathSanitizer;
 use App\Support\WhatsApp\CoordinacionWhatsappPayload;
 use App\Support\Organizacion\OrganizacionPortalUrls;
@@ -2384,6 +2385,11 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
         }
 
         $relative = ltrim($path, '/');
+
+        // Legacy reubicado en S3 (assets/imgs/...) → CDN + ruta relativa, sin sanitizar el nombre.
+        if (LegacyInspectionAssets::isRelocatedPath($relative)) {
+            return LegacyInspectionAssets::cdnUrl($relative);
+        }
 
         // No pasar por normalizeRelativePath: sanitiza caracteres chinos y rompe el nombre en disco.
         if (stripos($relative, 'assets/') === 0) {

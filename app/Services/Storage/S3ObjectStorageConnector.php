@@ -3,6 +3,7 @@
 namespace App\Services\Storage;
 
 use App\Contracts\ObjectStorageConnectorInterface;
+use App\Support\Storage\LegacyInspectionAssets;
 use App\Support\Storage\StoragePathSanitizer;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
@@ -177,6 +178,11 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
         $lookupPath = $this->resolveInputForLookup($relativePath);
         if ($lookupPath === null) {
             return null;
+        }
+
+        // Media legacy de inspección reubicada en la raíz del bucket (assets/imgs/...): siempre CDN.
+        if (LegacyInspectionAssets::isRelocatedPath($lookupPath)) {
+            return LegacyInspectionAssets::cdnUrl($lookupPath, $this->cdnBaseUrl());
         }
 
         $located = $this->locateStoragePath($lookupPath);
