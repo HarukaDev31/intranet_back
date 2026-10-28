@@ -914,6 +914,19 @@ class SeguimientoConsolidadoDriveService
                 'duration_ms' => (int) round((microtime(true) - $excelStarted) * 1000),
             ]);
 
+            // Releer Drive justo antes de subir: lo escrito mientras se generaba el Excel (notas de URGENCIA, etc.)
+            // se guarda en BD y se reaplica al archivo, en vez de sobrescribirse.
+            if (!empty($contenedor->excel_seguimiento_drive_file_id)) {
+                $prePull = app(SeguimientoConsolidadoDriveCellSyncService::class)
+                    ->pullFromDrive($idContenedor, 'pre_upload', $flow);
+                $this->logFlow(
+                    empty($prePull['success']) ? 'pull_pre_upload_fallido' : 'pull_pre_upload_ok',
+                    $flow,
+                    empty($prePull['success']) ? 'warning' : 'info',
+                    ['message' => $prePull['message'] ?? null]
+                );
+            }
+
             $manualStarted = microtime(true);
             $manualResult = app(SeguimientoConsolidadoDriveCellSyncService::class)
                 ->applyManualCellsToLocalFile($idContenedor, $tmpPath, $flow);
