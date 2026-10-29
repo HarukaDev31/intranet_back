@@ -74,6 +74,9 @@ Route::get('/carga-consolidada/contenedor/factura-guia/general/guia-remision/{id
 // Módulo de Carga Consolidada
 require __DIR__.'/modules/carga-consolidada.php';
 
+// Módulo de Pago a Proveedor
+require __DIR__.'/modules/pago-proveedor.php';
+
 // Módulo de Dashboard por Usuario
 require __DIR__.'/modules/dashboard-usuario.php';
 
