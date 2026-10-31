@@ -4,109 +4,147 @@ namespace App\Services\PagoProveedor;
 
 use App\Exceptions\PagoProveedorException;
 use App\Models\CalculadoraImportacion;
+use App\Models\CargaConsolidada\Cotizacion;
+use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\PagoProveedor\PagoProveedorCotizacion;
 use App\Support\CargaConsolidada\CargaLabel;
 
 class PagoProveedorCotizacionCcLookup
 {
+    public function __construct(
+        private readonly PagoProveedorCacheService $cache,
+    ) {
+    }
+
+    public function forget(string $code): void
+    {
+        $this->cache->forgetConsolidatedQuote($code);
+    }
+
     /**
      * @return array<string, mixed>
      */
-    public function buscar(string $codigo): array
+    public function findByCode(string $code): array
     {
-        $codigo = strtoupper(trim($codigo));
-        if (!preg_match('/^CO\d{8}$/', $codigo)) {
+        $code = strtoupper(trim($code));
+
+        return $this->cache->rememberConsolidatedQuote($code, fn () => $this->load($code));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function load(string $code): array
+    {
+        if (!preg_match('/^CO\d{8}$/', $code)) {
             throw new PagoProveedorException('El número de cotización de Consolidada debe tener el formato CO y 8 dígitos.');
         }
 
-        $calculadora = CalculadoraImportacion::query()
+        $calculator = CalculadoraImportacion::query()
             ->with(['cotizacion.contenedor', 'cotizacion.proveedores', 'proveedores', 'contenedor'])
-            ->where('cod_cotizacion', $codigo)
+            ->where('cod_cotizacion', $code)
             ->first();
 
-        if (!$calculadora) {
+        if (!$calculator instanceof CalculadoraImportacion) {
             throw new PagoProveedorException('Ese número no existe en Carga Consolidada.', 404);
         }
 
-        $cotizacion = $calculadora->cotizacion;
-        $contenedor = ($cotizacion instanceof \Illuminate\Database\Eloquent\Model ? $cotizacion->getRelationValue('contenedor') : null)
-            ?: $calculadora->contenedor;
-        $documento = $calculadora->dni_cliente ?: $calculadora->ruc_cliente;
-        $nombre = $calculadora->razon_social ?: $calculadora->nombre_cliente;
+        $quote = $calculator->cotizacion;
+        $container = ($quote instanceof Cotizacion ? $quote->contenedor : null) ?: $calculator->contenedor;
+        $name = $calculator->razon_social ?: $calculator->nombre_cliente;
+        $document = $calculator->dni_cliente ?: $calculator->ruc_cliente;
+        $whatsapp = $calculator->whatsapp_cliente;
+        $email = $calculator->correo_cliente;
+        $quoteId = null;
 
-        if ($cotizacion instanceof \Illuminate\Database\Eloquent\Model) {
-            $nombre = $cotizacion->getAttribute('nombre') ?: $nombre;
-            $documento = $cotizacion->getAttribute('documento') ?: $documento;
+        if ($quote instanceof Cotizacion) {
+            $name = $quote->nombre ?: $name;
+            $document = $quote->documento ?: $document;
+            $whatsapp = $quote->telefono ?: $whatsapp;
+            $email = $quote->correo ?: $email;
+            $quoteId = $quote->id;
         }
 
-        $codigos = $this->codigos($calculadora);
-
-        $yaUsada = PagoProveedorCotizacion::query()
-            ->where('cod_cotizacion_cc', $codigo)
+        $alreadyUsed = PagoProveedorCotizacion::query()
+            ->where('consolidated_quote_code', $code)
             ->exists();
 
         return [
-            'cod_cotizacion_cc' => $codigo,
-            'calculadora_importacion_id' => $calculadora->id,
-            'id_cotizacion_cc' => $cotizacion instanceof \Illuminate\Database\Eloquent\Model ? $cotizacion->getAttribute('id') : null,
+            'cod_cotizacion_cc' => $code,
+            'calculadora_importacion_id' => $calculator->id,
+            'id_cotizacion_cc' => $quoteId,
             'cliente' => [
-                'nombre' => $nombre,
-                'documento' => $documento,
-                'whatsapp' => ($cotizacion instanceof \Illuminate\Database\Eloquent\Model ? $cotizacion->getAttribute('telefono') : null) ?: $calculadora->whatsapp_cliente,
-                'correo' => ($cotizacion instanceof \Illuminate\Database\Eloquent\Model ? $cotizacion->getAttribute('correo') : null) ?: $calculadora->correo_cliente,
+                'nombre' => $name,
+                'documento' => $document,
+                'whatsapp' => $whatsapp,
+                'correo' => $email,
             ],
-            'consolidado' => $this->consolidado($contenedor),
-            'proveedores' => $codigos,
-            'ya_usada' => $yaUsada,
-            'aviso' => $yaUsada
+            'consolidado' => $this->consolidationLabel($container),
+            'proveedores' => $this->existingProviders($calculator, $quote instanceof Cotizacion ? $quote : null),
+            'ya_usada' => $alreadyUsed,
+            'aviso' => $alreadyUsed
                 ? 'Ya existe una cotización de pago a proveedor con este número. Puedes continuar.'
                 : null,
         ];
     }
 
     /**
+     * Suppliers already created in Carga Consolidada. This module does not invent providers.
+     *
      * @return array<int, array<string, mixed>>
      */
-    private function codigos(CalculadoraImportacion $calculadora): array
+    private function existingProviders(CalculadoraImportacion $calculator, ?Cotizacion $quote): array
     {
-        $cotizacion = $calculadora->cotizacion;
-        $fuente = $calculadora->proveedores;
-        if ($cotizacion instanceof \Illuminate\Database\Eloquent\Model) {
-            $deCotizacion = $cotizacion->getRelationValue('proveedores');
-            if ($deCotizacion instanceof \Illuminate\Support\Collection && $deCotizacion->isNotEmpty()) {
-                $fuente = $deCotizacion;
-            }
+        if ($quote instanceof Cotizacion && $quote->proveedores->isNotEmpty()) {
+            return $quote->proveedores
+                ->filter(fn (CotizacionProveedor $provider) => trim((string) $provider->code_supplier) !== '')
+                ->map(fn (CotizacionProveedor $provider) => $this->providerRow($provider))
+                ->values()
+                ->all();
         }
 
-        $codigos = [];
-        foreach ($fuente as $proveedor) {
-            if (!$proveedor instanceof \Illuminate\Database\Eloquent\Model) {
-                continue;
-            }
-            $codigo = trim((string) $proveedor->getAttribute('code_supplier'));
-            if ($codigo === '') {
-                continue;
-            }
-            $codigos[] = [
-                'id_proveedor_cc' => $proveedor->getAttribute('id'),
-                'code_supplier' => $codigo,
-                'producto' => $proveedor->getAttribute('products'),
-                'nombre' => $proveedor->getAttribute('supplier'),
-            ];
+        $linkedIds = $calculator->proveedores
+            ->pluck('id_proveedor')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        if ($linkedIds === []) {
+            return [];
         }
 
-        return $codigos;
+        return CotizacionProveedor::query()
+            ->whereIn('id', $linkedIds)
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (CotizacionProveedor $provider) => trim((string) $provider->code_supplier) !== '')
+            ->map(fn (CotizacionProveedor $provider) => $this->providerRow($provider))
+            ->values()
+            ->all();
     }
 
-    private function consolidado(mixed $contenedor): ?string
+    /**
+     * @return array<string, mixed>
+     */
+    private function providerRow(CotizacionProveedor $provider): array
     {
-        if (!$contenedor) {
+        return [
+            'id_proveedor_cc' => $provider->id,
+            'code_supplier' => $provider->code_supplier,
+            'producto' => $provider->products,
+            'nombre' => $provider->supplier,
+        ];
+    }
+
+    private function consolidationLabel(mixed $container): ?string
+    {
+        if (!$container instanceof \Illuminate\Database\Eloquent\Model) {
             return null;
         }
 
-        $label = CargaLabel::format($contenedor->carga ?? '', $contenedor->f_inicio ?? null, $contenedor->parte ?? null);
-        if (preg_match('/^(.+)-(\d{4})$/', $label, $coincidencias)) {
-            return $coincidencias[1] . ' - ' . $coincidencias[2];
+        $label = CargaLabel::format($container->getAttribute('carga') ?? '', $container->getAttribute('f_inicio') ?? null, $container->getAttribute('parte') ?? null);
+        if (preg_match('/^(.+)-(\d{4})$/', $label, $matches)) {
+            return $matches[1] . ' - ' . $matches[2];
         }
 
         return $label !== '' ? $label : null;

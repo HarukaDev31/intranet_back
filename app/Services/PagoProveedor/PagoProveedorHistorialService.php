@@ -13,12 +13,12 @@ class PagoProveedorHistorialService
     public function registrar(string $entidadTipo, int $entidadId, string $accion, array $actor, ?string $detalle = null): void
     {
         PagoProveedorHistorial::query()->create([
-            'entidad_tipo' => $entidadTipo,
-            'entidad_id' => $entidadId,
-            'accion' => $accion,
-            'detalle' => $detalle,
-            'usuario_id' => $actor['id'],
-            'usuario_nombre' => $actor['nombre'],
+            'entity_type' => $entidadTipo,
+            'entity_id' => $entidadId,
+            'action' => $accion,
+            'detail' => $detalle,
+            'user_id' => $actor['id'],
+            'user_name' => $actor['nombre'],
             'area' => $actor['area'],
             'created_at' => Carbon::now(),
         ]);

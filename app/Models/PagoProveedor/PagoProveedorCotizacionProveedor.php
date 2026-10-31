@@ -2,62 +2,73 @@
 
 namespace App\Models\PagoProveedor;
 
+use App\Models\CargaConsolidada\CotizacionProveedor;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * @property int $id
- * @property int $cotizacion_id
- * @property int $orden
+ * @property int $quote_id
+ * @property int $position
  * @property string|null $code_supplier
- * @property int|null $id_proveedor_cc
- * @property string|null $nombre_proveedor
- * @property string|null $producto
- * @property string $moneda
- * @property string $tipo_pago
- * @property float $valor_carga_usd
- * @property string $modalidad_abono
- * @property string $modalidad_pago
- * @property float $porcentaje_1
- * @property float $porcentaje_2
- * @property \Illuminate\Support\Carbon|null $fecha_cuota_2
- * @property bool $comision_bancaria
- * @property bool $comision_administrativa
+ * @property int|null $consolidated_provider_id
+ * @property string|null $supplier_name
+ * @property string|null $product
+ * @property string $currency
+ * @property string $payment_type
+ * @property float $cargo_value_usd
+ * @property string $client_payment_mode
+ * @property string $supplier_payment_mode
+ * @property float $first_share_percent
+ * @property float|null $second_share_percent
+ * @property \Illuminate\Support\Carbon|null $second_installment_on
+ * @property bool $charges_bank_fee
+ * @property bool $charges_admin_fee
  * @property string|null $proforma_path
- * @property string|null $proforma_nombre
+ * @property string|null $proforma_name
+ * @property CotizacionProveedor|null $consolidatedProvider
  */
 class PagoProveedorCotizacionProveedor extends Model
 {
+    public const CURRENCY_USD = 'USD';
+    public const CURRENCY_RMB = 'RMB';
+    public const PAYMENT_TT = 'tt';
+    public const PAYMENT_TRANSFER = 'transferencia';
+    public const PAYMENT_CARD = 'tarjeta';
+    public const FULL_SHARE = 100;
+    public const MODE_TOTAL = 'total';
+    public const MODE_SPLIT = 'fraccionado';
+
     protected $table = 'pago_proveedor_cotizacion_proveedores';
 
     protected $fillable = [
-        'cotizacion_id',
-        'orden',
+        'quote_id',
+        'position',
         'code_supplier',
-        'id_proveedor_cc',
-        'nombre_proveedor',
-        'producto',
-        'moneda',
-        'tipo_pago',
-        'valor_carga_usd',
-        'modalidad_abono',
-        'modalidad_pago',
-        'porcentaje_1',
-        'porcentaje_2',
-        'fecha_cuota_2',
-        'comision_bancaria',
-        'comision_administrativa',
+        'consolidated_provider_id',
+        'supplier_name',
+        'product',
+        'currency',
+        'payment_type',
+        'cargo_value_usd',
+        'client_payment_mode',
+        'supplier_payment_mode',
+        'first_share_percent',
+        'second_share_percent',
+        'second_installment_on',
+        'charges_bank_fee',
+        'charges_admin_fee',
         'proforma_path',
-        'proforma_nombre',
+        'proforma_name',
     ];
 
     protected $casts = [
-        'valor_carga_usd' => 'float',
-        'porcentaje_1' => 'float',
-        'porcentaje_2' => 'float',
-        'fecha_cuota_2' => 'date:Y-m-d',
-        'comision_bancaria' => 'boolean',
-        'comision_administrativa' => 'boolean',
+        'cargo_value_usd' => 'float',
+        'first_share_percent' => 'float',
+        'second_share_percent' => 'float',
+        'second_installment_on' => 'date:Y-m-d',
+        'charges_bank_fee' => 'boolean',
+        'charges_admin_fee' => 'boolean',
     ];
 
     /**
@@ -65,6 +76,16 @@ class PagoProveedorCotizacionProveedor extends Model
      */
     public function cotizacion(): BelongsTo
     {
-        return $this->belongsTo(PagoProveedorCotizacion::class, 'cotizacion_id');
+        return $this->belongsTo(PagoProveedorCotizacion::class, 'quote_id');
+    }
+
+    /**
+     * The supplier already created in Carga Consolidada.
+     *
+     * @return BelongsTo<CotizacionProveedor, $this>
+     */
+    public function consolidatedProvider(): BelongsTo
+    {
+        return $this->belongsTo(CotizacionProveedor::class, 'consolidated_provider_id');
     }
 }

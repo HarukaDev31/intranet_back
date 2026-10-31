@@ -8,47 +8,86 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * @property int $id
- * @property int $solicitud_id
- * @property float $importe
- * @property \Illuminate\Support\Carbon|null $fecha_pago
- * @property string $numero_operacion
- * @property string $banco
- * @property bool $interbancaria
+ * @property int $request_id
+ * @property float $amount
+ * @property float|null $bank_amount
+ * @property float|null $recorded_amount
+ * @property \Illuminate\Support\Carbon|null $paid_on
+ * @property string $operation_number
+ * @property string $bank
+ * @property bool $interbank
  * @property string $voucher_path
- * @property string $voucher_nombre
- * @property string $estado
- * @property float $excedente
- * @property string|null $excedente_decision
- * @property bool $operacion_repetida
- * @property int|null $usuario_id
+ * @property string $voucher_name
+ * @property string $status
+ * @property string|null $observation_reason
+ * @property string|null $observation_detail
+ * @property bool $corrected_by_admin
+ * @property \Illuminate\Support\Carbon|null $verified_at
+ * @property int|null $verified_by_user_id
+ * @property float $surplus
+ * @property string|null $surplus_decision
+ * @property bool $repeated_operation
+ * @property int|null $user_id
  * @property \Illuminate\Database\Eloquent\Collection<int, PagoProveedorAbonoAplicacion> $aplicaciones
+ * @property PagoProveedorSolicitud|null $solicitud
  */
 class PagoProveedorAbono extends Model
 {
+    public const STATUS_IN_VALIDATION = 'en_validacion';
+    public const STATUS_VALIDATED = 'validado';
+    public const STATUS_OBSERVED = 'observado';
+    public const STATUS_CANCELLED = 'anulado';
+    public const BANK_BCP = 'bcp';
+    public const BANK_INTERBANK = 'interbank';
+    public const EXCESS_TO_CONSULT = 'por_consultar';
+    public const EXCESS_APPLIED = 'aplicado_cuota';
+    public const EXCESS_REFUND = 'reembolso_solicitado';
+    public const EXCESS_KEEP = 'no_devuelve';
+    public const REASON_NOT_RECEIVED = 'did_not_arrive';
+    public const REASON_OTHER_ACCOUNT = 'other_account';
+    public const REASON_FAKE_VOUCHER = 'fake_voucher';
+    public const FILTER_ALL = 'all';
+    public const SETTING_OBSERVATION_REASONS = 'deposit_observation_reasons';
+    public const PURPOSE_CLIENT = 'client_deposit';
+    public const PURPOSE_EXCHANGE = 'exchange_difference';
+
     protected $table = 'pago_proveedor_abonos';
 
     protected $fillable = [
-        'solicitud_id',
-        'importe',
-        'fecha_pago',
-        'numero_operacion',
-        'banco',
-        'interbancaria',
+        'request_id',
+        'purpose',
+        'exchange_provider_id',
+        'amount',
+        'bank_amount',
+        'recorded_amount',
+        'paid_on',
+        'operation_number',
+        'bank',
+        'interbank',
         'voucher_path',
-        'voucher_nombre',
-        'estado',
-        'excedente',
-        'excedente_decision',
-        'operacion_repetida',
-        'usuario_id',
+        'voucher_name',
+        'status',
+        'observation_reason',
+        'observation_detail',
+        'corrected_by_admin',
+        'verified_at',
+        'verified_by_user_id',
+        'surplus',
+        'surplus_decision',
+        'repeated_operation',
+        'user_id',
     ];
 
     protected $casts = [
-        'importe' => 'float',
-        'fecha_pago' => 'date:Y-m-d',
-        'interbancaria' => 'boolean',
-        'excedente' => 'float',
-        'operacion_repetida' => 'boolean',
+        'amount' => 'float',
+        'bank_amount' => 'float',
+        'recorded_amount' => 'float',
+        'paid_on' => 'date:Y-m-d',
+        'corrected_by_admin' => 'boolean',
+        'verified_at' => 'datetime',
+        'interbank' => 'boolean',
+        'surplus' => 'float',
+        'repeated_operation' => 'boolean',
     ];
 
     /**
@@ -56,7 +95,7 @@ class PagoProveedorAbono extends Model
      */
     public function solicitud(): BelongsTo
     {
-        return $this->belongsTo(PagoProveedorSolicitud::class, 'solicitud_id');
+        return $this->belongsTo(PagoProveedorSolicitud::class, 'request_id');
     }
 
     /**
@@ -64,6 +103,14 @@ class PagoProveedorAbono extends Model
      */
     public function aplicaciones(): HasMany
     {
-        return $this->hasMany(PagoProveedorAbonoAplicacion::class, 'abono_id');
+        return $this->hasMany(PagoProveedorAbonoAplicacion::class, 'deposit_id');
+    }
+
+    /**
+     * @return BelongsTo<PagoProveedorSolicitudProveedor, $this>
+     */
+    public function exchangeProvider(): BelongsTo
+    {
+        return $this->belongsTo(PagoProveedorSolicitudProveedor::class, 'exchange_provider_id');
     }
 }

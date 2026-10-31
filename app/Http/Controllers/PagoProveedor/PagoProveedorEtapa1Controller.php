@@ -4,7 +4,12 @@ namespace App\Http\Controllers\PagoProveedor;
 
 use App\Exceptions\PagoProveedorException;
 use App\Http\Controllers\Controller;
+use App\Models\PagoProveedor\PagoProveedorSolicitudProveedor;
 use App\Services\PagoProveedor\PagoProveedorAutorizacion;
+use App\Models\PagoProveedor\PagoProveedorAbono;
+use App\Services\PagoProveedor\PagoProveedorConfirmacionService;
+use App\Services\PagoProveedor\PagoProveedorReembolsoService;
+use App\Services\PagoProveedor\PagoProveedorYuanService;
 use App\Services\PagoProveedor\PagoProveedorEtapa1Service;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,6 +18,8 @@ use Illuminate\Validation\ValidationException;
 
 class PagoProveedorEtapa1Controller extends Controller
 {
+    use RespondeConResource;
+
     public function __construct(
         private readonly PagoProveedorAutorizacion $autorizacion,
         private readonly PagoProveedorEtapa1Service $etapa1,
@@ -28,10 +35,7 @@ class PagoProveedorEtapa1Controller extends Controller
                 'wechat' => ['required', 'string', 'max:30'],
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => $this->etapa1->guardarRmb($solicitudId, $proveedorId, $datos['vendedor_nombre'], $datos['wechat'], $actor),
-            ]);
+            return $this->datos($this->etapa1->guardarRmb($solicitudId, $proveedorId, $datos['vendedor_nombre'], $datos['wechat'], $actor));
         });
     }
 
@@ -40,10 +44,7 @@ class PagoProveedorEtapa1Controller extends Controller
         return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
             $actor = $this->autorizacion->exigirVentas($request->user());
 
-            return response()->json([
-                'success' => true,
-                'data' => $this->etapa1->enviarFormulario($solicitudId, $proveedorId, $actor),
-            ]);
+            return $this->datos($this->etapa1->enviarFormulario($solicitudId, $proveedorId, $actor));
         });
     }
 
@@ -52,10 +53,7 @@ class PagoProveedorEtapa1Controller extends Controller
         return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
             $actor = $this->autorizacion->exigirVentas($request->user());
 
-            return response()->json([
-                'success' => true,
-                'data' => $this->etapa1->llenarPorVentas($solicitudId, $proveedorId, $request->all(), $actor),
-            ]);
+            return $this->datos($this->etapa1->llenarPorVentas($solicitudId, $proveedorId, $request->all(), $actor));
         });
     }
 
@@ -64,10 +62,7 @@ class PagoProveedorEtapa1Controller extends Controller
         return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
             $actor = $this->autorizacion->exigirVentas($request->user());
 
-            return response()->json([
-                'success' => true,
-                'data' => $this->etapa1->solicitarValidacion($solicitudId, $proveedorId, $actor),
-            ]);
+            return $this->datos($this->etapa1->solicitarValidacion($solicitudId, $proveedorId, $actor));
         });
     }
 
@@ -76,10 +71,7 @@ class PagoProveedorEtapa1Controller extends Controller
         return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
             $actor = $this->autorizacion->exigirVentas($request->user());
 
-            return response()->json([
-                'success' => true,
-                'data' => $this->etapa1->anularProveedor($solicitudId, $proveedorId, $actor),
-            ]);
+            return $this->datos($this->etapa1->anularProveedor($solicitudId, $proveedorId, $actor));
         });
     }
 
@@ -88,10 +80,7 @@ class PagoProveedorEtapa1Controller extends Controller
         return $this->responder(function () use ($request, $solicitudId) {
             $actor = $this->autorizacion->exigirVentas($request->user());
 
-            return response()->json([
-                'success' => true,
-                'data' => $this->etapa1->vistaPreviaPedirDatos($solicitudId, $actor),
-            ]);
+            return $this->datos($this->etapa1->vistaPreviaPedirDatos($solicitudId, $actor));
         });
     }
 
@@ -100,10 +89,7 @@ class PagoProveedorEtapa1Controller extends Controller
         return $this->responder(function () use ($request, $solicitudId) {
             $actor = $this->autorizacion->exigirVentas($request->user());
 
-            return response()->json([
-                'success' => true,
-                'data' => $this->etapa1->vistaPreviaCuentas($solicitudId, $actor),
-            ]);
+            return $this->datos($this->etapa1->vistaPreviaCuentas($solicitudId, $actor));
         });
     }
 
@@ -122,10 +108,7 @@ class PagoProveedorEtapa1Controller extends Controller
         return $this->responder(function () use ($request, $solicitudId, $abonoId) {
             $actor = $this->autorizacion->exigirVentas($request->user());
 
-            return response()->json([
-                'success' => true,
-                'data' => $this->etapa1->anularAbono($solicitudId, $abonoId, $actor),
-            ]);
+            return $this->datos($this->etapa1->anularAbono($solicitudId, $abonoId, $actor));
         });
     }
 
@@ -137,27 +120,139 @@ class PagoProveedorEtapa1Controller extends Controller
                 'decision' => ['required', 'in:aplicado_cuota,reembolso_solicitado'],
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => $this->etapa1->decidirExcedente($solicitudId, $abonoId, $datos['decision'], $actor),
+            return $this->datos($this->etapa1->decidirExcedente($solicitudId, $abonoId, $datos['decision'], $actor));
+        });
+    }
+
+    public function decidirCuota(Request $request, int $solicitudId, int $proveedorId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
+            $actor = $this->autorizacion->exigirVentas($request->user());
+            $datos = $request->validate([
+                'choice' => ['required', 'in:'.PagoProveedorSolicitudProveedor::CHOICE_PROCEED.','.PagoProveedorSolicitudProveedor::CHOICE_CANCEL],
             ]);
+
+            return $this->datos(app(PagoProveedorConfirmacionService::class)->decideSecondInstallment(
+                $solicitudId,
+                $proveedorId,
+                $datos['choice'],
+                $actor
+            ));
+        });
+    }
+
+    public function confirmarTipoCambio(Request $request, int $solicitudId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $solicitudId) {
+            $actor = $this->autorizacion->exigirVentas($request->user());
+            $datos = $request->validate([
+                'tipo_cambio' => ['required', 'numeric', 'gt:0'],
+            ]);
+
+            return $this->datos(app(PagoProveedorConfirmacionService::class)->confirmExchangeRate(
+                $solicitudId,
+                (float) $datos['tipo_cambio'],
+                $actor
+            ));
+        });
+    }
+
+    public function decidirPago(Request $request, int $solicitudId, int $proveedorId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
+            $actor = $this->autorizacion->exigirVentas($request->user());
+            $datos = $request->validate([
+                'choice' => ['required', 'in:'.PagoProveedorSolicitudProveedor::CHOICE_PROCEED.','.PagoProveedorSolicitudProveedor::PAYMENT_CANCEL.','.PagoProveedorSolicitudProveedor::PAYMENT_REFUND],
+                'reason' => ['nullable', 'string', 'max:500'],
+            ]);
+
+            return $this->datos(app(PagoProveedorConfirmacionService::class)->decideSecondPayment(
+                $solicitudId,
+                $proveedorId,
+                $datos['choice'],
+                $datos['reason'] ?? null,
+                $actor
+            ));
+        });
+    }
+
+    public function registrarDiferencia(Request $request, int $solicitudId, int $proveedorId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
+            $actor = $this->autorizacion->exigirVentas($request->user());
+            $datos = $request->validate([
+                'importe' => ['required', 'numeric', 'gt:0'],
+                'fecha' => ['required', 'date'],
+                'banco' => ['required', 'in:'.PagoProveedorAbono::BANK_BCP.','.PagoProveedorAbono::BANK_INTERBANK],
+                'numero_operacion' => ['required', 'string', 'max:80'],
+                'voucher' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            ]);
+
+            return $this->datos(app(PagoProveedorConfirmacionService::class)->registerExchangeVoucher(
+                $solicitudId,
+                $proveedorId,
+                (float) $datos['importe'],
+                $datos['fecha'],
+                $datos['banco'],
+                $datos['numero_operacion'],
+                $datos['voucher'],
+                $actor
+            ));
+        });
+    }
+
+    public function solicitarReembolso(Request $request, int $solicitudId, int $proveedorId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
+            $actor = $this->autorizacion->exigirVentas($request->user());
+
+            return $this->datos(app(PagoProveedorReembolsoService::class)->request($solicitudId, $proveedorId, $actor));
+        });
+    }
+
+    public function elegirContinuacion(Request $request, int $solicitudId, int $abonoId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $solicitudId, $abonoId) {
+            $actor = $this->autorizacion->exigirVentas($request->user());
+            $datos = $request->validate([
+                'proveedores' => ['required', 'array', 'min:1'],
+                'proveedores.*' => ['integer'],
+            ]);
+
+            return $this->datos($this->etapa1->elegirContinuacion($solicitudId, $abonoId, $datos['proveedores'], $actor));
+        });
+    }
+
+    public function levantarChina(Request $request, int $solicitudId, int $proveedorId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
+            $actor = $this->autorizacion->exigirVentas($request->user());
+            $datos = $request->validate([
+                'vendedor' => ['required', 'string', 'max:120'],
+                'wechat' => ['required', 'string', 'max:40'],
+            ]);
+
+            return $this->datos(app(PagoProveedorYuanService::class)->lift(
+                $solicitudId,
+                $proveedorId,
+                $datos['vendedor'],
+                $datos['wechat'],
+                $actor
+            ));
         });
     }
 
     public function verFormulario(string $token): JsonResponse
     {
         return $this->responder(function () use ($token) {
-            return response()->json(['success' => true, 'data' => $this->etapa1->verFormularioPublico($token)]);
+            return $this->datos($this->etapa1->verFormularioPublico($token));
         });
     }
 
     public function guardarFormulario(Request $request, string $token): JsonResponse
     {
         return $this->responder(function () use ($request, $token) {
-            return response()->json([
-                'success' => true,
-                'data' => $this->etapa1->guardarFormularioPublico($token, $request->all()),
-            ]);
+            return $this->datos($this->etapa1->guardarFormularioPublico($token, $request->all()));
         });
     }
 
@@ -177,7 +272,7 @@ class PagoProveedorEtapa1Controller extends Controller
             $datos = $request->validate($reglas);
             $resultado = $this->etapa1->registrarAbono($solicitudId, $datos, $request->file('voucher'), $actor, $abonoId);
 
-            return response()->json(['success' => true, 'data' => $resultado], $abonoId ? 200 : 201);
+            return $this->datos($resultado, $abonoId ? 200 : 201);
         });
     }
 

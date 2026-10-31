@@ -8,20 +8,20 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * @property int $id
- * @property string $codigo
+ * @property string $code
  * @property int|null $calculadora_importacion_id
- * @property int|null $id_cotizacion_cc
- * @property string $cod_cotizacion_cc
- * @property string $estado
- * @property \Carbon\Carbon|null $vigencia_fin
- * @property float|null $tipo_cambio
- * @property bool $tipo_cambio_confirmado
- * @property string|null $cliente_nombre
- * @property string|null $cliente_documento
- * @property string|null $cliente_whatsapp
- * @property string|null $cliente_correo
- * @property string|null $consolidado
- * @property int|null $usuario_id
+ * @property int|null $consolidated_quote_id
+ * @property string $consolidated_quote_code
+ * @property string $status
+ * @property \Carbon\Carbon|null $valid_until
+ * @property float|null $exchange_rate
+ * @property bool $exchange_rate_confirmed
+ * @property string|null $client_name
+ * @property string|null $client_document
+ * @property string|null $client_whatsapp
+ * @property string|null $client_email
+ * @property string|null $consolidation
+ * @property int|null $user_id
  * @property \Illuminate\Support\Carbon|null $created_at
  * @property \Illuminate\Support\Carbon|null $updated_at
  * @property \Illuminate\Database\Eloquent\Collection<int, PagoProveedorCotizacionProveedor> $proveedores
@@ -30,29 +30,33 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  */
 class PagoProveedorCotizacion extends Model
 {
+    public const STATUS_PENDING = 'pendiente';
+    public const STATUS_CONFIRMED = 'confirmada';
+    public const FILTER_EXPIRED = 'vencida';
+
     protected $table = 'pago_proveedor_cotizaciones';
 
     protected $fillable = [
-        'codigo',
+        'code',
         'calculadora_importacion_id',
-        'id_cotizacion_cc',
-        'cod_cotizacion_cc',
-        'estado',
-        'vigencia_fin',
-        'tipo_cambio',
-        'tipo_cambio_confirmado',
-        'cliente_nombre',
-        'cliente_documento',
-        'cliente_whatsapp',
-        'cliente_correo',
-        'consolidado',
-        'usuario_id',
+        'consolidated_quote_id',
+        'consolidated_quote_code',
+        'status',
+        'valid_until',
+        'exchange_rate',
+        'exchange_rate_confirmed',
+        'client_name',
+        'client_document',
+        'client_whatsapp',
+        'client_email',
+        'consolidation',
+        'user_id',
     ];
 
     protected $casts = [
-        'vigencia_fin' => 'datetime',
-        'tipo_cambio' => 'float',
-        'tipo_cambio_confirmado' => 'boolean',
+        'valid_until' => 'datetime',
+        'exchange_rate' => 'float',
+        'exchange_rate_confirmed' => 'boolean',
     ];
 
     /**
@@ -60,7 +64,7 @@ class PagoProveedorCotizacion extends Model
      */
     public function proveedores(): HasMany
     {
-        return $this->hasMany(PagoProveedorCotizacionProveedor::class, 'cotizacion_id')->orderBy('orden');
+        return $this->hasMany(PagoProveedorCotizacionProveedor::class, 'quote_id')->orderBy('position');
     }
 
     /**
@@ -68,7 +72,7 @@ class PagoProveedorCotizacion extends Model
      */
     public function solicitud(): HasOne
     {
-        return $this->hasOne(PagoProveedorSolicitud::class, 'cotizacion_id');
+        return $this->hasOne(PagoProveedorSolicitud::class, 'quote_id');
     }
 
     /**
@@ -76,8 +80,8 @@ class PagoProveedorCotizacion extends Model
      */
     public function historial(): HasMany
     {
-        return $this->hasMany(PagoProveedorHistorial::class, 'entidad_id')
-            ->where('entidad_tipo', 'cotizacion')
+        return $this->hasMany(PagoProveedorHistorial::class, 'entity_id')
+            ->where('entity_type', PagoProveedorHistorial::ENTITY_QUOTE)
             ->orderByDesc('id');
     }
 }

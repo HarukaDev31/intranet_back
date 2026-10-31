@@ -7,9 +7,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * @property int $id
- * @property int $abono_id
- * @property int $solicitud_proveedor_id
- * @property float $monto
+ * @property int $deposit_id
+ * @property int $request_provider_id
+ * @property float $amount
  * @property PagoProveedorAbono|null $abono
  * @property PagoProveedorSolicitudProveedor|null $proveedor
  */
@@ -18,13 +18,14 @@ class PagoProveedorAbonoAplicacion extends Model
     protected $table = 'pago_proveedor_abono_aplicaciones';
 
     protected $fillable = [
-        'abono_id',
-        'solicitud_proveedor_id',
-        'monto',
+        'deposit_id',
+        'request_provider_id',
+        'amount',
+        'continues',
     ];
 
     protected $casts = [
-        'monto' => 'float',
+        'amount' => 'float',
     ];
 
     /**
@@ -32,7 +33,7 @@ class PagoProveedorAbonoAplicacion extends Model
      */
     public function abono(): BelongsTo
     {
-        return $this->belongsTo(PagoProveedorAbono::class, 'abono_id');
+        return $this->belongsTo(PagoProveedorAbono::class, 'deposit_id');
     }
 
     /**
@@ -40,6 +41,6 @@ class PagoProveedorAbonoAplicacion extends Model
      */
     public function proveedor(): BelongsTo
     {
-        return $this->belongsTo(PagoProveedorSolicitudProveedor::class, 'solicitud_proveedor_id');
+        return $this->belongsTo(PagoProveedorSolicitudProveedor::class, 'request_provider_id');
     }
 }

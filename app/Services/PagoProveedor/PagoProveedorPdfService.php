@@ -24,7 +24,7 @@ class PagoProveedorPdfService
     public function resumen(int $id, array $actor): array
     {
         $cotizacion = $this->cotizaciones->encontrar($id);
-        $presentado = $this->presenter->cotizacion($cotizacion, $this->configuracion->tarifa());
+        $presentado = $this->presenter->cotizacion($cotizacion, $this->configuracion->tariff());
         if (!$presentado['puede_enviar']) {
             throw new PagoProveedorException(
                 $presentado['vencida']
@@ -50,7 +50,7 @@ class PagoProveedorPdfService
         $this->historial->registrar('cotizacion', $cotizacion->id, 'PDF descargado', $actor);
 
         return [
-            'filename' => 'Resumen_pago_proveedor_' . $cotizacion->codigo . '.pdf',
+            'filename' => 'Resumen_pago_proveedor_' . $cotizacion->code . '.pdf',
             'base64' => base64_encode($dompdf->output()),
         ];
     }

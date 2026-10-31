@@ -4,6 +4,7 @@ namespace App\Http\Controllers\PagoProveedor;
 
 use App\Exceptions\PagoProveedorException;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\PagoProveedor\CotizacionResource;
 use App\Http\Requests\PagoProveedor\StorePagoProveedorCotizacionRequest;
 use App\Http\Requests\PagoProveedor\StorePagoProveedorProformaRequest;
 use App\Http\Requests\PagoProveedor\UpdatePagoProveedorCotizacionRequest;
@@ -18,6 +19,8 @@ use Illuminate\Support\Facades\Log;
 
 class PagoProveedorCotizacionController extends Controller
 {
+    use RespondeConResource;
+
     public function __construct(
         private readonly PagoProveedorAutorizacion $autorizacion,
         private readonly PagoProveedorCotizacionService $cotizaciones,
@@ -37,16 +40,7 @@ class PagoProveedorCotizacionController extends Controller
                 'per_page' => $request->get('per_page', 15),
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => $pagina->items(),
-                'pagination' => [
-                    'current_page' => $pagina->currentPage(),
-                    'last_page' => $pagina->lastPage(),
-                    'per_page' => $pagina->perPage(),
-                    'total' => $pagina->total(),
-                ],
-            ]);
+            return $this->pagina(CotizacionResource::collection($pagina->getCollection()), $pagina);
         });
     }
 
@@ -57,7 +51,7 @@ class PagoProveedorCotizacionController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $this->lookup->buscar($codigo),
+                'data' => $this->lookup->findByCode($codigo),
             ]);
         });
     }
@@ -68,7 +62,7 @@ class PagoProveedorCotizacionController extends Controller
             $actor = $this->autorizacion->exigirVentas($request->user());
             $cotizacion = $this->cotizaciones->crear($request->validated()['cod_cotizacion_cc'], $actor);
 
-            return response()->json(['success' => true, 'data' => $cotizacion], 201);
+            return $this->ok(CotizacionResource::detail($cotizacion), 201);
         });
     }
 
@@ -77,7 +71,7 @@ class PagoProveedorCotizacionController extends Controller
         return $this->responder(function () use ($request, $id) {
             $this->autorizacion->exigirVentas($request->user());
 
-            return response()->json(['success' => true, 'data' => $this->cotizaciones->ver($id)]);
+            return $this->ok(CotizacionResource::detail($this->cotizaciones->ver($id)));
         });
     }
 
@@ -87,7 +81,7 @@ class PagoProveedorCotizacionController extends Controller
             $actor = $this->autorizacion->exigirVentas($request->user());
             $cotizacion = $this->cotizaciones->actualizar($id, $request->validated(), $actor);
 
-            return response()->json(['success' => true, 'data' => $cotizacion]);
+            return $this->ok(CotizacionResource::detail($cotizacion));
         });
     }
 
@@ -110,7 +104,7 @@ class PagoProveedorCotizacionController extends Controller
             ]);
             $cotizacion = $this->cotizaciones->renovar($id, isset($datos['tipo_cambio']) ? (float) $datos['tipo_cambio'] : null, $actor);
 
-            return response()->json(['success' => true, 'data' => $cotizacion]);
+            return $this->ok(CotizacionResource::detail($cotizacion));
         });
     }
 
@@ -120,7 +114,7 @@ class PagoProveedorCotizacionController extends Controller
             $actor = $this->autorizacion->exigirVentas($request->user());
             $cotizacion = $this->cotizaciones->subirProforma($id, $proveedorId, $request->file('proforma'), $actor);
 
-            return response()->json(['success' => true, 'data' => $cotizacion]);
+            return $this->ok(CotizacionResource::detail($cotizacion));
         });
     }
 
@@ -155,7 +149,7 @@ class PagoProveedorCotizacionController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $this->configuracion->todas(),
+                'data' => $this->configuracion->all(),
             ]);
         });
     }
@@ -167,7 +161,7 @@ class PagoProveedorCotizacionController extends Controller
             $datos = $request->validate([
                 'horas' => ['required', 'integer', 'min:1', 'max:240'],
             ]);
-            $this->configuracion->guardar('vigencia_cotizacion_horas', (int) $datos['horas']);
+            $this->configuracion->save('vigencia_cotizacion_horas', (int) $datos['horas']);
 
             return response()->json([
                 'success' => true,

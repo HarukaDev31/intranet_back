@@ -11,12 +11,12 @@ class PagoProveedorMensaje extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'cotizacion_id',
-        'solicitud_id',
-        'tipo',
-        'destinatario',
-        'cuerpo',
-        'usuario_id',
+        'quote_id',
+        'request_id',
+        'message_type',
+        'recipient',
+        'body',
+        'user_id',
         'created_at',
     ];
 

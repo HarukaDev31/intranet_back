@@ -3,15 +3,15 @@
 namespace App\Services\PagoProveedor;
 
 use App\Exceptions\PagoProveedorException;
+use App\Models\PagoProveedor\PagoProveedorCotizacion;
+use App\Models\PagoProveedor\PagoProveedorHistorial;
 use App\Models\PagoProveedor\PagoProveedorSolicitud;
-use App\Traits\FileTrait;
+use App\Models\PagoProveedor\PagoProveedorSolicitudProveedor;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 class PagoProveedorSolicitudService
 {
-    use FileTrait;
-
     public function __construct(
         private readonly PagoProveedorCotizacionService $cotizaciones,
         private readonly PagoProveedorCotizacionPresenter $presenter,
@@ -22,42 +22,39 @@ class PagoProveedorSolicitudService
 
     public function listar(array $filtros): LengthAwarePaginator
     {
-        $query = PagoProveedorSolicitud::query()->with(['proveedores', 'cotizacion'])->orderByDesc('id');
+        $query = PagoProveedorSolicitud::query()->with(['proveedores.datos', 'proveedores.consolidatedProvider', 'cotizacion'])->orderByDesc('id');
 
         if (!empty($filtros['search'])) {
             $texto = '%' . trim((string) $filtros['search']) . '%';
             $query->where(function ($q) use ($texto) {
-                $q->where('cliente_nombre', 'like', $texto)
-                    ->orWhere('cod_cotizacion_cc', 'like', $texto)
-                    ->orWhere('consolidado', 'like', $texto)
-                    ->orWhere('numero_orden', 'like', $texto);
+                $q->where('client_name', 'like', $texto)
+                    ->orWhere('consolidated_quote_code', 'like', $texto)
+                    ->orWhere('consolidation', 'like', $texto)
+                    ->orWhere('order_number', 'like', $texto)
+                    ->orWhereHas('proveedores', function ($proveedores) use ($texto) {
+                        $proveedores->where('request_code', 'like', $texto)
+                            ->orWhere('code_supplier', 'like', $texto);
+                    });
             });
         }
 
-        $pagina = $query->paginate((int) ($filtros['per_page'] ?? 15));
-        $pagina->getCollection()->transform(fn (PagoProveedorSolicitud $solicitud) => $this->resumen($solicitud));
-
-        return $pagina;
+        return $query->paginate((int) ($filtros['per_page'] ?? 15));
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    public function ver(int $id): array
+    public function ver(int $id): PagoProveedorSolicitud
     {
-        $solicitud = PagoProveedorSolicitud::query()->with(['proveedores', 'cotizacion'])->find($id);
+        $solicitud = PagoProveedorSolicitud::query()->with(['proveedores.datos', 'proveedores.consolidatedProvider', 'cotizacion'])->find($id);
         if (!$solicitud) {
             throw new PagoProveedorException('La solicitud no existe.', 404);
         }
 
-        return $this->detalle($solicitud);
+        return $solicitud;
     }
 
     /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
-     * @return array<string, mixed>
      */
-    public function crearDesdeCotizacion(int $cotizacionId, array $actor): array
+    public function crearDesdeCotizacion(int $cotizacionId, array $actor): PagoProveedorSolicitud
     {
         return DB::transaction(function () use ($cotizacionId, $actor) {
             $cotizacion = $this->cotizaciones->encontrar($cotizacionId, true);
@@ -67,7 +64,7 @@ class PagoProveedorSolicitudService
                 throw new PagoProveedorException('Esta cotización ya tiene una solicitud.');
             }
 
-            $presentado = $this->presenter->cotizacion($cotizacion, $this->configuracion->tarifa());
+            $presentado = $this->presenter->cotizacion($cotizacion, $this->configuracion->tariff());
             if ($presentado['vencida']) {
                 throw new PagoProveedorException('La cotización está vencida. Renuévala antes de crear la solicitud.');
             }
@@ -75,20 +72,20 @@ class PagoProveedorSolicitudService
                 throw new PagoProveedorException(implode(' ', $presentado['faltantes']));
             }
 
-            $numero = ((int) PagoProveedorSolicitud::query()->lockForUpdate()->max('numero_orden')) + 1;
+            $numero = ((int) PagoProveedorSolicitud::query()->lockForUpdate()->max('order_number')) + 1;
             $solicitud = PagoProveedorSolicitud::query()->create([
-                'numero_orden' => $numero,
-                'cotizacion_id' => $cotizacion->id,
-                'cod_cotizacion_cc' => $cotizacion->cod_cotizacion_cc,
-                'id_cotizacion_cc' => $cotizacion->id_cotizacion_cc,
-                'tipo_cambio' => $cotizacion->tipo_cambio,
-                'tipo_cambio_confirmado' => true,
-                'cliente_nombre' => $cotizacion->cliente_nombre,
-                'cliente_documento' => $cotizacion->cliente_documento,
-                'cliente_whatsapp' => $cotizacion->cliente_whatsapp,
-                'cliente_correo' => $cotizacion->cliente_correo,
-                'consolidado' => $cotizacion->consolidado,
-                'usuario_id' => $actor['id'],
+                'order_number' => $numero,
+                'quote_id' => $cotizacion->id,
+                'consolidated_quote_code' => $cotizacion->consolidated_quote_code,
+                'consolidated_quote_id' => $cotizacion->consolidated_quote_id,
+                'exchange_rate' => $cotizacion->exchange_rate,
+                'exchange_rate_confirmed' => true,
+                'client_name' => $cotizacion->client_name,
+                'client_document' => $cotizacion->client_document,
+                'client_whatsapp' => $cotizacion->client_whatsapp,
+                'client_email' => $cotizacion->client_email,
+                'consolidation' => $cotizacion->consolidation,
+                'user_id' => $actor['id'],
             ]);
 
             $porOrden = [];
@@ -97,104 +94,43 @@ class PagoProveedorSolicitudService
             }
 
             foreach ($cotizacion->proveedores as $proveedor) {
-                $linea = $porOrden[$proveedor->orden] ?? [];
+                $linea = $porOrden[$proveedor->position] ?? [];
                 $solicitud->proveedores()->create([
-                    'orden' => $proveedor->orden,
+                    'position' => $proveedor->position,
                     'code_supplier' => $proveedor->code_supplier,
-                    'id_proveedor_cc' => $proveedor->id_proveedor_cc,
-                    'nombre_proveedor' => $proveedor->nombre_proveedor,
-                    'producto' => $proveedor->producto,
-                    'moneda' => $linea['moneda'] ?? $proveedor->moneda,
-                    'tipo_pago' => $proveedor->tipo_pago,
-                    'valor_carga_usd' => $proveedor->valor_carga_usd,
-                    'modalidad_abono' => $linea['modalidad_abono'] ?? $proveedor->modalidad_abono,
-                    'modalidad_pago' => $linea['modalidad_pago'] ?? $proveedor->modalidad_pago,
-                    'porcentaje_1' => $proveedor->porcentaje_1,
-                    'porcentaje_2' => $proveedor->porcentaje_2,
-                    'fecha_cuota_2' => $proveedor->fecha_cuota_2,
-                    'comision_bancaria' => $proveedor->comision_bancaria,
-                    'comision_administrativa' => $proveedor->comision_administrativa,
-                    'bancaria_monto' => $linea['bancaria'] ?? 0,
-                    'administrativa_monto' => $linea['administrativa'] ?? 0,
-                    'total_monto' => $linea['total'] ?? 0,
-                    'bancaria_incluida_en_orden' => $linea['bancaria_incluida_en'] ?? null,
-                    'resumen_json' => $linea,
+                    'consolidated_provider_id' => $proveedor->consolidated_provider_id,
+                    'supplier_name' => $proveedor->supplier_name,
+                    'product' => $proveedor->product,
+                    'currency' => $linea['moneda'] ?? $proveedor->currency,
+                    'payment_type' => $proveedor->payment_type,
+                    'cargo_value_usd' => $proveedor->cargo_value_usd,
+                    'client_payment_mode' => $linea['modalidad_abono'] ?? $proveedor->client_payment_mode,
+                    'supplier_payment_mode' => $linea['modalidad_pago'] ?? $proveedor->supplier_payment_mode,
+                    'first_share_percent' => $proveedor->first_share_percent,
+                    'second_share_percent' => $proveedor->second_share_percent,
+                    'second_installment_on' => $proveedor->second_installment_on,
+                    'charges_bank_fee' => $proveedor->charges_bank_fee,
+                    'charges_admin_fee' => $proveedor->charges_admin_fee,
+                    'bank_fee_amount' => $linea['bancaria'] ?? 0,
+                    'admin_fee_amount' => $linea['administrativa'] ?? 0,
+                    'total_amount' => $linea['total'] ?? 0,
+                    'bank_fee_on_position' => $linea['bancaria_incluida_en'] ?? null,
+                    'summary_json' => $linea,
                     'proforma_path' => $proveedor->proforma_path,
-                    'proforma_nombre' => $proveedor->proforma_nombre,
-                    'etapa' => 1,
-                    'estado' => 'en_proceso',
-                    'cuota_actual' => 1,
-                    'pago_actual' => 1,
+                    'proforma_name' => $proveedor->proforma_name,
+                    'stage' => PagoProveedorSolicitudProveedor::STAGE_DATA,
+                    'status' => PagoProveedorSolicitudProveedor::STATUS_IN_PROGRESS,
+                    'current_installment' => PagoProveedorSolicitudProveedor::FIRST_INSTALLMENT,
+                    'current_payment' => PagoProveedorSolicitudProveedor::FIRST_INSTALLMENT,
                 ]);
             }
 
-            $cotizacion->estado = 'confirmada';
+            $cotizacion->status = PagoProveedorCotizacion::STATUS_CONFIRMED;
             $cotizacion->save();
-            $this->historial->registrar('cotizacion', $cotizacion->id, 'Confirmada', $actor, 'Solicitud N.° ' . $numero);
-            $this->historial->registrar('solicitud', $solicitud->id, 'Creada', $actor, 'Proveedores en etapa 1.');
+            $this->historial->registrar(PagoProveedorHistorial::ENTITY_QUOTE, $cotizacion->id, 'Confirmada', $actor, 'Solicitud N.° ' . $numero);
+            $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitud->id, 'Creada', $actor, 'Proveedores en etapa 1.');
 
-            return $this->detalle($solicitud->load('proveedores', 'cotizacion'));
+            return $solicitud->load(['proveedores.datos', 'cotizacion']);
         });
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function resumen(PagoProveedorSolicitud $solicitud): array
-    {
-        return [
-            'id' => $solicitud->id,
-            'numero_orden' => $solicitud->numero_orden,
-            'cotizacion_id' => $solicitud->cotizacion_id,
-            'cotizacion_codigo' => $solicitud->cotizacion?->codigo,
-            'cod_cotizacion_cc' => $solicitud->cod_cotizacion_cc,
-            'cliente_nombre' => $solicitud->cliente_nombre,
-            'consolidado' => $solicitud->consolidado,
-            'proveedores_cantidad' => $solicitud->proveedores->count(),
-            'creado_en' => optional($solicitud->created_at)->toIso8601String(),
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function detalle(PagoProveedorSolicitud $solicitud): array
-    {
-        $resumen = $this->resumen($solicitud);
-        $resumen['tipo_cambio'] = $solicitud->tipo_cambio;
-        $resumen['cliente_documento'] = $solicitud->cliente_documento;
-        $resumen['cliente_whatsapp'] = $solicitud->cliente_whatsapp;
-        $resumen['cliente_correo'] = $solicitud->cliente_correo;
-        $resumen['proveedores'] = $solicitud->proveedores->map(function ($proveedor) {
-            $titulo = $proveedor->nombre_proveedor
-                ? $proveedor->code_supplier . ' · ' . $proveedor->nombre_proveedor
-                : $proveedor->code_supplier;
-
-            return [
-                'id' => $proveedor->id,
-                'orden' => $proveedor->orden,
-                'titulo' => $titulo,
-                'code_supplier' => $proveedor->code_supplier,
-                'nombre_proveedor' => $proveedor->nombre_proveedor,
-                'producto' => $proveedor->producto,
-                'moneda' => $proveedor->moneda,
-                'tipo_pago' => $proveedor->tipo_pago,
-                'valor_carga_usd' => $proveedor->valor_carga_usd,
-                'modalidad_abono' => $proveedor->modalidad_abono,
-                'modalidad_pago' => $proveedor->modalidad_pago,
-                'bancaria_monto' => $proveedor->bancaria_monto,
-                'administrativa_monto' => $proveedor->administrativa_monto,
-                'total_monto' => $proveedor->total_monto,
-                'etiqueta_bancaria' => $proveedor->resumen_json['etiqueta_bancaria'] ?? null,
-                'proforma_nombre' => $proveedor->proforma_nombre,
-                'proforma_url' => $proveedor->proforma_path ? $this->cdnStorageUrl($proveedor->proforma_path) : null,
-                'etapa' => $proveedor->etapa,
-                'etapa_nombre' => 'Solicitud y datos de pago',
-                'estado' => $proveedor->estado,
-                'estado_nombre' => 'En proceso',
-            ];
-        })->values()->all();
-
-        return $resumen;
     }
 }

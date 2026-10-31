@@ -4,6 +4,7 @@ namespace App\Http\Controllers\PagoProveedor;
 
 use App\Exceptions\PagoProveedorException;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\PagoProveedor\SolicitudResource;
 use App\Services\PagoProveedor\PagoProveedorAutorizacion;
 use App\Services\PagoProveedor\PagoProveedorEtapa1Service;
 use App\Services\PagoProveedor\PagoProveedorSolicitudService;
@@ -13,6 +14,8 @@ use Illuminate\Support\Facades\Log;
 
 class PagoProveedorSolicitudController extends Controller
 {
+    use RespondeConResource;
+
     public function __construct(
         private readonly PagoProveedorAutorizacion $autorizacion,
         private readonly PagoProveedorSolicitudService $solicitudes,
@@ -29,16 +32,7 @@ class PagoProveedorSolicitudController extends Controller
                 'per_page' => $request->get('per_page', 15),
             ]);
 
-            return response()->json([
-                'success' => true,
-                'data' => $pagina->items(),
-                'pagination' => [
-                    'current_page' => $pagina->currentPage(),
-                    'last_page' => $pagina->lastPage(),
-                    'per_page' => $pagina->perPage(),
-                    'total' => $pagina->total(),
-                ],
-            ]);
+            return $this->pagina(SolicitudResource::collection($pagina->getCollection()), $pagina);
         });
     }
 
@@ -47,7 +41,7 @@ class PagoProveedorSolicitudController extends Controller
         return $this->responder(function () use ($request, $id) {
             $this->autorizacion->exigirVentas($request->user());
 
-            return response()->json(['success' => true, 'data' => $this->etapa1->detalle($id)]);
+            return $this->ok(new \App\Http\Resources\PagoProveedor\SolicitudDetalleResource($this->etapa1->detalle($id)));
         });
     }
 
@@ -56,10 +50,7 @@ class PagoProveedorSolicitudController extends Controller
         return $this->responder(function () use ($request, $cotizacionId) {
             $actor = $this->autorizacion->exigirVentas($request->user());
 
-            return response()->json([
-                'success' => true,
-                'data' => $this->solicitudes->crearDesdeCotizacion($cotizacionId, $actor),
-            ], 201);
+            return $this->ok(new SolicitudResource($this->solicitudes->crearDesdeCotizacion($cotizacionId, $actor)), 201);
         });
     }
 

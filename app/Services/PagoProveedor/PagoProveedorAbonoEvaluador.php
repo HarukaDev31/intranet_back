@@ -3,6 +3,7 @@
 namespace App\Services\PagoProveedor;
 
 use App\Exceptions\PagoProveedorException;
+use App\Models\PagoProveedor\PagoProveedorAbono;
 
 /**
  * Reparte un abono entre proveedores sin pasar el saldo de cada uno (RN-50, RN-51, RN-55).
@@ -79,9 +80,9 @@ class PagoProveedorAbonoEvaluador
             return null;
         }
         if ($excedente <= 1) {
-            return $hayCuota2 ? 'aplicado_cuota' : 'no_devuelve';
+            return $hayCuota2 ? PagoProveedorAbono::EXCESS_APPLIED : PagoProveedorAbono::EXCESS_KEEP;
         }
 
-        return 'por_consultar';
+        return PagoProveedorAbono::EXCESS_TO_CONSULT;
     }
 }

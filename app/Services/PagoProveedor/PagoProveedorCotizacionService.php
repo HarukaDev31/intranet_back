@@ -28,103 +28,85 @@ class PagoProveedorCotizacionService
 
     public function listar(array $filtros): LengthAwarePaginator
     {
-        $query = PagoProveedorCotizacion::query()->with('proveedores')->orderByDesc('id');
+        $query = PagoProveedorCotizacion::query()->with(['proveedores.consolidatedProvider', 'solicitud'])->orderByDesc('id');
 
         if (!empty($filtros['search'])) {
             $texto = '%' . trim((string) $filtros['search']) . '%';
             $query->where(function ($q) use ($texto) {
-                $q->where('codigo', 'like', $texto)
-                    ->orWhere('cod_cotizacion_cc', 'like', $texto)
-                    ->orWhere('cliente_nombre', 'like', $texto)
-                    ->orWhere('consolidado', 'like', $texto);
+                $q->where('code', 'like', $texto)
+                    ->orWhere('consolidated_quote_code', 'like', $texto)
+                    ->orWhere('client_name', 'like', $texto)
+                    ->orWhere('consolidation', 'like', $texto);
             });
         }
 
         if (!empty($filtros['estado']) && $filtros['estado'] !== 'todos') {
-            if ($filtros['estado'] === 'vencida') {
-                $query->where('estado', 'pendiente')->where('vigencia_fin', '<=', now());
-            } elseif ($filtros['estado'] === 'pendiente') {
-                $query->where('estado', 'pendiente')->where('vigencia_fin', '>', now());
+            if ($filtros['estado'] === PagoProveedorCotizacion::FILTER_EXPIRED) {
+                $query->where('status', PagoProveedorCotizacion::STATUS_PENDING)->where('valid_until', '<=', now());
+            } elseif ($filtros['estado'] === PagoProveedorCotizacion::STATUS_PENDING) {
+                $query->where('status', PagoProveedorCotizacion::STATUS_PENDING)->where('valid_until', '>', now());
             } else {
-                $query->where('estado', $filtros['estado']);
+                $query->where('status', $filtros['estado']);
             }
         }
 
-        $tarifa = $this->configuracion->tarifa();
-        $pagina = $query->paginate((int) ($filtros['per_page'] ?? 15));
-        $pagina->getCollection()->transform(function (PagoProveedorCotizacion $cotizacion) use ($tarifa) {
-            return $this->presenter->cotizacion($cotizacion, $tarifa);
-        });
-
-        return $pagina;
+        return $query->paginate((int) ($filtros['per_page'] ?? 15));
     }
 
     /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
-     * @return array<string, mixed>
      */
-    public function crear(string $codigoCc, array $actor): array
+    public function crear(string $codigoCc, array $actor): PagoProveedorCotizacion
     {
-        $origen = $this->lookup->buscar($codigoCc);
+        $origen = $this->lookup->findByCode($codigoCc);
 
         return DB::transaction(function () use ($origen, $actor) {
             $cotizacion = PagoProveedorCotizacion::query()->create([
-                'codigo' => $this->siguienteCodigo(),
+                'code' => $this->siguienteCodigo(),
                 'calculadora_importacion_id' => $origen['calculadora_importacion_id'],
-                'id_cotizacion_cc' => $origen['id_cotizacion_cc'],
-                'cod_cotizacion_cc' => $origen['cod_cotizacion_cc'],
-                'estado' => 'pendiente',
-                'vigencia_fin' => $this->vigencia->sumarHorasHabiles(now(), $this->configuracion->horasVigencia()),
-                'cliente_nombre' => $origen['cliente']['nombre'],
-                'cliente_documento' => $origen['cliente']['documento'],
-                'cliente_whatsapp' => $origen['cliente']['whatsapp'],
-                'cliente_correo' => $origen['cliente']['correo'],
-                'consolidado' => $origen['consolidado'],
-                'usuario_id' => $actor['id'],
+                'consolidated_quote_id' => $origen['id_cotizacion_cc'],
+                'consolidated_quote_code' => $origen['cod_cotizacion_cc'],
+                'status' => PagoProveedorCotizacion::STATUS_PENDING,
+                'valid_until' => $this->vigencia->sumarHorasHabiles(now(), $this->configuracion->validityHours()),
+                'client_name' => $origen['cliente']['nombre'],
+                'client_document' => $origen['cliente']['documento'],
+                'client_whatsapp' => $origen['cliente']['whatsapp'],
+                'client_email' => $origen['cliente']['correo'],
+                'consolidation' => $origen['consolidado'],
+                'user_id' => $actor['id'],
             ]);
 
             $cotizacion->proveedores()->create($this->proveedorVacio(1));
-            $this->historial->registrar('cotizacion', $cotizacion->id, 'Creada', $actor, $origen['cod_cotizacion_cc']);
+            $this->historial->registrar(PagoProveedorHistorial::ENTITY_QUOTE, $cotizacion->id, 'Creada', $actor, $origen['cod_cotizacion_cc']);
+            $this->lookup->forget($origen['cod_cotizacion_cc']);
 
             return $this->ver($cotizacion->id);
         });
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    public function ver(int $id): array
+    public function ver(int $id): PagoProveedorCotizacion
     {
-        $cotizacion = $this->encontrar($id);
-        $codigos = [];
-        try {
-            $codigos = $this->lookup->buscar($cotizacion->cod_cotizacion_cc)['proveedores'];
-        } catch (PagoProveedorException) {
-            $codigos = [];
-        }
-
-        return $this->presenter->cotizacion($cotizacion, $this->configuracion->tarifa(), true, $codigos);
+        return $this->encontrar($id);
     }
 
     /**
      * @param  array<string, mixed>  $datos
      * @param  array{id: int|null, nombre: string, area: string}  $actor
-     * @return array<string, mixed>
      */
-    public function actualizar(int $id, array $datos, array $actor): array
+    public function actualizar(int $id, array $datos, array $actor): PagoProveedorCotizacion
     {
         return DB::transaction(function () use ($id, $datos, $actor) {
             $cotizacion = $this->encontrar($id, true);
             $this->exigirPendiente($cotizacion);
 
-            $codigos = $this->lookup->buscar($cotizacion->cod_cotizacion_cc)['proveedores'];
+            $codigos = $this->lookup->findByCode($cotizacion->consolidated_quote_code)['proveedores'];
             $permitidos = collect($codigos)->keyBy('code_supplier');
             if ($permitidos->isEmpty()) {
                 throw new PagoProveedorException('El consolidado todavía no tiene códigos de proveedor.');
             }
 
-            $cotizacion->tipo_cambio = isset($datos['tipo_cambio']) ? (float) $datos['tipo_cambio'] : null;
-            $cotizacion->tipo_cambio_confirmado = (bool) $datos['tipo_cambio_confirmado'] && (float) $cotizacion->tipo_cambio > 0;
+            $cotizacion->exchange_rate = isset($datos['tipo_cambio']) ? (float) $datos['tipo_cambio'] : null;
+            $cotizacion->exchange_rate_confirmed = (bool) $datos['tipo_cambio_confirmado'] && (float) $cotizacion->exchange_rate > 0;
             $cotizacion->save();
 
             $conservar = [];
@@ -146,7 +128,7 @@ class PagoProveedorCotizacionService
             }
 
             $cotizacion->proveedores()->whereNotIn('id', $conservar)->delete();
-            $this->historial->registrar('cotizacion', $cotizacion->id, 'Editada', $actor);
+            $this->historial->registrar(PagoProveedorHistorial::ENTITY_QUOTE, $cotizacion->id, 'Editada', $actor);
 
             return $this->ver($cotizacion->id);
         });
@@ -161,35 +143,36 @@ class PagoProveedorCotizacionService
             $cotizacion = $this->encontrar($id, true);
             $this->exigirPendiente($cotizacion);
             PagoProveedorHistorial::query()
-                ->where('entidad_tipo', 'cotizacion')
-                ->where('entidad_id', $cotizacion->id)
+                ->where('entity_type', PagoProveedorHistorial::ENTITY_QUOTE)
+                ->where('entity_id', $cotizacion->id)
                 ->delete();
-            PagoProveedorMensaje::query()->where('cotizacion_id', $cotizacion->id)->delete();
+            PagoProveedorMensaje::query()->where('quote_id', $cotizacion->id)->delete();
+            $code = (string) $cotizacion->consolidated_quote_code;
             $cotizacion->delete();
+            $this->lookup->forget($code);
         });
         unset($actor);
     }
 
     /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
-     * @return array<string, mixed>
      */
-    public function renovar(int $id, ?float $tipoCambio, array $actor): array
+    public function renovar(int $id, ?float $tipoCambio, array $actor): PagoProveedorCotizacion
     {
         return DB::transaction(function () use ($id, $tipoCambio, $actor) {
             $cotizacion = $this->encontrar($id, true);
             $this->exigirPendiente($cotizacion);
-            if (!$this->vigencia->estaVencida($cotizacion->vigencia_fin)) {
+            if (!$this->vigencia->estaVencida($cotizacion->valid_until)) {
                 throw new PagoProveedorException('Solo se renueva una cotización vencida.');
             }
 
             if ($tipoCambio !== null && $tipoCambio > 0) {
-                $cotizacion->tipo_cambio = $tipoCambio;
+                $cotizacion->exchange_rate = $tipoCambio;
             }
-            $cotizacion->tipo_cambio_confirmado = false;
-            $cotizacion->vigencia_fin = $this->vigencia->sumarHorasHabiles(now(), $this->configuracion->horasVigencia());
+            $cotizacion->exchange_rate_confirmed = false;
+            $cotizacion->valid_until = $this->vigencia->sumarHorasHabiles(now(), $this->configuracion->validityHours());
             $cotizacion->save();
-            $this->historial->registrar('cotizacion', $cotizacion->id, 'Renovada', $actor, 'Se reinició la vigencia. Hay que reenviar el resumen.');
+            $this->historial->registrar(PagoProveedorHistorial::ENTITY_QUOTE, $cotizacion->id, 'Renovada', $actor, 'Se reinició la vigencia. Hay que reenviar el resumen.');
 
             return $this->ver($cotizacion->id);
         });
@@ -197,9 +180,8 @@ class PagoProveedorCotizacionService
 
     /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
-     * @return array<string, mixed>
      */
-    public function subirProforma(int $cotizacionId, int $proveedorId, UploadedFile $archivo, array $actor): array
+    public function subirProforma(int $cotizacionId, int $proveedorId, UploadedFile $archivo, array $actor): PagoProveedorCotizacion
     {
         $cotizacion = $this->encontrar($cotizacionId);
         $this->exigirPendiente($cotizacion);
@@ -216,9 +198,9 @@ class PagoProveedorCotizacionService
             'proforma-' . $proveedor->id . '-' . now()->format('YmdHis') . '.' . $extension
         );
         $proveedor->proforma_path = $this->storageFinalizeCdnPath($ruta);
-        $proveedor->proforma_nombre = $nombre;
+        $proveedor->proforma_name = $nombre;
         $proveedor->save();
-        $this->historial->registrar('cotizacion', $cotizacion->id, 'Proforma cargada', $actor, $nombre);
+        $this->historial->registrar(PagoProveedorHistorial::ENTITY_QUOTE, $cotizacion->id, 'Proforma cargada', $actor, $nombre);
 
         return $this->ver($cotizacion->id);
     }
@@ -230,7 +212,7 @@ class PagoProveedorCotizacionService
     public function vistaPreviaWhatsapp(int $id, array $actor): array
     {
         $cotizacion = $this->encontrar($id);
-        $presentado = $this->presenter->cotizacion($cotizacion, $this->configuracion->tarifa());
+        $presentado = $this->presenter->cotizacion($cotizacion, $this->configuracion->tariff());
         if (!$presentado['puede_enviar']) {
             throw new PagoProveedorException(
                 $presentado['vencida']
@@ -241,29 +223,29 @@ class PagoProveedorCotizacionService
 
         $detalle = $cotizacion->proveedores->map(fn ($proveedor) => [
             'code_supplier' => $proveedor->code_supplier,
-            'nombre_proveedor' => $proveedor->nombre_proveedor,
-            'producto' => $proveedor->producto,
+            'nombre_proveedor' => $proveedor->supplier_name,
+            'producto' => $proveedor->product,
         ])->all();
 
         $texto = $this->mensajes->resumen(
-            (string) $cotizacion->cliente_nombre,
+            (string) $cotizacion->client_name,
             $presentado['resumen'],
             $detalle
         );
 
         PagoProveedorMensaje::query()->create([
-            'cotizacion_id' => $cotizacion->id,
-            'tipo' => 'resumen',
-            'destinatario' => $cotizacion->cliente_whatsapp,
-            'cuerpo' => $texto,
-            'usuario_id' => $actor['id'],
+            'quote_id' => $cotizacion->id,
+            'message_type' => 'resumen',
+            'recipient' => $cotizacion->client_whatsapp,
+            'body' => $texto,
+            'user_id' => $actor['id'],
             'created_at' => now(),
         ]);
-        $this->historial->registrar('cotizacion', $cotizacion->id, 'Resumen preparado', $actor, 'Vista previa de WhatsApp. El envío real queda pendiente de plantilla Meta.');
+        $this->historial->registrar(PagoProveedorHistorial::ENTITY_QUOTE, $cotizacion->id, 'Resumen preparado', $actor, 'Vista previa de WhatsApp. El envío real queda pendiente de plantilla Meta.');
 
         return [
             'texto' => $texto,
-            'destinatario' => $cotizacion->cliente_whatsapp,
+            'destinatario' => $cotizacion->client_whatsapp,
             'puede_enviar' => false,
             'nota' => 'Quedó registrada la vista previa. El envío por WhatsApp se habilita cuando exista la plantilla de Meta.',
         ];
@@ -271,7 +253,7 @@ class PagoProveedorCotizacionService
 
     public function encontrar(int $id, bool $bloquear = false): PagoProveedorCotizacion
     {
-        $query = PagoProveedorCotizacion::query()->with('proveedores');
+        $query = PagoProveedorCotizacion::query()->with(['proveedores.consolidatedProvider', 'solicitud']);
         if ($bloquear) {
             $query->lockForUpdate();
         }
@@ -285,7 +267,7 @@ class PagoProveedorCotizacionService
 
     public function exigirPendiente(PagoProveedorCotizacion $cotizacion): void
     {
-        if ($cotizacion->estado !== 'pendiente') {
+        if ($cotizacion->status !== PagoProveedorCotizacion::STATUS_PENDING) {
             throw new PagoProveedorException('Esta cotización ya está confirmada y no se puede modificar.');
         }
     }
@@ -299,19 +281,23 @@ class PagoProveedorCotizacionService
     {
         $moneda = strtoupper((string) $fila['moneda']);
         $tipo = (string) $fila['tipo_pago'];
-        if ($tipo === 'tarjeta') {
+        if ($tipo === PagoProveedorCotizacionProveedor::PAYMENT_CARD) {
             throw new PagoProveedorException('USD / Tarjeta está fuera de alcance en esta versión.');
         }
-        if ($moneda === 'USD') {
-            $tipo = 'tt';
+        if ($moneda === PagoProveedorCotizacionProveedor::CURRENCY_USD) {
+            $tipo = PagoProveedorCotizacionProveedor::PAYMENT_TT;
         }
-        if ($moneda === 'RMB') {
-            $tipo = 'transferencia';
+        if ($moneda === PagoProveedorCotizacionProveedor::CURRENCY_RMB) {
+            $tipo = PagoProveedorCotizacionProveedor::PAYMENT_TRANSFER;
         }
 
-        $abono = $fila['modalidad_abono'] === 'fraccionado' ? 'fraccionado' : 'total';
-        $pago = $fila['modalidad_pago'] === 'fraccionado' ? 'fraccionado' : 'total';
-        if ($moneda === 'USD') {
+        $abono = $fila['modalidad_abono'] === PagoProveedorCotizacionProveedor::MODE_SPLIT
+            ? PagoProveedorCotizacionProveedor::MODE_SPLIT
+            : PagoProveedorCotizacionProveedor::MODE_TOTAL;
+        $pago = $fila['modalidad_pago'] === PagoProveedorCotizacionProveedor::MODE_SPLIT
+            ? PagoProveedorCotizacionProveedor::MODE_SPLIT
+            : PagoProveedorCotizacionProveedor::MODE_TOTAL;
+        if ($moneda === PagoProveedorCotizacionProveedor::CURRENCY_USD) {
             $pago = $abono;
         }
 
@@ -325,30 +311,34 @@ class PagoProveedorCotizacionService
             $idProveedor = $catalogo['id_proveedor_cc'] ?? null;
         }
 
-        $p1 = $abono === 'total' && $pago === 'total' ? 100 : (float) ($fila['porcentaje_1'] ?? 50);
-        $p2 = $abono === 'total' && $pago === 'total' ? null : (float) ($fila['porcentaje_2'] ?? (100 - $p1));
-        if ($abono === 'fraccionado' || $pago === 'fraccionado') {
-            if (round($p1 + (float) $p2, 2) !== 100.0) {
+        $p1 = $abono === PagoProveedorCotizacionProveedor::MODE_TOTAL && $pago === PagoProveedorCotizacionProveedor::MODE_TOTAL
+            ? PagoProveedorCotizacionProveedor::FULL_SHARE
+            : (float) ($fila['porcentaje_1'] ?? 50);
+        $p2 = $abono === PagoProveedorCotizacionProveedor::MODE_TOTAL && $pago === PagoProveedorCotizacionProveedor::MODE_TOTAL
+            ? null
+            : (float) ($fila['porcentaje_2'] ?? (PagoProveedorCotizacionProveedor::FULL_SHARE - $p1));
+        if ($abono === PagoProveedorCotizacionProveedor::MODE_SPLIT || $pago === PagoProveedorCotizacionProveedor::MODE_SPLIT) {
+            if (round($p1 + (float) $p2, 2) !== (float) PagoProveedorCotizacionProveedor::FULL_SHARE) {
                 throw new PagoProveedorException("Proveedor {$orden}: los porcentajes deben sumar 100.");
             }
         }
 
         return [
-            'orden' => $orden,
+            'position' => $orden,
             'code_supplier' => $codigo !== '' ? $codigo : null,
-            'id_proveedor_cc' => $idProveedor,
-            'nombre_proveedor' => $this->vacio($fila['nombre_proveedor'] ?? null),
-            'producto' => $this->vacio($fila['producto'] ?? null),
-            'moneda' => $moneda,
-            'tipo_pago' => $tipo,
-            'valor_carga_usd' => round((float) ($fila['valor_carga_usd'] ?? 0), 2),
-            'modalidad_abono' => $abono,
-            'modalidad_pago' => $pago,
-            'porcentaje_1' => $p1,
-            'porcentaje_2' => $p2,
-            'fecha_cuota_2' => $abono === 'fraccionado' ? (($fila['fecha_cuota_2'] ?? null) ?: null) : null,
-            'comision_bancaria' => (bool) $fila['comision_bancaria'],
-            'comision_administrativa' => (bool) $fila['comision_administrativa'],
+            'consolidated_provider_id' => $idProveedor,
+            'supplier_name' => $this->vacio($fila['nombre_proveedor'] ?? null),
+            'product' => $this->vacio($fila['producto'] ?? null),
+            'currency' => $moneda,
+            'payment_type' => $tipo,
+            'cargo_value_usd' => round((float) ($fila['valor_carga_usd'] ?? 0), 2),
+            'client_payment_mode' => $abono,
+            'supplier_payment_mode' => $pago,
+            'first_share_percent' => $p1,
+            'second_share_percent' => $p2,
+            'second_installment_on' => $abono === PagoProveedorCotizacionProveedor::MODE_SPLIT ? (($fila['fecha_cuota_2'] ?? null) ?: null) : null,
+            'charges_bank_fee' => (bool) $fila['comision_bancaria'],
+            'charges_admin_fee' => (bool) $fila['comision_administrativa'],
         ];
     }
 
@@ -358,15 +348,15 @@ class PagoProveedorCotizacionService
     private function proveedorVacio(int $orden): array
     {
         return [
-            'orden' => $orden,
-            'moneda' => 'RMB',
-            'tipo_pago' => 'transferencia',
-            'valor_carga_usd' => 0,
-            'modalidad_abono' => 'total',
-            'modalidad_pago' => 'total',
-            'porcentaje_1' => 100,
-            'comision_bancaria' => true,
-            'comision_administrativa' => false,
+            'position' => $orden,
+            'currency' => PagoProveedorCotizacionProveedor::CURRENCY_RMB,
+            'payment_type' => PagoProveedorCotizacionProveedor::PAYMENT_TRANSFER,
+            'cargo_value_usd' => 0,
+            'client_payment_mode' => PagoProveedorCotizacionProveedor::MODE_TOTAL,
+            'supplier_payment_mode' => PagoProveedorCotizacionProveedor::MODE_TOTAL,
+            'first_share_percent' => PagoProveedorCotizacionProveedor::FULL_SHARE,
+            'charges_bank_fee' => true,
+            'charges_admin_fee' => false,
         ];
     }
 
@@ -374,7 +364,7 @@ class PagoProveedorCotizacionService
     {
         $maximo = (int) PagoProveedorCotizacion::query()
             ->lockForUpdate()
-            ->selectRaw('MAX(CAST(SUBSTRING(codigo, 5) AS UNSIGNED)) as n')
+            ->selectRaw('MAX(CAST(SUBSTRING(code, 5) AS UNSIGNED)) as n')
             ->value('n');
 
         return 'COT-' . str_pad((string) ($maximo + 1), 2, '0', STR_PAD_LEFT);
