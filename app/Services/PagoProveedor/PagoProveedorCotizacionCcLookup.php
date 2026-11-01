@@ -8,6 +8,8 @@ use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\PagoProveedor\PagoProveedorCotizacion;
 use App\Support\CargaConsolidada\CargaLabel;
+use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Collection;
 
 class PagoProveedorCotizacionCcLookup
 {
@@ -50,7 +52,14 @@ class PagoProveedorCotizacionCcLookup
         }
 
         $quote = $calculator->cotizacion;
-        $container = ($quote instanceof Cotizacion ? $quote->contenedor : null) ?: $calculator->contenedor;
+        $container = $calculator->contenedor;
+        if ($quote instanceof Cotizacion) {
+            $relation = $quote->contenedor();
+            $loaded = $relation instanceof Relation ? $relation->getResults() : null;
+            if ($loaded !== null) {
+                $container = $loaded;
+            }
+        }
         $name = $calculator->razon_social ?: $calculator->nombre_cliente;
         $document = $calculator->dni_cliente ?: $calculator->ruc_cliente;
         $whatsapp = $calculator->whatsapp_cliente;
@@ -95,12 +104,16 @@ class PagoProveedorCotizacionCcLookup
      */
     private function existingProviders(CalculadoraImportacion $calculator, ?Cotizacion $quote): array
     {
-        if ($quote instanceof Cotizacion && $quote->proveedores->isNotEmpty()) {
-            return $quote->proveedores
-                ->filter(fn (CotizacionProveedor $provider) => trim((string) $provider->code_supplier) !== '')
-                ->map(fn (CotizacionProveedor $provider) => $this->providerRow($provider))
-                ->values()
-                ->all();
+        if ($quote instanceof Cotizacion) {
+            $relation = $quote->proveedores();
+            $providers = $relation instanceof Relation ? $relation->getResults() : null;
+            if ($providers instanceof Collection && $providers->isNotEmpty()) {
+                return $providers
+                    ->filter(fn ($provider) => $provider instanceof CotizacionProveedor && trim((string) $provider->code_supplier) !== '')
+                    ->map(fn ($provider) => $provider instanceof CotizacionProveedor ? $this->providerRow($provider) : [])
+                    ->values()
+                    ->all();
+            }
         }
 
         $linkedIds = $calculator->proveedores

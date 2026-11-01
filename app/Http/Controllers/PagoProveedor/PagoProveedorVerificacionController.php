@@ -29,7 +29,7 @@ class PagoProveedorVerificacionController extends Controller
             $this->authorization->requireAdministration($request->user());
             $page = $this->deposits->list($request->all());
 
-            return DepositoVerificacionResource::collection($page->getCollection())->additional([
+            return DepositoVerificacionResource::collection($page->items())->additional([
                 'success' => true,
                 'pending_count' => $this->deposits->pendingCount(),
                 'reasons' => $this->deposits->reasons(),

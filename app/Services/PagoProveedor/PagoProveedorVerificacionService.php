@@ -109,7 +109,7 @@ class PagoProveedorVerificacionService
             $deposit = $this->find($id, true);
             $this->requireOpen($deposit);
             $deposit->bank = $data['bank'];
-            $deposit->paid_on = $data['paid_on'];
+            $deposit->paid_on = \Illuminate\Support\Carbon::parse($data['paid_on']);
             $deposit->operation_number = trim($data['operation_number']);
             $deposit->corrected_by_admin = true;
             $deposit->save();

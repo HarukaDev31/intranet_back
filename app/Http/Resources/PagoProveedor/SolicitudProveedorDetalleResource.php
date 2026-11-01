@@ -39,7 +39,7 @@ class SolicitudProveedorDetalleResource extends JsonResource
             'orden' => $provider->position,
             'titulo' => $title,
             'code_supplier' => $provider->code_supplier,
-            'consolidated_provider_id' => $provider->consolidatedProvider?->id ?? $provider->consolidated_provider_id,
+            'consolidated_provider_id' => $provider->consolidatedProvider !== null ? $provider->consolidatedProvider->id : $provider->consolidated_provider_id,
             'nombre_proveedor' => $provider->supplier_name,
             'producto' => $provider->product,
             'moneda' => $provider->currency,

@@ -29,7 +29,7 @@ class PagoProveedorEjecucionController extends Controller
             $filters = $request->all();
             $page = $this->executions->list($filters);
 
-            return EjecucionPagoResource::collection($page->getCollection())->additional([
+            return EjecucionPagoResource::collection($page->items())->additional([
                 'success' => true,
                 'pending_count' => $this->executions->pendingCount(),
                 'totals' => $this->executions->totals($filters),

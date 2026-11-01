@@ -163,7 +163,7 @@ class PagoProveedorReembolsoService
             ));
             $refund->status = PagoProveedorReembolso::STATUS_APPROVED;
             $refund->approved_amount = round($amount, 2);
-            $refund->paid_on = $paidOn;
+            $refund->paid_on = \Illuminate\Support\Carbon::parse($paidOn);
             $refund->bank = $bank;
             $refund->operation_number = $operation !== null && trim($operation) !== '' ? trim($operation) : null;
             $refund->voucher_path = $path;

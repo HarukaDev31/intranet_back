@@ -32,7 +32,7 @@ class PagoProveedorSolicitudController extends Controller
                 'per_page' => $request->get('per_page', 15),
             ]);
 
-            return $this->pagina(SolicitudResource::collection($pagina->getCollection()), $pagina);
+            return $this->pagina(SolicitudResource::collection($pagina->items()), $pagina);
         });
     }
 

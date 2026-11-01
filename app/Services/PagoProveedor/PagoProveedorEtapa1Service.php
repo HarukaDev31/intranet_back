@@ -37,7 +37,6 @@ class PagoProveedorEtapa1Service
 
     /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
-     * @return array<string, mixed>
      */
     public function guardarRmb(int $solicitudId, int $proveedorId, string $vendedor, string $wechat, array $actor): PagoProveedorSolicitud
     {
@@ -96,7 +95,6 @@ class PagoProveedorEtapa1Service
     /**
      * @param  array<string, mixed>  $payload
      * @param  array{id: int|null, nombre: string, area: string}  $actor
-     * @return array<string, mixed>
      */
     public function llenarPorVentas(int $solicitudId, int $proveedorId, array $payload, array $actor): PagoProveedorSolicitud
     {
@@ -147,7 +145,6 @@ class PagoProveedorEtapa1Service
 
     /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
-     * @return array<string, mixed>
      */
     public function anularProveedor(int $solicitudId, int $proveedorId, array $actor): PagoProveedorSolicitud
     {
@@ -358,7 +355,6 @@ class PagoProveedorEtapa1Service
 
     /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
-     * @return array<string, mixed>
      */
     public function anularAbono(int $solicitudId, int $abonoId, array $actor): PagoProveedorSolicitud
     {
@@ -375,7 +371,6 @@ class PagoProveedorEtapa1Service
 
     /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
-     * @return array<string, mixed>
      */
     public function decidirExcedente(int $solicitudId, int $abonoId, string $decision, array $actor): PagoProveedorSolicitud
     {

@@ -28,7 +28,7 @@ class PagoProveedorYuanController extends Controller
             $this->authorization->requireWarehouse($request->user());
             $page = $this->yuan->list($request->all());
 
-            return YuanPagoResource::collection($page->getCollection())->additional([
+            return YuanPagoResource::collection($page->items())->additional([
                 'success' => true,
                 'pending_count' => $this->yuan->pendingCount(),
                 'indicators' => $this->yuan->indicators(),

@@ -29,7 +29,7 @@ class PagoProveedorAprobacionController extends Controller
             $actor = $this->authorization->requireAdministration($request->user());
             $page = $this->approvals->list($request->all(), $actor);
 
-            return AprobacionPagoResource::collection($page->getCollection())->additional([
+            return AprobacionPagoResource::collection($page->items())->additional([
                 'success' => true,
                 'pending_count' => $this->approvals->pendingCount(),
                 'settings' => $this->approvals->settings(),

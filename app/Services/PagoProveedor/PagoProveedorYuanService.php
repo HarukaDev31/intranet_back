@@ -350,7 +350,8 @@ class PagoProveedorYuanService
         $installment = $installments[max(0, (int) $provider->current_installment - 1)] ?? [];
         $payment = $payments[max(0, (int) $provider->current_payment - 1)] ?? [];
         $usd = isset($payment['carga']) ? (float) $payment['carga'] : (float) ($installment['carga'] ?? $provider->cargo_value_usd);
-        $rate = (float) ($provider->solicitud?->exchange_rate ?? 0);
+        $solicitud = $provider->solicitud;
+        $rate = $solicitud === null ? 0.0 : (float) ($solicitud->exchange_rate ?? 0);
 
         return [
             'usd' => round($usd, 2),

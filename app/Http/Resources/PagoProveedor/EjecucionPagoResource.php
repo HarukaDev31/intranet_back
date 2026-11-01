@@ -22,7 +22,9 @@ class EjecucionPagoResource extends JsonResource
     {
         $execution = $this->resource instanceof PagoProveedorEjecucion ? $this->resource : null;
         /** @var PagoProveedorSolicitudProveedor $provider */
-        $provider = $execution?->proveedor ?? $this->resource;
+        $provider = $execution instanceof PagoProveedorEjecucion && $execution->proveedor !== null
+            ? $execution->proveedor
+            : $this->resource;
         $provider->loadMissing(['solicitud', 'datos']);
         $solicitud = $provider->solicitud;
         $data = $provider->datos;
@@ -36,7 +38,7 @@ class EjecucionPagoResource extends JsonResource
         $profit = $difference === null ? null : round($difference + $amounts['charged_admin_fee'], 2);
 
         return [
-            'id' => $execution?->id ?? $provider->id,
+            'id' => $execution instanceof PagoProveedorEjecucion ? $execution->id : $provider->id,
             'provider_id' => $provider->id,
             'request_id' => $provider->request_id,
             'order_number' => $solicitud?->order_number,
@@ -49,10 +51,10 @@ class EjecucionPagoResource extends JsonResource
             'currency' => $provider->currency,
             'payment_type' => $provider->payment_type,
             'installment_label' => $provider->client_payment_mode === PagoProveedorCotizacionProveedor::MODE_SPLIT
-                ? 'Cuota '.($execution?->installment ?? $provider->current_installment).' de 2'
+                ? 'Cuota '.(($execution instanceof PagoProveedorEjecucion ? $execution->installment : null) ?? $provider->current_installment).' de 2'
                 : null,
             'supplier_payment_label' => $provider->supplier_payment_mode === PagoProveedorCotizacionProveedor::MODE_SPLIT
-                ? 'Pago '.($execution?->supplier_payment ?? $provider->current_payment).' de 2'
+                ? 'Pago '.(($execution instanceof PagoProveedorEjecucion ? $execution->supplier_payment : null) ?? $provider->current_payment).' de 2'
                 : null,
             'status' => $execution ? PagoProveedorEjecucion::STATUS_PAID : PagoProveedorEjecucion::STATUS_PENDING,
             'status_label' => $execution ? 'Pagado' : 'Pendiente',

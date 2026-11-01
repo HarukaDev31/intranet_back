@@ -29,7 +29,7 @@ class PagoProveedorReembolsoController extends Controller
             $this->authorization->requireAdministration($request->user());
             $page = $this->refunds->list($request->all());
 
-            return ReembolsoResource::collection($page->getCollection())->additional([
+            return ReembolsoResource::collection($page->items())->additional([
                 'success' => true,
                 'pending_count' => $this->refunds->pendingCount(),
                 'pagination' => [

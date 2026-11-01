@@ -40,7 +40,7 @@ class PagoProveedorCotizacionController extends Controller
                 'per_page' => $request->get('per_page', 15),
             ]);
 
-            return $this->pagina(CotizacionResource::collection($pagina->getCollection()), $pagina);
+            return $this->pagina(CotizacionResource::collection($pagina->items()), $pagina);
         });
     }
 
