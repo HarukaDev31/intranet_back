@@ -365,7 +365,7 @@ class CotizacionFinalController extends Controller
                         WHERE cccp.id_cotizacion = contenedor_consolidado_cotizacion.id
                         AND ccp.name IN ('LOGISTICA', 'IMPUESTOS', 'DELIVERY')
                     ) AS pagos_count"),
-                    DB::raw('(contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final) as total_logistica_impuestos')
+                    DB::raw('(IFNULL(contenedor_consolidado_cotizacion.logistica_final, 0) + IFNULL(contenedor_consolidado_cotizacion.impuestos_final, 0)) as total_logistica_impuestos')
                 ])
                 ->leftJoin('contenedor_consolidado_tipo_cliente as TC', 'TC.id', '=', 'contenedor_consolidado_cotizacion.id_tipo_cliente')
                 ->whereRaw($this->sqlScopeCotizacionesPagosFinal('contenedor_consolidado_cotizacion', $idContenedor));
@@ -3473,6 +3473,10 @@ class CotizacionFinalController extends Controller
         $descuento = $rowDescuento !== null
             ? $this->getMainSheetRowAmount($sheet, $rowDescuento)
             : 0.0;
+        $rowMontoTotal = $this->findMainSheetRowByColumnBLabelExact($sheet, 'MONTO TOTAL');
+        $montoTotal = $rowMontoTotal !== null
+            ? $this->getMainSheetRowAmount($sheet, $rowMontoTotal)
+            : 0.0;
         $logistica = round($logisticaServicioImportacion, 2);
         $impuestos = $this->getMainSheetRowAmount($sheet, $rowImpuestos);
 
@@ -3493,13 +3497,19 @@ class CotizacionFinalController extends Controller
             $peso = $this->parsePesoFromMainSheetCell($sheet, 'I9');
         }
 
-        if ($logistica <= 0 && $impuestos <= 0 && $fob <= 0) {
+        if ($logistica <= 0 && $impuestos <= 0 && $fob <= 0 && $montoTotal <= 0) {
             return null;
         }
-        $logistica = $logistica- $recargos + $descuento;
+        $reconstruido = round($logisticaServicioImportacion + $impuestos + $serviciosExtraLogistica, 2);
+        if ($montoTotal > 0 && abs($montoTotal - $reconstruido) > 0.02) {
+            $logistica = round($montoTotal - $impuestos - $serviciosExtraLogistica - $recargos + $descuento, 2);
+        } else {
+            $logistica = $logistica - $recargos + $descuento;
+        }
         Log::info('EXtraccion de datos de la cotizacion final', [
             'recargos'=>$recargos,
             'descuento'=>$descuento,
+            'monto_total'=>$montoTotal,
             'logistica_final'=>$logistica,
             'impuestos_final'=>$impuestos,
             'fob_final'=>$fob,
