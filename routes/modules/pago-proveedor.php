@@ -19,6 +19,7 @@ Route::group(['prefix' => 'pago-proveedor', 'middleware' => 'jwt.auth'], functio
     Route::get('configuracion', [PagoProveedorCotizacionController::class, 'configuracion']);
     Route::put('configuracion/vigencia', [PagoProveedorCotizacionController::class, 'actualizarVigencia']);
 
+    Route::get('cotizaciones-cc', [PagoProveedorCotizacionController::class, 'sugerirConsolidada']);
     Route::get('cotizaciones-cc/{codigo}', [PagoProveedorCotizacionController::class, 'buscarConsolidada']);
     Route::get('cotizaciones', [PagoProveedorCotizacionController::class, 'index']);
     Route::post('cotizaciones', [PagoProveedorCotizacionController::class, 'store']);

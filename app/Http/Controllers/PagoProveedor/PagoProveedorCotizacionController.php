@@ -4,6 +4,7 @@ namespace App\Http\Controllers\PagoProveedor;
 
 use App\Exceptions\PagoProveedorException;
 use App\Http\Controllers\Controller;
+use App\Models\CalculadoraImportacion;
 use App\Http\Resources\PagoProveedor\CotizacionResource;
 use App\Http\Requests\PagoProveedor\StorePagoProveedorCotizacionRequest;
 use App\Http\Requests\PagoProveedor\StorePagoProveedorProformaRequest;
@@ -41,6 +42,31 @@ class PagoProveedorCotizacionController extends Controller
             ]);
 
             return $this->pagina(CotizacionResource::collection($pagina->items()), $pagina);
+        });
+    }
+
+    public function sugerirConsolidada(Request $request): JsonResponse
+    {
+        return $this->responder(function () use ($request) {
+            $this->autorizacion->exigirVentas($request->user());
+            $page = $this->lookup->search((string) $request->get('q', ''), (int) $request->get('per_page', 8));
+            $items = [];
+            foreach ($page->items() as $row) {
+                if ($row instanceof CalculadoraImportacion) {
+                    $items[] = $this->lookup->suggestion($row);
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $items,
+                'pagination' => [
+                    'current_page' => $page->currentPage(),
+                    'last_page' => $page->lastPage(),
+                    'per_page' => $page->perPage(),
+                    'total' => $page->total(),
+                ],
+            ]);
         });
     }
 

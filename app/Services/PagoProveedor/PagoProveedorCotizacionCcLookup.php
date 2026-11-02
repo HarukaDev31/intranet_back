@@ -9,6 +9,7 @@ use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\PagoProveedor\PagoProveedorCotizacion;
 use App\Support\CargaConsolidada\CargaLabel;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 
 class PagoProveedorCotizacionCcLookup
@@ -21,6 +22,59 @@ class PagoProveedorCotizacionCcLookup
     public function forget(string $code): void
     {
         $this->cache->forgetConsolidatedQuote($code);
+    }
+
+    /**
+     * @return LengthAwarePaginator<int, CalculadoraImportacion>
+     */
+    public function search(string $term, int $perPage): LengthAwarePaginator
+    {
+        $perPage = min(20, max(1, $perPage));
+        $term = trim($term);
+        $query = CalculadoraImportacion::query()
+            ->with(['cotizacion', 'contenedor'])
+            ->whereNotNull('cod_cotizacion')
+            ->where('cod_cotizacion', '!=', '');
+
+        if (mb_strlen($term) >= 2) {
+            $like = '%' . addcslashes($term, '%_\\') . '%';
+            $query->where(function ($inner) use ($like): void {
+                $inner->where('cod_cotizacion', 'like', $like)
+                    ->orWhere('nombre_cliente', 'like', $like)
+                    ->orWhere('razon_social', 'like', $like)
+                    ->orWhere('dni_cliente', 'like', $like)
+                    ->orWhere('ruc_cliente', 'like', $like)
+                    ->orWhereHas('cotizacion', function ($quote) use ($like): void {
+                        $quote->where('nombre', 'like', $like)
+                            ->orWhere('documento', 'like', $like);
+                    });
+            });
+        } else {
+            $query->whereRaw('1 = 0');
+        }
+
+        return $query->orderByDesc('id')->paginate($perPage);
+    }
+
+    /**
+     * @return array{cod_cotizacion_cc: string, cliente_nombre: ?string, cliente_documento: ?string, consolidado: ?string}
+     */
+    public function suggestion(CalculadoraImportacion $calculator): array
+    {
+        $quote = $calculator->cotizacion;
+        $name = $calculator->razon_social ?: $calculator->nombre_cliente;
+        $document = $calculator->dni_cliente ?: $calculator->ruc_cliente;
+        if ($quote instanceof Cotizacion) {
+            $name = $quote->nombre ?: $name;
+            $document = $quote->documento ?: $document;
+        }
+
+        return [
+            'cod_cotizacion_cc' => strtoupper((string) $calculator->cod_cotizacion),
+            'cliente_nombre' => $name !== null && $name !== '' ? (string) $name : null,
+            'cliente_documento' => $document !== null && $document !== '' ? (string) $document : null,
+            'consolidado' => $this->consolidationLabel($calculator->contenedor),
+        ];
     }
 
     /**
