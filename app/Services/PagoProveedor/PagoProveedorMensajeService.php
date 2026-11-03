@@ -64,9 +64,6 @@ class PagoProveedorMensajeService
         return $texto;
     }
 
-    /**
-     * @param  array{id: int|null, nombre: string, area: string}  $actor
-     */
     public function usdNoticeText(PagoProveedorSolicitudProveedor $provider, float $amount): string
     {
         $provider->loadMissing('solicitud');
@@ -93,9 +90,6 @@ class PagoProveedorMensajeService
         $this->store($provider, 'aviso_usd', $this->usdNoticeText($provider, $amount), $actor);
     }
 
-    /**
-     * @param  array{id: int|null, nombre: string, area: string}  $actor
-     */
     public function rmbNoticeText(PagoProveedorSolicitudProveedor $provider): string
     {
         $provider->loadMissing('solicitud');
@@ -142,14 +136,14 @@ class PagoProveedorMensajeService
         return 'aviso_rmb:'.number_format(round($yuanPaid, 2), 2, '.', '');
     }
 
-    /**
-     * @param  array{id: int|null, nombre: string, area: string}  $actor
-     */
     public function balanceStored(PagoProveedorSolicitudProveedor $provider): bool
     {
         return $this->alreadyStored($provider, 'balance');
     }
 
+    /**
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
     public function storeBalance(PagoProveedorSolicitudProveedor $provider, array $actor): void
     {
         if ($this->alreadyStored($provider, 'balance')) {
