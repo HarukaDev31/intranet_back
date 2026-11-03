@@ -43,6 +43,28 @@ class PagoProveedorEjecucionController extends Controller
         });
     }
 
+    public function notice(Request $request, int $providerId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $providerId) {
+            if ($request->isMethod('GET')) {
+                $this->authorization->requireAdministration($request->user());
+                $amount = (float) $request->query('amount', 0);
+
+                return response()->json([
+                    'success' => true,
+                    'data' => ['message' => $this->executions->noticeText($providerId, $amount)],
+                ]);
+            }
+            $actor = $this->authorization->requireAdministration($request->user());
+            $data = $request->validate([
+                'amount' => ['required', 'numeric', 'gt:0'],
+            ]);
+            $this->executions->confirmNotice($providerId, (float) $data['amount'], $actor);
+
+            return response()->json(['success' => true, 'message' => 'Aviso listo para enviar.']);
+        });
+    }
+
     public function store(Request $request, int $providerId): JsonResponse
     {
         return $this->responder(function () use ($request, $providerId) {

@@ -67,41 +67,89 @@ class PagoProveedorMensajeService
     /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
      */
-    public function storeUsdNotice(PagoProveedorSolicitudProveedor $provider, float $amount, array $actor): void
+    public function usdNoticeText(PagoProveedorSolicitudProveedor $provider, float $amount): string
     {
         $provider->loadMissing('solicitud');
         $request = $provider->solicitud;
         $name = trim((string) ($provider->supplier_name ?? ''));
         $who = $name !== '' ? $provider->code_supplier.' · '.$name : (string) $provider->code_supplier;
-        $text = "Hola, ".($request?->client_name ?: 'cliente')." 🙋🏻‍♀️\n|\n"
+
+        return "Hola, ".($request?->client_name ?: 'cliente')." 🙋🏻‍♀️\n|\n"
             ."¡Te confirmamos que el pago a tu proveedor se realizó exitosamente! ✅\n"
             .$who."\n".$provider->product."\n"
             .'Consolidado: '.($request?->consolidation ?: '—')."\n"
             .'Monto pagado: $'.$this->amount($amount)."\n"
             .'La constancia quedó registrada en el sistema.';
-        $this->store($provider, 'aviso_usd', $text, $actor);
     }
 
     /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
      */
-    public function storeRmbNotice(PagoProveedorSolicitudProveedor $provider, array $actor): void
+    public function storeUsdNotice(PagoProveedorSolicitudProveedor $provider, float $amount, array $actor): void
+    {
+        if ($this->alreadyStored($provider, 'aviso_usd')) {
+            return;
+        }
+        $this->store($provider, 'aviso_usd', $this->usdNoticeText($provider, $amount), $actor);
+    }
+
+    /**
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    public function rmbNoticeText(PagoProveedorSolicitudProveedor $provider): string
     {
         $provider->loadMissing('solicitud');
         $request = $provider->solicitud;
         $name = trim((string) ($provider->supplier_name ?? ''));
-        $who = $name !== '' ? $provider->code_supplier.' · '.$name : (string) $provider->code_supplier;
-        $text = "Hola, ".($request?->client_name ?: 'cliente')." 🙋🏻‍♀️\n|\n"
+        $providerLine = $name !== '' ? "• Proveedor: ".$name."\n" : '';
+
+        return "Hola, ".($request?->client_name ?: 'cliente')." 🙋🏻‍♀️\n|\n"
             ."¡Te confirmamos que el pago a tu proveedor se realizó exitosamente! ✅\n"
-            .$who."\n".$provider->product."\n"
-            .'Consolidado: '.($request?->consolidation ?: '—')."\n"
+            ."• Código de proveedor: ".$provider->code_supplier."\n"
+            .$providerLine
+            ."• Producto: ".$provider->product."\n"
+            .'• N.° de consolidado: '.($request?->consolidation ?: '—')."\n\n"
             .'Por favor, confirma la recepción con tu proveedor.';
-        $this->store($provider, 'aviso_rmb', $text, $actor);
+    }
+
+    /**
+     * El aviso se guarda antes de registrar el pago (RN-93). El texto no lleva importe ni código de solicitud.
+     *
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    public function confirmRmbNotice(PagoProveedorSolicitudProveedor $provider, float $yuanPaid, array $actor): void
+    {
+        $provider->loadMissing('solicitud');
+        $type = $this->rmbNoticeType($yuanPaid);
+        if ($this->alreadyStored($provider, $type)) {
+            return;
+        }
+        $this->store($provider, $type, $this->rmbNoticeText($provider), $actor);
+    }
+
+    public function rmbNoticeMatches(PagoProveedorSolicitudProveedor $provider, float $yuanPaid): bool
+    {
+        return $this->alreadyStored($provider, $this->rmbNoticeType($yuanPaid));
+    }
+
+    public function storeRmbNotice(PagoProveedorSolicitudProveedor $provider, array $actor): void
+    {
+        $this->confirmRmbNotice($provider, 0, $actor);
+    }
+
+    private function rmbNoticeType(float $yuanPaid): string
+    {
+        return 'aviso_rmb:'.number_format(round($yuanPaid, 2), 2, '.', '');
     }
 
     /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
      */
+    public function balanceStored(PagoProveedorSolicitudProveedor $provider): bool
+    {
+        return $this->alreadyStored($provider, 'balance');
+    }
+
     public function storeBalance(PagoProveedorSolicitudProveedor $provider, array $actor): void
     {
         if ($this->alreadyStored($provider, 'balance')) {
@@ -128,9 +176,15 @@ class PagoProveedorMensajeService
 
     public function noticeStored(PagoProveedorSolicitudProveedor $provider): bool
     {
-        $type = $provider->currency === 'USD' ? 'aviso_usd' : 'aviso_rmb';
+        if ($provider->currency === 'USD') {
+            return $this->alreadyStored($provider, 'aviso_usd');
+        }
 
-        return $this->alreadyStored($provider, $type);
+        return PagoProveedorMensaje::query()
+            ->where('request_id', $provider->request_id)
+            ->where('message_type', 'like', 'aviso_rmb%')
+            ->where('body', 'like', '%'.$provider->code_supplier.'%')
+            ->exists();
     }
 
     /**

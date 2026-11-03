@@ -36,8 +36,7 @@ class PagoProveedorYuanService
     public function list(array $filters): LengthAwarePaginator
     {
         $bucket = (string) ($filters['bucket'] ?? PagoProveedorEjecucion::BUCKET_PENDING);
-        $search = mb_strtolower(trim((string) ($filters['search'] ?? '')));
-        $rows = $this->rows($bucket, $search);
+        $rows = $this->rows($bucket, $this->searchOf($filters), $this->partnerOf($filters));
         $page = max(1, (int) ($filters['page'] ?? 1));
         $perPage = max(1, (int) ($filters['per_page'] ?? 15));
 
@@ -56,26 +55,98 @@ class PagoProveedorYuanService
     }
 
     /**
-     * @return array{usd_received: float, yuan_obtained: float, yuan_paid: float, to_collect: float}
+     * @param  array<string, mixed>  $filters
+     * @return array{usd_received: float, yuan_obtained: float, yuan_paid: float, to_collect: float, to_collect_yuan: float}
      */
-    public function indicators(): array
+    public function indicators(array $filters = []): array
     {
-        $executions = PagoProveedorEjecucion::query()
-            ->whereHas('proveedor', fn ($query) => $query->where('currency', PagoProveedorCotizacionProveedor::CURRENCY_RMB))
-            ->get();
-        $toCollect = 0.0;
-        foreach ($executions as $execution) {
-            if ($execution->exchange_result === PagoProveedorEjecucion::RESULT_COLLECT) {
-                $toCollect += abs((float) $execution->exchange_difference_usd);
+        $rows = $this->rows('all', $this->searchOf($filters), $this->partnerOf($filters));
+        $usd = 0.0;
+        $obtained = 0.0;
+        $paid = 0.0;
+        $collectUsd = 0.0;
+        $collectYuan = 0.0;
+        foreach ($rows as $provider) {
+            $usd += $this->quote($provider)['usd'];
+            foreach ($provider->ejecuciones as $execution) {
+                $obtained += (float) $execution->yuan_obtained;
+                $paid += (float) $execution->yuan_paid;
+                if ($execution->exchange_result !== PagoProveedorEjecucion::RESULT_COLLECT) {
+                    continue;
+                }
+                $collectUsd += abs((float) $execution->exchange_difference_usd);
+                $collectYuan += abs((float) $execution->yuan_obtained - (float) $execution->yuan_paid);
             }
         }
 
         return [
-            'usd_received' => round((float) $executions->sum('cargo_amount'), 2),
-            'yuan_obtained' => round((float) $executions->sum('yuan_obtained'), 2),
-            'yuan_paid' => round((float) $executions->sum('yuan_paid'), 2),
-            'to_collect' => round($toCollect, 2),
+            'usd_received' => round($usd, 2),
+            'yuan_obtained' => round($obtained, 2),
+            'yuan_paid' => round($paid, 2),
+            'to_collect' => round($collectUsd, 2),
+            'to_collect_yuan' => round($collectYuan, 2),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array{all: int, pending: int, observed: int, paid: int}
+     */
+    public function counts(array $filters): array
+    {
+        $search = $this->searchOf($filters);
+        $partner = $this->partnerOf($filters);
+
+        return [
+            'all' => $this->rows('all', $search, $partner)->count(),
+            'pending' => $this->rows(PagoProveedorEjecucion::BUCKET_PENDING, $search, $partner)->count(),
+            'observed' => $this->rows('observed', $search, $partner)->count(),
+            'paid' => $this->rows(PagoProveedorEjecucion::BUCKET_PAID, $search, $partner)->count(),
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function partners(): array
+    {
+        return $this->rows('all', '', '')
+            ->map(fn (PagoProveedorSolicitudProveedor $provider) => trim((string) ($provider->solicitud?->partner ?: 'Pro Business')))
+            ->filter(fn (string $partner) => $partner !== '')
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    public function confirmNotice(int $providerId, float $yuanPaid, array $actor): PagoProveedorSolicitudProveedor
+    {
+        return DB::transaction(function () use ($providerId, $yuanPaid, $actor) {
+            $provider = $this->lock($providerId);
+            $this->requireReady($provider);
+            if ($provider->solicitud?->origin === PagoProveedorSolicitud::ORIGIN_MANUAL) {
+                throw new PagoProveedorException('Las solicitudes manuales no avisan al cliente.');
+            }
+            if ($yuanPaid <= 0) {
+                throw new PagoProveedorException('Ingresa primero los yuanes pagados.');
+            }
+            app(PagoProveedorMensajeService::class)->confirmRmbNotice($provider, $yuanPaid, $actor);
+
+            return $provider->load(['solicitud', 'datos', 'ejecuciones']);
+        });
+    }
+
+    public function noticeText(int $providerId): string
+    {
+        $provider = PagoProveedorSolicitudProveedor::query()->with('solicitud')->find($providerId);
+        if (!$provider) {
+            throw new PagoProveedorException('El pago no existe.', 404);
+        }
+
+        return app(PagoProveedorMensajeService::class)->rmbNoticeText($provider);
     }
 
     /**
@@ -115,10 +186,14 @@ class PagoProveedorYuanService
             }
 
             $quote = $this->quote($provider);
-            $obtained = round($quote['usd'] * $realRate, 2);
-            $differenceYuan = round($obtained - $yuanPaid, 2);
-            $differenceUsd = round($differenceYuan / $realRate, 2);
-            $result = $this->classify($differenceUsd);
+            $manual = $provider->solicitud?->origin === PagoProveedorSolicitud::ORIGIN_MANUAL;
+            if (!$manual && !app(PagoProveedorMensajeService::class)->rmbNoticeMatches($provider, $yuanPaid)) {
+                throw new PagoProveedorException('Primero envía el aviso al cliente por WhatsApp. Si cambias los yuanes pagados, vuelve a enviarlo.');
+            }
+            $calculo = PagoProveedorYuanCalculo::calcular($quote['usd'], $realRate, $yuanPaid, $this->tolerance());
+            $obtained = $calculo['obtained'];
+            $differenceUsd = $calculo['difference_usd'];
+            $result = $calculo['result'];
             $extension = strtolower($receipt->getClientOriginalExtension() ?: 'pdf');
             $path = $this->storageFinalizeCdnPath($this->storageStoreUpload(
                 $receipt,
@@ -147,7 +222,9 @@ class PagoProveedorYuanService
                 'user_id' => $actor['id'],
             ]);
 
-            $provider->exchange_result = $result;
+            if (!$manual) {
+                $provider->exchange_result = $result;
+            }
             $provider->china_observation_reason = null;
             $provider->china_observation_detail = null;
             $provider->china_observed_at = null;
@@ -156,7 +233,7 @@ class PagoProveedorYuanService
             $provider->stage = PagoProveedorSolicitudProveedor::STAGE_CONFIRMATION;
             $provider->save();
             $provider->load('ejecuciones');
-            if ($result === PagoProveedorEjecucion::RESULT_REFUND) {
+            if (!$manual && $result === PagoProveedorEjecucion::RESULT_REFUND) {
                 app(PagoProveedorReembolsoService::class)->ensureExchange($provider, $actor);
             }
 
@@ -167,11 +244,9 @@ class PagoProveedorYuanService
                 $actor,
                 $provider->code_supplier.' · '.$this->resultLabel($result)
             );
-            app(PagoProveedorMensajeService::class)->storeRmbNotice($provider, $actor);
-            if (in_array($result, [PagoProveedorEjecucion::RESULT_COLLECT, PagoProveedorEjecucion::RESULT_REFUND], true)) {
-                app(PagoProveedorMensajeService::class)->storeBalance($provider, $actor);
+            if (!$manual) {
+                app(PagoProveedorConfirmacionService::class)->open($provider);
             }
-            app(PagoProveedorConfirmacionService::class)->open($provider);
             $execution->load(['proveedor.solicitud', 'proveedor.datos']);
 
             return $execution;
@@ -250,6 +325,68 @@ class PagoProveedorYuanService
     }
 
     /**
+     * Las solicitudes manuales las levanta China (RN-96). Las de Perú las levanta Ventas.
+     *
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    public function liftManual(int $providerId, array $actor): PagoProveedorSolicitudProveedor
+    {
+        return DB::transaction(function () use ($providerId, $actor) {
+            $provider = $this->lock($providerId);
+            $request = $provider->solicitud;
+            if ($request?->origin !== PagoProveedorSolicitud::ORIGIN_MANUAL) {
+                throw new PagoProveedorException('Esta observación la levanta Ventas.');
+            }
+            if ($provider->china_observation_reason === null) {
+                throw new PagoProveedorException('Este pago no está observado.');
+            }
+            $provider->status = PagoProveedorSolicitudProveedor::STATUS_IN_PROGRESS;
+            $provider->stage = PagoProveedorSolicitudProveedor::STAGE_EXECUTION;
+            $provider->china_observation_reason = null;
+            $provider->china_observation_detail = null;
+            $provider->china_observed_at = null;
+            $provider->china_observe_until = null;
+            $provider->save();
+            $this->history->registrar(
+                PagoProveedorHistorial::ENTITY_REQUEST,
+                (int) $provider->request_id,
+                'Observación manual levantada',
+                $actor,
+                $provider->code_supplier
+            );
+
+            return $provider->load(['solicitud', 'datos', 'ejecuciones']);
+        });
+    }
+
+    /**
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    public function deleteManual(int $providerId, array $actor): void
+    {
+        DB::transaction(function () use ($providerId, $actor) {
+            $provider = $this->lock($providerId);
+            $request = $provider->solicitud;
+            if ($request?->origin !== PagoProveedorSolicitud::ORIGIN_MANUAL) {
+                throw new PagoProveedorException('Solo se eliminan las solicitudes creadas aquí.');
+            }
+            if ($provider->ejecuciones()->exists()) {
+                throw new PagoProveedorException('Este pago ya tiene constancia. No se puede eliminar.');
+            }
+            $this->history->registrar(
+                PagoProveedorHistorial::ENTITY_REQUEST,
+                (int) $provider->request_id,
+                'Solicitud manual eliminada',
+                $actor,
+                $provider->code_supplier
+            );
+            $provider->datos()->delete();
+            $provider->delete();
+            $request->delete();
+        });
+    }
+
+    /**
      * @param  array{partner: string, client_name: string, consolidation: string, product: string, supplier_code: ?string, supplier_name: ?string, seller_name: string, wechat: string, usd_amount: float, yuan_amount: float}  $payload
      * @param  array{id: int|null, nombre: string, area: string}  $actor
      */
@@ -260,6 +397,14 @@ class PagoProveedorYuanService
             $name = trim((string) ($payload['supplier_name'] ?? ''));
             if ($code === '' && $name === '') {
                 throw new PagoProveedorException('Indica el código o el nombre del proveedor.');
+            }
+            $partner = trim((string) $payload['partner']);
+            if (stripos($partner, 'pro business') !== false) {
+                throw new PagoProveedorException('Las solicitudes de Pro Business llegan desde Aprobación. Aquí solo van las de otros socios.');
+            }
+            $wechat = preg_replace('/\s+/', '', (string) $payload['wechat']) ?? '';
+            if (!preg_match('/^\d{5,20}$/', $wechat)) {
+                throw new PagoProveedorException('El N.° de WeChat es un número: solo dígitos, entre 5 y 20.');
             }
             $usd = round((float) $payload['usd_amount'], 2);
             $yuan = round((float) $payload['yuan_amount'], 2);
@@ -298,7 +443,7 @@ class PagoProveedorYuanService
                 'exchange_rate_confirmed' => true,
                 'client_name' => trim($payload['client_name']),
                 'consolidation' => trim($payload['consolidation']),
-                'partner' => trim($payload['partner']),
+                'partner' => $partner,
                 'origin' => PagoProveedorSolicitud::ORIGIN_MANUAL,
                 'user_id' => $actor['id'],
             ]);
@@ -327,12 +472,88 @@ class PagoProveedorYuanService
             ]);
             $provider->datos()->create([
                 'seller_name' => trim($payload['seller_name']),
-                'wechat' => PagoProveedorDatosReglas::wechat($payload['wechat']),
+                'wechat' => PagoProveedorDatosReglas::wechat($wechat),
                 'status' => PagoProveedorDatoProveedor::STATUS_RECEIVED,
                 'source' => 'china',
                 'token' => Str::random(40),
             ]);
             $this->history->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $request->id, 'Solicitud manual', $actor, $provider->code_supplier.' · '.$request->partner);
+
+            return $provider->load(['solicitud', 'datos', 'ejecuciones']);
+        });
+    }
+
+    /**
+     * @param  array{partner: string, client_name: string, consolidation: string, product: string, supplier_code: ?string, supplier_name: ?string, seller_name: string, wechat: string, usd_amount: float, yuan_amount: float}  $payload
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    public function updateManual(int $providerId, array $payload, ?UploadedFile $proforma, array $actor): PagoProveedorSolicitudProveedor
+    {
+        return DB::transaction(function () use ($providerId, $payload, $proforma, $actor) {
+            $provider = $this->lock($providerId);
+            $request = $provider->solicitud;
+            if ($request?->origin !== PagoProveedorSolicitud::ORIGIN_MANUAL) {
+                throw new PagoProveedorException('Solo se editan las solicitudes creadas aquí.');
+            }
+            if ($provider->ejecuciones()->exists()) {
+                throw new PagoProveedorException('Este pago ya tiene constancia. No se puede editar.');
+            }
+            $code = trim((string) ($payload['supplier_code'] ?? ''));
+            $name = trim((string) ($payload['supplier_name'] ?? ''));
+            if ($code === '' && $name === '') {
+                throw new PagoProveedorException('Indica el código o el nombre del proveedor.');
+            }
+            $partner = trim((string) $payload['partner']);
+            if (stripos($partner, 'pro business') !== false) {
+                throw new PagoProveedorException('Las solicitudes de Pro Business llegan desde Aprobación. Aquí solo van las de otros socios.');
+            }
+            $wechat = preg_replace('/\s+/', '', (string) $payload['wechat']) ?? '';
+            if (!preg_match('/^\d{5,20}$/', $wechat)) {
+                throw new PagoProveedorException('El N.° de WeChat es un número: solo dígitos, entre 5 y 20.');
+            }
+            $usd = round((float) $payload['usd_amount'], 2);
+            $yuan = round((float) $payload['yuan_amount'], 2);
+            if ($usd <= 0 || $yuan <= 0) {
+                throw new PagoProveedorException('Los montos en dólares y yuanes tienen que ser mayores que cero.');
+            }
+            $rate = round($yuan / $usd, 4);
+            $request->exchange_rate = $rate;
+            $request->client_name = trim($payload['client_name']);
+            $request->consolidation = trim($payload['consolidation']);
+            $request->consolidated_quote_code = trim($payload['consolidation']);
+            $request->partner = $partner;
+            $request->save();
+            $quote = $request->cotizacion;
+            if ($quote) {
+                $quote->exchange_rate = $rate;
+                $quote->client_name = trim($payload['client_name']);
+                $quote->consolidation = trim($payload['consolidation']);
+                $quote->consolidated_quote_code = trim($payload['consolidation']);
+                $quote->save();
+            }
+            if ($proforma) {
+                $extension = strtolower($proforma->getClientOriginalExtension() ?: 'pdf');
+                $provider->proforma_path = $this->storageFinalizeCdnPath($this->storageStoreUpload(
+                    $proforma,
+                    'pago-proveedor/proformas',
+                    'manual-'.$request->order_number.'-'.now()->format('YmdHis').'.'.$extension
+                ));
+                $provider->proforma_name = $proforma->getClientOriginalName();
+            }
+            $provider->code_supplier = $code !== '' ? $code : 'Sin código';
+            $provider->supplier_name = $name !== '' ? $name : null;
+            $provider->product = trim($payload['product']);
+            $provider->cargo_value_usd = $usd;
+            $provider->total_amount = $usd;
+            $provider->summary_json = ['cuotas' => [['carga' => $usd, 'total' => $usd]], 'pagos_proveedor' => [['carga' => $usd]]];
+            $provider->save();
+            $datos = $provider->datos;
+            if ($datos) {
+                $datos->seller_name = trim($payload['seller_name']);
+                $datos->wechat = PagoProveedorDatosReglas::wechat($wechat);
+                $datos->save();
+            }
+            $this->history->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $request->id, 'Solicitud manual editada', $actor, $provider->code_supplier.' · '.$partner);
 
             return $provider->load(['solicitud', 'datos', 'ejecuciones']);
         });
@@ -362,12 +583,16 @@ class PagoProveedorYuanService
 
     public function classify(float $differenceUsd): string
     {
-        $tolerance = (float) $this->configuration->value(PagoProveedorSolicitudProveedor::SETTING_TOLERANCE, 1);
-        if (abs($differenceUsd) <= $tolerance + PagoProveedorSolicitudProveedor::MONEY_EPSILON) {
+        if (abs($differenceUsd) <= $this->tolerance() + 0.001) {
             return PagoProveedorEjecucion::RESULT_WITHIN;
         }
 
         return $differenceUsd < 0 ? PagoProveedorEjecucion::RESULT_COLLECT : PagoProveedorEjecucion::RESULT_REFUND;
+    }
+
+    public function tolerance(): float
+    {
+        return (float) $this->configuration->value(PagoProveedorSolicitudProveedor::SETTING_TOLERANCE, 1);
     }
 
     public function resultLabel(string $result): string
@@ -409,7 +634,26 @@ class PagoProveedorYuanService
     /**
      * @return Collection<int, PagoProveedorSolicitudProveedor>
      */
-    private function rows(string $bucket, string $search): Collection
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function searchOf(array $filters): string
+    {
+        return mb_strtolower(trim((string) ($filters['search'] ?? '')));
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function partnerOf(array $filters): string
+    {
+        return trim((string) ($filters['partner'] ?? ''));
+    }
+
+    /**
+     * @return Collection<int, PagoProveedorSolicitudProveedor>
+     */
+    private function rows(string $bucket, string $search, string $partner = ''): Collection
     {
         $providers = PagoProveedorSolicitudProveedor::query()
             ->with(['solicitud', 'datos', 'ejecuciones'])
@@ -417,6 +661,12 @@ class PagoProveedorYuanService
             ->orderByDesc('id')
             ->get()
             ->filter(fn (PagoProveedorSolicitudProveedor $provider) => $this->inBucket($provider, $bucket));
+
+        if ($partner !== '') {
+            $providers = $providers->filter(function (PagoProveedorSolicitudProveedor $provider) use ($partner) {
+                return trim((string) ($provider->solicitud?->partner ?: 'Pro Business')) === $partner;
+            });
+        }
 
         if ($search === '') {
             return $providers->values();

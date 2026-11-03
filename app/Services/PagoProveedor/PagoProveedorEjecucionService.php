@@ -53,6 +53,31 @@ class PagoProveedorEjecucionService
         return $this->pending('')->count();
     }
 
+    public function noticeText(int $providerId, float $amount): string
+    {
+        $provider = PagoProveedorSolicitudProveedor::query()->with('solicitud')->find($providerId);
+        if (!$provider) {
+            throw new PagoProveedorException('El pago no existe.', 404);
+        }
+
+        return app(PagoProveedorMensajeService::class)->usdNoticeText($provider, $amount);
+    }
+
+    /**
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    public function confirmNotice(int $providerId, float $amount, array $actor): PagoProveedorSolicitudProveedor
+    {
+        $provider = PagoProveedorSolicitudProveedor::query()->with('solicitud')->find($providerId);
+        if (!$provider) {
+            throw new PagoProveedorException('El pago no existe.', 404);
+        }
+        $this->requireReady($provider);
+        app(PagoProveedorMensajeService::class)->storeUsdNotice($provider, $amount, $actor);
+
+        return $provider->load(['solicitud', 'datos', 'ejecuciones']);
+    }
+
     /**
      * @param  array<string, mixed>  $filters
      * @return array{count: int, cargo: float, charged_bank_fee: float, real_bank_fee: float, bank_difference: float, admin_fee: float, profit: float}
@@ -127,6 +152,10 @@ class PagoProveedorEjecucionService
                 'user_id' => $actor['id'],
             ]);
 
+            $messages = app(PagoProveedorMensajeService::class);
+            if (!$messages->noticeStored($provider)) {
+                throw new PagoProveedorException('Primero envía el aviso al cliente por WhatsApp.');
+            }
             $this->history->registrar(
                 PagoProveedorHistorial::ENTITY_REQUEST,
                 (int) $provider->request_id,
@@ -134,7 +163,6 @@ class PagoProveedorEjecucionService
                 $actor,
                 $provider->code_supplier.' · constancia '.$execution->receipt_name
             );
-            app(PagoProveedorMensajeService::class)->storeUsdNotice($provider, (float) $execution->cargo_amount, $actor);
 
             $payments = $provider->summary_json['pagos_proveedor'] ?? [];
             $hasAnotherPart = is_array($payments) && count($payments) > (int) $provider->current_payment;

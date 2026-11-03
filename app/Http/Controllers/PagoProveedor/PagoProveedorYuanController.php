@@ -31,7 +31,9 @@ class PagoProveedorYuanController extends Controller
             return YuanPagoResource::collection($page->items())->additional([
                 'success' => true,
                 'pending_count' => $this->yuan->pendingCount(),
-                'indicators' => $this->yuan->indicators(),
+                'indicators' => $this->yuan->indicators($request->all()),
+                'counts' => $this->yuan->counts($request->all()),
+                'partners' => $this->yuan->partners(),
                 'reasons' => $this->yuan->reasons(),
                 'pagination' => [
                     'current_page' => $page->currentPage(),
@@ -84,6 +86,70 @@ class PagoProveedorYuanController extends Controller
             $provider = $this->yuan->createManual($data, $request->file('proforma'), $actor);
 
             return $this->ok(new YuanPagoResource($provider), 201);
+        });
+    }
+
+    public function updateManual(Request $request, int $providerId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $providerId) {
+            $actor = $this->authorization->requireWarehouse($request->user());
+            $data = $request->validate([
+                'partner' => ['required', 'string', 'max:80'],
+                'client_name' => ['required', 'string', 'max:160'],
+                'consolidation' => ['required', 'string', 'max:40'],
+                'product' => ['required', 'string', 'max:160'],
+                'supplier_code' => ['nullable', 'string', 'max:50'],
+                'supplier_name' => ['nullable', 'string', 'max:160'],
+                'seller_name' => ['required', 'string', 'max:120'],
+                'wechat' => ['required', 'string', 'max:40'],
+                'usd_amount' => ['required', 'numeric', 'gt:0'],
+                'yuan_amount' => ['required', 'numeric', 'gt:0'],
+                'proforma' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx', 'max:10240'],
+            ]);
+            $provider = $this->yuan->updateManual($providerId, $data, $request->file('proforma'), $actor);
+
+            return $this->ok(new YuanPagoResource($provider));
+        });
+    }
+
+    public function notice(Request $request, int $providerId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $providerId) {
+            if ($request->isMethod('GET')) {
+                $this->authorization->requireWarehouse($request->user());
+
+                return response()->json([
+                    'success' => true,
+                    'data' => ['message' => $this->yuan->noticeText($providerId)],
+                ]);
+            }
+            $actor = $this->authorization->requireWarehouse($request->user());
+            $data = $request->validate([
+                'yuan_paid' => ['required', 'numeric', 'gt:0'],
+            ]);
+            $provider = $this->yuan->confirmNotice($providerId, (float) $data['yuan_paid'], $actor);
+
+            return $this->ok(new YuanPagoResource($provider));
+        });
+    }
+
+    public function lift(Request $request, int $providerId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $providerId) {
+            $actor = $this->authorization->requireWarehouse($request->user());
+            $provider = $this->yuan->liftManual($providerId, $actor);
+
+            return $this->ok(new YuanPagoResource($provider));
+        });
+    }
+
+    public function destroy(Request $request, int $providerId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $providerId) {
+            $actor = $this->authorization->requireWarehouse($request->user());
+            $this->yuan->deleteManual($providerId, $actor);
+
+            return response()->json(['success' => true, 'message' => 'La solicitud se eliminó.']);
         });
     }
 

@@ -190,6 +190,29 @@ class PagoProveedorConfirmacionService
     /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
      */
+    /**
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    public function sendBalance(int $requestId, int $providerId, array $actor): PagoProveedorSolicitud
+    {
+        return DB::transaction(function () use ($requestId, $providerId, $actor) {
+            $provider = PagoProveedorSolicitudProveedor::query()
+                ->with('solicitud')
+                ->where('request_id', $requestId)
+                ->lockForUpdate()
+                ->find($providerId);
+            if (!$provider) {
+                throw new PagoProveedorException('El proveedor no existe.', 404);
+            }
+            if (!in_array($provider->exchange_result, [PagoProveedorEjecucion::RESULT_COLLECT, PagoProveedorEjecucion::RESULT_REFUND], true)) {
+                throw new PagoProveedorException('Este pago no tiene diferencia para avisarle al cliente.');
+            }
+            app(PagoProveedorMensajeService::class)->storeBalance($provider, $actor);
+
+            return $provider->solicitud;
+        });
+    }
+
     public function registerExchangeVoucher(
         int $requestId,
         int $providerId,
@@ -278,6 +301,8 @@ class PagoProveedorConfirmacionService
                 'second_installment_choice' => $provider->second_installment_choice,
                 'second_payment_choice' => $provider->second_payment_choice,
                 'can_register_exchange' => $provider->exchange_result === PagoProveedorEjecucion::RESULT_COLLECT && !$this->exchangeCovered($provider),
+                'can_send_balance' => in_array($provider->exchange_result, [PagoProveedorEjecucion::RESULT_COLLECT, PagoProveedorEjecucion::RESULT_REFUND], true)
+                    && !app(PagoProveedorMensajeService::class)->balanceStored($provider),
                 'can_request_refund' => $provider->refunds->contains(fn (PagoProveedorReembolso $refund) => $refund->status === PagoProveedorReembolso::STATUS_CONSULT),
                 'exchange_due_usd' => $this->exchangeDue($provider),
                 'decision_due_at' => optional($provider->decision_due_at)->toIso8601String(),

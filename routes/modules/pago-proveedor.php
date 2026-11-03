@@ -45,6 +45,7 @@ Route::group(['prefix' => 'pago-proveedor', 'middleware' => 'jwt.auth'], functio
     Route::post('solicitudes/{id}/tipo-cambio', [PagoProveedorEtapa1Controller::class, 'confirmarTipoCambio'])->whereNumber('id');
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/pago-2', [PagoProveedorEtapa1Controller::class, 'decidirPago'])->whereNumber(['id', 'proveedorId']);
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/diferencia-cambio', [PagoProveedorEtapa1Controller::class, 'registrarDiferencia'])->whereNumber(['id', 'proveedorId']);
+    Route::post('solicitudes/{id}/proveedores/{proveedorId}/balance', [PagoProveedorEtapa1Controller::class, 'enviarBalance'])->whereNumber(['id', 'proveedorId']);
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/levantar-china', [PagoProveedorEtapa1Controller::class, 'levantarChina'])->whereNumber(['id', 'proveedorId']);
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/reembolso', [PagoProveedorEtapa1Controller::class, 'solicitarReembolso'])->whereNumber(['id', 'proveedorId']);
     Route::post('solicitudes/{id}/abonos/{abonoId}/continuan', [PagoProveedorEtapa1Controller::class, 'elegirContinuacion'])->whereNumber(['id', 'abonoId']);
@@ -53,6 +54,7 @@ Route::group(['prefix' => 'pago-proveedor', 'middleware' => 'jwt.auth'], functio
     Route::post('reembolsos/{id}/aprobar', [PagoProveedorReembolsoController::class, 'approve'])->whereNumber('id');
     Route::post('reembolsos/{id}/rechazar', [PagoProveedorReembolsoController::class, 'reject'])->whereNumber('id');
     Route::post('yuanes/manual', [PagoProveedorYuanController::class, 'storeManual']);
+    Route::post('yuanes/{providerId}/editar', [PagoProveedorYuanController::class, 'updateManual'])->whereNumber('providerId');
     Route::post('solicitudes/{id}/abonos', [PagoProveedorEtapa1Controller::class, 'registrarAbono'])->whereNumber('id');
     Route::post('solicitudes/{id}/abonos/{abonoId}', [PagoProveedorEtapa1Controller::class, 'actualizarAbono'])->whereNumber(['id', 'abonoId']);
     Route::post('solicitudes/{id}/abonos/{abonoId}/anular', [PagoProveedorEtapa1Controller::class, 'anularAbono'])->whereNumber(['id', 'abonoId']);
@@ -76,9 +78,15 @@ Route::group(['prefix' => 'pago-proveedor', 'middleware' => 'jwt.auth'], functio
     Route::post('aprobaciones/{id}/anular', [PagoProveedorAprobacionController::class, 'cancel'])->whereNumber('id');
 
     Route::get('ejecuciones', [PagoProveedorEjecucionController::class, 'index']);
+    Route::get('ejecuciones/{providerId}/aviso', [PagoProveedorEjecucionController::class, 'notice'])->whereNumber('providerId');
+    Route::post('ejecuciones/{providerId}/aviso', [PagoProveedorEjecucionController::class, 'notice'])->whereNumber('providerId');
     Route::post('ejecuciones/{providerId}', [PagoProveedorEjecucionController::class, 'store'])->whereNumber('providerId');
 
     Route::get('yuanes', [PagoProveedorYuanController::class, 'index']);
+    Route::get('yuanes/{providerId}/aviso', [PagoProveedorYuanController::class, 'notice'])->whereNumber('providerId');
+    Route::post('yuanes/{providerId}/aviso', [PagoProveedorYuanController::class, 'notice'])->whereNumber('providerId');
     Route::post('yuanes/{providerId}/observar', [PagoProveedorYuanController::class, 'observe'])->whereNumber('providerId');
+    Route::post('yuanes/{providerId}/levantar', [PagoProveedorYuanController::class, 'lift'])->whereNumber('providerId');
     Route::post('yuanes/{providerId}', [PagoProveedorYuanController::class, 'store'])->whereNumber('providerId');
+    Route::delete('yuanes/{providerId}', [PagoProveedorYuanController::class, 'destroy'])->whereNumber('providerId');
 });
