@@ -206,4 +206,42 @@ class CotizacionProveedor extends Model
     {
         return $this->hasMany(CotizacionCotizadorProveedorDocumento::class, 'id_proveedor');
     }
+
+    /**
+     * Tras enviar (o generar para descarga) el rotulado: marca SENDED y pasa el estado
+     * del proveedor a ROTULADO si estaba vacío o en DATOS PROVEEDOR, dejando el tracking.
+     *
+     * @param int|string $idCotizacion
+     * @param array<int> $idsProveedores
+     */
+    public static function marcarRotuladoEnviado($idCotizacion, array $idsProveedores): void
+    {
+        foreach (static::whereIn('id', $idsProveedores)->get() as $proveedor) {
+            $update = ['send_rotulado_status' => 'SENDED'];
+            $estado = $proveedor->estados;
+            if ($estado === null || $estado === '' || $estado === 'DATOS PROVEEDOR') {
+                $update['estados'] = 'ROTULADO';
+                $ahora = now();
+                $tracking = \DB::table('contenedor_proveedor_estados_tracking')
+                    ->where('id_proveedor', $proveedor->id)
+                    ->where('id_cotizacion', $idCotizacion)
+                    ->orderBy('created_at', 'desc')
+                    ->orderBy('id', 'desc')
+                    ->first();
+                if ($tracking) {
+                    \DB::table('contenedor_proveedor_estados_tracking')
+                        ->where('id', $tracking->id)
+                        ->update(['updated_at' => $ahora]);
+                }
+                \DB::table('contenedor_proveedor_estados_tracking')->insert([
+                    'id_proveedor' => $proveedor->id,
+                    'id_cotizacion' => $idCotizacion,
+                    'estado' => 'ROTULADO',
+                    'created_at' => $ahora,
+                    'updated_at' => $ahora,
+                ]);
+            }
+            $proveedor->update($update);
+        }
+    }
 }

@@ -304,9 +304,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
 
                     $processedProviders++;
                     if (!empty($proveedorArray['id'])) {
-                        CotizacionProveedor::where('id', $proveedorArray['id'])->update([
-                            'send_rotulado_status' => 'SENDED',
-                        ]);
+                        CotizacionProveedor::marcarRotuladoEnviado($this->idCotizacion, [$proveedorArray['id']]);
                     }
                 } catch (Exception $e) {
                     Log::error('Error procesando proveedor ' . $supplierCode . ': ' . $e->getMessage());

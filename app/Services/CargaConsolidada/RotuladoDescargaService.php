@@ -102,8 +102,7 @@ class RotuladoDescargaService
             throw new \Exception('No se pudo publicar el archivo de rotulado para descarga');
         }
 
-        CotizacionProveedor::whereIn('id', $proveedores->pluck('id')->all())
-            ->update(['send_rotulado_status' => 'SENDED']);
+        CotizacionProveedor::marcarRotuladoEnviado($cotizacion->id, $proveedores->pluck('id')->all());
 
         Log::info('[ROTULADO_DESCARGA] ZIP generado (org sin Meta propio)', [
             'id_cotizacion' => $cotizacion->id,
