@@ -4,6 +4,8 @@ namespace App\Services\PagoProveedor;
 
 use App\Exceptions\PagoProveedorException;
 use App\Models\PagoProveedor\PagoProveedorCotizacion;
+use App\Models\PagoProveedor\PagoProveedorEjecucion;
+use App\Models\PagoProveedor\PagoProveedorSolicitudProveedor;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 
@@ -51,6 +53,90 @@ class PagoProveedorPdfService
 
         return [
             'filename' => 'Resumen_pago_proveedor_' . $cotizacion->code . '.pdf',
+            'base64' => base64_encode($dompdf->output()),
+        ];
+    }
+
+    /**
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     * @return array{filename: string, base64: string}
+     */
+    public function balance(PagoProveedorSolicitudProveedor $provider, array $actor): array
+    {
+        $provider->loadMissing(['solicitud', 'ejecuciones']);
+        $request = $provider->solicitud;
+        $pagos = [];
+        $cobrado = 0.0;
+        $obtenido = 0.0;
+        $pagado = 0.0;
+        $diffUsd = 0.0;
+        foreach ($provider->ejecuciones->sortBy('supplier_payment') as $execution) {
+            $usd = (float) $execution->cargo_amount;
+            $got = (float) $execution->yuan_obtained;
+            $paid = (float) $execution->yuan_paid;
+            $rate = (float) $execution->real_exchange_rate;
+            $rowDiff = (float) $execution->exchange_difference_usd;
+            $cobrado += $usd;
+            $obtenido += $got;
+            $pagado += $paid;
+            $diffUsd += $rowDiff;
+            $pagos[] = [
+                'n' => (int) $execution->supplier_payment,
+                'tc' => $rate,
+                'usd' => $usd,
+                'obtenido' => $got,
+                'pagado' => $paid,
+                'diff_usd' => $rowDiff,
+            ];
+        }
+        if ($pagos === []) {
+            throw new PagoProveedorException('Todavía no hay un pago registrado para armar el balance.');
+        }
+        $diffUsd = round($diffUsd, 2);
+        $label = 'Diferencia';
+        if ($provider->exchange_result === PagoProveedorEjecucion::RESULT_COLLECT) {
+            $label = 'Diferencia a pagar';
+        } elseif ($provider->exchange_result === PagoProveedorEjecucion::RESULT_REFUND) {
+            $label = 'Diferencia a devolver';
+        } elseif (abs($diffUsd) <= 0.009) {
+            $label = 'Sin diferencia';
+        }
+        $html = view('pago-proveedor.balance', [
+            'fecha' => now()->timezone(PagoProveedorVigenciaService::ZONA)->format('d/m/Y'),
+            'cliente' => $request?->client_name,
+            'consolidado' => $request?->consolidation,
+            'codigo_proveedor' => $provider->code_supplier,
+            'nombre_proveedor' => $provider->supplier_name,
+            'producto' => $provider->product,
+            'diferencia_label' => $label,
+            'diferencia_usd' => abs($diffUsd),
+            'cobrado_usd' => round($cobrado, 2),
+            'obtenido_rmb' => round($obtenido, 2),
+            'pagado_rmb' => round($pagado, 2),
+            'pagos' => $pagos,
+            'mostrar_cuentas' => $provider->exchange_result === PagoProveedorEjecucion::RESULT_COLLECT,
+        ])->render();
+
+        $options = new Options();
+        $options->set('isHtml5ParserEnabled', true);
+        $options->set('isRemoteEnabled', false);
+        $options->set('defaultFont', 'DejaVu Sans');
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4');
+        $dompdf->render();
+
+        $code = preg_replace('/[^A-Za-z0-9_-]/', '', (string) $provider->code_supplier) ?: (string) $provider->id;
+        $this->historial->registrar(
+            \App\Models\PagoProveedor\PagoProveedorHistorial::ENTITY_REQUEST,
+            (int) $provider->request_id,
+            'PDF de balance descargado',
+            $actor,
+            $provider->code_supplier
+        );
+
+        return [
+            'filename' => 'Balance_'.$code.'.pdf',
             'base64' => base64_encode($dompdf->output()),
         ];
     }

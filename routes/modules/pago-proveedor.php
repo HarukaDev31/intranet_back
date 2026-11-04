@@ -45,6 +45,7 @@ Route::group(['prefix' => 'pago-proveedor', 'middleware' => 'jwt.auth'], functio
     Route::post('solicitudes/{id}/tipo-cambio', [PagoProveedorEtapa1Controller::class, 'confirmarTipoCambio'])->whereNumber('id');
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/pago-2', [PagoProveedorEtapa1Controller::class, 'decidirPago'])->whereNumber(['id', 'proveedorId']);
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/diferencia-cambio', [PagoProveedorEtapa1Controller::class, 'registrarDiferencia'])->whereNumber(['id', 'proveedorId']);
+    Route::get('solicitudes/{id}/proveedores/{proveedorId}/balance', [PagoProveedorEtapa1Controller::class, 'descargarBalance'])->whereNumber(['id', 'proveedorId']);
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/balance', [PagoProveedorEtapa1Controller::class, 'enviarBalance'])->whereNumber(['id', 'proveedorId']);
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/levantar-china', [PagoProveedorEtapa1Controller::class, 'levantarChina'])->whereNumber(['id', 'proveedorId']);
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/reembolso', [PagoProveedorEtapa1Controller::class, 'solicitarReembolso'])->whereNumber(['id', 'proveedorId']);
@@ -74,6 +75,7 @@ Route::group(['prefix' => 'pago-proveedor', 'middleware' => 'jwt.auth'], functio
     Route::get('aprobaciones/{id}', [PagoProveedorAprobacionController::class, 'show'])->whereNumber('id');
     Route::post('aprobaciones/{id}/aprobar', [PagoProveedorAprobacionController::class, 'approve'])->whereNumber('id');
     Route::post('aprobaciones/{id}/cobrar', [PagoProveedorAprobacionController::class, 'collect'])->whereNumber('id');
+    Route::post('aprobaciones/{id}/error-registro', [PagoProveedorAprobacionController::class, 'registrationError'])->whereNumber('id');
     Route::post('aprobaciones/{id}/extender', [PagoProveedorAprobacionController::class, 'extend'])->whereNumber('id');
     Route::post('aprobaciones/{id}/anular', [PagoProveedorAprobacionController::class, 'cancel'])->whereNumber('id');
 

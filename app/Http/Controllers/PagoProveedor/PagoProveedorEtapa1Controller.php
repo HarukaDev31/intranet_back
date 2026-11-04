@@ -180,8 +180,23 @@ class PagoProveedorEtapa1Controller extends Controller
     {
         return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
             $actor = $this->autorizacion->exigirVentas($request->user());
+            $resultado = app(PagoProveedorConfirmacionService::class)->sendBalance($solicitudId, $proveedorId, $actor);
+            $payload = $this->datos($resultado['solicitud'])->getData(true);
+            $payload['pdf'] = $resultado['pdf'];
 
-            return $this->datos(app(PagoProveedorConfirmacionService::class)->sendBalance($solicitudId, $proveedorId, $actor));
+            return response()->json($payload);
+        });
+    }
+
+    public function descargarBalance(Request $request, int $solicitudId, int $proveedorId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
+            $actor = $this->autorizacion->exigirVentas($request->user());
+
+            return response()->json([
+                'success' => true,
+                'data' => app(PagoProveedorConfirmacionService::class)->downloadBalance($solicitudId, $proveedorId, $actor),
+            ]);
         });
     }
 

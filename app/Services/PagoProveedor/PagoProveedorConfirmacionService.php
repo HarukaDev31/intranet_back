@@ -189,15 +189,13 @@ class PagoProveedorConfirmacionService
 
     /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
+     * @return array{solicitud: PagoProveedorSolicitud, pdf: array{filename: string, base64: string}}
      */
-    /**
-     * @param  array{id: int|null, nombre: string, area: string}  $actor
-     */
-    public function sendBalance(int $requestId, int $providerId, array $actor): PagoProveedorSolicitud
+    public function sendBalance(int $requestId, int $providerId, array $actor): array
     {
         return DB::transaction(function () use ($requestId, $providerId, $actor) {
             $provider = PagoProveedorSolicitudProveedor::query()
-                ->with('solicitud')
+                ->with(['solicitud', 'ejecuciones'])
                 ->where('request_id', $requestId)
                 ->lockForUpdate()
                 ->find($providerId);
@@ -208,9 +206,42 @@ class PagoProveedorConfirmacionService
                 throw new PagoProveedorException('Este pago no tiene diferencia para avisarle al cliente.');
             }
             app(PagoProveedorMensajeService::class)->storeBalance($provider, $actor);
+            $pdf = app(PagoProveedorPdfService::class)->balance($provider, $actor);
 
-            return $provider->solicitud;
+            return [
+                'solicitud' => $provider->solicitud,
+                'pdf' => $pdf,
+            ];
         });
+    }
+
+    /**
+     * @return array{filename: string, base64: string}
+     */
+    public function downloadBalance(int $requestId, int $providerId, array $actor): array
+    {
+        $provider = $this->find($requestId, $providerId);
+        $provider->loadMissing('ejecuciones');
+
+        return app(PagoProveedorPdfService::class)->balance($provider, $actor);
+    }
+
+    /**
+     * @return array{cargo: float, admin: float, total: float}
+     */
+    public function paymentTwoRefund(PagoProveedorSolicitudProveedor $provider): array
+    {
+        $summary = is_array($provider->summary_json) ? $provider->summary_json : [];
+        $payments = is_array($summary['pagos_proveedor'] ?? null) ? $summary['pagos_proveedor'] : [];
+        $second = $payments[1] ?? [];
+        $cargo = round((float) ($second['carga'] ?? 0), 2);
+        $admin = round((float) ($second['administrativa'] ?? 0), 2);
+
+        return [
+            'cargo' => $cargo,
+            'admin' => $admin,
+            'total' => round($cargo + $admin, 2),
+        ];
     }
 
     public function registerExchangeVoucher(
@@ -303,8 +334,10 @@ class PagoProveedorConfirmacionService
                 'can_register_exchange' => $provider->exchange_result === PagoProveedorEjecucion::RESULT_COLLECT && !$this->exchangeCovered($provider),
                 'can_send_balance' => in_array($provider->exchange_result, [PagoProveedorEjecucion::RESULT_COLLECT, PagoProveedorEjecucion::RESULT_REFUND], true)
                     && !app(PagoProveedorMensajeService::class)->balanceStored($provider),
+                'can_download_balance' => $provider->ejecuciones->isNotEmpty(),
                 'can_request_refund' => $provider->refunds->contains(fn (PagoProveedorReembolso $refund) => $refund->status === PagoProveedorReembolso::STATUS_CONSULT),
                 'exchange_due_usd' => $this->exchangeDue($provider),
+                'payment_two_refund' => $this->awaitsPaymentChoice($provider) ? $this->paymentTwoRefund($provider) : null,
                 'decision_due_at' => optional($provider->decision_due_at)->toIso8601String(),
                 'decision_overdue' => $provider->decision_due_at ? $provider->decision_due_at->isPast() : false,
                 'exchange_rate_pending' => (bool) $provider->exchange_rate_pending,

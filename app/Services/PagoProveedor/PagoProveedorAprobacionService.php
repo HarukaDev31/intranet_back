@@ -193,23 +193,55 @@ class PagoProveedorAprobacionService
     /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
      */
+    public function markRegistrationError(int $id, string $detail, array $actor): PagoProveedorSolicitudProveedor
+    {
+        return DB::transaction(function () use ($id, $detail, $actor) {
+            $provider = $this->find($id, true);
+            $this->requireOpen($provider);
+            $note = trim($detail);
+            if ($note === '') {
+                throw new PagoProveedorException('Indica qué debe corregir Ventas.');
+            }
+            $provider->approval_status = PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR;
+            $provider->status = PagoProveedorSolicitudProveedor::STATUS_OBSERVED;
+            $provider->collect_amount = null;
+            $provider->collect_until = now()->addDays($this->remedyDays());
+            $provider->save();
+            $this->history->registrar(
+                PagoProveedorHistorial::ENTITY_REQUEST,
+                (int) $provider->request_id,
+                'Error de registro',
+                $actor,
+                $note
+            );
+
+            return $this->refreshed($provider);
+        });
+    }
+
+    /**
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
     public function extendCollect(int $id, array $actor): PagoProveedorSolicitudProveedor
     {
         return DB::transaction(function () use ($id, $actor) {
             $provider = $this->find($id, true);
-            if ($provider->approval_status !== PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT || !$provider->collect_until) {
-                throw new PagoProveedorException('Este pago no está por cobrar.');
+            $observedApproval = in_array($provider->approval_status, [
+                PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT,
+                PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR,
+            ], true);
+            if (!$observedApproval || !$provider->collect_until) {
+                throw new PagoProveedorException('Este pago no tiene un plazo de observación para extender.');
             }
             $base = $provider->collect_until->isFuture() ? $provider->collect_until : now();
             $provider->collect_until = $base->copy()->addDays($this->remedyDays());
-            $provider->approval_status = PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT;
             $provider->status = PagoProveedorSolicitudProveedor::STATUS_OBSERVED;
             $provider->stage = PagoProveedorSolicitudProveedor::STAGE_VALIDATION;
             $provider->save();
             $this->history->registrar(
                 PagoProveedorHistorial::ENTITY_REQUEST,
                 (int) $provider->request_id,
-                'Plazo de cobro extendido',
+                'Plazo de observación extendido',
                 $actor,
                 $provider->code_supplier
             );
@@ -488,6 +520,7 @@ class PagoProveedorAprobacionService
 
     private function expireCollect(PagoProveedorSolicitudProveedor $provider): void
     {
+        // Solo «Por cobrar» vuelve a Pendiente sin escalar (RN-72). «Error de registro» espera a Administración.
         if ($provider->approval_status !== PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT || !$provider->collect_until) {
             return;
         }

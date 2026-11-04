@@ -66,9 +66,20 @@ class AprobacionPagoResource extends JsonResource
             'deposits' => $deposits,
             'can_approve' => $open,
             'can_collect' => $open
-                && $provider->approval_status !== PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT
+                && !in_array($provider->approval_status, [
+                    PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT,
+                    PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR,
+                ], true)
                 && $comparison['difference'] < -PagoProveedorSolicitudProveedor::MONEY_EPSILON,
-            'can_extend' => $provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT
+            'can_mark_registration_error' => $open
+                && !in_array($provider->approval_status, [
+                    PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT,
+                    PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR,
+                ], true),
+            'can_extend' => in_array($provider->approval_status, [
+                    PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT,
+                    PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR,
+                ], true)
                 && $provider->collect_until
                 && $provider->collect_until->isPast(),
             'can_cancel' => $open,
@@ -100,6 +111,9 @@ class AprobacionPagoResource extends JsonResource
 
             return 'Faltan $'.$amount.': Ventas debe cobrarlos al cliente';
         }
+        if ($provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR) {
+            return 'Error de registro: Ventas debe corregir el voucher o los datos';
+        }
 
         if ($provider->collect_until && $provider->collect_until->isPast()) {
             return 'Plazo de cobro vencido';
@@ -127,6 +141,7 @@ class AprobacionPagoResource extends JsonResource
     {
         return match ($status) {
             PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT => 'Por cobrar',
+            PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR => 'Error de registro',
             PagoProveedorSolicitudProveedor::APPROVAL_APPROVED => 'Aprobado',
             default => 'Pendiente',
         };
@@ -137,7 +152,10 @@ class AprobacionPagoResource extends JsonResource
      */
     private function deadlineText(PagoProveedorSolicitudProveedor $provider, array $deposits): ?string
     {
-        if ($provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT && $provider->collect_until) {
+        if (in_array($provider->approval_status, [
+            PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT,
+            PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR,
+        ], true) && $provider->collect_until) {
             $days = (int) now()->startOfDay()->diffInDays($provider->collect_until->copy()->startOfDay(), false);
             if ($days < 0) {
                 $gone = abs($days);

@@ -36,6 +36,7 @@ class SolicitudProveedorResource extends JsonResource
             'collect_amount' => $provider->collect_amount,
             'exchange_result' => $provider->exchange_result,
             'second_payment_choice' => $provider->second_payment_choice,
+            'second_installment_on' => optional($provider->second_installment_on)->format('Y-m-d'),
             'sales_task' => $task,
             'owner' => $task ? PagoProveedorSolicitudProveedor::OWNER_SALES : PagoProveedorSolicitudProveedor::OWNER_OTHER,
         ];

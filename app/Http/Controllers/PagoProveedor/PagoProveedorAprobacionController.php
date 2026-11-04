@@ -73,6 +73,18 @@ class PagoProveedorAprobacionController extends Controller
         });
     }
 
+    public function registrationError(Request $request, int $id): JsonResponse
+    {
+        return $this->responder(function () use ($request, $id) {
+            $actor = $this->authorization->requireAdministration($request->user());
+            $data = $request->validate([
+                'detail' => ['required', 'string', 'max:500'],
+            ]);
+
+            return $this->ok(new AprobacionPagoResource($this->approvals->markRegistrationError($id, $data['detail'], $actor)));
+        });
+    }
+
     public function extend(Request $request, int $id): JsonResponse
     {
         return $this->responder(function () use ($request, $id) {

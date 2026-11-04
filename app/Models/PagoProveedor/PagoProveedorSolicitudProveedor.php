@@ -82,6 +82,7 @@ class PagoProveedorSolicitudProveedor extends Model
 
     public const APPROVAL_PENDING = 'pendiente';
     public const APPROVAL_TO_COLLECT = 'por_cobrar';
+    public const APPROVAL_REGISTRATION_ERROR = 'error_registro';
     public const APPROVAL_APPROVED = 'aprobado';
     public const APPROVAL_AUTOMATIC = 'automatica';
     public const APPROVAL_MANUAL = 'manual';
@@ -262,6 +263,16 @@ class PagoProveedorSolicitudProveedor extends Model
             return null;
         }
         if ($this->exchange_rate_pending) {
+            return self::TASK_CONFIRMATION;
+        }
+        if ($this->approval_status === self::APPROVAL_REGISTRATION_ERROR) {
+            return self::TASK_OBSERVED;
+        }
+        if ($this->client_payment_mode === PagoProveedorCotizacionProveedor::MODE_SPLIT
+            && (int) $this->current_installment === self::FIRST_INSTALLMENT
+            && $this->second_installment_choice === null
+            && $this->second_installment_on
+            && $this->second_installment_on->copy()->startOfDay()->lte(now('America/Lima')->startOfDay()->addDays(2))) {
             return self::TASK_CONFIRMATION;
         }
         if ((int) $this->stage === self::STAGE_CONFIRMATION
