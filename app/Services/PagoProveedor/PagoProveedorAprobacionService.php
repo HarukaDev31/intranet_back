@@ -248,8 +248,7 @@ class PagoProveedorAprobacionService
                 throw new PagoProveedorException('Indica el motivo para extender el plazo.');
             }
             $extra = max(1, $days ?? $this->remedyDays());
-            $base = $provider->collect_until->isFuture() ? $provider->collect_until : now();
-            $provider->collect_until = $base->copy()->addDays($extra);
+            $provider->collect_until = now()->addDays($extra);
             $provider->status = PagoProveedorSolicitudProveedor::STATUS_OBSERVED;
             $provider->stage = PagoProveedorSolicitudProveedor::STAGE_VALIDATION;
             $provider->save();

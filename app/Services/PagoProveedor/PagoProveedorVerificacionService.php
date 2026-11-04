@@ -286,8 +286,7 @@ class PagoProveedorVerificacionService
                 throw new PagoProveedorException('Indica el motivo para extender el plazo.');
             }
             $extra = max(1, $days ?? $this->remedyDays());
-            $base = $deposit->observe_until->isFuture() ? $deposit->observe_until : now();
-            $deposit->observe_until = $base->copy()->addDays($extra);
+            $deposit->observe_until = now()->addDays($extra);
             $deposit->observation_escalated_at = null;
             $deposit->save();
             $this->history->registrar(
