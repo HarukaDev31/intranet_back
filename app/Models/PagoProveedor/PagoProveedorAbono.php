@@ -21,6 +21,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $status
  * @property string|null $observation_reason
  * @property string|null $observation_detail
+ * @property \Illuminate\Support\Carbon|null $observe_until
+ * @property \Illuminate\Support\Carbon|null $observation_escalated_at
  * @property bool $corrected_by_admin
  * @property \Illuminate\Support\Carbon|null $verified_at
  * @property int|null $verified_by_user_id
@@ -69,6 +71,8 @@ class PagoProveedorAbono extends Model
         'status',
         'observation_reason',
         'observation_detail',
+        'observe_until',
+        'observation_escalated_at',
         'corrected_by_admin',
         'verified_at',
         'verified_by_user_id',
@@ -85,6 +89,8 @@ class PagoProveedorAbono extends Model
         'paid_on' => 'date:Y-m-d',
         'corrected_by_admin' => 'boolean',
         'verified_at' => 'datetime',
+        'observe_until' => 'datetime',
+        'observation_escalated_at' => 'datetime',
         'interbank' => 'boolean',
         'surplus' => 'float',
         'repeated_operation' => 'boolean',

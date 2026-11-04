@@ -67,7 +67,14 @@ class PagoProveedorVerificacionService
             $query->whereDate('paid_on', '<=', $filters['paid_to']);
         }
 
-        return $query->paginate(max(1, (int) ($filters['per_page'] ?? 15)));
+        $page = $query->paginate(max(1, (int) ($filters['per_page'] ?? 15)));
+        foreach ($page->items() as $deposit) {
+            if ($deposit instanceof PagoProveedorAbono) {
+                $this->escalateIfDue($deposit);
+            }
+        }
+
+        return $page;
     }
 
     public function pendingCount(): int
@@ -94,7 +101,10 @@ class PagoProveedorVerificacionService
 
     public function show(int $id): PagoProveedorAbono
     {
-        return $this->find($id);
+        $deposit = $this->find($id);
+        $this->escalateIfDue($deposit);
+
+        return $deposit->fresh(['solicitud.proveedores', 'aplicaciones']) ?: $deposit;
     }
 
     /**
@@ -147,6 +157,8 @@ class PagoProveedorVerificacionService
             $deposit->status = PagoProveedorAbono::STATUS_VALIDATED;
             $deposit->observation_reason = null;
             $deposit->observation_detail = null;
+            $deposit->observe_until = null;
+            $deposit->observation_escalated_at = null;
             $deposit->verified_at = now();
             $deposit->verified_by_user_id = $actor['id'];
             $deposit->save();
@@ -184,6 +196,8 @@ class PagoProveedorVerificacionService
             $deposit->status = PagoProveedorAbono::STATUS_OBSERVED;
             $deposit->observation_reason = $code;
             $deposit->observation_detail = $detail !== null && trim($detail) !== '' ? trim($detail) : null;
+            $deposit->observe_until = now()->addDays($this->remedyDays());
+            $deposit->observation_escalated_at = null;
             $deposit->verified_at = now();
             $deposit->verified_by_user_id = $actor['id'];
             $deposit->save();
@@ -193,7 +207,7 @@ class PagoProveedorVerificacionService
                 (int) $deposit->request_id,
                 'Depósito observado',
                 $actor,
-                trim($label.' '.($deposit->observation_detail ?? ''))
+                trim($label.' '.($deposit->observation_detail ?? '').' · plazo '.$this->remedyDays().' días')
             );
 
             return $deposit->fresh(['solicitud.proveedores', 'aplicaciones']);
@@ -232,6 +246,8 @@ class PagoProveedorVerificacionService
             $deposit->status = PagoProveedorAbono::STATUS_IN_VALIDATION;
             $deposit->observation_reason = null;
             $deposit->observation_detail = null;
+            $deposit->observe_until = null;
+            $deposit->observation_escalated_at = null;
             $deposit->verified_at = null;
             $deposit->verified_by_user_id = null;
             $deposit->save();
@@ -248,6 +264,122 @@ class PagoProveedorVerificacionService
 
             return $deposit->fresh(['solicitud.proveedores', 'aplicaciones']);
         });
+    }
+
+    /**
+     * Extiende el plazo de una observación vencida (RN-112).
+     *
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    public function extendObservation(int $id, string $reason, ?int $days, array $actor): PagoProveedorAbono
+    {
+        return DB::transaction(function () use ($id, $reason, $days, $actor) {
+            $deposit = $this->find($id, true);
+            if ($deposit->status !== PagoProveedorAbono::STATUS_OBSERVED || !$deposit->observe_until) {
+                throw new PagoProveedorException('Este depósito no tiene un plazo de observación para extender.');
+            }
+            if ($deposit->observe_until->isFuture()) {
+                throw new PagoProveedorException('El plazo de la observación todavía no venció.');
+            }
+            $note = trim($reason);
+            if ($note === '') {
+                throw new PagoProveedorException('Indica el motivo para extender el plazo.');
+            }
+            $extra = max(1, $days ?? $this->remedyDays());
+            $base = $deposit->observe_until->isFuture() ? $deposit->observe_until : now();
+            $deposit->observe_until = $base->copy()->addDays($extra);
+            $deposit->observation_escalated_at = null;
+            $deposit->save();
+            $this->history->registrar(
+                PagoProveedorHistorial::ENTITY_REQUEST,
+                (int) $deposit->request_id,
+                'Plazo de observación extendido',
+                $actor,
+                $extra.' día'.($extra === 1 ? '' : 's').': '.$note
+            );
+
+            return $deposit->fresh(['solicitud.proveedores', 'aplicaciones']);
+        });
+    }
+
+    /**
+     * Anula los pagos vinculados a un depósito con observación vencida (RN-112).
+     *
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    public function cancelObservedPayment(int $id, string $reason, array $actor): PagoProveedorAbono
+    {
+        return DB::transaction(function () use ($id, $reason, $actor) {
+            $deposit = $this->find($id, true);
+            if ($deposit->status !== PagoProveedorAbono::STATUS_OBSERVED || !$deposit->observe_until) {
+                throw new PagoProveedorException('Solo se anula un pago con observación de depósito vencida.');
+            }
+            if ($deposit->observe_until->isFuture()) {
+                throw new PagoProveedorException('El plazo de la observación todavía no venció.');
+            }
+            $note = trim($reason);
+            if ($note === '') {
+                throw new PagoProveedorException('Indica el motivo de la anulación.');
+            }
+
+            $deposit->loadMissing(['aplicaciones.proveedor', 'solicitud.proveedores']);
+            $cancelled = 0;
+            foreach ($deposit->aplicaciones as $application) {
+                $provider = $application->proveedor
+                    ?: $deposit->solicitud?->proveedores?->firstWhere('id', $application->request_provider_id);
+                if (!$provider || $provider->status === PagoProveedorSolicitudProveedor::STATUS_CANCELLED) {
+                    continue;
+                }
+                if ($provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_APPROVED
+                    || (int) $provider->stage > PagoProveedorSolicitudProveedor::STAGE_VALIDATION) {
+                    continue;
+                }
+                $provider->status = PagoProveedorSolicitudProveedor::STATUS_CANCELLED;
+                $provider->approval_status = null;
+                $provider->collect_until = null;
+                $provider->save();
+                $cancelled++;
+            }
+            if ($cancelled === 0) {
+                throw new PagoProveedorException('No hay un pago abierto vinculado a este depósito para anular.');
+            }
+
+            $deposit->status = PagoProveedorAbono::STATUS_CANCELLED;
+            $deposit->observe_until = null;
+            $deposit->observation_escalated_at = null;
+            $deposit->save();
+            $this->history->registrar(
+                PagoProveedorHistorial::ENTITY_REQUEST,
+                (int) $deposit->request_id,
+                'Pago anulado por observación vencida',
+                $actor,
+                $note
+            );
+
+            return $deposit->fresh(['solicitud.proveedores', 'aplicaciones']);
+        });
+    }
+
+    /**
+     * Aviso único a jefatura cuando vence el plazo de 7 días (RN-112 / PV-11).
+     */
+    public function escalateIfDue(PagoProveedorAbono $deposit): void
+    {
+        if ($deposit->status !== PagoProveedorAbono::STATUS_OBSERVED || !$deposit->observe_until) {
+            return;
+        }
+        if ($deposit->observe_until->isFuture() || $deposit->observation_escalated_at) {
+            return;
+        }
+        $deposit->observation_escalated_at = now();
+        $deposit->save();
+        $this->history->registrar(
+            PagoProveedorHistorial::ENTITY_REQUEST,
+            (int) $deposit->request_id,
+            'Observación vencida',
+            ['id' => null, 'nombre' => 'Sistema', 'area' => 'Sistema'],
+            'Más de '.$this->remedyDays().' días sin subsanar. Administración decide: extender el plazo o anular el pago.'
+        );
     }
 
     /**
@@ -339,6 +471,11 @@ class PagoProveedorVerificacionService
         $match = collect($this->reasons())->firstWhere('code', $code);
 
         return $match['label'] ?? $code;
+    }
+
+    private function remedyDays(): int
+    {
+        return max(1, (int) $this->configuration->value(PagoProveedorSolicitudProveedor::SETTING_REMEDY_DAYS, 7));
     }
 
     /**

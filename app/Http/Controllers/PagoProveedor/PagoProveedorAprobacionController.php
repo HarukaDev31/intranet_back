@@ -89,8 +89,17 @@ class PagoProveedorAprobacionController extends Controller
     {
         return $this->responder(function () use ($request, $id) {
             $actor = $this->authorization->requireAdministration($request->user());
+            $data = $request->validate([
+                'reason' => ['required', 'string', 'max:255'],
+                'days' => ['nullable', 'integer', 'min:1', 'max:60'],
+            ]);
 
-            return $this->ok(new AprobacionPagoResource($this->approvals->extendCollect($id, $actor)));
+            return $this->ok(new AprobacionPagoResource($this->approvals->extendCollect(
+                $id,
+                $data['reason'],
+                isset($data['days']) ? (int) $data['days'] : null,
+                $actor
+            )));
         });
     }
 

@@ -32,6 +32,16 @@ class DepositoVerificacionResource extends JsonResource
         $silentMinutes = max(1, (int) app(PagoProveedorConfiguracionService::class)->value(PagoProveedorSolicitudProveedor::SETTING_UNDO_MINUTES, 5));
         $noticeHours = max(1, (int) app(PagoProveedorConfiguracionService::class)->value(PagoProveedorSolicitudProveedor::SETTING_UNDO_HOURS, 24));
         $withinUndo = $minutesSince !== null && $minutesSince <= $noticeHours * 60;
+        $observedOverdue = $deposit->status === PagoProveedorAbono::STATUS_OBSERVED
+            && $deposit->observe_until
+            && $deposit->observe_until->isPast();
+        $observeDeadlineText = null;
+        if ($deposit->status === PagoProveedorAbono::STATUS_OBSERVED && $deposit->observe_until) {
+            $days = (int) now()->startOfDay()->diffInDays($deposit->observe_until->copy()->startOfDay(), false);
+            $observeDeadlineText = $days < 0
+                ? 'vencido hace '.abs($days).' día'.(abs($days) === 1 ? '' : 's')
+                : 'quedan '.$days.' día'.($days === 1 ? '' : 's');
+        }
 
         $deposit->loadMissing('exchangeProvider');
         $providers = $deposit->aplicaciones->map(function ($application) use ($solicitud) {
@@ -77,18 +87,24 @@ class DepositoVerificacionResource extends JsonResource
             'status_label' => self::statusLabel($deposit->status),
             'purpose' => $deposit->purpose ?: PagoProveedorAbono::PURPOSE_CLIENT,
             'purpose_label' => $deposit->purpose === PagoProveedorAbono::PURPOSE_EXCHANGE ? 'Diferencia de cambio' : 'Abono del cliente',
-            'deadline_text' => $deposit->status === PagoProveedorAbono::STATUS_IN_VALIDATION
-                ? ($remaining >= 0 ? 'quedan '.$this->duration($remaining) : 'vencido hace '.$this->duration(abs($remaining)))
-                : null,
-            'deadline_overdue' => $deposit->status === PagoProveedorAbono::STATUS_IN_VALIDATION && $remaining < 0,
+            'deadline_text' => $deposit->status === PagoProveedorAbono::STATUS_OBSERVED
+                ? $observeDeadlineText
+                : ($deposit->status === PagoProveedorAbono::STATUS_IN_VALIDATION
+                    ? ($remaining >= 0 ? 'quedan '.$this->duration($remaining) : 'vencido hace '.$this->duration(abs($remaining)))
+                    : null),
+            'deadline_overdue' => $observedOverdue
+                || ($deposit->status === PagoProveedorAbono::STATUS_IN_VALIDATION && $remaining < 0),
             'observation_reason' => $deposit->observation_reason,
             'observation_detail' => $deposit->observation_detail,
+            'observe_until' => optional($deposit->observe_until)->toIso8601String(),
             'corrected_by_admin' => $deposit->corrected_by_admin,
             'verified_at' => optional($deposit->verified_at)->toIso8601String(),
             'providers' => $providers,
             'shared' => count($providers) > 1,
-            'can_validate' => $open && !$movedOn,
+            'can_validate' => $open && !$movedOn && $deposit->status === PagoProveedorAbono::STATUS_IN_VALIDATION,
             'can_undo' => $verified && !$movedOn && $withinUndo,
+            'can_extend' => $observedOverdue && !$movedOn,
+            'can_cancel_payment' => $observedOverdue && !$movedOn,
             'undo_notifies_sales' => $minutesSince !== null && $minutesSince > $silentMinutes,
         ];
     }

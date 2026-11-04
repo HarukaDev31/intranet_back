@@ -68,6 +68,8 @@ Route::group(['prefix' => 'pago-proveedor', 'middleware' => 'jwt.auth'], functio
     Route::post('verificacion/depositos/{id}/validar', [PagoProveedorVerificacionController::class, 'validateDeposit'])->whereNumber('id');
     Route::post('verificacion/depositos/{id}/observar', [PagoProveedorVerificacionController::class, 'observe'])->whereNumber('id');
     Route::post('verificacion/depositos/{id}/deshacer', [PagoProveedorVerificacionController::class, 'undo'])->whereNumber('id');
+    Route::post('verificacion/depositos/{id}/extender', [PagoProveedorVerificacionController::class, 'extend'])->whereNumber('id');
+    Route::post('verificacion/depositos/{id}/anular-pago', [PagoProveedorVerificacionController::class, 'cancelPayment'])->whereNumber('id');
 
     Route::get('aprobaciones', [PagoProveedorAprobacionController::class, 'index']);
     Route::put('aprobaciones/plazos', [PagoProveedorAprobacionController::class, 'updateSettings']);

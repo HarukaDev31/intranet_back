@@ -357,6 +357,8 @@ class PagoProveedorEtapa1Service
                 'user_id' => $actor['id'],
                 'observation_reason' => null,
                 'observation_detail' => null,
+                'observe_until' => null,
+                'observation_escalated_at' => null,
                 'verified_at' => null,
                 'verified_by_user_id' => null,
                 'bank_amount' => null,

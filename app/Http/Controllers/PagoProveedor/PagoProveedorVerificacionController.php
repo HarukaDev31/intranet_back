@@ -110,6 +110,38 @@ class PagoProveedorVerificacionController extends Controller
         });
     }
 
+    public function extend(Request $request, int $id): JsonResponse
+    {
+        return $this->responder(function () use ($request, $id) {
+            $actor = $this->authorization->requireAdministration($request->user());
+            $data = $request->validate([
+                'reason' => ['required', 'string', 'max:255'],
+                'days' => ['nullable', 'integer', 'min:1', 'max:60'],
+            ]);
+
+            return $this->ok(new DepositoVerificacionResource($this->deposits->extendObservation(
+                $id,
+                $data['reason'],
+                isset($data['days']) ? (int) $data['days'] : null,
+                $actor
+            )));
+        });
+    }
+
+    public function cancelPayment(Request $request, int $id): JsonResponse
+    {
+        return $this->responder(function () use ($request, $id) {
+            $actor = $this->authorization->requireAdministration($request->user());
+            $data = $request->validate([
+                'reason' => ['required', 'string', 'max:255'],
+            ]);
+
+            return $this->ok(new DepositoVerificacionResource(
+                $this->deposits->cancelObservedPayment($id, $data['reason'], $actor)
+            ));
+        });
+    }
+
     private function responder(callable $action): JsonResponse
     {
         try {

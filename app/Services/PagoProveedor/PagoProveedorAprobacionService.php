@@ -53,11 +53,16 @@ class PagoProveedorAprobacionService
             if (!in_array($provider->approval_status, [
                 PagoProveedorSolicitudProveedor::APPROVAL_PENDING,
                 PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT,
+                PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR,
             ], true)) {
                 return false;
             }
             $comparison = $this->compare($provider);
-            if (!$this->readyForDecision($comparison)) {
+            $waitingOnSales = in_array($provider->approval_status, [
+                PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT,
+                PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR,
+            ], true);
+            if (!$waitingOnSales && !$this->readyForDecision($comparison)) {
                 return false;
             }
 
@@ -83,6 +88,7 @@ class PagoProveedorAprobacionService
             ->whereIn('approval_status', [
                 PagoProveedorSolicitudProveedor::APPROVAL_PENDING,
                 PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT,
+                PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR,
             ])
             ->where('status', '!=', PagoProveedorSolicitudProveedor::STATUS_CANCELLED)
             ->count();
@@ -90,7 +96,10 @@ class PagoProveedorAprobacionService
 
     public function show(int $id): PagoProveedorSolicitudProveedor
     {
-        return $this->find($id);
+        $provider = $this->find($id);
+        $this->escalateRegistrationError($provider);
+
+        return $provider->fresh($this->relations()) ?: $provider;
     }
 
     /**
@@ -109,6 +118,7 @@ class PagoProveedorAprobacionService
         }
 
         $this->expireCollect($provider);
+        $this->escalateRegistrationError($provider);
         $comparison = $this->compare($provider);
         if (!$this->readyForDecision($comparison)) {
             return;
@@ -222,19 +232,24 @@ class PagoProveedorAprobacionService
     /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
      */
-    public function extendCollect(int $id, array $actor): PagoProveedorSolicitudProveedor
+    public function extendCollect(int $id, string $reason, ?int $days, array $actor): PagoProveedorSolicitudProveedor
     {
-        return DB::transaction(function () use ($id, $actor) {
+        return DB::transaction(function () use ($id, $reason, $days, $actor) {
             $provider = $this->find($id, true);
-            $observedApproval = in_array($provider->approval_status, [
-                PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT,
-                PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR,
-            ], true);
-            if (!$observedApproval || !$provider->collect_until) {
+            if ($provider->approval_status !== PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR
+                || !$provider->collect_until) {
                 throw new PagoProveedorException('Este pago no tiene un plazo de observación para extender.');
             }
+            if ($provider->collect_until->isFuture()) {
+                throw new PagoProveedorException('El plazo de la observación todavía no venció.');
+            }
+            $note = $this->cleanReason($reason);
+            if ($note === null) {
+                throw new PagoProveedorException('Indica el motivo para extender el plazo.');
+            }
+            $extra = max(1, $days ?? $this->remedyDays());
             $base = $provider->collect_until->isFuture() ? $provider->collect_until : now();
-            $provider->collect_until = $base->copy()->addDays($this->remedyDays());
+            $provider->collect_until = $base->copy()->addDays($extra);
             $provider->status = PagoProveedorSolicitudProveedor::STATUS_OBSERVED;
             $provider->stage = PagoProveedorSolicitudProveedor::STAGE_VALIDATION;
             $provider->save();
@@ -243,7 +258,7 @@ class PagoProveedorAprobacionService
                 (int) $provider->request_id,
                 'Plazo de observación extendido',
                 $actor,
-                $provider->code_supplier
+                $extra.' día'.($extra === 1 ? '' : 's').' · '.$provider->code_supplier.': '.$note
             );
 
             return $this->refreshed($provider);
@@ -529,7 +544,41 @@ class PagoProveedorAprobacionService
         }
         $provider->approval_status = PagoProveedorSolicitudProveedor::APPROVAL_PENDING;
         $provider->status = PagoProveedorSolicitudProveedor::STATUS_IN_PROGRESS;
+        $provider->collect_until = null;
         $provider->save();
+        $this->history->registrar(
+            PagoProveedorHistorial::ENTITY_REQUEST,
+            (int) $provider->request_id,
+            'Plazo de cobro vencido',
+            ['id' => null, 'nombre' => 'Sistema', 'area' => 'Sistema'],
+            ($provider->code_supplier ?: 'Proveedor').': vuelve a Pendiente sin escalar'
+        );
+    }
+
+    private function escalateRegistrationError(PagoProveedorSolicitudProveedor $provider): void
+    {
+        if ($provider->approval_status !== PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR
+            || !$provider->collect_until
+            || $provider->collect_until->isFuture()) {
+            return;
+        }
+        // Aviso único por vencimiento: se registra en historial la primera vez que se consulta (RN-112 / PV-11).
+        $already = PagoProveedorHistorial::query()
+            ->where('entity_type', PagoProveedorHistorial::ENTITY_REQUEST)
+            ->where('entity_id', $provider->request_id)
+            ->where('action', 'Observación vencida')
+            ->where('detail', 'like', '%'.$provider->code_supplier.'%')
+            ->exists();
+        if ($already) {
+            return;
+        }
+        $this->history->registrar(
+            PagoProveedorHistorial::ENTITY_REQUEST,
+            (int) $provider->request_id,
+            'Observación vencida',
+            ['id' => null, 'nombre' => 'Sistema', 'area' => 'Sistema'],
+            ($provider->code_supplier ?: 'Proveedor').': error de registro sin subsanar. Administración decide extender o anular.'
+        );
     }
 
     private function charged(PagoProveedorSolicitudProveedor $provider): float
@@ -632,6 +681,7 @@ class PagoProveedorAprobacionService
                         ->orWhereIn('approval_status', [
                             PagoProveedorSolicitudProveedor::APPROVAL_PENDING,
                             PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT,
+                            PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR,
                         ]);
                 })
                 ->orderByDesc('id');

@@ -76,13 +76,13 @@ class AprobacionPagoResource extends JsonResource
                     PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT,
                     PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR,
                 ], true),
-            'can_extend' => in_array($provider->approval_status, [
-                    PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT,
-                    PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR,
-                ], true)
+            // RN-72: «Por cobrar» vencido vuelve a Pendiente. RN-112: «Error de registro» vencido → extender o anular.
+            'can_extend' => $provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR
                 && $provider->collect_until
                 && $provider->collect_until->isPast(),
-            'can_cancel' => $open,
+            'can_cancel' => $provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR
+                && $provider->collect_until
+                && $provider->collect_until->isPast(),
             'needs_reason' => $approval->needsReason($comparison['category']),
         ];
     }
