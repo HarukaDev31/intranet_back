@@ -34,13 +34,9 @@ class AbonoResource extends JsonResource
         $decideText = null;
         if ($abono->surplus_decision === PagoProveedorAbono::EXCESS_TO_CONSULT && $abono->updated_at) {
             $decideUntil = $abono->updated_at->copy()->addHours($hours);
-            $remaining = (int) now()->diffInMinutes($decideUntil, false);
-            $decideOverdue = $remaining < 0;
-            $decideText = $decideOverdue
-                ? 'plazo de decisión vencido'
-                : (abs($remaining) < 60
-                    ? 'quedan '.$remaining.' min para decidir'
-                    : 'quedan '.intdiv(max(0, $remaining), 60).' h para decidir');
+            $decideOverdue = $decideUntil->isPast();
+            $raw = \App\Services\PagoProveedor\PagoProveedorPlazo::remainingText($decideUntil, 'para decidir');
+            $decideText = $decideOverdue ? 'plazo de decisión vencido' : $raw;
         }
 
         return [

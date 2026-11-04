@@ -340,6 +340,12 @@ class PagoProveedorConfirmacionService
                 'payment_two_refund' => $this->awaitsPaymentChoice($provider) ? $this->paymentTwoRefund($provider) : null,
                 'decision_due_at' => optional($provider->decision_due_at)->toIso8601String(),
                 'decision_overdue' => $provider->decision_due_at ? $provider->decision_due_at->isPast() : false,
+                'decision_due_text' => $provider->decision_due_at
+                    ? ($provider->decision_due_at->isPast()
+                        ? 'El plazo ya venció. Igual puedes elegir.'
+                        : PagoProveedorPlazo::remainingText($provider->decision_due_at))
+                    : null,
+                'pending_refund' => $this->pendingRefundSummary($provider),
                 'exchange_rate_pending' => (bool) $provider->exchange_rate_pending,
             ],
         ];
@@ -449,8 +455,16 @@ class PagoProveedorConfirmacionService
                 'owner' => PagoProveedorSolicitudProveedor::OWNER_OTHER,
             ];
         }
-        $refund = $this->hasPendingRefund($provider);
-        if ($refund) {
+        $openRefund = $this->openRefund($provider);
+        if ($openRefund && $provider->second_payment_choice !== PagoProveedorSolicitudProveedor::PAYMENT_REFUND) {
+            $items[] = [
+                'key' => 'refund',
+                'label' => 'Reembolso pendiente',
+                'done' => false,
+                'blocks' => true,
+                'owner' => PagoProveedorSolicitudProveedor::OWNER_OTHER,
+            ];
+        } elseif ($this->hasPendingSurplusRefund($provider)) {
             $items[] = [
                 'key' => 'refund',
                 'label' => 'Reembolso pendiente',
@@ -513,10 +527,19 @@ class PagoProveedorConfirmacionService
 
     private function hasPendingRefund(PagoProveedorSolicitudProveedor $provider): bool
     {
+        return $this->openRefund($provider) !== null || $this->hasPendingSurplusRefund($provider);
+    }
+
+    private function openRefund(PagoProveedorSolicitudProveedor $provider): ?PagoProveedorReembolso
+    {
         $provider->loadMissing('refunds');
-        if ($provider->refunds->contains(fn (PagoProveedorReembolso $refund) => $this->refundOpen($refund))) {
-            return true;
-        }
+
+        return $provider->refunds->first(fn (PagoProveedorReembolso $refund) => $this->refundOpen($refund));
+    }
+
+    private function hasPendingSurplusRefund(PagoProveedorSolicitudProveedor $provider): bool
+    {
+        $provider->loadMissing('refunds');
 
         return $provider->aplicaciones->contains(function ($application) use ($provider) {
             $deposit = $application->abono;
@@ -526,6 +549,53 @@ class PagoProveedorConfirmacionService
 
             return !$provider->refunds->contains(fn (PagoProveedorReembolso $refund) => (int) $refund->deposit_id === (int) $deposit->id && !$this->refundOpen($refund));
         });
+    }
+
+    /**
+     * @return array{amount: float, status: string, status_label: string, origin_label: string, blocks_close: bool}|null
+     */
+    private function pendingRefundSummary(PagoProveedorSolicitudProveedor $provider): ?array
+    {
+        $refund = $this->openRefund($provider);
+        if (!$refund) {
+            if (!$this->hasPendingSurplusRefund($provider)) {
+                return null;
+            }
+            $amount = 0.0;
+            foreach ($provider->aplicaciones as $application) {
+                $deposit = $application->abono;
+                if ($deposit && $deposit->surplus_decision === PagoProveedorAbono::EXCESS_REFUND) {
+                    $amount += (float) $deposit->surplus;
+                }
+            }
+
+            return [
+                'amount' => round($amount, 2),
+                'status' => PagoProveedorReembolso::STATUS_REQUESTED,
+                'status_label' => 'Solicitado',
+                'origin_label' => 'Excedente del cliente',
+                'blocks_close' => true,
+            ];
+        }
+
+        $originLabel = match ($refund->origin) {
+            PagoProveedorReembolso::ORIGIN_PAYMENT => 'Anulación del pago 2',
+            PagoProveedorReembolso::ORIGIN_EXCHANGE => 'Diferencia de cambio',
+            default => 'Excedente del cliente',
+        };
+        $statusLabel = match ($refund->status) {
+            PagoProveedorReembolso::STATUS_CONSULT => 'Por consultar',
+            PagoProveedorReembolso::STATUS_REQUESTED => 'Solicitado',
+            default => $refund->status,
+        };
+
+        return [
+            'amount' => round((float) $refund->amount, 2),
+            'status' => $refund->status,
+            'status_label' => $statusLabel,
+            'origin_label' => $originLabel,
+            'blocks_close' => true,
+        ];
     }
 
     private function refundOpen(PagoProveedorReembolso $refund): bool

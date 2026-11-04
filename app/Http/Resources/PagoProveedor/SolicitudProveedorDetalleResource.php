@@ -71,6 +71,11 @@ class SolicitudProveedorDetalleResource extends JsonResource
                 'label' => app(\App\Services\PagoProveedor\PagoProveedorYuanService::class)->reasonLabel((string) $provider->china_observation_reason),
                 'detail' => $provider->china_observation_detail,
                 'until' => optional($provider->china_observe_until)->toIso8601String(),
+                'until_text' => $provider->china_observe_until
+                    ? ($provider->china_observe_until->isPast()
+                        ? 'plazo vencido'
+                        : \App\Services\PagoProveedor\PagoProveedorPlazo::remainingText($provider->china_observe_until))
+                    : null,
                 'overdue' => $provider->china_observe_until ? $provider->china_observe_until->isPast() : false,
             ] : null,
             'progreso' => $this->progress($provider),

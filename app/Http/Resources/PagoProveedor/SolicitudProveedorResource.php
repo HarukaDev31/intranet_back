@@ -37,6 +37,21 @@ class SolicitudProveedorResource extends JsonResource
             'exchange_result' => $provider->exchange_result,
             'second_payment_choice' => $provider->second_payment_choice,
             'second_installment_on' => optional($provider->second_installment_on)->format('Y-m-d'),
+            'decision_due_at' => optional($provider->decision_due_at)->toIso8601String(),
+            'decision_due_text' => $provider->decision_due_at
+                ? ($provider->decision_due_at->isPast()
+                    ? 'plazo vencido'
+                    : \App\Services\PagoProveedor\PagoProveedorPlazo::remainingText($provider->decision_due_at))
+                : null,
+            'observe_until' => optional($provider->china_observe_until)->toIso8601String(),
+            'observe_text' => $provider->status === PagoProveedorSolicitudProveedor::STATUS_OBSERVED && $provider->china_observe_until
+                ? ($provider->china_observe_until->isPast()
+                    ? 'plazo vencido'
+                    : \App\Services\PagoProveedor\PagoProveedorPlazo::remainingText($provider->china_observe_until))
+                : null,
+            'observe_label' => $provider->china_observation_reason
+                ? app(\App\Services\PagoProveedor\PagoProveedorYuanService::class)->reasonLabel((string) $provider->china_observation_reason)
+                : null,
             'sales_task' => $task,
             'owner' => $task ? PagoProveedorSolicitudProveedor::OWNER_SALES : PagoProveedorSolicitudProveedor::OWNER_OTHER,
         ];

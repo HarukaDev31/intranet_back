@@ -84,6 +84,11 @@ class YuanPagoResource extends JsonResource
                 : null,
             'observation_detail' => $provider->china_observation_detail,
             'observation_until' => optional($provider->china_observe_until)->toIso8601String(),
+            'observation_until_text' => $provider->china_observe_until
+                ? ($provider->china_observe_until->isPast()
+                    ? 'plazo vencido'
+                    : \App\Services\PagoProveedor\PagoProveedorPlazo::remainingText($provider->china_observe_until))
+                : null,
             'observation_overdue' => $provider->china_observe_until ? $provider->china_observe_until->isPast() : false,
             'tolerance' => (float) app(PagoProveedorConfiguracionService::class)->value(PagoProveedorSolicitudProveedor::SETTING_TOLERANCE, 1),
         ];
