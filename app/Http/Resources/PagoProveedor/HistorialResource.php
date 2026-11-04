@@ -17,8 +17,8 @@ class HistorialResource extends JsonResource
         $event = $this->resource;
 
         return [
-            'accion' => $event->accion,
-            'detalle' => $event->detalle,
+            'accion' => $event->action,
+            'detalle' => $event->detail,
             'usuario' => trim((string) $event->user_name . ' · ' . (string) $event->area, ' ·'),
             'fecha' => optional($event->created_at)->toIso8601String(),
         ];

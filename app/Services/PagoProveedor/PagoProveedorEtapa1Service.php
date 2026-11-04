@@ -159,17 +159,55 @@ class PagoProveedorEtapa1Service
     }
 
     /**
+     * @return array<int, array{id: int, titulo: string, moneda: string, incompleto: bool}>
+     */
+    public function candidatosPedirDatos(int $solicitudId): array
+    {
+        $solicitud = $this->solicitud($solicitudId);
+        $rows = [];
+        foreach ($solicitud->proveedores as $proveedor) {
+            if ($proveedor->status === PagoProveedorSolicitudProveedor::STATUS_CANCELLED || (int) $proveedor->stage !== PagoProveedorSolicitudProveedor::STAGE_DATA) {
+                continue;
+            }
+            $incomplete = false;
+            if ($proveedor->currency === PagoProveedorCotizacionProveedor::CURRENCY_RMB) {
+                $datos = $proveedor->datos;
+                $incomplete = !($datos && trim((string) $datos->seller_name) !== '' && trim((string) $datos->wechat) !== '');
+            } else {
+                $datos = $this->datosDe($proveedor);
+                $incomplete = !($datos->status === PagoProveedorDatoProveedor::STATUS_RECEIVED && !$datos->correction_requested);
+            }
+            if (!$incomplete) {
+                continue;
+            }
+            $rows[] = [
+                'id' => $proveedor->id,
+                'titulo' => trim(($proveedor->code_supplier ?: 'Sin código').' · '.($proveedor->product ?: '')),
+                'moneda' => $proveedor->currency,
+                'incompleto' => true,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
+     * @param  array<int, int>|null  $providerIds
      * @return array<string, mixed>
      */
-    public function vistaPreviaPedirDatos(int $solicitudId, array $actor): array
+    public function vistaPreviaPedirDatos(int $solicitudId, array $actor, ?array $providerIds = null): array
     {
-        return DB::transaction(function () use ($solicitudId, $actor) {
+        return DB::transaction(function () use ($solicitudId, $actor, $providerIds) {
             $solicitud = $this->solicitud($solicitudId, true);
+            $selected = $providerIds === null ? null : array_map('intval', $providerIds);
             $bloques = [];
             $primero = null;
             foreach ($solicitud->proveedores as $proveedor) {
                 if ($proveedor->status === PagoProveedorSolicitudProveedor::STATUS_CANCELLED || (int) $proveedor->stage !== PagoProveedorSolicitudProveedor::STAGE_DATA) {
+                    continue;
+                }
+                if ($selected !== null && !in_array((int) $proveedor->id, $selected, true)) {
                     continue;
                 }
                 $primero ??= $proveedor;

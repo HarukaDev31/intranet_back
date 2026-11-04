@@ -75,12 +75,32 @@ class PagoProveedorEtapa1Controller extends Controller
         });
     }
 
+    public function candidatosPedirDatos(Request $request, int $solicitudId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $solicitudId) {
+            $this->autorizacion->exigirVentas($request->user());
+
+            return response()->json([
+                'success' => true,
+                'data' => $this->etapa1->candidatosPedirDatos($solicitudId),
+            ]);
+        });
+    }
+
     public function pedirDatos(Request $request, int $solicitudId): JsonResponse
     {
         return $this->responder(function () use ($request, $solicitudId) {
             $actor = $this->autorizacion->exigirVentas($request->user());
+            $datos = $request->validate([
+                'proveedores' => ['nullable', 'array'],
+                'proveedores.*' => ['integer'],
+            ]);
 
-            return $this->datos($this->etapa1->vistaPreviaPedirDatos($solicitudId, $actor));
+            return $this->datos($this->etapa1->vistaPreviaPedirDatos(
+                $solicitudId,
+                $actor,
+                $datos['proveedores'] ?? null
+            ));
         });
     }
 

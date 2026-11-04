@@ -404,7 +404,7 @@ class PagoProveedorConfirmacionService
                 'key' => 'client_notice',
                 'label' => 'Aviso al cliente por WhatsApp',
                 'done' => app(PagoProveedorMensajeService::class)->noticeStored($provider),
-                'blocks' => false,
+                'blocks' => true,
                 'owner' => PagoProveedorSolicitudProveedor::OWNER_OTHER,
             ];
         }

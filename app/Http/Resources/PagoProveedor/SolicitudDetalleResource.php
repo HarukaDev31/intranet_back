@@ -3,6 +3,7 @@
 namespace App\Http\Resources\PagoProveedor;
 
 use App\Models\PagoProveedor\PagoProveedorAbono;
+use App\Models\PagoProveedor\PagoProveedorHistorial;
 use App\Models\PagoProveedor\PagoProveedorSolicitud;
 use App\Models\PagoProveedor\PagoProveedorSolicitudProveedor;
 use App\Services\PagoProveedor\PagoProveedorAprobacionService;
@@ -66,6 +67,14 @@ class SolicitudDetalleResource extends JsonResource
             'excedente' => round($excess, 2),
             'proveedores' => SolicitudProveedorDetalleResource::collection($solicitud->proveedores)->resolve(),
             'abonos' => AbonoResource::collection($solicitud->abonos)->resolve(),
+            'historial' => HistorialResource::collection(
+                PagoProveedorHistorial::query()
+                    ->where('entity_type', PagoProveedorHistorial::ENTITY_REQUEST)
+                    ->where('entity_id', $solicitud->id)
+                    ->orderByDesc('id')
+                    ->limit(40)
+                    ->get()
+            )->resolve(),
         ];
     }
 }
