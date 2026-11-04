@@ -525,11 +525,6 @@ class PagoProveedorConfirmacionService
         ];
     }
 
-    private function hasPendingRefund(PagoProveedorSolicitudProveedor $provider): bool
-    {
-        return $this->openRefund($provider) !== null || $this->hasPendingSurplusRefund($provider);
-    }
-
     private function openRefund(PagoProveedorSolicitudProveedor $provider): ?PagoProveedorReembolso
     {
         $provider->loadMissing('refunds');
