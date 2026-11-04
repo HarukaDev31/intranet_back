@@ -278,7 +278,9 @@ class PagoProveedorEtapa1Service
             $this->guardarMensaje($primero, 'cuentas', $texto, $actor);
 
             return [
+                'tipo' => 'cuentas',
                 'texto' => $texto,
+                'imagen' => '/images/pago-proveedor/cuentas-bancarias.jpg',
                 'nota' => 'La imagen oficial de las cuentas va antes de este texto. Los números de cuenta no se escriben en el mensaje.',
             ];
         });

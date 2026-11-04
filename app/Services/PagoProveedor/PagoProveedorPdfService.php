@@ -35,9 +35,25 @@ class PagoProveedorPdfService
             );
         }
 
+        $cuentasPath = public_path('pago-proveedor/cuentas-bancarias.jpg');
+        $cuentasImagen = is_file($cuentasPath)
+            ? 'data:image/jpeg;base64,'.base64_encode((string) file_get_contents($cuentasPath))
+            : null;
+        $hayCuotas = collect($presentado['proveedores'] ?? [])->contains(function ($proveedor) {
+            $mode = $proveedor['tipo_fraccionamiento']
+                ?? $proveedor['client_payment_mode']
+                ?? $proveedor['modalidad']
+                ?? '';
+
+            return in_array($mode, ['clienteFracciona', 'client_installments', 'Fraccionado', 'fraccionado'], true)
+                || (($proveedor['cuotas'] ?? null) === 2);
+        });
+
         $html = view('pago-proveedor.resumen', [
             'cotizacion' => $presentado,
             'fecha' => now()->timezone(PagoProveedorVigenciaService::ZONA)->format('d/m/Y'),
+            'cuentas_imagen' => $cuentasImagen,
+            'hay_cuotas' => $hayCuotas,
         ])->render();
 
         $options = new Options();
