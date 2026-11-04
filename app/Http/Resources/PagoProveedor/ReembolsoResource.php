@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\PagoProveedor;
 
+use App\Models\PagoProveedor\PagoProveedorAbono;
 use App\Models\PagoProveedor\PagoProveedorReembolso;
 use App\Services\PagoProveedor\PagoProveedorReembolsoService;
 use App\Traits\FileTrait;
@@ -46,9 +47,11 @@ class ReembolsoResource extends JsonResource
             'approved_amount' => $refund->approved_amount,
             'reason' => $refund->reason,
             'calculation' => $service->explain($refund),
+            'calculation_lines' => $service->explanationLines($refund),
             'requested_at' => optional($refund->requested_at)->toIso8601String(),
             'paid_on' => optional($refund->paid_on)->toDateString(),
             'bank' => $refund->bank,
+            'bank_label' => $refund->bank === PagoProveedorAbono::BANK_INTERBANK ? 'Interbank' : ($refund->bank === PagoProveedorAbono::BANK_BCP ? 'BCP' : $refund->bank),
             'operation_number' => $refund->operation_number,
             'voucher_name' => $refund->voucher_name,
             'voucher_url' => $refund->voucher_path ? $this->cdnStorageUrl($refund->voucher_path) : null,

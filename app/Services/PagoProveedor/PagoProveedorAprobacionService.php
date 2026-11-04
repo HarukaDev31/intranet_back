@@ -519,16 +519,32 @@ class PagoProveedorAprobacionService
 
     private function markSurplusToConsult(PagoProveedorSolicitudProveedor $provider): void
     {
+        $provider->loadMissing(['solicitud.proveedores', 'aplicaciones.abono.aplicaciones']);
+        $hayCuota2 = $provider->solicitud?->proveedores?->contains(
+            fn ($row) => $row->client_payment_mode === PagoProveedorCotizacionProveedor::MODE_SPLIT
+        ) ?? false;
+        $evaluador = app(PagoProveedorAbonoEvaluador::class);
         foreach ($provider->aplicaciones as $application) {
             $deposit = $application->abono;
             if (!$deposit || $deposit->status !== PagoProveedorAbono::STATUS_VALIDATED) {
                 continue;
             }
-            if ((float) $deposit->surplus <= $this->tolerance() || $deposit->surplus_decision) {
+            if ($deposit->surplus_decision || (float) $deposit->surplus <= 0) {
                 continue;
             }
-            $deposit->surplus_decision = PagoProveedorAbono::EXCESS_TO_CONSULT;
+            $decision = $evaluador->decisionExcedente((float) $deposit->surplus, (bool) $hayCuota2, $this->tolerance());
+            if ($decision === null) {
+                continue;
+            }
+            $deposit->surplus_decision = $decision;
             $deposit->save();
+            if ($decision === PagoProveedorAbono::EXCESS_REFUND) {
+                app(PagoProveedorReembolsoService::class)->ensureSurplus($deposit->fresh(['aplicaciones']), [
+                    'id' => null,
+                    'nombre' => 'Sistema',
+                    'area' => 'Sistema',
+                ]);
+            }
         }
     }
 

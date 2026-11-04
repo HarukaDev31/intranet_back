@@ -49,9 +49,16 @@ class PagoProveedorReembolsoService
         if ($existing) {
             return $existing;
         }
+        $deposit->loadMissing('aplicaciones');
         $amount = round((float) $deposit->surplus, 2);
+        if ($amount <= 0) {
+            throw new PagoProveedorException('No hay excedente para reembolsar.');
+        }
+        $top = $deposit->aplicaciones->sortByDesc(fn ($row) => (float) $row->amount)->first();
+        $providerId = $top ? $top->request_provider_id : null;
         $refund = PagoProveedorReembolso::query()->create([
             'request_id' => $deposit->request_id,
+            'request_provider_id' => $providerId,
             'deposit_id' => $deposit->id,
             'origin' => PagoProveedorReembolso::ORIGIN_SURPLUS,
             'status' => PagoProveedorReembolso::STATUS_REQUESTED,
@@ -189,7 +196,13 @@ class PagoProveedorReembolsoService
             if ($note === '') {
                 throw new PagoProveedorException('Indica el motivo del rechazo.');
             }
-            $refund->status = PagoProveedorReembolso::STATUS_REJECTED;
+            // Diferencia de cambio vuelve a «por consultar»; el resto queda rechazado (RN-121 / maqueta).
+            if ($refund->origin === PagoProveedorReembolso::ORIGIN_EXCHANGE) {
+                $refund->status = PagoProveedorReembolso::STATUS_CONSULT;
+                $refund->requested_at = null;
+            } else {
+                $refund->status = PagoProveedorReembolso::STATUS_REJECTED;
+            }
             $refund->reason = $note;
             $refund->decided_at = now();
             $refund->decided_by_user_id = $actor['id'];
@@ -201,7 +214,10 @@ class PagoProveedorReembolsoService
         });
     }
 
-    public function explain(PagoProveedorReembolso $refund): string
+    /**
+     * @return array<int, string>
+     */
+    public function explanationLines(PagoProveedorReembolso $refund): array
     {
         $parts = is_array($refund->breakdown) ? $refund->breakdown : [];
         $lines = [];
@@ -219,10 +235,15 @@ class PagoProveedorReembolsoService
         }
         $sum = round((float) ($parts['cargo'] ?? 0) + (float) ($parts['admin'] ?? 0) + (float) ($parts['surplus'] ?? 0) + (float) ($parts['difference_usd'] ?? 0), 2);
         if ($lines === [] || abs($sum - (float) $refund->amount) > 0.02) {
-            return 'Total $'.number_format((float) $refund->amount, 2, '.', '');
+            return ['Total $'.number_format((float) $refund->amount, 2, '.', '')];
         }
 
-        return implode(' · ', $lines);
+        return $lines;
+    }
+
+    public function explain(PagoProveedorReembolso $refund): string
+    {
+        return implode(' · ', $this->explanationLines($refund));
     }
 
     public function isOpen(PagoProveedorReembolso $refund): bool

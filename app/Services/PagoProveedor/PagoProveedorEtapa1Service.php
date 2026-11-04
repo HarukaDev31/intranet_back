@@ -354,7 +354,11 @@ class PagoProveedorEtapa1Service
                 'voucher_name' => $nombreVoucher,
                 'status' => PagoProveedorAbono::STATUS_IN_VALIDATION,
                 'surplus' => $evaluacion['excedente'],
-                'surplus_decision' => $this->evaluador->decisionExcedente($evaluacion['excedente'], $hayCuota2),
+                'surplus_decision' => $this->evaluador->decisionExcedente(
+                    $evaluacion['excedente'],
+                    $hayCuota2,
+                    (float) app(PagoProveedorConfiguracionService::class)->value(PagoProveedorSolicitudProveedor::SETTING_TOLERANCE, 1)
+                ),
                 'repeated_operation' => $repetida,
                 'user_id' => $actor['id'],
                 'observation_reason' => null,
@@ -379,6 +383,10 @@ class PagoProveedorEtapa1Service
                     'request_provider_id' => $proveedorId,
                     'amount' => $monto,
                 ]);
+            }
+
+            if ($abono->surplus_decision === PagoProveedorAbono::EXCESS_REFUND) {
+                app(PagoProveedorReembolsoService::class)->ensureSurplus($abono->fresh(['aplicaciones']), $actor);
             }
 
             $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, $abonoId ? 'Abono editado' : 'Abono registrado', $actor, $abono->operation_number);

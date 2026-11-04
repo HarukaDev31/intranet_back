@@ -74,15 +74,17 @@ class PagoProveedorAbonoEvaluador
         ];
     }
 
-    public function decisionExcedente(float $excedente, bool $hayCuota2): ?string
+    public function decisionExcedente(float $excedente, bool $hayCuota2, float $tolerance = 1.0): ?string
     {
         if ($excedente <= 0) {
             return null;
         }
-        if ($excedente <= 1) {
+        $tolerance = max(0.0, $tolerance);
+        // RN-122: ≤ tolerancia → cuota 2 si existe; si no, no se devuelve.
+        if ($excedente <= $tolerance + 0.001) {
             return $hayCuota2 ? PagoProveedorAbono::EXCESS_APPLIED : PagoProveedorAbono::EXCESS_KEEP;
         }
-
-        return PagoProveedorAbono::EXCESS_TO_CONSULT;
+        // RN-123: > tolerancia sin cuotas → reembolso directo; con cuotas → consultar (72 h).
+        return $hayCuota2 ? PagoProveedorAbono::EXCESS_TO_CONSULT : PagoProveedorAbono::EXCESS_REFUND;
     }
 }

@@ -28,6 +28,21 @@ class AbonoResource extends JsonResource
             return $provider && (int) $provider->stage > PagoProveedorSolicitudProveedor::STAGE_DATA;
         });
 
+        $hours = max(1, (int) app(PagoProveedorConfiguracionService::class)->value(PagoProveedorSolicitudProveedor::SETTING_DECISION_HOURS, 72));
+        $decideUntil = null;
+        $decideOverdue = false;
+        $decideText = null;
+        if ($abono->surplus_decision === PagoProveedorAbono::EXCESS_TO_CONSULT && $abono->updated_at) {
+            $decideUntil = $abono->updated_at->copy()->addHours($hours);
+            $remaining = (int) now()->diffInMinutes($decideUntil, false);
+            $decideOverdue = $remaining < 0;
+            $decideText = $decideOverdue
+                ? 'plazo de decisión vencido'
+                : (abs($remaining) < 60
+                    ? 'quedan '.$remaining.' min para decidir'
+                    : 'quedan '.intdiv(max(0, $remaining), 60).' h para decidir');
+        }
+
         return [
             'id' => $abono->id,
             'importe' => $abono->amount,
@@ -41,6 +56,9 @@ class AbonoResource extends JsonResource
             'estado_nombre' => self::statusLabel($abono->status),
             'excedente' => $abono->surplus,
             'excedente_decision' => $abono->surplus_decision,
+            'excedente_decide_until' => optional($decideUntil)->toIso8601String(),
+            'excedente_decide_overdue' => $decideOverdue,
+            'excedente_decide_text' => $decideText,
             'operacion_repetida' => $abono->repeated_operation,
             'puede_editar' => in_array($abono->status, [PagoProveedorAbono::STATUS_IN_VALIDATION, PagoProveedorAbono::STATUS_OBSERVED], true) && !$advanced,
             'puede_elegir_continuacion' => $abono->status === PagoProveedorAbono::STATUS_VALIDATED
