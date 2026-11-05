@@ -31,6 +31,15 @@ class UpdatePagoProveedorCotizacionRequest extends FormRequest
             'proveedores.*.fecha_cuota_2' => ['nullable', 'date'],
             'proveedores.*.comision_bancaria' => ['required', 'boolean'],
             'proveedores.*.comision_administrativa' => ['required', 'boolean'],
+            'proveedores.*.proforma' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx', 'max:10240'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'proveedores.*.proforma.mimes' => 'La proforma debe ser PDF, imagen, Word o Excel.',
+            'proveedores.*.proforma.max' => 'La proforma no debe superar los 10 MB.',
         ];
     }
 }

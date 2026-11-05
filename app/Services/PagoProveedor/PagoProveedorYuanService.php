@@ -737,6 +737,9 @@ class PagoProveedorYuanService
 
     private function requireReady(PagoProveedorSolicitudProveedor $provider): void
     {
+        if ($provider->sales_observation) {
+            throw new PagoProveedorException('Ventas observó este proveedor: el pago sigue cuando levante la observación.');
+        }
         if (!$this->isPending($provider)) {
             throw new PagoProveedorException('Este pago en yuanes no está listo para registrar.');
         }

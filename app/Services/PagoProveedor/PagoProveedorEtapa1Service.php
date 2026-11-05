@@ -151,16 +151,73 @@ class PagoProveedorEtapa1Service
     /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
      */
-    public function anularProveedor(int $solicitudId, int $proveedorId, array $actor): PagoProveedorSolicitud
+    public function anularProveedor(int $solicitudId, int $proveedorId, string $motivo, array $actor): PagoProveedorSolicitud
     {
-        return DB::transaction(function () use ($solicitudId, $proveedorId, $actor) {
+        return DB::transaction(function () use ($solicitudId, $proveedorId, $motivo, $actor) {
             $proveedor = $this->proveedorEtapa1($solicitudId, $proveedorId);
             $proveedor->status = PagoProveedorSolicitudProveedor::STATUS_CANCELLED;
+            $proveedor->cancellation_reason = $motivo;
+            $proveedor->sales_observation = null;
+            $proveedor->sales_observed_at = null;
             $proveedor->save();
             $this->recalculateYuanBankFee($this->solicitudDe($proveedor));
-            $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, 'Proveedor anulado', $actor, $proveedor->code_supplier);
+            $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, 'Proveedor anulado', $actor, $proveedor->code_supplier . ' · ' . $motivo);
 
             return $this->recargar($this->solicitudDe($proveedor));
+        });
+    }
+
+    /**
+     * Sales pauses a supplier until the incident is solved. Validation belongs to Administration.
+     *
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    public function observarProveedor(int $solicitudId, int $proveedorId, string $motivo, array $actor): PagoProveedorSolicitud
+    {
+        return DB::transaction(function () use ($solicitudId, $proveedorId, $motivo, $actor) {
+            $solicitud = $this->solicitud($solicitudId, true);
+            $proveedor = $solicitud->proveedores->firstWhere('id', $proveedorId);
+            if (!$proveedor) {
+                throw new PagoProveedorException('El proveedor no pertenece a esta solicitud.', 404);
+            }
+            if ($proveedor->status !== PagoProveedorSolicitudProveedor::STATUS_IN_PROGRESS) {
+                throw new PagoProveedorException('Solo se observa un proveedor en proceso.');
+            }
+            if ((int) $proveedor->stage === PagoProveedorSolicitudProveedor::STAGE_VALIDATION) {
+                throw new PagoProveedorException('En Validación de pago observa Administración.');
+            }
+            $proveedor->status = PagoProveedorSolicitudProveedor::STATUS_OBSERVED;
+            $proveedor->sales_observation = $motivo;
+            $proveedor->sales_observed_at = now();
+            $proveedor->save();
+            $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, 'Proveedor observado', $actor, $proveedor->code_supplier . ' · ' . $motivo);
+
+            return $this->recargar($solicitud);
+        });
+    }
+
+    /**
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    public function levantarObservacionVentas(int $solicitudId, int $proveedorId, string $motivo, array $actor): PagoProveedorSolicitud
+    {
+        return DB::transaction(function () use ($solicitudId, $proveedorId, $motivo, $actor) {
+            $solicitud = $this->solicitud($solicitudId, true);
+            $proveedor = $solicitud->proveedores->firstWhere('id', $proveedorId);
+            if (!$proveedor) {
+                throw new PagoProveedorException('El proveedor no pertenece a esta solicitud.', 404);
+            }
+            if (!$proveedor->sales_observation) {
+                throw new PagoProveedorException('Este proveedor no tiene una observación de Ventas.');
+            }
+            $proveedor->status = PagoProveedorSolicitudProveedor::STATUS_IN_PROGRESS;
+            $proveedor->sales_observation = null;
+            $proveedor->sales_observed_at = null;
+            $proveedor->save();
+            $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, 'Observación levantada', $actor, $proveedor->code_supplier . ' · ' . $motivo);
+            $this->intentarAvanzar($solicitud, $actor);
+
+            return $this->recargar($solicitud);
         });
     }
 
@@ -212,7 +269,7 @@ class PagoProveedorEtapa1Service
         $solicitud = $this->solicitud($solicitudId);
         $rows = [];
         foreach ($solicitud->proveedores as $proveedor) {
-            if ($proveedor->status === PagoProveedorSolicitudProveedor::STATUS_CANCELLED || (int) $proveedor->stage !== PagoProveedorSolicitudProveedor::STAGE_DATA) {
+            if ($proveedor->status === PagoProveedorSolicitudProveedor::STATUS_CANCELLED || $proveedor->sales_observation || (int) $proveedor->stage !== PagoProveedorSolicitudProveedor::STAGE_DATA) {
                 continue;
             }
             $incomplete = false;
@@ -860,7 +917,7 @@ class PagoProveedorEtapa1Service
 
     private function enlace(PagoProveedorDatoProveedor $datos): string
     {
-        return rtrim((string) config('pago_proveedor.front_url'), '/') . '/pago-proveedor/formulario-tt/' . $datos->token;
+        return rtrim((string) config('pago_proveedor.clientes_url'), '/') . '/pago-proveedor/formulario-tt/' . $datos->token;
     }
 
     private function textoFormulario(PagoProveedorSolicitudProveedor $proveedor, string $enlace, bool $porAutorizar): string

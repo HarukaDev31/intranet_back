@@ -324,6 +324,9 @@ class PagoProveedorEjecucionService
 
     private function requireReady(PagoProveedorSolicitudProveedor $provider): void
     {
+        if ($provider->sales_observation) {
+            throw new PagoProveedorException('Ventas observó este proveedor: el pago sigue cuando levante la observación.');
+        }
         if ($provider->currency !== PagoProveedorCotizacionProveedor::CURRENCY_USD
             || $provider->payment_type !== PagoProveedorCotizacionProveedor::PAYMENT_TT) {
             throw new PagoProveedorException('Este pago no se ejecuta en dólares.');

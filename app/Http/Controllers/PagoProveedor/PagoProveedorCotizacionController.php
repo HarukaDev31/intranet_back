@@ -6,13 +6,14 @@ use App\Exceptions\PagoProveedorException;
 use App\Http\Controllers\Controller;
 use App\Models\CalculadoraImportacion;
 use App\Http\Resources\PagoProveedor\CotizacionResource;
+use App\Http\Requests\PagoProveedor\ResumenPagoProveedorCotizacionRequest;
 use App\Http\Requests\PagoProveedor\StorePagoProveedorCotizacionRequest;
-use App\Http\Requests\PagoProveedor\StorePagoProveedorProformaRequest;
 use App\Http\Requests\PagoProveedor\UpdatePagoProveedorCotizacionRequest;
 use App\Services\PagoProveedor\PagoProveedorAutorizacion;
 use App\Services\PagoProveedor\PagoProveedorConfiguracionService;
 use App\Services\PagoProveedor\PagoProveedorCotizacionCcLookup;
 use App\Services\PagoProveedor\PagoProveedorCotizacionService;
+use App\Services\PagoProveedor\PagoProveedorCotizacionWhatsappService;
 use App\Services\PagoProveedor\PagoProveedorPdfService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,6 +29,7 @@ class PagoProveedorCotizacionController extends Controller
         private readonly PagoProveedorCotizacionCcLookup $lookup,
         private readonly PagoProveedorPdfService $pdf,
         private readonly PagoProveedorConfiguracionService $configuracion,
+        private readonly PagoProveedorCotizacionWhatsappService $whatsapp,
     ) {
     }
 
@@ -97,7 +99,8 @@ class PagoProveedorCotizacionController extends Controller
     {
         return $this->responder(function () use ($request) {
             $actor = $this->autorizacion->exigirVentas($request->user());
-            $cotizacion = $this->cotizaciones->crear($request->validated()['cod_cotizacion_cc'], $actor);
+            $datos = $request->validated();
+            $cotizacion = $this->cotizaciones->crearConDatos($datos['cod_cotizacion_cc'], $datos, $actor);
 
             return $this->ok(CotizacionResource::detail($cotizacion), 201);
         });
@@ -145,16 +148,6 @@ class PagoProveedorCotizacionController extends Controller
         });
     }
 
-    public function proforma(StorePagoProveedorProformaRequest $request, int $id, int $proveedorId): JsonResponse
-    {
-        return $this->responder(function () use ($request, $id, $proveedorId) {
-            $actor = $this->autorizacion->exigirVentas($request->user());
-            $cotizacion = $this->cotizaciones->subirProforma($id, $proveedorId, $request->file('proforma'), $actor);
-
-            return $this->ok(CotizacionResource::detail($cotizacion));
-        });
-    }
-
     public function whatsapp(Request $request, int $id): JsonResponse
     {
         return $this->responder(function () use ($request, $id) {
@@ -188,6 +181,43 @@ class PagoProveedorCotizacionController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => $this->pdf->resumen($id, $actor),
+            ]);
+        });
+    }
+
+    public function pdfResumen(ResumenPagoProveedorCotizacionRequest $request): JsonResponse
+    {
+        return $this->responder(function () use ($request) {
+            $actor = $this->autorizacion->exigirVentas($request->user());
+
+            return response()->json([
+                'success' => true,
+                'data' => $this->pdf->resumenBorrador($request->validated(), $actor),
+            ]);
+        });
+    }
+
+    public function vistaPreviaResumen(ResumenPagoProveedorCotizacionRequest $request): JsonResponse
+    {
+        return $this->responder(function () use ($request) {
+            $this->autorizacion->exigirVentas($request->user());
+
+            return response()->json([
+                'success' => true,
+                'data' => $this->whatsapp->vistaPreviaBorrador($request->validated()),
+            ]);
+        });
+    }
+
+    public function enviarResumen(ResumenPagoProveedorCotizacionRequest $request): JsonResponse
+    {
+        return $this->responder(function () use ($request) {
+            $actor = $this->autorizacion->exigirVentas($request->user());
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Resumen enviado por WhatsApp.',
+                'data' => $this->whatsapp->enviarBorrador($request->validated(), $actor),
             ]);
         });
     }

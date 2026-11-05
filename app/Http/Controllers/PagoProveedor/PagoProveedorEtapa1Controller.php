@@ -70,8 +70,29 @@ class PagoProveedorEtapa1Controller extends Controller
     {
         return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
             $actor = $this->autorizacion->exigirVentas($request->user());
+            $datos = $request->validate(['motivo' => ['required', 'string', 'max:500']]);
 
-            return $this->datos($this->etapa1->anularProveedor($solicitudId, $proveedorId, $actor));
+            return $this->datos($this->etapa1->anularProveedor($solicitudId, $proveedorId, trim($datos['motivo']), $actor));
+        });
+    }
+
+    public function observarProveedor(Request $request, int $solicitudId, int $proveedorId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
+            $actor = $this->autorizacion->exigirVentas($request->user());
+            $datos = $request->validate(['motivo' => ['required', 'string', 'max:500']]);
+
+            return $this->datos($this->etapa1->observarProveedor($solicitudId, $proveedorId, trim($datos['motivo']), $actor));
+        });
+    }
+
+    public function levantarObservacion(Request $request, int $solicitudId, int $proveedorId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
+            $actor = $this->autorizacion->exigirVentas($request->user());
+            $datos = $request->validate(['motivo' => ['required', 'string', 'max:500']]);
+
+            return $this->datos($this->etapa1->levantarObservacionVentas($solicitudId, $proveedorId, trim($datos['motivo']), $actor));
         });
     }
 

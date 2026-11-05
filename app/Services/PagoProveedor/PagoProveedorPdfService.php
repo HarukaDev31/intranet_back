@@ -8,6 +8,9 @@ use App\Models\PagoProveedor\PagoProveedorEjecucion;
 use App\Models\PagoProveedor\PagoProveedorSolicitudProveedor;
 use Dompdf\Dompdf;
 use Dompdf\Options;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 class PagoProveedorPdfService
 {
@@ -56,6 +59,67 @@ class PagoProveedorPdfService
     }
 
     /**
+     * PDF con los datos del formulario, aunque la cotización no esté guardada.
+     *
+     * @param  array<string, mixed>  $datos
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     * @return array{filename: string, base64: string}
+     */
+    public function resumenBorrador(array $datos, array $actor): array
+    {
+        $cotizacion = $this->cotizaciones->borrador($datos);
+        $resumen = $this->resumenCacheado($cotizacion);
+        if ($cotizacion->id) {
+            $this->historial->registrar('cotizacion', $cotizacion->id, 'PDF descargado', $actor);
+        }
+
+        return $resumen;
+    }
+
+    /**
+     * @return array{path: string, filename: string}
+     */
+    public function temporalDeBorrador(PagoProveedorCotizacion $cotizacion): array
+    {
+        $resumen = $this->resumenCacheado($cotizacion);
+        $path = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pp-resumen-' . uniqid('', true) . '.pdf';
+        if (file_put_contents($path, base64_decode($resumen['base64'])) === false) {
+            throw new PagoProveedorException('No se pudo preparar el PDF para WhatsApp.');
+        }
+
+        return ['path' => $path, 'filename' => $resumen['filename']];
+    }
+
+    /**
+     * Solo se regenera si cambia lo que muestra el PDF, la fecha o la plantilla.
+     *
+     * @return array{filename: string, base64: string}
+     */
+    private function resumenCacheado(PagoProveedorCotizacion $cotizacion): array
+    {
+        $presentado = $this->presenter->cotizacion($cotizacion, $this->configuracion->tariff());
+        $this->exigirPuedeGenerarPdf($presentado);
+
+        $fecha = $this->fechaEmision();
+        $huella = sha1((string) json_encode([
+            Arr::only($presentado, ['id', 'codigo', 'estado', 'cod_cotizacion_cc', 'consolidado', 'cliente_nombre', 'tipo_cambio', 'proveedores_cantidad', 'total', 'total_ahora', 'comisiones', 'proveedores', 'resumen']),
+            explode(' ', (string) ($presentado['vigencia_hasta'] ?? ''))[0],
+            $fecha,
+            filemtime(resource_path('views/pago-proveedor/resumen.blade.php')),
+            filemtime(app_path('Services/PagoProveedor/PagoProveedorResumenPdfVista.php')),
+        ]));
+
+        return [
+            'filename' => $this->nombreArchivo($presentado),
+            'base64' => Cache::remember(
+                'pago-proveedor:resumen-pdf:' . $huella,
+                now()->addDay(),
+                fn () => base64_encode($this->renderResumen($presentado, $fecha))
+            ),
+        ];
+    }
+
+    /**
      * @return array{quote_id: int, filename: string, binary: string}
      */
     private function buildResumen(int $id): array
@@ -64,41 +128,59 @@ class PagoProveedorPdfService
         $presentado = $this->presenter->cotizacion($cotizacion, $this->configuracion->tariff());
         $this->exigirPuedeGenerarPdf($presentado);
 
-        $cuentasPath = public_path('pago-proveedor/cuentas-bancarias.jpg');
-        $cuentasImagen = is_file($cuentasPath)
-            ? 'data:image/jpeg;base64,'.base64_encode((string) file_get_contents($cuentasPath))
-            : null;
-        $hayCuotas = collect($presentado['proveedores'] ?? [])->contains(function ($proveedor) {
-            $mode = $proveedor['tipo_fraccionamiento']
-                ?? $proveedor['client_payment_mode']
-                ?? $proveedor['modalidad']
-                ?? '';
+        return [
+            'quote_id' => (int) $cotizacion->id,
+            'filename' => $this->nombreArchivo($presentado),
+            'binary' => $this->renderResumen($presentado, $this->fechaEmision()),
+        ];
+    }
 
-            return in_array($mode, ['clienteFracciona', 'client_installments', 'Fraccionado', 'fraccionado'], true)
-                || (($proveedor['cuotas'] ?? null) === 2);
-        });
-
-        $html = view('pago-proveedor.resumen', [
-            'cotizacion' => $presentado,
-            'fecha' => now()->timezone(PagoProveedorVigenciaService::ZONA)->format('d/m/Y'),
-            'cuentas_imagen' => $cuentasImagen,
-            'hay_cuotas' => $hayCuotas,
-        ])->render();
-
+    /**
+     * @param  array<string, mixed>  $presentado
+     */
+    private function renderResumen(array $presentado, string $fecha): string
+    {
         $options = new Options();
         $options->set('isHtml5ParserEnabled', true);
         $options->set('isRemoteEnabled', false);
-        $options->set('defaultFont', 'DejaVu Sans');
+        $options->set('defaultFont', 'Helvetica');
         $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html);
+        $metricas = $dompdf->getFontMetrics();
+        $dompdf->loadHtml(view(
+            'pago-proveedor.resumen',
+            (new PagoProveedorResumenPdfVista($metricas))->datos($presentado, $fecha)
+        )->render());
         $dompdf->setPaper('A4');
         $dompdf->render();
 
-        return [
-            'quote_id' => (int) $cotizacion->id,
-            'filename' => 'Resumen_pago_proveedor_' . $cotizacion->code . '.pdf',
-            'binary' => $dompdf->output(),
-        ];
+        $canvas = $dompdf->getCanvas();
+        $fuente = $metricas->getFont('Helvetica');
+        $puntosPorMm = 72 / 25.4;
+        $canvas->page_text(
+            (210 - 15) * $puntosPorMm - $metricas->getTextWidth('Página 1 de 1', $fuente, 7.5),
+            283 * $puntosPorMm,
+            'Página {PAGE_NUM} de {PAGE_COUNT}',
+            $fuente,
+            7.5,
+            [115 / 255, 115 / 255, 115 / 255]
+        );
+
+        return (string) $dompdf->output();
+    }
+
+    /**
+     * @param  array<string, mixed>  $presentado
+     */
+    private function nombreArchivo(array $presentado): string
+    {
+        $cliente = preg_replace('/[^A-Za-z0-9]+/', '_', Str::ascii(trim((string) ($presentado['cliente_nombre'] ?? '')))) ?: 'cliente';
+
+        return 'Resumen_pago_proveedor_' . $cliente . '.pdf';
+    }
+
+    private function fechaEmision(): string
+    {
+        return now()->timezone(PagoProveedorVigenciaService::ZONA)->format('j/n/Y');
     }
 
     /**

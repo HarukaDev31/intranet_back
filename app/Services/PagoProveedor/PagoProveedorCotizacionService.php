@@ -10,6 +10,7 @@ use App\Models\PagoProveedor\PagoProveedorHistorial;
 use App\Models\PagoProveedor\PagoProveedorMensaje;
 use App\Traits\UsesObjectStorage;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 
@@ -119,6 +120,81 @@ class PagoProveedorCotizacionService
         });
     }
 
+    /**
+     * Crea la cotización con sus proveedores y proformas en una sola operación.
+     *
+     * @param  array<string, mixed>  $datos
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    public function crearConDatos(string $codigoCc, array $datos, array $actor): PagoProveedorCotizacion
+    {
+        try {
+            return DB::transaction(function () use ($codigoCc, $datos, $actor) {
+                $cotizacion = $this->crear($codigoCc, $actor);
+
+                return $this->actualizar($cotizacion->id, $datos, $actor);
+            });
+        } catch (\Throwable $e) {
+            // La caché pudo guardar "ya_usada" para una cotización que se revirtió.
+            $this->lookup->forget(strtoupper(trim($codigoCc)));
+            throw $e;
+        }
+    }
+
+    /**
+     * Cotización en memoria con los datos del formulario, para generar el resumen sin guardar nada.
+     * El tipo de cambio cuenta como confirmado: la confirmación solo se exige para crear la solicitud.
+     *
+     * @param  array<string, mixed>  $datos
+     */
+    public function borrador(array $datos): PagoProveedorCotizacion
+    {
+        $guardada = !empty($datos['cotizacion_id']) ? $this->encontrar((int) $datos['cotizacion_id']) : null;
+        if ($guardada) {
+            $this->exigirPendiente($guardada);
+        }
+
+        $origen = $this->lookup->findByCode($guardada ? $guardada->consolidated_quote_code : $datos['cod_cotizacion_cc']);
+        $permitidos = collect($origen['proveedores'])->keyBy('code_supplier');
+        if ($permitidos->isEmpty()) {
+            throw new PagoProveedorException('El consolidado todavía no tiene códigos de proveedor.');
+        }
+
+        if ($guardada) {
+            $cotizacion = clone $guardada;
+        } else {
+            $cotizacion = new PagoProveedorCotizacion([
+                'code' => $origen['cod_cotizacion_cc'],
+                'consolidated_quote_code' => $origen['cod_cotizacion_cc'],
+                'status' => PagoProveedorCotizacion::STATUS_PENDING,
+                'valid_until' => $this->vigencia->sumarHoras(
+                    now(),
+                    $this->configuracion->validityHours(),
+                    $this->configuracion->validityType()
+                ),
+                'client_name' => $origen['cliente']['nombre'],
+                'client_document' => $origen['cliente']['documento'],
+                'client_whatsapp' => $origen['cliente']['whatsapp'],
+                'client_email' => $origen['cliente']['correo'],
+                'consolidation' => $origen['consolidado'],
+            ]);
+            $cotizacion->setRelation('solicitud', null);
+        }
+
+        $cotizacion->exchange_rate = isset($datos['tipo_cambio']) ? (float) $datos['tipo_cambio'] : null;
+        $cotizacion->exchange_rate_confirmed = (float) $cotizacion->exchange_rate > 0;
+
+        $filas = [];
+        foreach (array_values($datos['proveedores']) as $indice => $fila) {
+            $proveedor = new PagoProveedorCotizacionProveedor($this->normalizarProveedor($fila, $indice + 1, $permitidos));
+            $proveedor->setRelation('consolidatedProvider', null);
+            $filas[] = $proveedor;
+        }
+        $cotizacion->setRelation('proveedores', new EloquentCollection($filas));
+
+        return $cotizacion;
+    }
+
     public function ver(int $id): PagoProveedorCotizacion
     {
         return $this->encontrar($id);
@@ -145,25 +221,34 @@ class PagoProveedorCotizacionService
             $cotizacion->save();
 
             $conservar = [];
+            $proformas = [];
             foreach (array_values($datos['proveedores']) as $indice => $fila) {
                 $normalizada = $this->normalizarProveedor($fila, $indice + 1, $permitidos);
-                $existente = null;
+                $proveedor = null;
                 if (!empty($fila['id'])) {
-                    $existente = $cotizacion->proveedores()->where('id', $fila['id'])->first();
+                    $proveedor = $cotizacion->proveedores()->where('id', $fila['id'])->first();
                 }
 
-                if ($existente) {
-                    $existente->fill($normalizada);
-                    $existente->save();
-                    $conservar[] = $existente->id;
+                if ($proveedor) {
+                    $proveedor->fill($normalizada);
+                    $proveedor->save();
                 } else {
-                    $nuevo = $cotizacion->proveedores()->create($normalizada);
-                    $conservar[] = $nuevo->id;
+                    $proveedor = $cotizacion->proveedores()->create($normalizada);
+                }
+                $conservar[] = $proveedor->id;
+
+                if (($fila['proforma'] ?? null) instanceof UploadedFile) {
+                    $proformas[] = [$proveedor, $fila['proforma']];
                 }
             }
 
             $cotizacion->proveedores()->whereNotIn('id', $conservar)->delete();
             $this->historial->registrar(PagoProveedorHistorial::ENTITY_QUOTE, $cotizacion->id, 'Editada', $actor);
+
+            // Se suben al final para no dejar archivos huérfanos si alguna fila no es válida.
+            foreach ($proformas as [$proveedor, $archivo]) {
+                $this->guardarProforma($cotizacion, $proveedor, $archivo, $actor);
+            }
 
             return $this->ver($cotizacion->id);
         });
@@ -223,15 +308,8 @@ class PagoProveedorCotizacionService
     /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
      */
-    public function subirProforma(int $cotizacionId, int $proveedorId, UploadedFile $archivo, array $actor): PagoProveedorCotizacion
+    private function guardarProforma(PagoProveedorCotizacion $cotizacion, PagoProveedorCotizacionProveedor $proveedor, UploadedFile $archivo, array $actor): void
     {
-        $cotizacion = $this->encontrar($cotizacionId);
-        $this->exigirPendiente($cotizacion);
-        $proveedor = $cotizacion->proveedores()->where('id', $proveedorId)->first();
-        if (!$proveedor) {
-            throw new PagoProveedorException('El proveedor no pertenece a esta cotización.', 404);
-        }
-
         $nombre = $archivo->getClientOriginalName();
         $extension = strtolower($archivo->getClientOriginalExtension() ?: 'pdf');
         $ruta = $this->storageStoreUpload(
@@ -243,8 +321,6 @@ class PagoProveedorCotizacionService
         $proveedor->proforma_name = $nombre;
         $proveedor->save();
         $this->historial->registrar(PagoProveedorHistorial::ENTITY_QUOTE, $cotizacion->id, 'Proforma cargada', $actor, $nombre);
-
-        return $this->ver($cotizacion->id);
     }
 
     /**

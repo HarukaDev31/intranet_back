@@ -3,176 +3,286 @@
 <head>
     <meta charset="utf-8">
     <style>
-        body { font-family: DejaVu Sans, sans-serif; color: #1a1a1a; font-size: 11px; }
-        h1 { font-size: 17px; margin: 0 0 4px; color: #0f2a4a; }
-        h2 { font-size: 12px; margin: 0 0 6px; color: #0f2a4a; }
-        .muted { color: #666; }
-        .orange { color: #e4570e; }
-        .box { border: 1px solid #e5e5e5; border-radius: 6px; padding: 9px 11px; margin-top: 10px; }
-        .total { background: #fff4ec; border-color: #f0c7a8; }
-        table { width: 100%; border-collapse: collapse; margin-top: 6px; }
-        th, td { text-align: left; padding: 5px 3px; border-bottom: 1px solid #eee; vertical-align: top; }
-        th { color: #666; font-weight: normal; font-size: 10px; }
-        .right { text-align: right; }
-        .accounts { width: 100%; border-collapse: collapse; margin-top: 6px; }
-        .accounts td { border: 1px solid #0f2a4a; padding: 8px 10px; width: 50%; vertical-align: top; }
-        .bank { font-size: 13px; font-weight: bold; margin-bottom: 4px; }
-        .bank-bcp { color: #004a99; }
-        .bank-ibk { color: #009650; }
-        .label { font-size: 9px; color: #666; text-transform: uppercase; }
-        .steps { width: 100%; border-collapse: collapse; margin-top: 6px; }
-        .steps td { width: 20%; text-align: center; vertical-align: top; padding: 4px; border: none; }
-        .step-n { display: inline-block; background: #0f2a4a; color: #fff; border-radius: 10px; padding: 2px 7px; font-size: 9px; font-weight: bold; margin-bottom: 4px; }
-        .step-t { font-weight: bold; font-size: 10px; color: #0f2a4a; }
-        .step-d { font-size: 9px; color: #666; margin-top: 2px; }
-        .terms li { margin-bottom: 3px; color: #444; font-size: 9.5px; }
-        .footer { margin-top: 14px; border-top: 1px solid #ddd; padding-top: 6px; font-size: 9px; color: #777; }
-        .img-cuentas { margin-top: 8px; max-width: 100%; }
+        @page { margin: 37mm 15mm 24mm 15mm; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: Helvetica, sans-serif; color: #2b2b2b; font-size: 9pt; }
+        table { border-collapse: collapse; }
+        td { padding: 0; vertical-align: top; }
+        .cabecera { position: fixed; top: -30mm; left: 0; right: 0; height: 23.6mm; border-bottom: 0.9mm solid #f2662b; }
+        .pie { position: fixed; bottom: -20mm; left: 0; right: 0; height: 12mm; border-top: 0.3mm solid #e4e4e4; padding-top: 1.2mm; color: #737373; font-size: 7.5pt; line-height: 4mm; }
+        .seccion { position: relative; height: 11mm; }
+        .seccion img { position: absolute; left: 0; top: 0; width: 6mm; height: 6mm; }
+        .seccion-titulo { position: absolute; left: 8.5mm; top: 1.2mm; font-weight: bold; font-size: 11pt; color: #181818; }
+        .seccion-nota { position: absolute; right: 0; top: 2mm; font-size: 7.6pt; color: #737373; }
+        .seccion-marca { display: inline-block; width: 3mm; height: 3mm; background: #f2662b; border-radius: 0.7mm; margin-right: 1.5mm; }
+        .seccion-linea { position: absolute; left: 0; right: 0; top: 8mm; border-top: 0.4mm solid #e2e2e2; }
+        .mantener { page-break-inside: avoid; }
+        .tarjeta { position: relative; height: 28mm; border-radius: 2.5mm; }
+        .tarjeta-icono { position: absolute; left: 4.5mm; top: 4.5mm; width: 7mm; height: 7mm; }
+        .tarjeta-etiqueta { position: absolute; left: 14mm; top: 7.3mm; font-weight: bold; font-size: 6.8pt; }
+        .tarjeta-valor { position: absolute; left: 4.5mm; top: 12.6mm; font-weight: bold; white-space: nowrap; }
+        .tarjeta-nota { position: absolute; left: 4.5mm; top: 22.3mm; white-space: nowrap; }
+        .proveedor { border: 0.3mm solid #e2e2e2; border-radius: 2.5mm; margin-bottom: 4mm; page-break-inside: avoid; padding-bottom: 4mm; }
+        .proveedor-cabeza { position: relative; height: 15mm; }
+        .proveedor-n { position: absolute; left: 4.5mm; top: 4mm; width: 8mm; height: 8mm; line-height: 6.4mm; border-radius: 4mm; background: #181818; color: #fff; text-align: center; font-weight: bold; font-size: 10.5pt; }
+        .proveedor-titulo { position: absolute; left: 16.5mm; top: 3.6mm; font-weight: bold; font-size: 10.5pt; color: #181818; white-space: nowrap; }
+        .proveedor-sub { position: absolute; left: 16.5mm; top: 8.8mm; color: #737373; white-space: nowrap; }
+        .proveedor-total { position: absolute; right: 4mm; top: 3mm; width: 43.5mm; height: 9.8mm; background: #f4f4f4; border-radius: 1.8mm; text-align: right; padding: 1.2mm 2.5mm 0 0; }
+        .fila { width: 100%; }
+        .fila td { border-bottom: 0.2mm solid #e4e4e4; padding: 1mm 0; font-size: 9pt; color: #2b2b2b; }
+        .fila td.valor { text-align: right; white-space: nowrap; }
+        .fila-cobro td { font-size: 8.8pt; padding: 0.9mm 0; }
+        .subtotal { width: 100%; border-radius: 1.8mm; margin-top: 2mm; }
+        .subtotal td { padding: 2.3mm 3mm; font-weight: bold; vertical-align: middle; }
+        .pill { display: inline-block; position: relative; top: 0.6mm; border-radius: 2.3mm; padding: 0.5mm 2mm; font-size: 7.2pt; font-weight: bold; margin-left: 2mm; }
+        .naranja-claro { background: #ffede1; color: #d6541a; }
+        .gris-claro { background: #f4f4f4; color: #181818; }
     </style>
 </head>
 <body>
-    <p class="muted" style="margin: 0;">Pro Business</p>
-    <h1>Resumen de pago a proveedor</h1>
-    <p class="muted">{{ $fecha }} · {{ $cotizacion['codigo'] }}</p>
-
-    <div class="box">
-        <strong>Datos del cliente</strong>
-        <p style="margin: 6px 0 0;">
-            {{ $cotizacion['cliente_nombre'] ?: '—' }}<br>
-            Consolidado: {{ $cotizacion['consolidado'] ?: '—' }}<br>
-            Cotización C.C.: {{ $cotizacion['cod_cotizacion_cc'] }}<br>
-            Proveedores: {{ $cotizacion['proveedores_cantidad'] }}<br>
-            Tipo de cambio aplicado: {{ $cotizacion['tipo_cambio'] ? number_format($cotizacion['tipo_cambio'], 4, '.', ',') : '—' }}
-        </p>
+    <div class="cabecera">
+        <img src="{{ $logo }}" style="position: absolute; left: 0; top: 0; width: 38mm;" alt="Pro Business">
+        <div style="position: absolute; right: 0; top: 3.2mm; text-align: right; line-height: 5mm;">
+            <div style="font-weight: bold; font-size: 14pt; color: #2b2b2b;">Resumen de pago a proveedor</div>
+            <div style="font-size: 9pt; color: #737373; margin-top: 1mm;">Emitido: {{ $fecha }}</div>
+            @if($referencia)
+                <div style="font-size: 9pt; color: #737373;">{{ $referencia }}</div>
+            @endif
+        </div>
     </div>
 
-    <div class="box total">
-        <span class="orange"><strong>{{ $cotizacion['total_ahora'] != $cotizacion['total'] ? 'Total a pagar ahora' : 'Total a pagar' }}</strong></span>
-        <span class="right orange" style="float: right; font-size: 15px;"><strong>$ {{ number_format($cotizacion['total_ahora'], 2, '.', ',') }}</strong></span>
-        <div style="clear: both;"></div>
-        <p class="muted" style="margin: 6px 0 0;">Comisiones: $ {{ number_format($cotizacion['comisiones'], 2, '.', ',') }}</p>
-        @if($cotizacion['total_ahora'] != $cotizacion['total'])
-            <p class="muted" style="margin: 4px 0 0;">Total del servicio: $ {{ number_format($cotizacion['total'], 2, '.', ',') }}</p>
-        @endif
-    </div>
-
-    <table>
-        <thead>
-            <tr>
-                <th>Proveedor</th>
-                <th>Moneda</th>
-                <th class="right">Carga</th>
-                <th class="right">Bancaria</th>
-                <th class="right">Administrativa</th>
-                <th class="right">Total</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach($cotizacion['proveedores'] as $proveedor)
-                @php
-                    $calculo = $proveedor['calculo'] ?? [];
-                    $segunda = $proveedor['nombre_proveedor']
-                        ? $proveedor['nombre_proveedor'].' · '.$proveedor['producto']
-                        : $proveedor['producto'];
-                @endphp
-                <tr>
-                    <td>
-                        <strong>Proveedor {{ $proveedor['orden'] }}: {{ $proveedor['code_supplier'] }}</strong><br>
-                        <span class="muted">{{ $segunda }}</span>
-                    </td>
-                    <td>{{ $proveedor['moneda'] === 'RMB' ? 'RMB / Transferencia' : 'USD / T-T' }}</td>
-                    <td class="right">$ {{ number_format($proveedor['valor_carga_usd'], 2, '.', ',') }}</td>
-                    <td class="right">
-                        @if(!empty($calculo['etiqueta_bancaria']))
-                            {{ $calculo['etiqueta_bancaria'] }}
-                        @else
-                            $ {{ number_format($calculo['bancaria'] ?? 0, 2, '.', ',') }}
-                        @endif
-                    </td>
-                    <td class="right">$ {{ number_format($calculo['administrativa'] ?? 0, 2, '.', ',') }}</td>
-                    <td class="right">$ {{ number_format($calculo['total'] ?? 0, 2, '.', ',') }}</td>
-                </tr>
-            @endforeach
-        </tbody>
-    </table>
-
-    <div class="box">
-        <h2>Cuentas para el depósito</h2>
-        <p class="muted" style="margin: 0 0 6px;">
-            Razón social: <strong>PRO MUNDO COMEX SAC</strong> · RUC 20612452432 · Cuentas corrientes en dólares (USD).
-            Concepto: <strong>Pago a proveedor</strong>.
-        </p>
-        @if(!empty($cuentas_imagen))
-            <img class="img-cuentas" src="{{ $cuentas_imagen }}" alt="Cuentas bancarias">
-        @else
-            <table class="accounts">
-                <tr>
-                    <td>
-                        <div class="bank bank-bcp">BCP</div>
-                        <div><span class="label">Cuenta</span><br><strong>191-4216222-1-10</strong></div>
-                        <div style="margin-top:4px;"><span class="label">CCI</span><br><strong>002-191-00421622211-0-57</strong></div>
-                    </td>
-                    <td>
-                        <div class="bank bank-ibk">Interbank</div>
-                        <div><span class="label">Cuenta</span><br><strong>200-3006218820</strong></div>
-                        <div style="margin-top:4px;"><span class="label">CCI</span><br><strong>003-200-003006218820-33</strong></div>
-                    </td>
-                </tr>
-            </table>
-        @endif
-    </div>
-
-    <div class="box">
-        <h2>Tu pago al proveedor, paso a paso</h2>
-        <p class="muted" style="margin: 0 0 4px;">Un proceso claro de principio a fin.</p>
-        <table class="steps">
-            <tr>
-                <td>
-                    <div class="step-n">INICIO</div>
-                    <div class="step-t">Cotización</div>
-                    <div class="step-d">Recibes el resumen con el total a depositar.</div>
-                </td>
-                <td>
-                    <div class="step-n">PASO 1</div>
-                    <div class="step-t">Depósito</div>
-                    <div class="step-d">Abonas a nuestras cuentas y registramos tu voucher.</div>
-                </td>
-                <td>
-                    <div class="step-n">PASO 2</div>
-                    <div class="step-t">Validación</div>
-                    <div class="step-d">Administración confirma el ingreso del dinero.</div>
-                </td>
-                <td>
-                    <div class="step-n">PASO 3</div>
-                    <div class="step-t">Pago al proveedor</div>
-                    <div class="step-d">Transferimos a tu proveedor (USD o RMB).</div>
-                </td>
-                <td>
-                    <div class="step-n">PASO 4</div>
-                    <div class="step-t">Confirmación</div>
-                    <div class="step-d">Constancia y, si aplica, balance de cambio.</div>
-                </td>
-            </tr>
-        </table>
-        @if(!empty($hay_cuotas))
-            <p class="muted" style="margin: 8px 0 0; font-style: italic;">Si pagas en cuotas, los pasos 1 al 4 se repiten con cada cuota.</p>
-        @endif
-    </div>
-
-    <div class="box">
-        <h2>Términos y condiciones</h2>
-        <ul class="terms">
-            <li>El tipo de cambio del resumen es referencial; el aplicado al pago en yuanes es el del día de la transferencia.</li>
-            <li>Las comisiones bancaria y administrativa se cobran según lo cotizado; si el banco aplica un cargo mayor, se refleja en la ganancia del servicio.</li>
-            <li>Debes depositar el total indicado con el concepto «Pago a proveedor». Diferencias dentro de la tolerancia las asume Pro Business.</li>
-            <li>Para pagos en dólares (T-T) el cliente autoriza los datos bancarios del proveedor antes de la transferencia.</li>
-            <li>Pro Business no se responsabiliza por datos incorrectos del proveedor (WeChat, cuenta, SWIFT) proporcionados por el cliente.</li>
-        </ul>
-    </div>
-
-    <div class="footer">
+    <div class="pie">
         PRO MUNDO COMEX SAC · RUC 20612452432 · info@probusiness.pe<br>
         Av. Nicolás Arriola 314, Urb. Santa Catarina – La Victoria, Piso 11, Oficina 3
     </div>
+
+    <div class="seccion">
+        <img src="{{ $iconos['persona'] }}" alt="">
+        <div class="seccion-titulo">DATOS DEL CLIENTE</div>
+        <div class="seccion-linea"></div>
+    </div>
+    @php($x = 0)
+    <div style="position: relative; height: 10.4mm;">
+        @foreach($datos_cliente as $indice => $dato)
+            @if($indice > 0)
+                <div style="position: absolute; left: {{ $x }}mm; top: -0.4mm; height: 10.4mm; border-left: 0.3mm solid #e2e2e2;"></div>
+            @endif
+            <div style="position: absolute; left: {{ $x + ($indice > 0 ? 4 : 0) }}mm; top: 0.3mm; font-size: 7.8pt; color: #737373; white-space: nowrap;">{{ $dato['etiqueta'] }}</div>
+            <div style="position: absolute; left: {{ $x + ($indice > 0 ? 4 : 0) }}mm; top: 5.3mm; font-weight: bold; color: #181818; font-size: {{ $dato['pt'] }}pt; white-space: nowrap;">{{ $dato['valor'] }}</div>
+            @php($x += $dato['ancho'])
+        @endforeach
+    </div>
+
+    @php($x = 0)
+    <div style="position: relative; height: 28mm; margin-top: 9.4mm;">
+        @foreach($tarjetas as $tarjeta)
+            <div class="tarjeta" style="position: absolute; left: {{ $x }}mm; top: 0; width: {{ $tarjeta['ancho'] }}mm; background: {{ $tarjeta['tipo'] === 'total' ? '#f2662b' : '#f4f4f4' }}; color: {{ $tarjeta['tipo'] === 'total' ? '#ffffff' : '#181818' }};">
+                @if($tarjeta['tipo'] === 'total')
+                    <div style="position: absolute; left: 4.5mm; top: 4.5mm; width: 8mm; height: 8mm; background: #fff; border-radius: 2mm;"></div>
+                    <img src="{{ $iconos[$tarjeta['icono']] }}" style="position: absolute; left: 5.7mm; top: 5.7mm; width: 5.6mm; height: 5.6mm;" alt="">
+                    <div class="tarjeta-etiqueta" style="left: 15mm;">{{ $tarjeta['etiqueta'] }}</div>
+                @else
+                    <img class="tarjeta-icono" src="{{ $iconos[$tarjeta['icono']] }}" alt="">
+                    <div class="tarjeta-etiqueta" style="color: #737373;">{{ $tarjeta['etiqueta'] }}</div>
+                @endif
+                <div class="tarjeta-valor" style="font-size: {{ $tarjeta['valor_pt'] }}pt;">{{ $tarjeta['valor'] }}</div>
+                @if($tarjeta['nota'])
+                    <div class="tarjeta-nota" style="font-size: {{ $tarjeta['nota_pt'] }}pt; {{ $tarjeta['tipo'] === 'total' ? '' : 'color: #737373;' }}">{{ $tarjeta['nota'] }}</div>
+                @endif
+            </div>
+            @php($x += $tarjeta['ancho'] + 3)
+        @endforeach
+    </div>
+
+    <div style="font-size: 7.8pt; color: #737373; margin-top: 1.6mm;">Montos expresados en dólares americanos (USD).</div>
+
+    @if($vigencia)
+        <div style="position: relative; height: 10mm; margin-top: 2mm; background: #ffede1; border-radius: 2mm;">
+            <div style="position: absolute; left: 0; top: 0; width: 1.8mm; height: 10mm; background: #f2662b; border-radius: 0.9mm;"></div>
+            <img src="{{ $reloj }}" style="position: absolute; left: 5.2mm; top: 2.4mm; width: 6.6mm; height: 6.6mm;" alt="">
+            <div style="position: absolute; left: 14mm; top: 2.9mm; font-weight: bold; font-size: 9.8pt; color: #181818;">Cotización vigente hasta el <span style="color: #d6541a;">{{ $vigencia }}</span></div>
+        </div>
+    @endif
+
+    <div style="height: 9mm;"></div>
+
+    @foreach($bloques as $indice => $bloque)
+        @if($indice === 0)
+            <div class="seccion">
+                <img src="{{ $iconos['caja'] }}" alt="">
+                <div class="seccion-titulo">DETALLE POR PROVEEDOR</div>
+                <div class="seccion-nota"><span class="seccion-marca"></span>Los importes en naranja suman el total a pagar ahora.</div>
+                <div class="seccion-linea"></div>
+            </div>
+        @endif
+        <div class="proveedor">
+            <div class="proveedor-cabeza">
+                <div class="proveedor-n">{{ $bloque['numero'] }}</div>
+                <div class="proveedor-titulo">{{ $bloque['titulo'] }}</div>
+                <div class="proveedor-sub" style="font-size: {{ $bloque['subtitulo_pt'] }}pt;">{{ $bloque['subtitulo'] }}</div>
+                @if($bloque['cobros'])
+                    <div class="proveedor-total">
+                        <div style="font-size: 6.4pt; color: #737373;">Total del proveedor (2 cuotas)</div>
+                        <div style="font-weight: bold; font-size: 12.5pt; color: #181818;">{{ $bloque['total'] }}</div>
+                    </div>
+                @endif
+            </div>
+
+            @if($bloque['cobros'])
+                <div style="margin: 2.5mm 4mm 3.5mm; font-size: 8.2pt; color: #737373;">Valor de carga total: <strong style="color: #181818; margin-left: 2.5mm;">{{ $bloque['valor_texto'] }}</strong></div>
+                <table style="width: 172mm; margin: 0 4mm; table-layout: fixed;">
+                    <tr>
+                        @foreach($bloque['cobros'] as $numeroCobro => $cobro)
+                            <td style="width: 86mm; {{ $numeroCobro === 0 ? 'padding-right: 4mm;' : 'padding-left: 4mm; border-left: 0.3mm solid #e2e2e2;' }}">
+                                <div style="height: 6.5mm; font-weight: bold; font-size: 9.5pt; color: #181818;">
+                                    {{ $cobro['titulo'] }}<span class="pill {{ $numeroCobro === 0 ? 'naranja-claro' : '' }}" style="{{ $numeroCobro === 0 ? '' : 'background: #f4f4f4; color: #737373;' }}">{{ $cobro['etiqueta'] }}</span>
+                                </div>
+                                <table class="fila fila-cobro">
+                                    @foreach($cobro['filas'] as $fila)
+                                        <tr><td>{{ $fila['etiqueta'] }}</td><td class="valor">{{ $fila['valor'] }}</td></tr>
+                                    @endforeach
+                                </table>
+                                <table class="subtotal {{ $numeroCobro === 0 ? 'naranja-claro' : 'gris-claro' }}">
+                                    <tr>
+                                        <td style="font-size: 9.6pt;">{{ $cobro['total_titulo'] }}</td>
+                                        <td style="font-size: 12pt; text-align: right;">{{ $cobro['total'] }}</td>
+                                    </tr>
+                                </table>
+                            </td>
+                        @endforeach
+                    </tr>
+                </table>
+            @else
+                <div style="margin: 0 4mm;">
+                    <table class="fila">
+                        @foreach($bloque['filas'] as $fila)
+                            <tr><td>{{ $fila['etiqueta'] }}</td><td class="valor">{{ $fila['valor'] }}</td></tr>
+                        @endforeach
+                    </table>
+                    <table class="subtotal naranja-claro">
+                        <tr>
+                            <td style="font-size: 9.8pt;">Subtotal del proveedor</td>
+                            <td style="font-size: 12.5pt; text-align: right;">{{ $bloque['total'] }}</td>
+                        </tr>
+                    </table>
+                </div>
+            @endif
+        </div>
+    @endforeach
+
+    @if($compromiso)
+        <table style="width: 180mm; border-top: 0.3mm solid #e2e2e2; margin: 1mm 0 3mm;">
+            <tr>
+                <td style="padding: 2.8mm 2mm; font-weight: bold; font-size: 10pt; color: #181818;">Compromiso total de pago</td>
+                <td style="padding: 2.4mm 2mm; font-weight: bold; font-size: 13pt; color: #181818; text-align: right;">{{ $compromiso }}</td>
+            </tr>
+        </table>
+    @endif
+
+    @foreach($bloques as $bloque)
+        @if($bloque['fraccion'])
+            <div class="mantener" style="margin-bottom: 5mm;">
+                <div style="font-weight: bold; font-size: 9.5pt; color: #181818; margin-bottom: 1.5mm;">
+                    {{ $bloque['fraccion']['titulo'] }}
+                    @if(count($bloques) > 1)
+                        <span style="color: #2b2b2b;"> — {{ $bloque['titulo'] }}</span>
+                    @endif
+                </div>
+                <table style="width: 180mm; table-layout: fixed;">
+                    <tr>
+                        @foreach($bloque['fraccion']['partes'] as $numeroParte => $parte)
+                            <td style="width: 90mm; {{ $numeroParte === 0 ? 'padding-right: 2mm;' : 'padding-left: 2mm;' }}">
+                                <div style="position: relative; height: 15mm; background: #f9f9f9; border: 0.3mm solid #e2e2e2; border-radius: 1.5mm;">
+                                    <div style="position: absolute; left: 3mm; top: 1.6mm; font-size: 7.5pt; color: #737373;">{{ $parte['etiqueta'] }}</div>
+                                    <div style="position: absolute; left: 3mm; top: 5.4mm; font-weight: bold; font-size: 15pt; color: #181818;">{{ $parte['porcentaje'] }}</div>
+                                    <div style="position: absolute; left: 27mm; top: 4.5mm; height: 7.5mm; border-left: 0.2mm solid #e4e4e4;"></div>
+                                    <div style="position: absolute; left: 31mm; top: 4.2mm; font-weight: bold; font-size: 11pt; color: #2b2b2b;">{{ $parte['monto'] }}</div>
+                                    <div style="position: absolute; left: 31mm; top: 10mm; font-size: 7.5pt; color: #737373;">{{ $parte['nota'] }}</div>
+                                </div>
+                            </td>
+                        @endforeach
+                    </tr>
+                </table>
+                <div style="font-style: italic; font-size: 8.5pt; color: #737373; line-height: 4.4mm; margin: 2mm 0 0 1mm;">{{ $bloque['fraccion']['texto'] }}</div>
+            </div>
+        @endif
+    @endforeach
+
+    <div class="mantener" style="margin: 3mm 0 7mm;">
+        <div class="seccion">
+            <img src="{{ $iconos['banco'] }}" alt="">
+            <div class="seccion-titulo">CUENTAS PARA EL DEPÓSITO</div>
+            <div class="seccion-linea"></div>
+        </div>
+        <div style="font-size: 8.4pt; color: #737373; margin: -2.4mm 0 1.4mm;">Razón social: <strong style="color: #181818;">PRO MUNDO COMEX SAC</strong> · RUC 20612452432 · Cuentas corrientes en dólares (USD)</div>
+        <div style="position: relative; height: 27mm; border: 0.5mm solid #181818; border-radius: 2mm;">
+            <div style="position: absolute; left: 90mm; top: 0; height: 26mm; border-left: 0.4mm solid #181818;"></div>
+            @foreach([['BCP', '#004a99', '191-4216222-1-10', '002-191-00421622211-0-57', 0], ['Interbank', '#009650', '200-3006218820', '003-200-003006218820-33', 90]] as [$banco, $color, $cuenta, $cci, $x])
+                <div style="position: absolute; left: {{ $x + 3.4 }}mm; top: 4.5mm; width: 1.6mm; height: 18mm; background: {{ $color }};"></div>
+                <div style="position: absolute; left: {{ $x + 8 }}mm; top: 4.4mm; font-weight: bold; font-size: 13pt; color: {{ $color }};">{{ $banco }}</div>
+                <div style="position: absolute; left: {{ $x + 8 }}mm; top: 13.6mm; font-weight: bold; font-size: 7pt; color: #737373;">CUENTA</div>
+                <div style="position: absolute; left: {{ $x + 27 }}mm; top: 12.2mm; font-weight: bold; font-size: 11.5pt; color: #2b2b2b;">{{ $cuenta }}</div>
+                <div style="position: absolute; left: {{ $x + 8 }}mm; top: 19.6mm; font-weight: bold; font-size: 7pt; color: #737373;">CCI</div>
+                <div style="position: absolute; left: {{ $x + 27 }}mm; top: 18.6mm; font-weight: bold; font-size: 10pt; color: #2b2b2b;">{{ $cci }}</div>
+            @endforeach
+        </div>
+    </div>
+
+    <div class="mantener" style="margin-bottom: 6mm;">
+        <div class="seccion">
+            <img src="{{ $iconos['ruta'] }}" alt="">
+            <div class="seccion-titulo">TU PAGO AL PROVEEDOR, PASO A PASO</div>
+            <div class="seccion-nota">Un proceso claro de principio a fin.</div>
+            <div class="seccion-linea"></div>
+        </div>
+        <div style="position: relative; background: #f8f8f8; border: 0.3mm solid #e2e2e2; border-radius: 2.5mm; height: 46.7mm;">
+            <img src="{{ $linea_tiempo }}" style="position: absolute; left: 0; top: 0; width: 180mm; height: 26mm;" alt="">
+            <div style="position: absolute; left: 9mm; top: 4.6mm; width: 18mm; text-align: center; font-weight: bold; font-size: 6.2pt; color: #ffffff;">ESTÁS AQUÍ</div>
+            <table style="position: absolute; left: 0; top: 24.6mm; width: 180mm; table-layout: fixed;">
+                <tr>
+                    @foreach($pasos as $indice => $paso)
+                        <td style="width: 36mm; padding: 0 2mm; text-align: center;">
+                            <div style="font-weight: bold; font-size: 6.8pt; color: {{ $indice === 0 ? '#f2662b' : '#737373' }}; margin-bottom: 1.2mm;">{{ $paso['etiqueta'] }}</div>
+                            <div style="height: 7.6mm; font-weight: bold; font-size: 8.4pt; color: #2b2b2b; line-height: 3.6mm;">{{ $paso['titulo'] }}</div>
+                            <div style="font-size: 7.6pt; color: #737373; line-height: 3.1mm;">{{ $paso['descripcion'] }}</div>
+                        </td>
+                    @endforeach
+                </tr>
+            </table>
+        </div>
+        @if($pago_en_cuotas)
+            <div style="font-style: italic; font-size: 8.2pt; color: #737373; margin-top: 2mm;">Si pagas en cuotas, los pasos 1 al 4 se repiten con cada cuota.</div>
+        @endif
+    </div>
+
+    @foreach($terminos as $numeroGrupo => $grupo)
+        <div class="mantener" style="{{ $numeroGrupo > 0 ? 'page-break-before: always;' : '' }}">
+            <div class="seccion">
+                <img src="{{ $iconos['documento'] }}" alt="">
+                <div class="seccion-titulo">{{ $grupo['titulo'] }}</div>
+                <div class="seccion-linea"></div>
+            </div>
+            <table style="width: 180mm; table-layout: fixed;">
+                <tr>
+                    @foreach($grupo['columnas'] as $indiceColumna => $columna)
+                        <td style="width: 90mm; {{ $indiceColumna === 0 ? 'padding-right: 5mm;' : 'padding-left: 5mm; border-left: 0.4mm solid #e2e2e2;' }}">
+                            @foreach($columna as $seccion)
+                                <div style="margin-bottom: 3mm;">
+                                    @if($seccion['titulo'])
+                                        <div style="font-weight: bold; font-size: 9.4pt; color: #181818; margin-bottom: 1.6mm;">{{ $seccion['titulo'] }}</div>
+                                    @endif
+                                    @foreach($seccion['items'] as $item)
+                                        <div style="position: relative; padding-left: 4.5mm; margin-bottom: 2.4mm; font-size: 8.6pt; line-height: 3.9mm; color: #2b2b2b;">
+                                            <span style="position: absolute; left: 0.4mm; top: 1.3mm; width: 1.2mm; height: 1.2mm; border-radius: 0.6mm; background: #181818;"></span>{{ $item }}
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endforeach
+                        </td>
+                    @endforeach
+                </tr>
+            </table>
+        </div>
+    @endforeach
 </body>
 </html>

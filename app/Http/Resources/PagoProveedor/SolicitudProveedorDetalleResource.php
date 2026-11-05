@@ -78,6 +78,11 @@ class SolicitudProveedorDetalleResource extends JsonResource
                     : null,
                 'overdue' => $provider->china_observe_until ? $provider->china_observe_until->isPast() : false,
             ] : null,
+            'observacion_ventas' => $provider->sales_observation ? [
+                'motivo' => $provider->sales_observation,
+                'fecha' => optional($provider->sales_observed_at)->toIso8601String(),
+            ] : null,
+            'motivo_anulacion' => $provider->cancellation_reason,
             'progreso' => $this->progress($provider),
             'puede_registrar_diferencia' => !$cancelled && $collecting && $balance > PagoProveedorSolicitudProveedor::MONEY_EPSILON,
             'codigo_solicitud' => $provider->request_code,

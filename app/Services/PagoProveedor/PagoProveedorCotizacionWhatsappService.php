@@ -32,7 +32,24 @@ class PagoProveedorCotizacionWhatsappService
     public function vistaPrevia(int $id, array $actor): array
     {
         unset($actor);
-        $cotizacion = $this->cotizaciones->encontrar($id);
+
+        return $this->armarVistaPrevia($this->cotizaciones->encontrar($id));
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     * @return array{texto: string, destinatario: string|null, puede_enviar: bool, nota: string}
+     */
+    public function vistaPreviaBorrador(array $datos): array
+    {
+        return $this->armarVistaPrevia($this->cotizaciones->borrador($datos));
+    }
+
+    /**
+     * @return array{texto: string, destinatario: string|null, puede_enviar: bool, nota: string}
+     */
+    private function armarVistaPrevia(PagoProveedorCotizacion $cotizacion): array
+    {
         $presentado = $this->presenter->cotizacion($cotizacion, $this->configuracion->tariff());
         $forRequest = $this->belongsToRequest($cotizacion);
         if (!$forRequest) {
@@ -61,16 +78,43 @@ class PagoProveedorCotizacionWhatsappService
      */
     public function enviar(int $id, array $actor): array
     {
-        $cotizacion = $this->cotizaciones->encontrar($id);
+        /** @var PagoProveedorPdfService $pdfService */
+        $pdfService = app(PagoProveedorPdfService::class);
+
+        return $this->enviarCotizacion(
+            $this->cotizaciones->encontrar($id),
+            $actor,
+            fn () => $pdfService->resumenTemporal($id, $actor)
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     * @return array{texto: string, destinatario: string, enviado: bool, nota: string}
+     */
+    public function enviarBorrador(array $datos, array $actor): array
+    {
+        /** @var PagoProveedorPdfService $pdfService */
+        $pdfService = app(PagoProveedorPdfService::class);
+        $cotizacion = $this->cotizaciones->borrador($datos);
+
+        return $this->enviarCotizacion($cotizacion, $actor, fn () => $pdfService->temporalDeBorrador($cotizacion));
+    }
+
+    /**
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     * @param  callable(): array{path: string, filename: string}  $generarPdf
+     * @return array{texto: string, destinatario: string, enviado: bool, nota: string}
+     */
+    private function enviarCotizacion(PagoProveedorCotizacion $cotizacion, array $actor, callable $generarPdf): array
+    {
         $presentado = $this->presenter->cotizacion($cotizacion, $this->configuracion->tariff());
         $this->exigirListoParaEnviar($presentado, true);
 
         $texto = $this->armarTexto($cotizacion, $presentado);
         $telefono = $this->telefonoCliente((string) $cotizacion->client_whatsapp);
-
-        /** @var PagoProveedorPdfService $pdfService */
-        $pdfService = app(PagoProveedorPdfService::class);
-        $archivo = $pdfService->resumenTemporal($id, $actor);
+        $archivo = $generarPdf();
 
         try {
             $respuestaTexto = $this->sendMessageVentas($texto, $telefono, 0);
@@ -107,21 +151,28 @@ class PagoProveedorCotizacionWhatsappService
             }
         }
 
-        PagoProveedorMensaje::query()->create([
-            'quote_id' => $cotizacion->id,
-            'message_type' => 'resumen',
-            'recipient' => $cotizacion->client_whatsapp,
-            'body' => $texto,
-            'user_id' => $actor['id'],
-            'created_at' => now(),
-        ]);
-        $this->historial->registrar(
-            PagoProveedorHistorial::ENTITY_QUOTE,
-            $cotizacion->id,
-            'Resumen enviado por WhatsApp',
-            $actor,
-            'Enviado desde el número de ventas a ' . $cotizacion->client_whatsapp
-        );
+        if ($cotizacion->id) {
+            PagoProveedorMensaje::query()->create([
+                'quote_id' => $cotizacion->id,
+                'message_type' => 'resumen',
+                'recipient' => $cotizacion->client_whatsapp,
+                'body' => $texto,
+                'user_id' => $actor['id'],
+                'created_at' => now(),
+            ]);
+            $this->historial->registrar(
+                PagoProveedorHistorial::ENTITY_QUOTE,
+                $cotizacion->id,
+                'Resumen enviado por WhatsApp',
+                $actor,
+                'Enviado desde el número de ventas a ' . $cotizacion->client_whatsapp
+            );
+        } else {
+            Log::info('Pago proveedor: resumen enviado sin cotización guardada', [
+                'cod_cotizacion_cc' => $cotizacion->consolidated_quote_code,
+                'user_id' => $actor['id'],
+            ]);
+        }
 
         return [
             'texto' => $texto,

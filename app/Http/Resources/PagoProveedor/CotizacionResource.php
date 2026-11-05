@@ -174,7 +174,8 @@ class CotizacionResource extends JsonResource
     private function isComplete(PagoProveedorCotizacion $cotizacion): array
     {
         $missing = [];
-        if (!$cotizacion->exchange_rate_confirmed || (float) $cotizacion->exchange_rate <= 0) {
+        $hayYuanes = $cotizacion->proveedores->contains('currency', PagoProveedorCotizacionProveedor::CURRENCY_RMB);
+        if ($hayYuanes && (!$cotizacion->exchange_rate_confirmed || (float) $cotizacion->exchange_rate <= 0)) {
             $missing[] = 'Confirma el tipo de cambio.';
         }
 

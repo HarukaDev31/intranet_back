@@ -9,4 +9,5 @@ if (!$front) {
 
 return [
     'front_url' => rtrim((string) $front, '/'),
+    'clientes_url' => rtrim((string) env('APP_URL_CLIENTES', 'https://clientes.probusiness.pe'), '/'),
 ];
