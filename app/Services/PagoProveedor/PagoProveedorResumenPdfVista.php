@@ -75,7 +75,7 @@ class PagoProveedorResumenPdfVista
      * @param  array<string, mixed>  $cotizacion
      * @return array<string, mixed>
      */
-    public function datos(array $cotizacion, string $fecha): array
+    public function datos(array $cotizacion, string $fecha, int $paso = 0, ?string $referenciaSolicitud = null): array
     {
         $proveedores = $cotizacion['proveedores'] ?? [];
         $tc = (float) ($cotizacion['tipo_cambio'] ?? 0);
@@ -101,7 +101,7 @@ class PagoProveedorResumenPdfVista
                 'ruta' => 'ruta_n',
             ]),
             'fecha' => $fecha,
-            'referencia' => !empty($cotizacion['id']) ? 'Cotización ' . $cotizacion['codigo'] : '',
+            'referencia' => $this->referencia($cotizacion, $referenciaSolicitud),
             'datos_cliente' => $this->datosCliente($cotizacion, $hayRmb, $tc, $fecha, count($proveedores)),
             'tarjetas' => $this->tarjetas($cotizacion, $bloques, $hayCobros),
             'vigencia' => ($cotizacion['estado'] ?? '') === 'pendiente' && !empty($cotizacion['vigencia_hasta'])
@@ -110,11 +110,26 @@ class PagoProveedorResumenPdfVista
             'reloj' => 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="66" height="66"><g transform="scale(10)"><circle cx="3.3" cy="3.3" r="2.7" fill="none" stroke="#f2662b" stroke-width="0.55"/><path d="M3.3 3.3 L3.3 1.6 M3.3 3.3 L4.6 4" fill="none" stroke="#f2662b" stroke-width="0.55"/></g></svg>'),
             'bloques' => $bloques,
             'compromiso' => $hayCobros ? $this->usd($cotizacion['total']) : null,
-            'pasos' => $this->pasos($hayRmb, $hayUsd),
-            'linea_tiempo' => $this->lineaDeTiempo(),
+            'pasos' => $this->pasos($hayRmb, $hayUsd, $paso),
+            'linea_tiempo' => $this->lineaDeTiempo($paso),
+            'paso' => $paso,
+            'paso_nombre' => \App\Models\PagoProveedor\PagoProveedorDocumento::stepLabel($paso),
             'pago_en_cuotas' => $pagoEnCuotas,
             'terminos' => $this->terminos($proveedores, $hayRmb, $hayUsd, $pagoEnCuotas, $this->espacioParaTerminos($bloques, ($cotizacion['estado'] ?? '') === 'pendiente' && !empty($cotizacion['vigencia_hasta']), $pagoEnCuotas, $hayCobros)),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $cotizacion
+     */
+    private function referencia(array $cotizacion, ?string $referenciaSolicitud): string
+    {
+        $cotizacionCodigo = !empty($cotizacion['id']) ? 'Cotización ' . $cotizacion['codigo'] : '';
+        if ($referenciaSolicitud !== null && trim($referenciaSolicitud) !== '') {
+            return trim($referenciaSolicitud . ($cotizacionCodigo !== '' ? ' · ' . $cotizacionCodigo : ''));
+        }
+
+        return $cotizacionCodigo;
     }
 
     /**
@@ -342,9 +357,9 @@ class PagoProveedorResumenPdfVista
     }
 
     /**
-     * @return array<int, array{titulo: string, descripcion: string, etiqueta: string}>
+     * @return array<int, array{titulo: string, descripcion: string, etiqueta: string, actual: bool}>
      */
-    private function pasos(bool $hayRmb, bool $hayUsd): array
+    private function pasos(bool $hayRmb, bool $hayUsd, int $paso): array
     {
         $pago = match (true) {
             $hayRmb && $hayUsd => 'Pagamos a tu proveedor en RMB o USD.',
@@ -353,20 +368,33 @@ class PagoProveedorResumenPdfVista
             default => 'Pagamos a tu proveedor.',
         };
 
-        return [
+        $paso = max(0, min(4, $paso));
+        $pasos = [
             ['etiqueta' => 'INICIO', 'titulo' => 'Cotización', 'descripcion' => 'Te enviamos la propuesta para tu confirmación.'],
             ['etiqueta' => 'PASO 1', 'titulo' => 'Solicitud y datos de pago', 'descripcion' => 'Envías los datos del proveedor y tu voucher.'],
             ['etiqueta' => 'PASO 2', 'titulo' => 'Validación de pago', 'descripcion' => 'Verificamos el ingreso de tu depósito.'],
             ['etiqueta' => 'PASO 3', 'titulo' => 'Ejecución de pago', 'descripcion' => $pago],
             ['etiqueta' => 'PASO 4', 'titulo' => 'Confirmación', 'descripcion' => 'Te enviamos la constancia para tu validación.'],
         ];
+
+        foreach ($pasos as $indice => $datos) {
+            $actual = $indice === $paso;
+            $hecho = $indice < $paso;
+            $pasos[$indice]['actual'] = $actual;
+            $pasos[$indice]['color_etiqueta'] = $actual ? '#f2662b' : '#737373';
+            $pasos[$indice]['color_titulo'] = $actual ? '#f2662b' : ($hecho ? '#2b2b2b' : '#9a9a9a');
+            $pasos[$indice]['color_nota'] = $actual || $hecho ? '#737373' : '#a3a3a3';
+        }
+
+        return $pasos;
     }
 
     /**
-     * Línea de tiempo del esquema, con la cotización como etapa actual. Coordenadas en mm.
+     * Línea de tiempo del esquema, marcando el paso en el que está el proceso. Coordenadas en mm.
      */
-    private function lineaDeTiempo(): string
+    private function lineaDeTiempo(int $paso): string
     {
+        $paso = max(0, min(4, $paso));
         $columna = self::ANCHO_CONTENIDO / 5;
         $radio = 6;
         $cy = 15.8;
@@ -383,17 +411,24 @@ class PagoProveedorResumenPdfVista
         for ($i = 0; $i < 4; $i++) {
             $x1 = $columna * ($i + 0.5) + $radio;
             $x2 = $columna * ($i + 1.5) - $radio;
-            $svg .= sprintf('<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="#c8c8c8" stroke-width="0.8" stroke-dasharray="1.4 1.2"/>', $x1, $cy, $x2, $cy);
+            // El tramo ya recorrido va sólido y oscuro; el pendiente queda punteado en gris.
+            $tramo = $i < $paso
+                ? sprintf('<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="#181818" stroke-width="0.8"/>', $x1, $cy, $x2, $cy)
+                : sprintf('<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="#c8c8c8" stroke-width="0.8" stroke-dasharray="1.4 1.2"/>', $x1, $cy, $x2, $cy);
+            $svg .= $tramo;
         }
         foreach ($trazos as $i => $trazo) {
             $x = $columna * ($i + 0.5);
-            if ($i === 0) {
+            $actual = $i === $paso;
+            if ($actual) {
                 $svg .= sprintf('<circle cx="%s" cy="%s" r="7.5" fill="#fde2d6"/><circle cx="%s" cy="%s" r="6" fill="#f2662b"/>', $x, $cy, $x, $cy);
                 $svg .= sprintf('<rect x="%s" y="%s" width="18" height="4" rx="2" ry="2" fill="#f2662b"/>', $x - 9, $cy - 12);
+            } elseif ($i < $paso) {
+                $svg .= sprintf('<circle cx="%s" cy="%s" r="6" fill="#181818"/>', $x, $cy);
             } else {
                 $svg .= sprintf('<circle cx="%s" cy="%s" r="6" fill="#ffffff" stroke="#c8c8c8" stroke-width="0.6"/>', $x, $cy);
             }
-            $color = $i === 0 ? '#ffffff' : $gris;
+            $color = $i <= $paso ? '#ffffff' : $gris;
             $svg .= sprintf('<g transform="translate(%s %s)" fill="none" stroke="%s" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round">%s</g>', $x, $cy, $color, $trazo);
         }
         $svg .= '</svg>';

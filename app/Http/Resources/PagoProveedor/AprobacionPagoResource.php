@@ -26,6 +26,7 @@ class AprobacionPagoResource extends JsonResource
         $comparison = $approval->compare($provider);
         $requestModel = $provider->solicitud;
         $deposits = $this->deposits($provider);
+        $cuota = $provider->summary_json['cuotas'][max(0, ((int) $provider->current_installment) - 1)] ?? [];
         $open = (int) $provider->stage === PagoProveedorSolicitudProveedor::STAGE_VALIDATION
             && $provider->approval_status !== PagoProveedorSolicitudProveedor::APPROVAL_APPROVED
             && $provider->status !== PagoProveedorSolicitudProveedor::STATUS_CANCELLED;
@@ -45,6 +46,10 @@ class AprobacionPagoResource extends JsonResource
             'installment_label' => $provider->client_payment_mode === PagoProveedorCotizacionProveedor::MODE_SPLIT
                 ? 'Cuota '.$provider->current_installment.' de 2'
                 : null,
+            'modality_label' => $provider->modalityLabel(),
+            'cargo_amount' => isset($cuota['carga']) ? (float) $cuota['carga'] : null,
+            'bank_fee_amount' => isset($cuota['bancaria']) ? (float) $cuota['bancaria'] : null,
+            'admin_fee_amount' => isset($cuota['administrativa']) ? (float) $cuota['administrativa'] : null,
             'charged_amount' => $comparison['charged'],
             'received_amount' => $comparison['received'],
             'difference' => $comparison['difference'],

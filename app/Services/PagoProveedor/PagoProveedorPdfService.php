@@ -4,12 +4,12 @@ namespace App\Services\PagoProveedor;
 
 use App\Exceptions\PagoProveedorException;
 use App\Models\PagoProveedor\PagoProveedorCotizacion;
+use App\Models\PagoProveedor\PagoProveedorDocumento;
 use App\Models\PagoProveedor\PagoProveedorEjecucion;
 use App\Models\PagoProveedor\PagoProveedorSolicitudProveedor;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class PagoProveedorPdfService
@@ -19,22 +19,30 @@ class PagoProveedorPdfService
         private readonly PagoProveedorCotizacionPresenter $presenter,
         private readonly PagoProveedorConfiguracionService $configuracion,
         private readonly PagoProveedorHistorialService $historial,
+        private readonly PagoProveedorDocumentoService $documentos,
     ) {
     }
 
     /**
+     * Resumen de la cotización con el paso del flujo en el que está.
+     * El PDF se reutiliza mientras los datos y el paso no cambien.
+     *
      * @param  array{id: int|null, nombre: string, area: string}  $actor
-     * @return array{filename: string, base64: string}
+     * @return array{filename: string, base64: string, paso: int, paso_nombre: string, emitido_el: string|null, generado: bool, descargas: int}
      */
     public function resumen(int $id, array $actor): array
     {
-        $built = $this->buildResumen($id);
-        $this->historial->registrar('cotizacion', $built['quote_id'], 'PDF descargado', $actor);
+        $cotizacion = $this->cotizaciones->encontrar($id);
+        $documento = $this->resumenDeCotizacion($cotizacion, $actor, true);
+        $this->historial->registrar(
+            PagoProveedorDocumento::ENTITY_QUOTE,
+            (int) $cotizacion->id,
+            'PDF descargado',
+            $actor,
+            'Paso ' . $documento['paso'] . ' · ' . $documento['paso_nombre']
+        );
 
-        return [
-            'filename' => $built['filename'],
-            'base64' => base64_encode($built['binary']),
-        ];
+        return $documento;
     }
 
     /**
@@ -45,16 +53,15 @@ class PagoProveedorPdfService
      */
     public function resumenTemporal(int $id, array $actor): array
     {
-        unset($actor);
-        $built = $this->buildResumen($id);
+        $documento = $this->resumenDeCotizacion($this->cotizaciones->encontrar($id), $actor, false);
         $path = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pp-resumen-' . $id . '-' . uniqid('', true) . '.pdf';
-        if (file_put_contents($path, $built['binary']) === false) {
+        if (file_put_contents($path, base64_decode($documento['base64'])) === false) {
             throw new PagoProveedorException('No se pudo preparar el PDF para WhatsApp.');
         }
 
         return [
             'path' => $path,
-            'filename' => $built['filename'],
+            'filename' => $documento['filename'],
         ];
     }
 
@@ -63,17 +70,16 @@ class PagoProveedorPdfService
      *
      * @param  array<string, mixed>  $datos
      * @param  array{id: int|null, nombre: string, area: string}  $actor
-     * @return array{filename: string, base64: string}
+     * @return array{filename: string, base64: string, paso: int, paso_nombre: string, emitido_el: string|null, generado: bool, descargas: int}
      */
     public function resumenBorrador(array $datos, array $actor): array
     {
         $cotizacion = $this->cotizaciones->borrador($datos);
-        $resumen = $this->resumenCacheado($cotizacion);
-        if ($cotizacion->id) {
-            $this->historial->registrar('cotizacion', $cotizacion->id, 'PDF descargado', $actor);
+        if (!$cotizacion->id) {
+            return $this->resumenSinGuardar($cotizacion);
         }
 
-        return $resumen;
+        return $this->resumenDeCotizacion($cotizacion, $actor, true);
     }
 
     /**
@@ -81,64 +87,234 @@ class PagoProveedorPdfService
      */
     public function temporalDeBorrador(PagoProveedorCotizacion $cotizacion): array
     {
-        $resumen = $this->resumenCacheado($cotizacion);
+        $documento = $cotizacion->id
+            ? $this->resumenDeCotizacion($cotizacion, null, false)
+            : $this->resumenSinGuardar($cotizacion);
+
         $path = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pp-resumen-' . uniqid('', true) . '.pdf';
-        if (file_put_contents($path, base64_decode($resumen['base64'])) === false) {
+        if (file_put_contents($path, base64_decode($documento['base64'])) === false) {
             throw new PagoProveedorException('No se pudo preparar el PDF para WhatsApp.');
         }
 
-        return ['path' => $path, 'filename' => $resumen['filename']];
+        return ['path' => $path, 'filename' => $documento['filename']];
     }
 
     /**
-     * Solo se regenera si cambia lo que muestra el PDF, la fecha o la plantilla.
+     * Balance de cambio de un proveedor: también se emite una vez por estado.
      *
-     * @return array{filename: string, base64: string}
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     * @return array{filename: string, base64: string, paso: int, paso_nombre: string, emitido_el: string|null, generado: bool, descargas: int}
      */
-    private function resumenCacheado(PagoProveedorCotizacion $cotizacion): array
+    public function balance(PagoProveedorSolicitudProveedor $provider, array $actor, bool $contarDescarga = true): array
+    {
+        $provider->loadMissing(['solicitud', 'ejecuciones']);
+        $datos = $this->datosBalance($provider);
+        $paso = $this->documentos->pasoDeSolicitudProveedor($provider);
+        $code = preg_replace('/[^A-Za-z0-9_-]/', '', (string) $provider->code_supplier) ?: (string) $provider->id;
+
+        $documento = $this->documentos->emitir(
+            PagoProveedorDocumento::ENTITY_REQUEST,
+            (int) $provider->request_id,
+            PagoProveedorDocumento::TYPE_BALANCE,
+            (int) $provider->id,
+            $paso,
+            sha1((string) json_encode($datos)),
+            'Balance_' . $code . '.pdf',
+            fn (string $fecha) => $this->renderBalance($datos, $fecha),
+            $actor,
+            $contarDescarga
+        );
+
+        if ($contarDescarga) {
+            $this->historial->registrar(
+                PagoProveedorDocumento::ENTITY_REQUEST,
+                (int) $provider->request_id,
+                'PDF de balance descargado',
+                $actor,
+                $provider->code_supplier
+            );
+        }
+
+        return $documento;
+    }
+
+    /**
+     * Estado del resumen sin generarlo: dice en qué paso se emitió y si sigue vigente.
+     * Sirve para avisar en la ficha si el PDF se regenerará al descargarlo.
+     *
+     * @return array{paso: int, paso_nombre: string, paso_actual: int, paso_actual_nombre: string, desactualizado: bool, generado_en: string|null, emitido_el: string|null, descargas: int, generado: bool}|null
+     */
+    public function estadoResumen(PagoProveedorCotizacion $cotizacion): ?array
+    {
+        if (!$cotizacion->id) {
+            return null;
+        }
+
+        $estado = $this->documentos->estado(
+            PagoProveedorDocumento::ENTITY_QUOTE,
+            (int) $cotizacion->id,
+            PagoProveedorDocumento::TYPE_SUMMARY
+        );
+        if ($estado === null) {
+            return null;
+        }
+
+        $paso = $this->documentos->pasoDeCotizacion($cotizacion);
+        $vigente = false;
+        try {
+            $presentado = $this->presenter->cotizacion($cotizacion, $this->configuracion->tariff());
+            $vigente = $this->documentos->vigente(
+                PagoProveedorDocumento::ENTITY_QUOTE,
+                (int) $cotizacion->id,
+                PagoProveedorDocumento::TYPE_SUMMARY,
+                0,
+                $paso,
+                $this->huellaResumen($presentado)
+            );
+        } catch (\Throwable $e) {
+            // Si todavía faltan datos para el PDF, se conserva el paso emitido.
+            $vigente = (int) $estado['paso'] === $paso;
+        }
+
+        $estado['paso_actual'] = $paso;
+        $estado['paso_actual_nombre'] = PagoProveedorDocumento::stepLabel($paso);
+        $estado['desactualizado'] = !$vigente;
+
+        return $estado;
+    }
+
+    /**
+     * Estado del balance sin generarlo: dice en qué paso se emitió y si sigue vigente.
+     *
+     * @return array{paso: int, paso_nombre: string, paso_actual: int, paso_actual_nombre: string, desactualizado: bool, generado_en: string|null, emitido_el: string|null, descargas: int, generado: bool}|null
+     */
+    public function estadoBalance(PagoProveedorSolicitudProveedor $provider): ?array
+    {
+        $provider->loadMissing(['solicitud', 'ejecuciones']);
+        $estado = $this->documentos->estado(
+            PagoProveedorDocumento::ENTITY_REQUEST,
+            (int) $provider->request_id,
+            PagoProveedorDocumento::TYPE_BALANCE,
+            (int) $provider->id
+        );
+        if ($estado === null) {
+            return null;
+        }
+
+        $paso = $this->documentos->pasoDeSolicitudProveedor($provider);
+        $vigente = false;
+        try {
+            $datos = $this->datosBalance($provider);
+            $vigente = $this->documentos->vigente(
+                PagoProveedorDocumento::ENTITY_REQUEST,
+                (int) $provider->request_id,
+                PagoProveedorDocumento::TYPE_BALANCE,
+                (int) $provider->id,
+                $paso,
+                sha1((string) json_encode($datos))
+            );
+        } catch (\Throwable $e) {
+            // Sin pagos registrados todavía no hay balance: se compara solo el paso.
+            $vigente = (int) $estado['paso'] === $paso;
+        }
+
+        $estado['paso_actual'] = $paso;
+        $estado['paso_actual_nombre'] = PagoProveedorDocumento::stepLabel($paso);
+        $estado['desactualizado'] = !$vigente;
+
+        return $estado;
+    }
+
+    /**
+     * @param  array{id: int|null, nombre: string, area: string}|null  $actor
+     * @return array{filename: string, base64: string, paso: int, paso_nombre: string, emitido_el: string|null, generado: bool, descargas: int}
+     */
+    private function resumenDeCotizacion(PagoProveedorCotizacion $cotizacion, ?array $actor, bool $contarDescarga): array
     {
         $presentado = $this->presenter->cotizacion($cotizacion, $this->configuracion->tariff());
         $this->exigirPuedeGenerarPdf($presentado);
+        $paso = $this->documentos->pasoDeCotizacion($cotizacion);
+        $referencia = $this->referenciaSolicitud($cotizacion);
 
+        return $this->documentos->emitir(
+            PagoProveedorDocumento::ENTITY_QUOTE,
+            (int) $cotizacion->id,
+            PagoProveedorDocumento::TYPE_SUMMARY,
+            0,
+            $paso,
+            $this->huellaResumen($presentado),
+            $this->nombreArchivo($presentado),
+            fn (string $fecha) => $this->renderResumen($presentado, $fecha, $paso, $referencia),
+            $actor,
+            $contarDescarga
+        );
+    }
+
+    /**
+     * Borrador de una cotización todavía no guardada: no hay nada que cachear.
+     *
+     * @return array{filename: string, base64: string, paso: int, paso_nombre: string, emitido_el: string|null, generado: bool, descargas: int}
+     */
+    private function resumenSinGuardar(PagoProveedorCotizacion $cotizacion): array
+    {
+        $presentado = $this->presenter->cotizacion($cotizacion, $this->configuracion->tariff());
+        $this->exigirPuedeGenerarPdf($presentado);
         $fecha = $this->fechaEmision();
-        $huella = sha1((string) json_encode([
-            Arr::only($presentado, ['id', 'codigo', 'estado', 'cod_cotizacion_cc', 'consolidado', 'cliente_nombre', 'tipo_cambio', 'proveedores_cantidad', 'total', 'total_ahora', 'comisiones', 'proveedores', 'resumen']),
-            explode(' ', (string) ($presentado['vigencia_hasta'] ?? ''))[0],
-            $fecha,
-            filemtime(resource_path('views/pago-proveedor/resumen.blade.php')),
-            filemtime(app_path('Services/PagoProveedor/PagoProveedorResumenPdfVista.php')),
-        ]));
+        $paso = PagoProveedorDocumento::STEP_QUOTE;
 
         return [
             'filename' => $this->nombreArchivo($presentado),
-            'base64' => Cache::remember(
-                'pago-proveedor:resumen-pdf:' . $huella,
-                now()->addDay(),
-                fn () => base64_encode($this->renderResumen($presentado, $fecha))
-            ),
+            'base64' => base64_encode($this->renderResumen($presentado, $fecha, $paso, null)),
+            'paso' => $paso,
+            'paso_nombre' => PagoProveedorDocumento::stepLabel($paso),
+            'emitido_el' => $fecha,
+            'generado' => true,
+            'descargas' => 0,
         ];
     }
 
     /**
-     * @return array{quote_id: int, filename: string, binary: string}
+     * Solo lo que muestra el PDF: si nada de esto cambia, se reutiliza el archivo.
+     *
+     * @param  array<string, mixed>  $presentado
      */
-    private function buildResumen(int $id): array
+    private function huellaResumen(array $presentado): string
     {
-        $cotizacion = $this->cotizaciones->encontrar($id);
-        $presentado = $this->presenter->cotizacion($cotizacion, $this->configuracion->tariff());
-        $this->exigirPuedeGenerarPdf($presentado);
+        return sha1((string) json_encode([
+            Arr::only($presentado, [
+                'id',
+                'codigo',
+                'estado',
+                'cod_cotizacion_cc',
+                'consolidado',
+                'cliente_nombre',
+                'tipo_cambio',
+                'proveedores_cantidad',
+                'total',
+                'total_ahora',
+                'comisiones',
+                'proveedores',
+                'resumen',
+            ]),
+            explode(' ', (string) ($presentado['vigencia_hasta'] ?? ''))[0],
+        ]));
+    }
 
-        return [
-            'quote_id' => (int) $cotizacion->id,
-            'filename' => $this->nombreArchivo($presentado),
-            'binary' => $this->renderResumen($presentado, $this->fechaEmision()),
-        ];
+    private function referenciaSolicitud(PagoProveedorCotizacion $cotizacion): ?string
+    {
+        $cotizacion->loadMissing('solicitud');
+        $solicitud = $cotizacion->solicitud;
+        if ($solicitud === null) {
+            return null;
+        }
+
+        return 'Solicitud N.° ' . $solicitud->order_number;
     }
 
     /**
      * @param  array<string, mixed>  $presentado
      */
-    private function renderResumen(array $presentado, string $fecha): string
+    private function renderResumen(array $presentado, string $fecha, int $paso, ?string $referencia): string
     {
         $options = new Options();
         $options->set('isHtml5ParserEnabled', true);
@@ -148,7 +324,7 @@ class PagoProveedorPdfService
         $metricas = $dompdf->getFontMetrics();
         $dompdf->loadHtml(view(
             'pago-proveedor.resumen',
-            (new PagoProveedorResumenPdfVista($metricas))->datos($presentado, $fecha)
+            (new PagoProveedorResumenPdfVista($metricas))->datos($presentado, $fecha, $paso, $referencia)
         )->render());
         $dompdf->setPaper('A4');
         $dompdf->render();
@@ -169,44 +345,10 @@ class PagoProveedorPdfService
     }
 
     /**
-     * @param  array<string, mixed>  $presentado
+     * @return array<string, mixed>
      */
-    private function nombreArchivo(array $presentado): string
+    private function datosBalance(PagoProveedorSolicitudProveedor $provider): array
     {
-        $cliente = preg_replace('/[^A-Za-z0-9]+/', '_', Str::ascii(trim((string) ($presentado['cliente_nombre'] ?? '')))) ?: 'cliente';
-
-        return 'Resumen_pago_proveedor_' . $cliente . '.pdf';
-    }
-
-    private function fechaEmision(): string
-    {
-        return now()->timezone(PagoProveedorVigenciaService::ZONA)->format('j/n/Y');
-    }
-
-    /**
-     * @param  array<string, mixed>  $presentado
-     */
-    private function exigirPuedeGenerarPdf(array $presentado): void
-    {
-        $faltantes = $presentado['faltantes_pdf'] ?? [];
-        if (is_array($faltantes) && count($faltantes) > 0) {
-            throw new PagoProveedorException(implode(' ', $faltantes));
-        }
-        if (($presentado['estado'] ?? '') === 'pendiente' && !empty($presentado['vencida'])) {
-            throw new PagoProveedorException('La cotización está vencida. Renuévala para descargar el resumen.');
-        }
-        if (empty($presentado['puede_descargar_pdf'])) {
-            throw new PagoProveedorException('Aún no se puede generar el PDF de resumen.');
-        }
-    }
-
-    /**
-     * @param  array{id: int|null, nombre: string, area: string}  $actor
-     * @return array{filename: string, base64: string}
-     */
-    public function balance(PagoProveedorSolicitudProveedor $provider, array $actor): array
-    {
-        $provider->loadMissing(['solicitud', 'ejecuciones']);
         $request = $provider->solicitud;
         $pagos = [];
         $cobrado = 0.0;
@@ -244,8 +386,8 @@ class PagoProveedorPdfService
         } elseif (abs($diffUsd) <= 0.009) {
             $label = 'Sin diferencia';
         }
-        $html = view('pago-proveedor.balance', [
-            'fecha' => now()->timezone(PagoProveedorVigenciaService::ZONA)->format('d/m/Y'),
+
+        return [
             'cliente' => $request?->client_name,
             'consolidado' => $request?->consolidation,
             'codigo_proveedor' => $provider->code_supplier,
@@ -258,7 +400,15 @@ class PagoProveedorPdfService
             'pagado_rmb' => round($pagado, 2),
             'pagos' => $pagos,
             'mostrar_cuentas' => $provider->exchange_result === PagoProveedorEjecucion::RESULT_COLLECT,
-        ])->render();
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     */
+    private function renderBalance(array $datos, string $fecha): string
+    {
+        $html = view('pago-proveedor.balance', ['fecha' => $fecha] + $datos)->render();
 
         $options = new Options();
         $options->set('isHtml5ParserEnabled', true);
@@ -269,18 +419,38 @@ class PagoProveedorPdfService
         $dompdf->setPaper('A4');
         $dompdf->render();
 
-        $code = preg_replace('/[^A-Za-z0-9_-]/', '', (string) $provider->code_supplier) ?: (string) $provider->id;
-        $this->historial->registrar(
-            \App\Models\PagoProveedor\PagoProveedorHistorial::ENTITY_REQUEST,
-            (int) $provider->request_id,
-            'PDF de balance descargado',
-            $actor,
-            $provider->code_supplier
-        );
+        return (string) $dompdf->output();
+    }
 
-        return [
-            'filename' => 'Balance_'.$code.'.pdf',
-            'base64' => base64_encode($dompdf->output()),
-        ];
+    /**
+     * @param  array<string, mixed>  $presentado
+     */
+    private function nombreArchivo(array $presentado): string
+    {
+        $cliente = preg_replace('/[^A-Za-z0-9]+/', '_', Str::ascii(trim((string) ($presentado['cliente_nombre'] ?? '')))) ?: 'cliente';
+
+        return 'Resumen_pago_proveedor_' . $cliente . '.pdf';
+    }
+
+    private function fechaEmision(): string
+    {
+        return now()->timezone(PagoProveedorVigenciaService::ZONA)->format('j/n/Y');
+    }
+
+    /**
+     * @param  array<string, mixed>  $presentado
+     */
+    private function exigirPuedeGenerarPdf(array $presentado): void
+    {
+        $faltantes = $presentado['faltantes_pdf'] ?? [];
+        if (is_array($faltantes) && count($faltantes) > 0) {
+            throw new PagoProveedorException(implode(' ', $faltantes));
+        }
+        if (($presentado['estado'] ?? '') === 'pendiente' && !empty($presentado['vencida'])) {
+            throw new PagoProveedorException('La cotización está vencida. Renuévala para descargar el resumen.');
+        }
+        if (empty($presentado['puede_descargar_pdf'])) {
+            throw new PagoProveedorException('Aún no se puede generar el PDF de resumen.');
+        }
     }
 }

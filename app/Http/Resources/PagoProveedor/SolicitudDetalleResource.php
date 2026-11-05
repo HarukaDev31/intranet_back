@@ -66,6 +66,7 @@ class SolicitudDetalleResource extends JsonResource
             'saldo_pendiente' => round($pending, 2),
             'excedente' => round($excess, 2),
             'proveedores' => SolicitudProveedorDetalleResource::collection($solicitud->proveedores)->resolve(),
+            'documentos' => $this->documentos($solicitud),
             'abonos' => AbonoResource::collection($solicitud->abonos)->resolve(),
             'historial' => HistorialResource::collection(
                 PagoProveedorHistorial::query()
@@ -76,5 +77,50 @@ class SolicitudDetalleResource extends JsonResource
                     ->get()
             )->resolve(),
         ];
+    }
+
+    /**
+     * PDF ya emitidos de la solicitud con su paso: el resumen general (que se emite
+     * sobre la cotización) y el balance de cada proveedor. Marca los que se regenerarán
+     * porque el proceso avanzó o retrocedió de etapa.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function documentos(PagoProveedorSolicitud $solicitud): array
+    {
+        $servicio = app(\App\Services\PagoProveedor\PagoProveedorDocumentoService::class);
+        $emitidos = [];
+
+        if ($solicitud->cotizacion !== null) {
+            $resumen = app(\App\Services\PagoProveedor\PagoProveedorPdfService::class)->estadoResumen($solicitud->cotizacion);
+            if ($resumen !== null) {
+                $emitidos[] = ['alcance_id' => 0, 'documento' => 'resumen'] + $resumen;
+            }
+        }
+
+        $pdf = app(\App\Services\PagoProveedor\PagoProveedorPdfService::class);
+
+        foreach ($servicio->estadoDeSolicitud((int) $solicitud->id) as $documento) {
+            $proveedor = $documento['alcance_id'] > 0
+                ? $solicitud->proveedores->firstWhere('id', (int) $documento['alcance_id'])
+                : null;
+            $pasoActual = $proveedor !== null
+                ? $servicio->pasoDeSolicitudProveedor($proveedor)
+                : \App\Services\PagoProveedor\PagoProveedorDocumentoService::pasoDeProveedores($solicitud->proveedores);
+
+            // El balance también se rehace si cambian los montos, no solo la etapa.
+            $vigente = $proveedor !== null ? $pdf->estadoBalance($proveedor) : null;
+            $desactualizado = $vigente !== null
+                ? (bool) $vigente['desactualizado']
+                : ((int) $documento['paso'] !== $pasoActual);
+
+            $emitidos[] = $documento + [
+                'paso_actual' => $pasoActual,
+                'paso_actual_nombre' => \App\Models\PagoProveedor\PagoProveedorDocumento::stepLabel($pasoActual),
+                'desactualizado' => $desactualizado,
+            ];
+        }
+
+        return $emitidos;
     }
 }

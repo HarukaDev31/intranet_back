@@ -84,6 +84,7 @@ class SolicitudProveedorDetalleResource extends JsonResource
             ] : null,
             'motivo_anulacion' => $provider->cancellation_reason,
             'progreso' => $this->progress($provider),
+            'documento_balance' => $this->documentoBalance($provider),
             'puede_registrar_diferencia' => !$cancelled && $collecting && $balance > PagoProveedorSolicitudProveedor::MONEY_EPSILON,
             'codigo_solicitud' => $provider->request_code,
             'puede_editar_etapa1' => (int) $provider->stage === PagoProveedorSolicitudProveedor::STAGE_DATA && !$cancelled,
@@ -152,6 +153,16 @@ class SolicitudProveedorDetalleResource extends JsonResource
         }
 
         return $progress;
+    }
+
+    /**
+     * Estado del balance del proveedor sin generarlo (marca si se regenerará).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function documentoBalance(PagoProveedorSolicitudProveedor $provider): ?array
+    {
+        return app(\App\Services\PagoProveedor\PagoProveedorPdfService::class)->estadoBalance($provider);
     }
 
     public static function stageLabel(int $stage): string

@@ -138,11 +138,23 @@ class CotizacionResource extends JsonResource
                     ->resolve()
             )->values()->all(),
             'resumen' => $calculation,
+            'documento' => $this->includeHistory ? $this->documento($cotizacion) : null,
             'creado_en' => optional($cotizacion->created_at)->toIso8601String(),
             'historial' => $this->includeHistory
                 ? HistorialResource::collection($cotizacion->historial()->limit(30)->get())->resolve()
                 : [],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function documento(PagoProveedorCotizacion $cotizacion): ?array
+    {
+        /** @var \App\Services\PagoProveedor\PagoProveedorPdfService $pdf */
+        $pdf = app(\App\Services\PagoProveedor\PagoProveedorPdfService::class);
+
+        return $pdf->estadoResumen($cotizacion);
     }
 
     private function tarifa(): TarifaPagoProveedor

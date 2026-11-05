@@ -257,6 +257,21 @@ class PagoProveedorSolicitudProveedor extends Model
     /**
      * Uses the eager-loaded datos relation. Callers list with proveedores.datos.
      */
+    public function modalityLabel(): string
+    {
+        $abono = $this->client_payment_mode === PagoProveedorCotizacionProveedor::MODE_SPLIT;
+        $pago = $this->supplier_payment_mode === PagoProveedorCotizacionProveedor::MODE_SPLIT;
+        $reparto = rtrim(rtrim(number_format((float) $this->first_share_percent, 2, '.', ''), '0'), '.')
+            .'%–'.rtrim(rtrim(number_format((float) $this->second_share_percent, 2, '.', ''), '0'), '.').'%';
+
+        return match (true) {
+            $abono && $pago => '2 cuotas '.$reparto.' · cuota '.(int) $this->current_installment.' de 2',
+            $abono => 'Total · 2 abonos '.$reparto,
+            $pago => '2 pagos al proveedor '.$reparto,
+            default => 'Total',
+        };
+    }
+
     public function salesTask(): ?string
     {
         if (in_array($this->status, [self::STATUS_CANCELLED, self::STATUS_COMPLETED], true)) {

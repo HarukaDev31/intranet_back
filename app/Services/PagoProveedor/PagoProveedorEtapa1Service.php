@@ -851,7 +851,7 @@ class PagoProveedorEtapa1Service
                 continue;
             }
             if (!$proveedor->request_code) {
-                $proveedor->request_code = $this->codes->armar($proveedor->currency, $this->siguienteCorrelativo());
+                $proveedor->request_code = $this->codes->armar($proveedor->currency, $this->siguienteCorrelativo(), $solicitud->created_at);
             }
             $proveedor->stage = PagoProveedorSolicitudProveedor::STAGE_VALIDATION;
             $proveedor->save();

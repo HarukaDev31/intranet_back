@@ -237,14 +237,14 @@
         </div>
         <div style="position: relative; background: #f8f8f8; border: 0.3mm solid #e2e2e2; border-radius: 2.5mm; height: 46.7mm;">
             <img src="{{ $linea_tiempo }}" style="position: absolute; left: 0; top: 0; width: 180mm; height: 26mm;" alt="">
-            <div style="position: absolute; left: 9mm; top: 4.6mm; width: 18mm; text-align: center; font-weight: bold; font-size: 6.2pt; color: #ffffff;">ESTÁS AQUÍ</div>
+            <div style="position: absolute; left: {{ 9 + 36 * ($paso ?? 0) }}mm; top: 4.6mm; width: 18mm; text-align: center; font-weight: bold; font-size: 6.2pt; color: #ffffff;">ESTÁS AQUÍ</div>
             <table style="position: absolute; left: 0; top: 24.6mm; width: 180mm; table-layout: fixed;">
                 <tr>
-                    @foreach($pasos as $indice => $paso)
+                    @foreach($pasos as $indice => $pasoActual)
                         <td style="width: 36mm; padding: 0 2mm; text-align: center;">
-                            <div style="font-weight: bold; font-size: 6.8pt; color: {{ $indice === 0 ? '#f2662b' : '#737373' }}; margin-bottom: 1.2mm;">{{ $paso['etiqueta'] }}</div>
-                            <div style="height: 7.6mm; font-weight: bold; font-size: 8.4pt; color: #2b2b2b; line-height: 3.6mm;">{{ $paso['titulo'] }}</div>
-                            <div style="font-size: 7.6pt; color: #737373; line-height: 3.1mm;">{{ $paso['descripcion'] }}</div>
+                            <div style="font-weight: bold; font-size: 6.8pt; color: {{ $pasoActual['color_etiqueta'] }}; margin-bottom: 1.2mm;">{{ $pasoActual['etiqueta'] }}</div>
+                            <div style="height: 7.6mm; font-weight: bold; font-size: 8.4pt; color: {{ $pasoActual['color_titulo'] }}; line-height: 3.6mm;">{{ $pasoActual['titulo'] }}</div>
+                            <div style="font-size: 7.6pt; color: {{ $pasoActual['color_nota'] }}; line-height: 3.1mm;">{{ $pasoActual['descripcion'] }}</div>
                         </td>
                     @endforeach
                 </tr>

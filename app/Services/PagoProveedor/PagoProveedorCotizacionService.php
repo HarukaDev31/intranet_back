@@ -6,6 +6,7 @@ use App\Exceptions\PagoProveedorException;
 use App\Models\PagoProveedor\PagoProveedorCotizacion;
 use App\Models\PagoProveedor\PagoProveedorSolicitud;
 use App\Models\PagoProveedor\PagoProveedorCotizacionProveedor;
+use App\Models\PagoProveedor\PagoProveedorDocumento;
 use App\Models\PagoProveedor\PagoProveedorHistorial;
 use App\Models\PagoProveedor\PagoProveedorMensaje;
 use App\Traits\UsesObjectStorage;
@@ -270,6 +271,10 @@ class PagoProveedorCotizacionService
                 ->where('entity_id', $cotizacion->id)
                 ->delete();
             PagoProveedorMensaje::query()->where('quote_id', $cotizacion->id)->delete();
+            PagoProveedorDocumento::query()
+                ->where('entity_type', PagoProveedorDocumento::ENTITY_QUOTE)
+                ->where('entity_id', $cotizacion->id)
+                ->delete();
             $code = (string) $cotizacion->consolidated_quote_code;
             $cotizacion->delete();
             $this->lookup->forget($code);

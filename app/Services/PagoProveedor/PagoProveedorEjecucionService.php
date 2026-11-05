@@ -262,7 +262,7 @@ class PagoProveedorEjecucionService
             ->orderByDesc('id')
             ->get()
             ->filter(function (PagoProveedorSolicitudProveedor $provider) use ($filters, $search) {
-                if (!$this->bankReady($provider) || $this->alreadyExecuted($provider)) {
+                if ($this->alreadyExecuted($provider)) {
                     return false;
                 }
 

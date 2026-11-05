@@ -14,7 +14,7 @@ class PagoProveedorCodigoSolicitud
     {
         $fecha = ($fecha ?: Carbon::now(PagoProveedorVigenciaService::ZONA))->timezone(PagoProveedorVigenciaService::ZONA);
         $prefijo = strtoupper($moneda) === 'RMB' ? 'CN' : 'PE';
-        $meses = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+        $meses = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
 
         return $prefijo
             . str_pad((string) $correlativo, 2, '0', STR_PAD_LEFT)

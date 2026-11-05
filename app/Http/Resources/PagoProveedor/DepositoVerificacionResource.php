@@ -23,7 +23,8 @@ class DepositoVerificacionResource extends JsonResource
         $deposit = $this->resource;
         $solicitud = $deposit->solicitud;
         $movedOn = app(PagoProveedorVerificacionService::class)->providerMovedOn($deposit);
-        $hours = max(1, (int) app(PagoProveedorConfiguracionService::class)->value(PagoProveedorSolicitudProveedor::SETTING_VERIFY_HOURS, 2));
+        $configuration = app(PagoProveedorConfiguracionService::class);
+        $hours = max(1, (int) $configuration->value(PagoProveedorSolicitudProveedor::SETTING_VERIFY_HOURS, 2));
         $deadline = $deposit->created_at?->copy()->addHours($hours);
         $remaining = $deadline ? (int) now()->diffInMinutes($deadline, false) : 0;
         $open = in_array($deposit->status, [PagoProveedorAbono::STATUS_IN_VALIDATION, PagoProveedorAbono::STATUS_OBSERVED], true);
@@ -44,8 +45,7 @@ class DepositoVerificacionResource extends JsonResource
         }
 
         $deposit->loadMissing('exchangeProvider');
-        $providers = $deposit->aplicaciones->map(function ($application) use ($solicitud) {
-            $provider = $solicitud?->proveedores?->firstWhere('id', $application->request_provider_id);
+        $providers = $deposit->aplicaciones->map(function ($application) use ($solicitud) {            $provider = $solicitud?->proveedores?->firstWhere('id', $application->request_provider_id);
 
             return [
                 'id' => $application->request_provider_id,
@@ -94,6 +94,30 @@ class DepositoVerificacionResource extends JsonResource
                     : null),
             'deadline_overdue' => $observedOverdue
                 || ($deposit->status === PagoProveedorAbono::STATUS_IN_VALIDATION && $remaining < 0),
+            // Plazo real calculado en el backend (no lo calcula el frontend).
+            'sla' => [
+                'registered_at' => optional($deposit->created_at)->toIso8601String(),
+                'deadline_at' => optional($deadline)->toIso8601String(),
+                'server_now' => now()->toIso8601String(),
+                'hours' => $hours,
+                'remaining_minutes' => $deposit->status === PagoProveedorAbono::STATUS_IN_VALIDATION ? $remaining : null,
+                'overdue' => $deposit->status === PagoProveedorAbono::STATUS_IN_VALIDATION && $remaining < 0,
+                'text' => $deposit->status === PagoProveedorAbono::STATUS_OBSERVED
+                    ? $observeDeadlineText
+                    : ($deposit->status === PagoProveedorAbono::STATUS_IN_VALIDATION
+                        ? ($remaining >= 0 ? 'quedan '.$this->duration($remaining) : 'vencido hace '.$this->duration(abs($remaining)))
+                        : null),
+            ],
+            // Comparación de importes (tolerancia y clasificación vienen de la configuración de Administración).
+            'comparison' => [
+                'recorded_amount' => (float) ($deposit->recorded_amount ?? $deposit->amount),
+                'bank_amount' => $deposit->bank_amount !== null ? (float) $deposit->bank_amount : null,
+                'difference' => $deposit->bank_amount !== null
+                    ? round((float) $deposit->bank_amount - (float) ($deposit->recorded_amount ?? $deposit->amount), 2)
+                    : null,
+                'tolerance' => (float) $configuration->value(PagoProveedorSolicitudProveedor::SETTING_TOLERANCE, 1),
+                'exception_limit' => (float) $configuration->value(PagoProveedorSolicitudProveedor::SETTING_EXCEPTION_LIMIT, 2),
+            ],
             'observation_reason' => $deposit->observation_reason,
             'observation_detail' => $deposit->observation_detail,
             'observe_until' => optional($deposit->observe_until)->toIso8601String(),

@@ -30,6 +30,10 @@ class ReembolsoResource extends JsonResource
             'client_name' => $refund->solicitud?->client_name,
             'consolidation' => $refund->solicitud?->consolidation,
             'supplier_code' => $refund->proveedor?->code_supplier,
+            'supplier_name' => $refund->proveedor?->supplier_name,
+            'product' => $refund->proveedor?->product,
+            'request_code' => $refund->proveedor?->request_code,
+            'currency' => $refund->proveedor?->currency,
             'origin' => $refund->origin,
             'origin_label' => match ($refund->origin) {
                 PagoProveedorReembolso::ORIGIN_EXCHANGE => 'Diferencia de cambio',

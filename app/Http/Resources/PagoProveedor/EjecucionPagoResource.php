@@ -48,8 +48,14 @@ class EjecucionPagoResource extends JsonResource
             'supplier_code' => $provider->code_supplier,
             'product' => $provider->product,
             'request_code' => $provider->request_code,
+            'modality_label' => $provider->modalityLabel(),
+            'proforma_name' => $provider->proforma_name,
+            'proforma_url' => $provider->proforma_path ? $this->cdnStorageUrl($provider->proforma_path) : null,
             'currency' => $provider->currency,
             'payment_type' => $provider->payment_type,
+            'payment_type_label' => $provider->payment_type === PagoProveedorCotizacionProveedor::PAYMENT_CARD
+                ? 'USD / Tarjeta'
+                : 'USD / T-T',
             'installment_label' => $provider->client_payment_mode === PagoProveedorCotizacionProveedor::MODE_SPLIT
                 ? 'Cuota '.(($execution instanceof PagoProveedorEjecucion ? $execution->installment : null) ?? $provider->current_installment).' de 2'
                 : null,
@@ -58,7 +64,11 @@ class EjecucionPagoResource extends JsonResource
                 : null,
             'status' => $execution ? PagoProveedorEjecucion::STATUS_PAID : PagoProveedorEjecucion::STATUS_PENDING,
             'status_label' => $execution ? 'Pagado' : 'Pendiente',
-            'observation' => $execution ? 'Constancia registrada' : 'Listo para transferir',
+            'observation' => $execution
+                ? 'Constancia registrada'
+                : (app(PagoProveedorEjecucionService::class)->bankReady($provider)
+                    ? 'Listo para transferir'
+                    : 'Faltan los datos bancarios del proveedor (T-T)'),
             'cargo_amount' => $amounts['cargo'],
             'charged_bank_fee' => $amounts['charged_bank_fee'],
             'real_bank_fee' => $real,
