@@ -153,7 +153,7 @@ class PagoProveedorComisionTest extends TestCase
         ]);
 
         $this->assertStringContainsString('Hola, María', $texto);
-        $this->assertStringContainsString('💰 Total a pagar:', $texto);
+        $this->assertStringContainsString('💰 *Total a pagar:', $texto);
         $this->assertStringContainsString('PDF', $texto);
         $this->assertStringNotContainsString('T.C', $texto);
         $this->assertStringNotContainsString('CN', $texto);
@@ -171,8 +171,8 @@ class PagoProveedorComisionTest extends TestCase
         ]);
 
         $this->assertStringContainsString('Total a pagar ahora', $texto);
-        $this->assertStringContainsString('➡ Comisión bancaria:', $texto);
-        $this->assertStringContainsString('Proveedor 1: MATO19-1', $texto);
+        $this->assertStringContainsString('➡️ Comisión bancaria / plataforma:', $texto);
+        $this->assertStringContainsString('➡️ MATO19-1 | Zapatillas', $texto);
     }
 
     private function bancariaDe(string $moneda, float $valor): float

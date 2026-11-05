@@ -38,6 +38,24 @@ class PagoProveedorVigenciaService
         return $cursor;
     }
 
+    public function sumarHorasCorridas(DateTimeInterface $inicio, int $horas): Carbon
+    {
+        return Carbon::parse($inicio)->timezone(self::ZONA)->addHours(max(0, $horas));
+    }
+
+    /**
+     * @param  string  $tipo  habiles|calendario
+     */
+    public function sumarHoras(DateTimeInterface $inicio, int $horas, string $tipo = 'habiles'): Carbon
+    {
+        $end = $tipo === 'calendario'
+            ? $this->sumarHorasCorridas($inicio, $horas)
+            : $this->sumarHorasHabiles($inicio, $horas);
+
+        // Eloquent stores the wall clock as is, so the value must leave Lima before it is saved.
+        return $end->timezone((string) config('app.timezone'));
+    }
+
     public function texto(DateTimeInterface $fin, ?DateTimeInterface $ahora = null): string
     {
         $limite = Carbon::parse($fin)->timezone(self::ZONA);

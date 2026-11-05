@@ -18,6 +18,8 @@ class TarifaPagoProveedor
         public float $bancariaRmbMedia = 90,
         public float $bancariaRmbAlta = 120,
         public float $administrativa = 30,
+        public float $administrativaUsd = 30,
+        public float $administrativaRmb = 30,
     ) {
     }
 
@@ -38,5 +40,10 @@ class TarifaPagoProveedor
         }
 
         return $esUsd ? $this->bancariaUsdBaja : $this->bancariaRmbBaja;
+    }
+
+    public function administrativaPara(string $moneda): float
+    {
+        return strtoupper($moneda) === 'USD' ? $this->administrativaUsd : $this->administrativaRmb;
     }
 }

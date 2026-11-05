@@ -40,11 +40,15 @@ class PagoProveedorAprobacionService
 
         $status = (string) ($filters['status'] ?? PagoProveedorSolicitudProveedor::FILTER_ALL);
         $search = mb_strtolower(trim((string) ($filters['search'] ?? '')));
-        $visible = $providers->filter(function (PagoProveedorSolicitudProveedor $provider) use ($bucket, $status, $search) {
+        $consolidation = trim((string) ($filters['consolidado'] ?? ''));
+        $bank = mb_strtolower(trim((string) ($filters['banco'] ?? '')));
+        $visible = $providers->filter(function (PagoProveedorSolicitudProveedor $provider) use ($bucket, $status, $search, $consolidation, $bank) {
             if ($bucket === PagoProveedorSolicitudProveedor::APPROVAL_BUCKET_APPROVED) {
                 return $provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_APPROVED
                     && $this->matchesStatus($provider, $status)
-                    && $this->matchesSearch($provider, $search);
+                    && $this->matchesSearch($provider, $search)
+                    && $this->matchesConsolidation($provider, $consolidation)
+                    && $this->matchesBank($provider, $bank);
             }
 
             if ((int) $provider->stage !== PagoProveedorSolicitudProveedor::STAGE_VALIDATION) {
@@ -66,7 +70,10 @@ class PagoProveedorAprobacionService
                 return false;
             }
 
-            return $this->matchesStatus($provider, $status) && $this->matchesSearch($provider, $search);
+            return $this->matchesStatus($provider, $status)
+                && $this->matchesSearch($provider, $search)
+                && $this->matchesConsolidation($provider, $consolidation)
+                && $this->matchesBank($provider, $bank);
         })->values();
 
         $page = max(1, (int) ($filters['page'] ?? 1));
@@ -97,6 +104,7 @@ class PagoProveedorAprobacionService
     public function show(int $id): PagoProveedorSolicitudProveedor
     {
         $provider = $this->find($id);
+        $this->expireCollect($provider);
         $this->escalateRegistrationError($provider);
 
         return $provider->fresh($this->relations()) ?: $provider;
@@ -548,7 +556,7 @@ class PagoProveedorAprobacionService
         }
     }
 
-    private function expireCollect(PagoProveedorSolicitudProveedor $provider): void
+    public function expireCollect(PagoProveedorSolicitudProveedor $provider): void
     {
         // Solo «Por cobrar» vuelve a Pendiente sin escalar (RN-72). «Error de registro» espera a Administración.
         if ($provider->approval_status !== PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT || !$provider->collect_until) {
@@ -682,6 +690,12 @@ class PagoProveedorAprobacionService
      */
     private function candidates(string $bucket): Collection
     {
+        PagoProveedorSolicitudProveedor::query()
+            ->where('approval_status', PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT)
+            ->where('collect_until', '<=', now())
+            ->get()
+            ->each(fn (PagoProveedorSolicitudProveedor $provider) => $this->expireCollect($provider));
+
         $query = PagoProveedorSolicitudProveedor::query()
             ->with($this->relations())
             ->where('status', '!=', PagoProveedorSolicitudProveedor::STATUS_CANCELLED);
@@ -729,6 +743,32 @@ class PagoProveedorAprobacionService
         ])));
 
         return str_contains($haystack, $search);
+    }
+
+    private function matchesConsolidation(PagoProveedorSolicitudProveedor $provider, string $consolidation): bool
+    {
+        if ($consolidation === '' || strtolower($consolidation) === 'todos') {
+            return true;
+        }
+
+        return (string) ($provider->solicitud->consolidation ?? '') === $consolidation;
+    }
+
+    private function matchesBank(PagoProveedorSolicitudProveedor $provider, string $bank): bool
+    {
+        if ($bank === '' || $bank === 'todos') {
+            return true;
+        }
+
+        $provider->loadMissing(['aplicaciones.abono']);
+        foreach ($provider->aplicaciones as $application) {
+            $abono = $application->abono;
+            if ($abono && mb_strtolower((string) $abono->bank) === $bank) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function refreshed(PagoProveedorSolicitudProveedor $provider): PagoProveedorSolicitudProveedor

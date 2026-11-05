@@ -7,76 +7,124 @@ use App\Models\PagoProveedor\PagoProveedorMensaje;
 use App\Models\PagoProveedor\PagoProveedorSolicitudProveedor;
 
 /**
- * Texto de vista previa de WhatsApp (RN-131, RN-133, RN-134, RN-135, RN-93).
- * No incluye tipo de cambio ni código de solicitud. El envío real espera la plantilla de Meta.
+ * Texto de WhatsApp (RN-131, RN-133, RN-134, RN-135, RN-93).
+ * No incluye tipo de cambio ni código de solicitud. El resumen de cotización se envía desde el número de ventas.
  */
 class PagoProveedorMensajeService
 {
     /**
+     * Same structure as the functional mock: suppliers, payment mode, summary and "Confirmo".
+     *
      * @param  array{proveedores: array<int, array<string, mixed>>, total: float, total_ahora: float}  $calculo
      * @param  array<int, array<string, mixed>>  $detalleProveedores  código, nombre, producto, alineados por orden
      */
-    public function resumen(string $nombreCliente, array $calculo, array $detalleProveedores): string
+    public function resumen(string $nombreCliente, array $calculo, array $detalleProveedores, ?string $validUntil = null, bool $forRequest = false): string
     {
-        $nombre = trim($nombreCliente) !== '' ? trim($nombreCliente) : 'cliente';
-        $lineasCalculo = $calculo['proveedores'];
-        $hayCuotas = $this->hayCuotas($lineasCalculo);
-        $rotuloTotal = $hayCuotas ? 'Total a pagar ahora' : 'Total a pagar';
-        $monto = $hayCuotas ? $calculo['total_ahora'] : $calculo['total'];
+        $lines = $calculo['proveedores'];
+        $hasInstallments = $this->hayCuotas($lines);
+        $labels = array_map(fn (array $detail) => $this->supplierLabel($detail), $detalleProveedores);
+        $modes = array_map(fn (array $line) => ($line['modalidad_abono'] ?? 'total') === 'fraccionado' ? 'Fraccionado' : 'Total', $lines);
+        $sameMode = count(array_unique($modes)) <= 1;
 
-        $encabezado = 'Hola, ' . $nombre . " 🙋🏻‍♀️\n|";
-
-        if (count($lineasCalculo) >= 2) {
-            return $encabezado . "\n"
-                . 'Tu pago a proveedor incluye ' . count($lineasCalculo) . " proveedores.\n"
-                . "El detalle está en el PDF de resumen.\n"
-                . '💰 ' . $rotuloTotal . ': $' . $this->amount($monto);
+        $cargo = 0.0;
+        $bankFee = 0.0;
+        $adminFee = 0.0;
+        foreach ($lines as $line) {
+            $first = $line['cuotas'][0] ?? [];
+            $cargo += (float) ($first['carga'] ?? $line['valor_carga_usd'] ?? 0);
+            $bankFee += (float) ($first['bancaria'] ?? $line['bancaria'] ?? 0);
+            $adminFee += (float) ($first['administrativa'] ?? $line['administrativa'] ?? 0);
         }
 
-        $linea = $lineasCalculo[0] ?? null;
-        $detalle = $detalleProveedores[0] ?? [];
-        $codigo = trim((string) ($detalle['code_supplier'] ?? ''));
-        $nombreProveedor = trim((string) ($detalle['nombre_proveedor'] ?? ''));
-        $producto = trim((string) ($detalle['producto'] ?? ''));
-        $segunda = $nombreProveedor !== '' ? $nombreProveedor . ' · ' . $producto : $producto;
-
-        $texto = $encabezado . "\n";
-        if ($codigo !== '') {
-            $texto .= 'Proveedor 1: ' . $codigo . "\n";
+        $text = [
+            'Hola, '.$this->firstName($nombreCliente).' 🙋🏻‍♀️',
+            $forRequest ? 'Te compartimos el resumen actualizado de tu pago a proveedor 👇' : 'Te compartimos tu cotización de pago a proveedor 👇',
+            '',
+            count($lines) > 1 ? '*Proveedores:*' : '*Proveedor:*',
+        ];
+        foreach ($labels as $label) {
+            $text[] = '➡️ '.$label;
         }
-        if ($segunda !== '') {
-            $texto .= $segunda . "\n";
+        $text[] = '';
+        $text[] = '*Modalidad de abono (Probusiness):* '.($sameMode ? ($modes[0] ?? 'Total') : implode(' | ', $modes));
+        $text[] = '';
+        $text[] = '*Resumen:*';
+        $text[] = '📦 Valor de carga: $'.$this->amount($cargo);
+        if ($bankFee > 0) {
+            $text[] = '➡️ Comisión bancaria / plataforma: $'.$this->amount($bankFee);
         }
-
-        if ($linea) {
-            if (($linea['etiqueta_bancaria'] ?? null) !== null) {
-                $texto .= '➡ Comisión bancaria: ' . $linea['etiqueta_bancaria'] . "\n";
-            } elseif ((float) $linea['bancaria'] > 0) {
-                $texto .= '➡ Comisión bancaria: $' . $this->amount((float) $linea['bancaria']) . "\n";
-            }
-            if ((float) $linea['administrativa'] > 0) {
-                $texto .= '➡ Comisión administrativa: $' . $this->amount((float) $linea['administrativa']) . "\n";
-            }
+        if ($adminFee > 0) {
+            $text[] = '➡️ Comisión administrativa: $'.$this->amount($adminFee);
         }
+        $text[] = '💰 *'.($hasInstallments ? 'Total a pagar ahora' : 'Total a pagar').': $'.$this->amount($hasInstallments ? $calculo['total_ahora'] : $calculo['total']).'*';
+        if ($hasInstallments) {
+            $text[] = '';
+            $text[] = $sameMode ? '💳 Pagas en 2 cuotas: este total es la cuota 1.' : '💳 Incluye la cuota 1 de los proveedores en cuotas.';
+        }
+        $text[] = '';
+        if ($validUntil !== null && $validUntil !== '') {
+            $text[] = '⏳ *Vigencia:* hasta el '.$validUntil;
+            $text[] = '';
+        }
+        $text[] = '📎 En el PDF adjunto verás el detalle por proveedor.';
+        $text[] = '';
+        $text[] = '✅ Si estás de acuerdo, respóndenos *"Confirmo"* y '.($forRequest ? 'continuamos con tu pago.' : 'registramos tu solicitud.');
 
-        $texto .= '💰 ' . $rotuloTotal . ': $' . $this->amount($monto);
+        return implode("\n", $text);
+    }
 
-        return $texto;
+    public function firstName(?string $client): string
+    {
+        $parts = preg_split('/\s+/', trim((string) $client)) ?: [];
+
+        return ($parts[0] ?? '') !== '' ? $parts[0] : 'cliente';
+    }
+
+    /**
+     * @param  array<string, mixed>  $detail
+     */
+    private function supplierLabel(array $detail): string
+    {
+        $reference = trim((string) ($detail['code_supplier'] ?? '')) ?: trim((string) ($detail['nombre_proveedor'] ?? '')) ?: 'Proveedor';
+        $product = trim((string) ($detail['producto'] ?? ''));
+
+        return $product !== '' ? $reference.' | '.$product : $reference;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function supplierBullets(PagoProveedorSolicitudProveedor $provider): array
+    {
+        $name = trim((string) ($provider->supplier_name ?? ''));
+        $code = trim((string) $provider->code_supplier) ?: ($name !== '' ? $name : 'Sin código');
+        $bullets = ['• *Código de proveedor:* '.$code];
+        if ($name !== '') {
+            $bullets[] = '• *Proveedor:* '.$name;
+        }
+        $bullets[] = '• *Producto:* '.$provider->product;
+
+        return $bullets;
     }
 
     public function usdNoticeText(PagoProveedorSolicitudProveedor $provider, float $amount): string
     {
         $provider->loadMissing('solicitud');
         $request = $provider->solicitud;
-        $name = trim((string) ($provider->supplier_name ?? ''));
-        $who = $name !== '' ? $provider->code_supplier.' · '.$name : (string) $provider->code_supplier;
 
-        return "Hola, ".($request?->client_name ?: 'cliente')." 🙋🏻‍♀️\n|\n"
-            ."¡Te confirmamos que el pago a tu proveedor se realizó exitosamente! ✅\n"
-            .$who."\n".$provider->product."\n"
-            .'Consolidado: '.($request?->consolidation ?: '—')."\n"
-            .'Monto pagado: $'.$this->amount($amount)."\n"
-            .'La constancia quedó registrada en el sistema.';
+        return implode("\n", [
+            'Hola, '.($request?->client_name ?: 'cliente').' 👋',
+            '',
+            '¡Te confirmamos que el pago a tu proveedor se realizó exitosamente! ✅',
+            '',
+            ...$this->supplierBullets($provider),
+            '• *N.° de consolidado:* '.($request?->consolidation ?: '—'),
+            '• *Monto pagado:* $'.$this->amount($amount),
+            '',
+            '📎 Te compartimos la constancia de pago. Por favor, confirma la recepción con tu proveedor.',
+            '',
+            '¡Gracias por confiar en Pro Business! 🤝',
+        ]);
     }
 
     /**
@@ -94,16 +142,19 @@ class PagoProveedorMensajeService
     {
         $provider->loadMissing('solicitud');
         $request = $provider->solicitud;
-        $name = trim((string) ($provider->supplier_name ?? ''));
-        $providerLine = $name !== '' ? "• Proveedor: ".$name."\n" : '';
 
-        return "Hola, ".($request?->client_name ?: 'cliente')." 🙋🏻‍♀️\n|\n"
-            ."¡Te confirmamos que el pago a tu proveedor se realizó exitosamente! ✅\n"
-            ."• Código de proveedor: ".$provider->code_supplier."\n"
-            .$providerLine
-            ."• Producto: ".$provider->product."\n"
-            .'• N.° de consolidado: '.($request?->consolidation ?: '—')."\n\n"
-            .'Por favor, confirma la recepción con tu proveedor.';
+        return implode("\n", [
+            'Hola, '.($request?->client_name ?: 'cliente').' 👋',
+            '',
+            '¡Te confirmamos que el pago a tu proveedor se realizó exitosamente! ✅',
+            '',
+            ...$this->supplierBullets($provider),
+            '• *N.° de consolidado:* '.($request?->consolidation ?: '—'),
+            '',
+            'Por favor, confirma la recepción con tu proveedor.',
+            '',
+            '¡Gracias por confiar en Pro Business! 🤝',
+        ]);
     }
 
     /**
@@ -149,23 +200,49 @@ class PagoProveedorMensajeService
         if ($this->alreadyStored($provider, 'balance')) {
             return;
         }
+        $text = $this->balanceText($provider);
+        if ($text === null) {
+            return;
+        }
+        $this->store($provider, 'balance', $text, $actor);
+    }
+
+    public function balanceText(PagoProveedorSolicitudProveedor $provider): ?string
+    {
         $provider->loadMissing(['solicitud', 'ejecuciones']);
-        $request = $provider->solicitud;
-        $name = trim((string) ($provider->supplier_name ?? ''));
-        $who = $name !== '' ? $provider->code_supplier.' · '.$name : (string) $provider->code_supplier;
-        $lines = [$who, (string) $provider->product];
+        $collect = 0.0;
+        $refund = 0.0;
+        $perPayment = [];
         foreach ($provider->ejecuciones as $execution) {
             if (!in_array($execution->exchange_result, [PagoProveedorEjecucion::RESULT_COLLECT, PagoProveedorEjecucion::RESULT_REFUND], true)) {
                 continue;
             }
-            $label = $execution->exchange_result === PagoProveedorEjecucion::RESULT_COLLECT ? 'Diferencia a pagar' : 'Diferencia a devolver';
-            $lines[] = 'Pago '.$execution->supplier_payment.': '.$label.' $'.$this->amount(abs((float) $execution->exchange_difference_usd));
+            $difference = abs((float) $execution->exchange_difference_usd);
+            if ($execution->exchange_result === PagoProveedorEjecucion::RESULT_COLLECT) {
+                $collect += $difference;
+            } else {
+                $refund += $difference;
+            }
+            $perPayment[] = '• *Pago '.$execution->supplier_payment.':* $'.$this->amount($difference);
         }
-        if (count($lines) < 3) {
-            return;
+        if ($perPayment === []) {
+            return null;
         }
-        $text = "Hola, ".($request?->client_name ?: 'cliente')." 🙋🏻‍♀️\n|\n".implode("\n", $lines);
-        $this->store($provider, 'balance', $text, $actor);
+        $label = $refund > $collect ? 'Diferencia a devolver' : 'Diferencia a pagar';
+
+        return implode("\n", [
+            'Hola, '.($provider->solicitud?->client_name ?: 'cliente').' 👋',
+            '',
+            'Te compartimos el balance correspondiente al pago de tu proveedor:',
+            '',
+            ...$this->supplierBullets($provider),
+            ...(count($perPayment) > 1 ? $perPayment : []),
+            '• *'.$label.':* $'.$this->amount(abs($collect - $refund)),
+            '',
+            'Adjuntamos el balance en PDF con el detalle para tu revisión.',
+            '',
+            '✅ Por favor, confírmanos tu conformidad para continuar con el proceso.',
+        ]);
     }
 
     public function noticeStored(PagoProveedorSolicitudProveedor $provider): bool

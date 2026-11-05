@@ -70,6 +70,7 @@ class EjecucionPagoResource extends JsonResource
             'receipt_url' => $execution?->receipt_path ? $this->cdnStorageUrl($execution->receipt_path) : null,
             'bank_ready' => app(PagoProveedorEjecucionService::class)->bankReady($provider),
             'can_register' => $execution === null,
+            'deposit_bank' => app(PagoProveedorEjecucionService::class)->clientBank($provider),
             'bank' => $this->bank($data),
             'bank_copy_text' => $this->copyText($data),
         ];

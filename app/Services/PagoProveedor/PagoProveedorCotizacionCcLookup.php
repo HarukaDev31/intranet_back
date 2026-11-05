@@ -195,10 +195,24 @@ class PagoProveedorCotizacionCcLookup
      */
     private function providerRow(CotizacionProveedor $provider): array
     {
+        $product = trim((string) $provider->products);
+        if ($product === '') {
+            $provider->loadMissing('items');
+            $product = $provider->items
+                ->map(function ($item) {
+                    $name = trim((string) ($item->final_name ?: $item->initial_name ?: $item->tipo_producto));
+
+                    return $name;
+                })
+                ->filter()
+                ->unique()
+                ->implode(', ');
+        }
+
         return [
             'id_proveedor_cc' => $provider->id,
             'code_supplier' => $provider->code_supplier,
-            'producto' => $provider->products,
+            'producto' => $product !== '' ? $product : null,
             'nombre' => $provider->supplier,
         ];
     }

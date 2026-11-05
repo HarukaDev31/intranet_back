@@ -4,6 +4,7 @@ namespace App\Services\PagoProveedor;
 
 use App\Exceptions\PagoProveedorException;
 use App\Models\PagoProveedor\PagoProveedorCotizacion;
+use App\Models\PagoProveedor\PagoProveedorSolicitud;
 use App\Models\PagoProveedor\PagoProveedorCotizacionProveedor;
 use App\Models\PagoProveedor\PagoProveedorHistorial;
 use App\Models\PagoProveedor\PagoProveedorMensaje;
@@ -21,14 +22,15 @@ class PagoProveedorCotizacionService
         private readonly PagoProveedorVigenciaService $vigencia,
         private readonly PagoProveedorHistorialService $historial,
         private readonly PagoProveedorCotizacionCcLookup $lookup,
-        private readonly PagoProveedorCotizacionPresenter $presenter,
-        private readonly PagoProveedorMensajeService $mensajes,
     ) {
     }
 
     public function listar(array $filtros): LengthAwarePaginator
     {
         $query = PagoProveedorCotizacion::query()->with(['proveedores.consolidatedProvider', 'solicitud'])->orderByDesc('id');
+
+        // A manual China request keeps an internal quote that Sales never works with (RN-97).
+        $query->whereDoesntHave('solicitud', fn ($request) => $request->where('origin', PagoProveedorSolicitud::ORIGIN_MANUAL));
 
         if (!empty($filtros['search'])) {
             $texto = '%' . trim((string) $filtros['search']) . '%';
@@ -38,6 +40,11 @@ class PagoProveedorCotizacionService
                     ->orWhere('client_name', 'like', $texto)
                     ->orWhere('consolidation', 'like', $texto);
             });
+        }
+
+        $consolidado = trim((string) ($filtros['consolidado'] ?? ''));
+        if ($consolidado !== '' && $consolidado !== 'todos') {
+            $query->where('consolidation', $consolidado);
         }
 
         if (!empty($filtros['estado']) && $filtros['estado'] !== 'todos') {
@@ -50,7 +57,31 @@ class PagoProveedorCotizacionService
             }
         }
 
+        $resaltarDesde = max(0, (int) ($filtros['resaltar_desde'] ?? 0));
+        if ($resaltarDesde > 0 && !empty($filtros['solo_resaltadas'])) {
+            $limite = now()->subDays($resaltarDesde)->startOfDay();
+            $query->where('status', PagoProveedorCotizacion::STATUS_PENDING)
+                ->whereDate('created_at', '<=', $limite);
+        }
+
         return $query->paginate((int) ($filtros['per_page'] ?? 15));
+    }
+
+    /**
+     * Consolidados distintos para el filtro del listado.
+     *
+     * @return array<int, string>
+     */
+    public function consolidadosDisponibles(): array
+    {
+        return PagoProveedorCotizacion::query()
+            ->whereNotNull('consolidation')
+            ->where('consolidation', '!=', '')
+            ->distinct()
+            ->orderBy('consolidation')
+            ->pluck('consolidation')
+            ->values()
+            ->all();
     }
 
     /**
@@ -67,7 +98,11 @@ class PagoProveedorCotizacionService
                 'consolidated_quote_id' => $origen['id_cotizacion_cc'],
                 'consolidated_quote_code' => $origen['cod_cotizacion_cc'],
                 'status' => PagoProveedorCotizacion::STATUS_PENDING,
-                'valid_until' => $this->vigencia->sumarHorasHabiles(now(), $this->configuracion->validityHours()),
+                'valid_until' => $this->vigencia->sumarHoras(
+                    now(),
+                    $this->configuracion->validityHours(),
+                    $this->configuracion->validityType()
+                ),
                 'client_name' => $origen['cliente']['nombre'],
                 'client_document' => $origen['cliente']['documento'],
                 'client_whatsapp' => $origen['cliente']['whatsapp'],
@@ -142,6 +177,9 @@ class PagoProveedorCotizacionService
         DB::transaction(function () use ($id) {
             $cotizacion = $this->encontrar($id, true);
             $this->exigirPendiente($cotizacion);
+            if ($cotizacion->solicitud) {
+                throw new PagoProveedorException('No se puede eliminar: ya tiene una solicitud asociada.');
+            }
             PagoProveedorHistorial::query()
                 ->where('entity_type', PagoProveedorHistorial::ENTITY_QUOTE)
                 ->where('entity_id', $cotizacion->id)
@@ -170,7 +208,11 @@ class PagoProveedorCotizacionService
                 $cotizacion->exchange_rate = $tipoCambio;
             }
             $cotizacion->exchange_rate_confirmed = false;
-            $cotizacion->valid_until = $this->vigencia->sumarHorasHabiles(now(), $this->configuracion->validityHours());
+            $cotizacion->valid_until = $this->vigencia->sumarHoras(
+                now(),
+                $this->configuracion->validityHours(),
+                $this->configuracion->validityType()
+            );
             $cotizacion->save();
             $this->historial->registrar(PagoProveedorHistorial::ENTITY_QUOTE, $cotizacion->id, 'Renovada', $actor, 'Se reinició la vigencia. Hay que reenviar el resumen.');
 
@@ -211,44 +253,16 @@ class PagoProveedorCotizacionService
      */
     public function vistaPreviaWhatsapp(int $id, array $actor): array
     {
-        $cotizacion = $this->encontrar($id);
-        $presentado = $this->presenter->cotizacion($cotizacion, $this->configuracion->tariff());
-        if (!$presentado['puede_enviar']) {
-            throw new PagoProveedorException(
-                $presentado['vencida']
-                    ? 'La cotización está vencida. Renuévala para enviar el resumen.'
-                    : implode(' ', $presentado['faltantes_pdf'])
-            );
-        }
+        return app(PagoProveedorCotizacionWhatsappService::class)->vistaPrevia($id, $actor);
+    }
 
-        $detalle = $cotizacion->proveedores->map(fn ($proveedor) => [
-            'code_supplier' => $proveedor->code_supplier,
-            'nombre_proveedor' => $proveedor->supplier_name,
-            'producto' => $proveedor->product,
-        ])->all();
-
-        $texto = $this->mensajes->resumen(
-            (string) $cotizacion->client_name,
-            $presentado['resumen'],
-            $detalle
-        );
-
-        PagoProveedorMensaje::query()->create([
-            'quote_id' => $cotizacion->id,
-            'message_type' => 'resumen',
-            'recipient' => $cotizacion->client_whatsapp,
-            'body' => $texto,
-            'user_id' => $actor['id'],
-            'created_at' => now(),
-        ]);
-        $this->historial->registrar(PagoProveedorHistorial::ENTITY_QUOTE, $cotizacion->id, 'Resumen preparado', $actor, 'Vista previa de WhatsApp. El envío real queda pendiente de plantilla Meta.');
-
-        return [
-            'texto' => $texto,
-            'destinatario' => $cotizacion->client_whatsapp,
-            'puede_enviar' => false,
-            'nota' => 'Quedó registrada la vista previa. El envío por WhatsApp se habilita cuando exista la plantilla de Meta.',
-        ];
+    /**
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     * @return array<string, mixed>
+     */
+    public function enviarWhatsapp(int $id, array $actor): array
+    {
+        return app(PagoProveedorCotizacionWhatsappService::class)->enviar($id, $actor);
     }
 
     public function encontrar(int $id, bool $bloquear = false): PagoProveedorCotizacion
@@ -268,7 +282,7 @@ class PagoProveedorCotizacionService
     public function exigirPendiente(PagoProveedorCotizacion $cotizacion): void
     {
         if ($cotizacion->status !== PagoProveedorCotizacion::STATUS_PENDING) {
-            throw new PagoProveedorException('Esta cotización ya está confirmada y no se puede modificar.');
+            throw new PagoProveedorException('Solo aplica a cotizaciones pendientes. Las confirmadas no se pueden editar ni eliminar.');
         }
     }
 

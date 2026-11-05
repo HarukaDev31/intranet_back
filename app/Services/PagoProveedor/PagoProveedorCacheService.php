@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Cache;
 
 class PagoProveedorCacheService
 {
-    private const VERSION = 'v1';
+    private const VERSION = 'v2';
 
     private const TAG = 'pago-proveedor';
 
@@ -23,7 +23,7 @@ class PagoProveedorCacheService
 
     public function forgetConfiguration(): void
     {
-        Cache::forget($this->key('configuration'));
+        $this->forget($this->key('configuration'));
     }
 
     /**
@@ -37,7 +37,21 @@ class PagoProveedorCacheService
 
     public function forgetConsolidatedQuote(string $code): void
     {
-        Cache::forget($this->key('cc:' . strtoupper(trim($code))));
+        $this->forget($this->key('cc:' . strtoupper(trim($code))));
+    }
+
+    /**
+     * A tagged entry only leaves the cache through the same tags it was stored with.
+     */
+    private function forget(string $key): void
+    {
+        if (Cache::getStore() instanceof TaggableStore) {
+            Cache::tags([self::TAG])->forget($key);
+
+            return;
+        }
+
+        Cache::forget($key);
     }
 
     /**

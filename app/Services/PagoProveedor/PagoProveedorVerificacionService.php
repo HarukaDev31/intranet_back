@@ -162,6 +162,7 @@ class PagoProveedorVerificacionService
             $deposit->verified_at = now();
             $deposit->verified_by_user_id = $actor['id'];
             $deposit->save();
+            $this->releaseObservedProviders($deposit);
 
             $note = $deposit->recorded_amount !== null && abs((float) $deposit->recorded_amount - $bankAmount) >= 0.005
                 ? 'Ventas registró '.$deposit->recorded_amount.' · se ajustó al importe del banco '.$deposit->bank_amount
@@ -201,6 +202,7 @@ class PagoProveedorVerificacionService
             $deposit->verified_at = now();
             $deposit->verified_by_user_id = $actor['id'];
             $deposit->save();
+            $this->observeProviders($deposit);
             $label = $this->reasonLabel($code);
             $this->history->registrar(
                 PagoProveedorHistorial::ENTITY_REQUEST,
@@ -251,6 +253,7 @@ class PagoProveedorVerificacionService
             $deposit->verified_at = null;
             $deposit->verified_by_user_id = null;
             $deposit->save();
+            $this->releaseObservedProviders($deposit);
 
             $this->approval->release($deposit);
             $notifies = $minutes > $silentMinutes;
@@ -406,6 +409,56 @@ class PagoProveedorVerificacionService
         return $reasons;
     }
 
+    /**
+     * Sales sees a deposit observation on the supplier and lifts it from there (ES-02, RN-111).
+     */
+    private function observeProviders(PagoProveedorAbono $deposit): void
+    {
+        foreach ($this->depositProviders($deposit) as $provider) {
+            if ($provider->status !== PagoProveedorSolicitudProveedor::STATUS_IN_PROGRESS) {
+                continue;
+            }
+            $provider->status = PagoProveedorSolicitudProveedor::STATUS_OBSERVED;
+            $provider->save();
+        }
+    }
+
+    public function releaseObservedProviders(PagoProveedorAbono $deposit): void
+    {
+        foreach ($this->depositProviders($deposit) as $provider) {
+            $collecting = in_array($provider->approval_status, [
+                PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT,
+                PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR,
+            ], true);
+            if ($provider->status !== PagoProveedorSolicitudProveedor::STATUS_OBSERVED || $collecting) {
+                continue;
+            }
+            $otherObservation = PagoProveedorAbono::query()
+                ->whereKeyNot($deposit->id)
+                ->where('status', PagoProveedorAbono::STATUS_OBSERVED)
+                ->whereHas('aplicaciones', fn ($query) => $query->where('request_provider_id', $provider->id))
+                ->exists();
+            if ($otherObservation) {
+                continue;
+            }
+            $provider->status = PagoProveedorSolicitudProveedor::STATUS_IN_PROGRESS;
+            $provider->save();
+        }
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, PagoProveedorSolicitudProveedor>
+     */
+    private function depositProviders(PagoProveedorAbono $deposit): \Illuminate\Support\Collection
+    {
+        $ids = $deposit->aplicaciones()->pluck('request_provider_id');
+
+        return PagoProveedorSolicitudProveedor::query()
+            ->whereIn('id', $ids)
+            ->where('stage', '<=', PagoProveedorSolicitudProveedor::STAGE_VALIDATION)
+            ->get();
+    }
+
     public function providerMovedOn(PagoProveedorAbono $deposit): bool
     {
         $request = $deposit->solicitud;
@@ -465,7 +518,7 @@ class PagoProveedorVerificacionService
         return $code;
     }
 
-    private function reasonLabel(string $code): string
+    public function reasonLabel(string $code): string
     {
         $match = collect($this->reasons())->firstWhere('code', $code);
 

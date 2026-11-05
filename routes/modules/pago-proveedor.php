@@ -29,6 +29,7 @@ Route::group(['prefix' => 'pago-proveedor', 'middleware' => 'jwt.auth'], functio
     Route::post('cotizaciones/{id}/renovar', [PagoProveedorCotizacionController::class, 'renovar']);
     Route::post('cotizaciones/{id}/proveedores/{proveedorId}/proforma', [PagoProveedorCotizacionController::class, 'proforma']);
     Route::post('cotizaciones/{id}/vista-previa-whatsapp', [PagoProveedorCotizacionController::class, 'whatsapp']);
+    Route::post('cotizaciones/{id}/enviar-whatsapp', [PagoProveedorCotizacionController::class, 'enviarWhatsapp']);
     Route::get('cotizaciones/{id}/pdf', [PagoProveedorCotizacionController::class, 'pdf']);
     Route::post('cotizaciones/{id}/solicitud', [PagoProveedorSolicitudController::class, 'storeDesdeCotizacion']);
 
@@ -46,10 +47,12 @@ Route::group(['prefix' => 'pago-proveedor', 'middleware' => 'jwt.auth'], functio
     Route::post('solicitudes/{id}/tipo-cambio', [PagoProveedorEtapa1Controller::class, 'confirmarTipoCambio'])->whereNumber('id');
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/pago-2', [PagoProveedorEtapa1Controller::class, 'decidirPago'])->whereNumber(['id', 'proveedorId']);
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/diferencia-cambio', [PagoProveedorEtapa1Controller::class, 'registrarDiferencia'])->whereNumber(['id', 'proveedorId']);
+    Route::get('solicitudes/{id}/proveedores/{proveedorId}/balance/vista-previa', [PagoProveedorEtapa1Controller::class, 'vistaPreviaBalance'])->whereNumber(['id', 'proveedorId']);
     Route::get('solicitudes/{id}/proveedores/{proveedorId}/balance', [PagoProveedorEtapa1Controller::class, 'descargarBalance'])->whereNumber(['id', 'proveedorId']);
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/balance', [PagoProveedorEtapa1Controller::class, 'enviarBalance'])->whereNumber(['id', 'proveedorId']);
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/levantar-china', [PagoProveedorEtapa1Controller::class, 'levantarChina'])->whereNumber(['id', 'proveedorId']);
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/reembolso', [PagoProveedorEtapa1Controller::class, 'solicitarReembolso'])->whereNumber(['id', 'proveedorId']);
+    Route::post('solicitudes/{id}/proveedores/{proveedorId}/completar', [PagoProveedorEtapa1Controller::class, 'completarProveedor'])->whereNumber(['id', 'proveedorId']);
     Route::post('solicitudes/{id}/abonos/{abonoId}/continuan', [PagoProveedorEtapa1Controller::class, 'elegirContinuacion'])->whereNumber(['id', 'abonoId']);
 
     Route::get('reembolsos', [PagoProveedorReembolsoController::class, 'index']);

@@ -49,7 +49,7 @@ class YuanPagoResource extends JsonResource
             'seller_name' => $provider->datos?->seller_name,
             'client_name' => $provider->solicitud?->client_name,
             'consolidation' => $provider->solicitud?->consolidation,
-            'partner' => $provider->solicitud?->partner ?: 'Pro Business',
+            'partner' => \App\Models\PagoProveedor\PagoProveedorSolicitud::partnerLabel($provider->solicitud?->partner),
             'manual' => $provider->solicitud?->origin === \App\Models\PagoProveedor\PagoProveedorSolicitud::ORIGIN_MANUAL,
             'payment_mode' => $provider->supplier_payment_mode,
             'usd_amount' => $quote['usd'],

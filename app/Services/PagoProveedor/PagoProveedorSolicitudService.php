@@ -24,6 +24,11 @@ class PagoProveedorSolicitudService
     {
         $query = PagoProveedorSolicitud::query()->with(['proveedores.datos', 'proveedores.consolidatedProvider', 'cotizacion'])->orderByDesc('id');
 
+        // China's manual requests belong to other partners and never reach Sales (RN-97).
+        $query->where(function ($own) {
+            $own->whereNull('origin')->orWhere('origin', '!=', PagoProveedorSolicitud::ORIGIN_MANUAL);
+        });
+
         if (!empty($filtros['search'])) {
             $texto = '%' . trim((string) $filtros['search']) . '%';
             $query->where(function ($q) use ($texto) {
@@ -35,6 +40,36 @@ class PagoProveedorSolicitudService
                         $proveedores->where('request_code', 'like', $texto)
                             ->orWhere('code_supplier', 'like', $texto);
                     });
+            });
+        }
+
+        $consolidado = trim((string) ($filtros['consolidado'] ?? ''));
+        if ($consolidado !== '' && strtolower($consolidado) !== 'todos') {
+            $query->where('consolidation', $consolidado);
+        }
+
+        $tipoPago = trim((string) ($filtros['tipo_pago'] ?? ''));
+        if ($tipoPago !== '' && strtolower($tipoPago) !== 'todos') {
+            $query->whereHas('proveedores', function ($proveedores) use ($tipoPago) {
+                if (strtoupper($tipoPago) === 'RMB') {
+                    $proveedores->where('currency', 'RMB');
+                } elseif (strtoupper($tipoPago) === 'USD') {
+                    $proveedores->where('currency', 'USD');
+                }
+            });
+        }
+
+        $etapa = $filtros['etapa'] ?? null;
+        if ($etapa !== null && $etapa !== '' && strtolower((string) $etapa) !== 'todos') {
+            $query->whereHas('proveedores', function ($proveedores) use ($etapa) {
+                $proveedores->where('stage', (int) $etapa);
+            });
+        }
+
+        $estado = trim((string) ($filtros['estado'] ?? ''));
+        if ($estado !== '' && strtolower($estado) !== 'todos') {
+            $query->whereHas('proveedores', function ($proveedores) use ($estado) {
+                $proveedores->where('status', $estado);
             });
         }
 

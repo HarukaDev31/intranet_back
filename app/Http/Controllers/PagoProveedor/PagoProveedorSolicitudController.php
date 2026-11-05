@@ -29,6 +29,10 @@ class PagoProveedorSolicitudController extends Controller
             $this->autorizacion->exigirVentas($request->user());
             $pagina = $this->solicitudes->listar([
                 'search' => $request->get('search'),
+                'consolidado' => $request->get('consolidado'),
+                'tipo_pago' => $request->get('tipo_pago'),
+                'etapa' => $request->get('etapa'),
+                'estado' => $request->get('estado'),
                 'per_page' => $request->get('per_page', 15),
             ]);
 

@@ -38,10 +38,21 @@ class PagoProveedorCotizacionController extends Controller
             $pagina = $this->cotizaciones->listar([
                 'search' => $request->get('search'),
                 'estado' => $request->get('estado'),
+                'consolidado' => $request->get('consolidado'),
+                'resaltar_desde' => $request->get('resaltar_desde'),
                 'per_page' => $request->get('per_page', 15),
             ]);
 
-            return $this->pagina(CotizacionResource::collection($pagina->items()), $pagina);
+            return CotizacionResource::collection($pagina->items())->additional([
+                'success' => true,
+                'pagination' => [
+                    'current_page' => $pagina->currentPage(),
+                    'last_page' => $pagina->lastPage(),
+                    'per_page' => $pagina->perPage(),
+                    'total' => $pagina->total(),
+                ],
+                'consolidados' => $this->cotizaciones->consolidadosDisponibles(),
+            ])->response();
         });
     }
 
@@ -156,6 +167,19 @@ class PagoProveedorCotizacionController extends Controller
         });
     }
 
+    public function enviarWhatsapp(Request $request, int $id): JsonResponse
+    {
+        return $this->responder(function () use ($request, $id) {
+            $actor = $this->autorizacion->exigirVentas($request->user());
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Resumen enviado por WhatsApp.',
+                'data' => $this->cotizaciones->enviarWhatsapp($id, $actor),
+            ]);
+        });
+    }
+
     public function pdf(Request $request, int $id): JsonResponse
     {
         return $this->responder(function () use ($request, $id) {
@@ -186,12 +210,19 @@ class PagoProveedorCotizacionController extends Controller
             $this->autorizacion->exigirVentas($request->user());
             $datos = $request->validate([
                 'horas' => ['required', 'integer', 'min:1', 'max:240'],
+                'tipo' => ['nullable', 'in:habiles,calendario'],
             ]);
             $this->configuracion->save('vigencia_cotizacion_horas', (int) $datos['horas']);
+            if (isset($datos['tipo'])) {
+                $this->configuracion->save('vigencia_cotizacion_tipo', $datos['tipo']);
+            }
 
             return response()->json([
                 'success' => true,
-                'data' => ['vigencia_cotizacion_horas' => (int) $datos['horas']],
+                'data' => [
+                    'vigencia_cotizacion_horas' => (int) $datos['horas'],
+                    'vigencia_cotizacion_tipo' => $this->configuracion->validityType(),
+                ],
             ]);
         });
     }

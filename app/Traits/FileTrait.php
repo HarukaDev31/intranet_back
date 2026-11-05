@@ -30,6 +30,11 @@ trait FileTrait
             return null;
         }
 
+        // En local el disco público no está en el CDN: la ficha debe abrir el archivo real.
+        if ($storage->uploadDisk() !== 's3') {
+            return $storage->url($normalized) ?? $this->buildCdnPublicUrl($normalized);
+        }
+
         return $this->buildCdnPublicUrl($normalized);
     }
 

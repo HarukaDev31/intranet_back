@@ -49,6 +49,14 @@ class PagoProveedorConfiguracionService
         return max(1, (int) $this->value('vigencia_cotizacion_horas', 48));
     }
 
+    /** @return string habiles|calendario */
+    public function validityType(): string
+    {
+        $tipo = (string) $this->value('vigencia_cotizacion_tipo', 'habiles');
+
+        return in_array($tipo, ['habiles', 'calendario'], true) ? $tipo : 'habiles';
+    }
+
     public function tariff(): TarifaPagoProveedor
     {
         if ($this->tariffMemo instanceof TarifaPagoProveedor) {
@@ -68,6 +76,14 @@ class PagoProveedorConfiguracionService
             bancariaRmbMedia: (float) ($rmb[1] ?? 90),
             bancariaRmbAlta: (float) ($rmb[2] ?? 120),
             administrativa: (float) $this->value('comision_administrativa', 30),
+            administrativaUsd: (float) $this->value(
+                'comision_administrativa_usd',
+                (float) $this->value('comision_administrativa', 30)
+            ),
+            administrativaRmb: (float) $this->value(
+                'comision_administrativa_rmb',
+                (float) $this->value('comision_administrativa', 30)
+            ),
         );
     }
 

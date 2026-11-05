@@ -97,15 +97,17 @@ class PagoProveedorComisionService
         $administrativa = 0.0;
         if ($cobraAdmin) {
             if ($adminDoble) {
-                $administrativa = $this->dinero($tarifa->administrativa * 2);
+                $adminUnit = $tarifa->administrativaPara($moneda);
+                $administrativa = $this->dinero($adminUnit * 2);
                 $cuotas[0]['administrativa'] = $administrativa;
             } elseif ($adminPorCuota) {
+                $adminUnit = $tarifa->administrativaPara($moneda);
                 foreach ($cuotas as $i => $cuota) {
-                    $cuotas[$i]['administrativa'] = $tarifa->administrativa;
-                    $administrativa += $tarifa->administrativa;
+                    $cuotas[$i]['administrativa'] = $adminUnit;
+                    $administrativa += $adminUnit;
                 }
             } else {
-                $administrativa = $tarifa->administrativa;
+                $administrativa = $tarifa->administrativaPara($moneda);
                 $cuotas[0]['administrativa'] = $administrativa;
             }
         }

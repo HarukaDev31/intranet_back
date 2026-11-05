@@ -34,7 +34,7 @@ class PagoProveedorEjecucionService
         $search = mb_strtolower(trim((string) ($filters['search'] ?? '')));
         $rows = $bucket === PagoProveedorEjecucion::BUCKET_PAID
             ? $this->paid($filters, $search)
-            : $this->pending($search);
+            : $this->pending($filters, $search);
 
         $page = max(1, (int) ($filters['page'] ?? 1));
         $perPage = max(1, (int) ($filters['per_page'] ?? 15));
@@ -50,7 +50,7 @@ class PagoProveedorEjecucionService
 
     public function pendingCount(): int
     {
-        return $this->pending('')->count();
+        return $this->pending([], '')->count();
     }
 
     public function noticeText(int $providerId, float $amount): string
@@ -203,6 +203,33 @@ class PagoProveedorEjecucionService
         ];
     }
 
+    public function clientBank(PagoProveedorSolicitudProveedor $provider): ?string
+    {
+        $provider->loadMissing(['aplicaciones.abono', 'solicitud.abonos']);
+        foreach ($provider->aplicaciones as $application) {
+            $abono = $application->abono;
+            if (!$abono) {
+                continue;
+            }
+            $bank = trim((string) $abono->bank);
+            if ($bank !== '') {
+                return mb_strtolower($bank);
+            }
+        }
+        $request = $provider->solicitud;
+        if (!$request) {
+            return null;
+        }
+        foreach ($request->abonos as $abono) {
+            $bank = trim((string) $abono->bank);
+            if ($bank !== '') {
+                return mb_strtolower($bank);
+            }
+        }
+
+        return null;
+    }
+
     public function bankReady(PagoProveedorSolicitudProveedor $provider): bool
     {
         $data = $provider->datos;
@@ -220,12 +247,13 @@ class PagoProveedorEjecucionService
     }
 
     /**
+     * @param  array<string, mixed>  $filters
      * @return Collection<int, PagoProveedorSolicitudProveedor>
      */
-    private function pending(string $search): Collection
+    private function pending(array $filters, string $search): Collection
     {
         return PagoProveedorSolicitudProveedor::query()
-            ->with(['solicitud', 'datos', 'ejecuciones'])
+            ->with(['solicitud.abonos', 'datos', 'ejecuciones', 'aplicaciones.abono'])
             ->where('currency', PagoProveedorCotizacionProveedor::CURRENCY_USD)
             ->where('payment_type', PagoProveedorCotizacionProveedor::PAYMENT_TT)
             ->where('stage', PagoProveedorSolicitudProveedor::STAGE_EXECUTION)
@@ -233,12 +261,12 @@ class PagoProveedorEjecucionService
             ->where('status', '!=', PagoProveedorSolicitudProveedor::STATUS_CANCELLED)
             ->orderByDesc('id')
             ->get()
-            ->filter(function (PagoProveedorSolicitudProveedor $provider) use ($search) {
+            ->filter(function (PagoProveedorSolicitudProveedor $provider) use ($filters, $search) {
                 if (!$this->bankReady($provider) || $this->alreadyExecuted($provider)) {
                     return false;
                 }
 
-                return $this->matches($provider, $search);
+                return $this->matches($provider, $search) && $this->matchesListFilters($provider, $filters);
             })
             ->values();
     }
@@ -250,7 +278,7 @@ class PagoProveedorEjecucionService
     private function paid(array $filters, string $search): Collection
     {
         $query = PagoProveedorEjecucion::query()
-            ->with(['proveedor.solicitud', 'proveedor.datos'])
+            ->with(['proveedor.solicitud.abonos', 'proveedor.datos', 'proveedor.aplicaciones.abono'])
             ->orderByDesc('executed_on')
             ->orderByDesc('id');
 
@@ -261,11 +289,29 @@ class PagoProveedorEjecucionService
             $query->whereDate('executed_on', '<=', $filters['paid_to']);
         }
 
-        return $query->get()->filter(function (PagoProveedorEjecucion $execution) use ($search) {
+        return $query->get()->filter(function (PagoProveedorEjecucion $execution) use ($filters, $search) {
             $provider = $execution->proveedor;
 
-            return $provider && $this->matches($provider, $search);
+            return $provider && $this->matches($provider, $search) && $this->matchesListFilters($provider, $filters);
         })->values();
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function matchesListFilters(PagoProveedorSolicitudProveedor $provider, array $filters): bool
+    {
+        $bank = mb_strtolower(trim((string) ($filters['banco'] ?? '')));
+        if ($bank !== '' && $bank !== 'todos' && $bank !== 'all' && $this->clientBank($provider) !== $bank) {
+            return false;
+        }
+        $consolidation = mb_strtolower(trim((string) ($filters['consolidado'] ?? '')));
+        if ($consolidation === '' || $consolidation === 'todos' || $consolidation === 'all') {
+            return true;
+        }
+        $current = mb_strtolower(trim((string) ($provider->solicitud->consolidation ?? '')));
+
+        return $current === $consolidation;
     }
 
     private function alreadyExecuted(PagoProveedorSolicitudProveedor $provider): bool

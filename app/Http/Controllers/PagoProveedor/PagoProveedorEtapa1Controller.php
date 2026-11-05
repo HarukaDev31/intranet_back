@@ -208,6 +208,18 @@ class PagoProveedorEtapa1Controller extends Controller
         });
     }
 
+    public function vistaPreviaBalance(Request $request, int $solicitudId, int $proveedorId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
+            $this->autorizacion->exigirVentas($request->user());
+
+            return response()->json([
+                'success' => true,
+                'data' => app(PagoProveedorConfirmacionService::class)->balancePreview($solicitudId, $proveedorId),
+            ]);
+        });
+    }
+
     public function descargarBalance(Request $request, int $solicitudId, int $proveedorId): JsonResponse
     {
         return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
@@ -251,6 +263,19 @@ class PagoProveedorEtapa1Controller extends Controller
             $actor = $this->autorizacion->exigirVentas($request->user());
 
             return $this->datos(app(PagoProveedorReembolsoService::class)->request($solicitudId, $proveedorId, $actor));
+        });
+    }
+
+    public function completarProveedor(Request $request, int $solicitudId, int $proveedorId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
+            $actor = $this->autorizacion->exigirVentas($request->user());
+
+            return $this->datos(app(PagoProveedorConfirmacionService::class)->complete(
+                $solicitudId,
+                $proveedorId,
+                $actor
+            ));
         });
     }
 

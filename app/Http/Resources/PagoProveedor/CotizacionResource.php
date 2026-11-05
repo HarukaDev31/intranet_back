@@ -78,6 +78,15 @@ class CotizacionResource extends JsonResource
             $byOrder[$line['orden']] = $line;
         }
         $complete = $this->isComplete($cotizacion);
+        $pending = $cotizacion->status === PagoProveedorCotizacion::STATUS_PENDING;
+        $ageDays = $cotizacion->created_at
+            ? max(0, (int) $cotizacion->created_at->copy()->startOfDay()->diffInDays(now()->startOfDay()))
+            : 0;
+        $highlightFrom = max(0, (int) $request->get('resaltar_desde', 0));
+        $highlight = $pending && $highlightFrom > 0 && $ageDays >= $highlightFrom;
+        $ageText = !$pending
+            ? null
+            : ($ageDays === 0 ? 'hoy' : ($ageDays === 1 ? 'hace 1 día' : 'hace '.$ageDays.' días'));
 
         return [
             'id' => $cotizacion->id,
@@ -91,20 +100,34 @@ class CotizacionResource extends JsonResource
             'cliente_whatsapp' => $cotizacion->client_whatsapp,
             'cliente_correo' => $cotizacion->client_email,
             'tipo_cambio' => $cotizacion->exchange_rate,
+            'tipo_cambio_fecha' => optional($cotizacion->created_at)
+                ?->timezone(PagoProveedorVigenciaService::ZONA)
+                ?->format('d/m/Y'),
             'tipo_cambio_confirmado' => $cotizacion->exchange_rate_confirmed,
             'vigencia_fin' => optional($cotizacion->valid_until)->toIso8601String(),
             'vigencia_texto' => $cotizacion->status === PagoProveedorCotizacion::STATUS_CONFIRMED
                 ? 'Confirmada'
                 : $vigencia->texto($cotizacion->valid_until),
+            'vigencia_hasta' => $cotizacion->status === PagoProveedorCotizacion::STATUS_CONFIRMED
+                ? null
+                : optional($cotizacion->valid_until)?->timezone(PagoProveedorVigenciaService::ZONA)->format('d/m/Y H:i'),
+            'resumen_enviado' => \App\Models\PagoProveedor\PagoProveedorMensaje::query()
+                ->where('quote_id', $cotizacion->id)
+                ->where('message_type', 'resumen')
+                ->exists(),
             'vencida' => $expired,
+            'antiguedad_dias' => $pending ? $ageDays : null,
+            'antiguedad_texto' => $ageText,
+            'resaltar' => $highlight,
             'proveedores_cantidad' => $cotizacion->proveedores->count(),
             'total' => $calculation['total'],
             'total_ahora' => $calculation['total_ahora'],
             'comisiones' => $calculation['comisiones'],
-            'puede_editar' => $cotizacion->status === PagoProveedorCotizacion::STATUS_PENDING,
-            'puede_eliminar' => $cotizacion->status === PagoProveedorCotizacion::STATUS_PENDING,
-            'puede_enviar' => $cotizacion->status === PagoProveedorCotizacion::STATUS_PENDING && !$expired && $complete['pdf'],
-            'puede_crear_solicitud' => $cotizacion->status === PagoProveedorCotizacion::STATUS_PENDING && !$expired && $complete['solicitud'],
+            'puede_editar' => $pending,
+            'puede_eliminar' => $pending && !$cotizacion->solicitud,
+            'puede_enviar' => $pending && !$expired && $complete['pdf'] && trim((string) $cotizacion->client_whatsapp) !== '',
+            'puede_descargar_pdf' => $complete['pdf'] && (!$expired || !$pending),
+            'puede_crear_solicitud' => $pending && !$expired && $complete['solicitud'],
             'puede_renovar' => $expired,
             'faltantes_pdf' => $complete['faltantes_pdf'],
             'faltantes' => $complete['faltantes'],

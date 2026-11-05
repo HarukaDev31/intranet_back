@@ -107,12 +107,10 @@ class PagoProveedorReembolsoService
         if ($existing) {
             return $existing;
         }
-        $summary = is_array($provider->summary_json) ? $provider->summary_json : [];
-        $payments = is_array($summary['pagos_proveedor'] ?? null) ? $summary['pagos_proveedor'] : [];
-        $second = $payments[1] ?? [];
-        $cargo = round((float) ($second['carga'] ?? 0), 2);
-        $admin = round((float) ($second['administrativa'] ?? 0), 2);
-        $amount = round($cargo + $admin, 2);
+        $parts = app(PagoProveedorConfirmacionService::class)->paymentTwoRefund($provider);
+        $cargo = $parts['cargo'];
+        $admin = $parts['admin'];
+        $amount = $parts['total'];
         $refund = PagoProveedorReembolso::query()->create([
             'request_id' => $provider->request_id,
             'request_provider_id' => $provider->id,
@@ -196,13 +194,9 @@ class PagoProveedorReembolsoService
             if ($note === '') {
                 throw new PagoProveedorException('Indica el motivo del rechazo.');
             }
-            // Diferencia de cambio vuelve a «por consultar»; el resto queda rechazado (RN-121 / maqueta).
-            if ($refund->origin === PagoProveedorReembolso::ORIGIN_EXCHANGE) {
-                $refund->status = PagoProveedorReembolso::STATUS_CONSULT;
-                $refund->requested_at = null;
-            } else {
-                $refund->status = PagoProveedorReembolso::STATUS_REJECTED;
-            }
+            // A rejected refund goes back to Sales, who consults the client again (functional mock).
+            $refund->status = PagoProveedorReembolso::STATUS_CONSULT;
+            $refund->requested_at = null;
             $refund->reason = $note;
             $refund->decided_at = now();
             $refund->decided_by_user_id = $actor['id'];

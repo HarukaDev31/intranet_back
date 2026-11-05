@@ -25,15 +25,44 @@ class PagoProveedorPdfService
      */
     public function resumen(int $id, array $actor): array
     {
+        $built = $this->buildResumen($id);
+        $this->historial->registrar('cotizacion', $built['quote_id'], 'PDF descargado', $actor);
+
+        return [
+            'filename' => $built['filename'],
+            'base64' => base64_encode($built['binary']),
+        ];
+    }
+
+    /**
+     * PDF temporal para adjuntar en WhatsApp (no registra descarga).
+     *
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     * @return array{path: string, filename: string}
+     */
+    public function resumenTemporal(int $id, array $actor): array
+    {
+        unset($actor);
+        $built = $this->buildResumen($id);
+        $path = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pp-resumen-' . $id . '-' . uniqid('', true) . '.pdf';
+        if (file_put_contents($path, $built['binary']) === false) {
+            throw new PagoProveedorException('No se pudo preparar el PDF para WhatsApp.');
+        }
+
+        return [
+            'path' => $path,
+            'filename' => $built['filename'],
+        ];
+    }
+
+    /**
+     * @return array{quote_id: int, filename: string, binary: string}
+     */
+    private function buildResumen(int $id): array
+    {
         $cotizacion = $this->cotizaciones->encontrar($id);
         $presentado = $this->presenter->cotizacion($cotizacion, $this->configuracion->tariff());
-        if (!$presentado['puede_enviar']) {
-            throw new PagoProveedorException(
-                $presentado['vencida']
-                    ? 'La cotización está vencida. Renuévala para descargar el resumen.'
-                    : implode(' ', $presentado['faltantes_pdf'])
-            );
-        }
+        $this->exigirPuedeGenerarPdf($presentado);
 
         $cuentasPath = public_path('pago-proveedor/cuentas-bancarias.jpg');
         $cuentasImagen = is_file($cuentasPath)
@@ -65,12 +94,28 @@ class PagoProveedorPdfService
         $dompdf->setPaper('A4');
         $dompdf->render();
 
-        $this->historial->registrar('cotizacion', $cotizacion->id, 'PDF descargado', $actor);
-
         return [
+            'quote_id' => (int) $cotizacion->id,
             'filename' => 'Resumen_pago_proveedor_' . $cotizacion->code . '.pdf',
-            'base64' => base64_encode($dompdf->output()),
+            'binary' => $dompdf->output(),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $presentado
+     */
+    private function exigirPuedeGenerarPdf(array $presentado): void
+    {
+        $faltantes = $presentado['faltantes_pdf'] ?? [];
+        if (is_array($faltantes) && count($faltantes) > 0) {
+            throw new PagoProveedorException(implode(' ', $faltantes));
+        }
+        if (($presentado['estado'] ?? '') === 'pendiente' && !empty($presentado['vencida'])) {
+            throw new PagoProveedorException('La cotización está vencida. Renuévala para descargar el resumen.');
+        }
+        if (empty($presentado['puede_descargar_pdf'])) {
+            throw new PagoProveedorException('Aún no se puede generar el PDF de resumen.');
+        }
     }
 
     /**

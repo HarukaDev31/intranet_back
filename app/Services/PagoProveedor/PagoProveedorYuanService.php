@@ -111,8 +111,9 @@ class PagoProveedorYuanService
     public function partners(): array
     {
         return $this->rows('all', '', '')
-            ->map(fn (PagoProveedorSolicitudProveedor $provider) => trim((string) ($provider->solicitud?->partner ?: 'Pro Business')))
+            ->map(fn (PagoProveedorSolicitudProveedor $provider) => PagoProveedorSolicitud::partnerLabel($provider->solicitud?->partner))
             ->filter(fn (string $partner) => $partner !== '')
+            ->merge(PagoProveedorSolicitud::PARTNERS)
             ->unique()
             ->sort()
             ->values()
@@ -664,7 +665,7 @@ class PagoProveedorYuanService
 
         if ($partner !== '') {
             $providers = $providers->filter(function (PagoProveedorSolicitudProveedor $provider) use ($partner) {
-                return trim((string) ($provider->solicitud?->partner ?: 'Pro Business')) === $partner;
+                return PagoProveedorSolicitud::partnerLabel($provider->solicitud?->partner) === $partner;
             });
         }
 

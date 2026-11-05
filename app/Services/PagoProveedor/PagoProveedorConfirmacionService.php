@@ -203,7 +203,7 @@ class PagoProveedorConfirmacionService
                 throw new PagoProveedorException('El proveedor no existe.', 404);
             }
             if (!in_array($provider->exchange_result, [PagoProveedorEjecucion::RESULT_COLLECT, PagoProveedorEjecucion::RESULT_REFUND], true)) {
-                throw new PagoProveedorException('Este pago no tiene diferencia para avisarle al cliente.');
+                throw new PagoProveedorException('Sin diferencia de cambio: no se envía balance al cliente.');
             }
             app(PagoProveedorMensajeService::class)->storeBalance($provider, $actor);
             $pdf = app(PagoProveedorPdfService::class)->balance($provider, $actor);
@@ -213,6 +213,23 @@ class PagoProveedorConfirmacionService
                 'pdf' => $pdf,
             ];
         });
+    }
+
+    /**
+     * Sales reviews the message before sending it (RN-103).
+     *
+     * @return array{texto: string, archivo: string}
+     */
+    public function balancePreview(int $requestId, int $providerId): array
+    {
+        $provider = $this->find($requestId, $providerId);
+        $provider->loadMissing(['solicitud', 'ejecuciones']);
+        $text = app(PagoProveedorMensajeService::class)->balanceText($provider);
+        if ($text === null) {
+            throw new PagoProveedorException('Sin diferencia de cambio: no se envía balance al cliente.');
+        }
+
+        return ['texto' => $text, 'archivo' => 'Balance_'.$provider->code_supplier.'.pdf'];
     }
 
     /**
@@ -235,7 +252,8 @@ class PagoProveedorConfirmacionService
         $payments = is_array($summary['pagos_proveedor'] ?? null) ? $summary['pagos_proveedor'] : [];
         $second = $payments[1] ?? [];
         $cargo = round((float) ($second['carga'] ?? 0), 2);
-        $admin = round((float) ($second['administrativa'] ?? 0), 2);
+        // The admin fee is charged once per managed payment, so half of it belongs to payment 2 (RN-34, RN-124).
+        $admin = round((float) ($summary['administrativa'] ?? 0) / 2, 2);
 
         return [
             'cargo' => $cargo,
@@ -347,8 +365,62 @@ class PagoProveedorConfirmacionService
                     : null,
                 'pending_refund' => $this->pendingRefundSummary($provider),
                 'exchange_rate_pending' => (bool) $provider->exchange_rate_pending,
+                'can_complete' => $this->canComplete($provider),
+                'complete_label' => 'Marcar como Completado',
             ],
         ];
+    }
+
+    /**
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    public function complete(int $requestId, int $providerId, array $actor): PagoProveedorSolicitud
+    {
+        return DB::transaction(function () use ($requestId, $providerId, $actor) {
+            $provider = $this->find($requestId, $providerId);
+            if (!$this->canComplete($provider)) {
+                $blocking = array_filter($this->items($provider), function (array $item) {
+                    return $item['blocks'] && !$item['done'];
+                });
+                $labels = array_map(function (array $item) {
+                    return $item['label'];
+                }, $blocking);
+                throw new PagoProveedorException(
+                    $labels === []
+                        ? 'Este proveedor ya no se puede marcar como completado.'
+                        : 'Falta: '.implode(', ', $labels).'.'
+                );
+            }
+            $provider->status = PagoProveedorSolicitudProveedor::STATUS_COMPLETED;
+            $provider->save();
+            $this->history->registrar(
+                PagoProveedorHistorial::ENTITY_REQUEST,
+                $requestId,
+                'Completado',
+                $actor,
+                'Ventas marcó el proveedor como Completado.'
+            );
+
+            return $this->reload($requestId);
+        });
+    }
+
+    private function canComplete(PagoProveedorSolicitudProveedor $provider): bool
+    {
+        if ($provider->status === PagoProveedorSolicitudProveedor::STATUS_COMPLETED) {
+            return false;
+        }
+        if ((int) $provider->stage !== PagoProveedorSolicitudProveedor::STAGE_CONFIRMATION) {
+            return false;
+        }
+        if ($this->awaitsInstallmentChoice($provider) || $this->awaitsPaymentChoice($provider)) {
+            return false;
+        }
+        $blocking = array_filter($this->items($provider), function (array $item) {
+            return $item['blocks'] && !$item['done'];
+        });
+
+        return $blocking === [];
     }
 
     private function tryComplete(PagoProveedorSolicitudProveedor $provider): void

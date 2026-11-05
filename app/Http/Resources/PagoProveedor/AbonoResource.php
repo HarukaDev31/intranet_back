@@ -56,7 +56,15 @@ class AbonoResource extends JsonResource
             'excedente_decide_overdue' => $decideOverdue,
             'excedente_decide_text' => $decideText,
             'operacion_repetida' => $abono->repeated_operation,
-            'puede_editar' => in_array($abono->status, [PagoProveedorAbono::STATUS_IN_VALIDATION, PagoProveedorAbono::STATUS_OBSERVED], true) && !$advanced,
+            // Sales corrects an observed deposit in any stage; voiding stays limited to stage 1 (RN-45, RN-56).
+            'puede_editar' => $abono->status === PagoProveedorAbono::STATUS_OBSERVED
+                || ($abono->status === PagoProveedorAbono::STATUS_IN_VALIDATION && !$advanced),
+            'puede_anular' => in_array($abono->status, [PagoProveedorAbono::STATUS_IN_VALIDATION, PagoProveedorAbono::STATUS_OBSERVED], true) && !$advanced,
+            'observacion' => $abono->status === PagoProveedorAbono::STATUS_OBSERVED ? [
+                'motivo' => app(\App\Services\PagoProveedor\PagoProveedorVerificacionService::class)->reasonLabel((string) $abono->observation_reason),
+                'detalle' => $abono->observation_detail,
+                'plazo' => $abono->observe_until ? \App\Services\PagoProveedor\PagoProveedorPlazo::remainingText($abono->observe_until) : null,
+            ] : null,
             'puede_elegir_continuacion' => $abono->status === PagoProveedorAbono::STATUS_VALIDATED
                 && $abono->aplicaciones->count() > 1
                 && $abono->aplicaciones->contains(fn (PagoProveedorAbonoAplicacion $aplicacion) => $aplicacion->continues === null)

@@ -4,6 +4,7 @@ namespace App\Services\PagoProveedor;
 
 use App\Exceptions\PagoProveedorException;
 use App\Models\PagoProveedor\PagoProveedorAbono;
+use App\Models\PagoProveedor\PagoProveedorAbonoAplicacion;
 use App\Models\PagoProveedor\PagoProveedorConfiguracion;
 use App\Models\PagoProveedor\PagoProveedorCotizacionProveedor;
 use App\Models\PagoProveedor\PagoProveedorDatoProveedor;
@@ -30,6 +31,10 @@ class PagoProveedorEtapa1Service
     public function detalle(int $solicitudId): PagoProveedorSolicitud
     {
         $solicitud = $this->solicitud($solicitudId);
+        $approvals = app(PagoProveedorAprobacionService::class);
+        foreach ($solicitud->proveedores as $provider) {
+            $approvals->expireCollect($provider);
+        }
         app(PagoProveedorConfirmacionService::class)->refresh($solicitud);
 
         return $solicitud;
@@ -152,10 +157,51 @@ class PagoProveedorEtapa1Service
             $proveedor = $this->proveedorEtapa1($solicitudId, $proveedorId);
             $proveedor->status = PagoProveedorSolicitudProveedor::STATUS_CANCELLED;
             $proveedor->save();
+            $this->recalculateYuanBankFee($this->solicitudDe($proveedor));
             $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, 'Proveedor anulado', $actor, $proveedor->code_supplier);
 
             return $this->recargar($this->solicitudDe($proveedor));
         });
+    }
+
+    /**
+     * The yuan bank fee moves to the next supplier when its carrier is cancelled,
+     * and stays as it is once one of them advanced (RN-35).
+     */
+    private function recalculateYuanBankFee(PagoProveedorSolicitud $request): void
+    {
+        $providers = $request->proveedores()->get()->filter(function (PagoProveedorSolicitudProveedor $provider) {
+            return $provider->status !== PagoProveedorSolicitudProveedor::STATUS_CANCELLED
+                && $provider->currency === PagoProveedorCotizacionProveedor::CURRENCY_RMB
+                && (bool) $provider->charges_bank_fee;
+        })->sortBy('position')->values();
+        if ($providers->isEmpty() || $providers->contains(fn (PagoProveedorSolicitudProveedor $provider) => (int) $provider->stage !== PagoProveedorSolicitudProveedor::STAGE_DATA)) {
+            return;
+        }
+
+        $summary = app(PagoProveedorComisionService::class)->calcular(
+            $providers->map(fn (PagoProveedorSolicitudProveedor $provider) => [
+                'orden' => (int) $provider->position,
+                'moneda' => $provider->currency,
+                'modalidad_abono' => $provider->client_payment_mode,
+                'modalidad_pago' => $provider->supplier_payment_mode,
+                'valor_carga_usd' => (float) $provider->cargo_value_usd,
+                'porcentaje_1' => $provider->first_share_percent,
+                'porcentaje_2' => $provider->second_share_percent,
+                'comision_bancaria' => (bool) $provider->charges_bank_fee,
+                'comision_administrativa' => (bool) $provider->charges_admin_fee,
+            ])->all(),
+            app(PagoProveedorConfiguracionService::class)->tariff()
+        );
+
+        foreach ($providers as $index => $provider) {
+            $line = $summary['proveedores'][$index];
+            $provider->bank_fee_amount = $line['bancaria'];
+            $provider->total_amount = $line['total'];
+            $provider->bank_fee_on_position = $line['bancaria_incluida_en'];
+            $provider->summary_json = $line;
+            $provider->save();
+        }
     }
 
     /**
@@ -201,6 +247,8 @@ class PagoProveedorEtapa1Service
         return DB::transaction(function () use ($solicitudId, $actor, $providerIds) {
             $solicitud = $this->solicitud($solicitudId, true);
             $selected = $providerIds === null ? null : array_map('intval', $providerIds);
+            $hasYuan = false;
+            $hasBankForm = false;
             $bloques = [];
             $primero = null;
             foreach ($solicitud->proveedores as $proveedor) {
@@ -216,7 +264,8 @@ class PagoProveedorEtapa1Service
                     if ($datos && trim((string) $datos->seller_name) !== '' && trim((string) $datos->wechat) !== '') {
                         continue;
                     }
-                    $bloques[] = "✅ Proveedor: {$proveedor->code_supplier} | {$proveedor->product}\n📝 Datos: nombre del vendedor y N.° de WeChat";
+                    $bloques[] = "✅ Proveedor: *{$proveedor->code_supplier} | {$proveedor->product}*\n📝 Datos:\n▪️ *Nombre del vendedor*\n▪️ *N.° de WeChat*";
+                    $hasYuan = true;
                     continue;
                 }
                 $datos = $this->datosDe($proveedor);
@@ -227,13 +276,13 @@ class PagoProveedorEtapa1Service
                     $datos->status = PagoProveedorDatoProveedor::STATUS_SENT;
                     $datos->save();
                 }
-                $bloques[] = "✅ Proveedor: {$proveedor->code_supplier} | {$proveedor->product}\n📝 Datos: {$this->enlace($datos)}";
+                $bloques[] = "✅ Proveedor: *{$proveedor->code_supplier} | {$proveedor->product}*\n📝 Datos:\n▪️ *Formulario bancario:* {$this->enlace($datos)}";
+                $hasBankForm = true;
             }
             if ($bloques === [] || !$primero) {
                 throw new PagoProveedorException('Los proveedores de esta solicitud ya tienen los datos.');
             }
-            $nombre = $solicitud->client_name ?: 'cliente';
-            $texto = "Hola, {$nombre} 🙋🏻‍♀️\n|\n" . implode("\n", $bloques) . "\nCon estos datos continuamos con el proceso.";
+            $texto = $this->dataRequestText($this->mensajes()->firstName($solicitud->client_name), $bloques, $hasYuan, $hasBankForm);
             $this->guardarMensaje($primero, 'pedir_datos', $texto, $actor);
             $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, 'Pedido de datos', $actor, null);
 
@@ -271,10 +320,17 @@ class PagoProveedorEtapa1Service
             if ($lineas === [] || !$primero) {
                 throw new PagoProveedorException('Ya no hay saldo por depositar.');
             }
-            $nombre = $solicitud->client_name ?: 'cliente';
-            $texto = "Hola, {$nombre} 🙋🏻‍♀️\n|\n👆🏻\nConcepto: Pago a proveedor\n"
-                . implode("\n", $lineas)
-                . "\nTotal a depositar: $" . number_format($total, 2, '.', ',');
+            $texto = implode("\n", [
+                'Hola, ' . $this->mensajes()->firstName($solicitud->client_name) . ' 🙋🏻‍♀️',
+                'Te compartimos nuestras cuentas bancarias para que puedas realizar el depósito de tu pago. 👆🏻',
+                '',
+                '*Concepto:* Pago a proveedor',
+                '',
+                count($lineas) > 1 ? '📦 Detalle de proveedores:' : '📦 Detalle del proveedor:',
+                ...array_map(fn (string $line) => '➡️ ' . $line, $lineas),
+                '',
+                '💰 *Total a depositar: $' . number_format($total, 2, '.', ',') . '*',
+            ]);
             $this->guardarMensaje($primero, 'cuentas', $texto, $actor);
 
             return [
@@ -297,9 +353,12 @@ class PagoProveedorEtapa1Service
             $solicitud = $this->solicitud($solicitudId, true);
             $abono = null;
             if ($abonoId) {
-                $abono = $this->abonoEditable($solicitud, $abonoId);
+                $abono = $this->abonoEditable($solicitud, $abonoId, true);
             }
 
+            $correctedProviderIds = $abono?->status === PagoProveedorAbono::STATUS_OBSERVED
+                ? $abono->aplicaciones->pluck('request_provider_id')->map(fn ($id) => (int) $id)->all()
+                : [];
             $saldos = [];
             $aprobacion = app(PagoProveedorAprobacionService::class);
             foreach ($solicitud->proveedores as $proveedor) {
@@ -307,7 +366,8 @@ class PagoProveedorEtapa1Service
                     continue;
                 }
                 $porCobrar = $proveedor->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT;
-                if ((int) $proveedor->stage !== PagoProveedorSolicitudProveedor::STAGE_DATA && !$porCobrar) {
+                $correcting = in_array((int) $proveedor->id, $correctedProviderIds, true);
+                if ((int) $proveedor->stage !== PagoProveedorSolicitudProveedor::STAGE_DATA && !$porCobrar && !$correcting) {
                     continue;
                 }
                 $saldos[$proveedor->id] = $porCobrar
@@ -371,8 +431,12 @@ class PagoProveedorEtapa1Service
             ];
 
             if ($abono) {
+                $wasObserved = $abono->status === PagoProveedorAbono::STATUS_OBSERVED;
                 $abono->fill($datosAbono);
                 $abono->save();
+                if ($wasObserved) {
+                    app(PagoProveedorVerificacionService::class)->releaseObservedProviders($abono);
+                }
                 $abono->aplicaciones()->delete();
             } else {
                 $abono = $solicitud->abonos()->create($datosAbono);
@@ -681,10 +745,28 @@ class PagoProveedorEtapa1Service
             if ($exceptoAbonoId && (int) $abono->id === $exceptoAbonoId) {
                 continue;
             }
-            $abonado += (float) $aplicacion->amount;
+            $abonado += $this->creditedAmount($aplicacion, $abono);
         }
 
         return round(max(0, $this->requiredAmount($proveedor) - $abonado), 2);
+    }
+
+    /**
+     * The bank rules over what Sales recorded (RN-62). A shared voucher keeps its split:
+     * Sales assigns that difference when choosing who continues (RN-66).
+     */
+    private function creditedAmount(PagoProveedorAbonoAplicacion $application, PagoProveedorAbono $deposit): float
+    {
+        $applied = (float) $application->amount;
+        if ($deposit->status !== PagoProveedorAbono::STATUS_VALIDATED || $deposit->bank_amount === null) {
+            return $applied;
+        }
+        $deposit->loadMissing('aplicaciones');
+        if ($deposit->aplicaciones->count() > 1) {
+            return $applied;
+        }
+
+        return min($applied, (float) $deposit->bank_amount);
     }
 
     public function requiredAmount(PagoProveedorSolicitudProveedor $proveedor): float
@@ -751,7 +833,7 @@ class PagoProveedorEtapa1Service
         return $siguiente;
     }
 
-    private function abonoEditable(PagoProveedorSolicitud $solicitud, int $abonoId): PagoProveedorAbono
+    private function abonoEditable(PagoProveedorSolicitud $solicitud, int $abonoId, bool $correcting = false): PagoProveedorAbono
     {
         $abono = $solicitud->abonos->firstWhere('id', $abonoId);
         if (!$abono) {
@@ -760,7 +842,11 @@ class PagoProveedorEtapa1Service
         if (!in_array($abono->status, [PagoProveedorAbono::STATUS_IN_VALIDATION, PagoProveedorAbono::STATUS_OBSERVED], true)) {
             throw new PagoProveedorException('Solo se edita o anula un abono pendiente o observado.');
         }
-        $avanzados = $abono->aplicaciones->contains(function ($aplicacion) use ($solicitud) {
+        // Sales lifts a deposit observation in the same stage (RN-56, RN-111).
+        if ($correcting && $abono->status === PagoProveedorAbono::STATUS_OBSERVED) {
+            return $abono;
+        }
+        $avanzados =$abono->aplicaciones->contains(function ($aplicacion) use ($solicitud) {
             $proveedor = $solicitud->proveedores->firstWhere('id', $aplicacion->request_provider_id);
 
             return $proveedor && (int) $proveedor->stage > 1;
@@ -779,12 +865,44 @@ class PagoProveedorEtapa1Service
 
     private function textoFormulario(PagoProveedorSolicitudProveedor $proveedor, string $enlace, bool $porAutorizar): string
     {
-        $nombre = $this->solicitudDe($proveedor)->client_name ?: 'cliente';
+        $nombre = $this->mensajes()->firstName($this->solicitudDe($proveedor)->client_name);
         $pedido = $porAutorizar
             ? 'Revisa y autoriza los datos bancarios que registramos para el pago.'
-            : 'Completa el formulario bancario para pagarle a tu proveedor.';
+            : 'Para pagar a tu proveedor por transferencia internacional (T-T) necesitamos sus datos bancarios.';
+        $bloque = "✅ Proveedor: *{$proveedor->code_supplier} | {$proveedor->product}*\n📝 Datos:\n▪️ *Formulario bancario:* {$enlace}";
 
-        return "Hola, {$nombre} 🙋🏻‍♀️\n|\nProveedor: {$proveedor->code_supplier}\n{$proveedor->product}\n{$pedido}\n{$enlace}";
+        return "Hola, {$nombre} 🙋🏻‍♀️\n{$pedido}\n\n{$bloque}\n\n👉 Apenas lo envíes, lo recibimos y continuamos con el proceso.";
+    }
+
+    private function mensajes(): PagoProveedorMensajeService
+    {
+        return app(PagoProveedorMensajeService::class);
+    }
+
+    /**
+     * @param  array<int, string>  $blocks
+     */
+    private function dataRequestText(string $name, array $blocks, bool $hasYuan, bool $hasBankForm): string
+    {
+        if (count($blocks) === 1) {
+            $intro = $hasBankForm
+                ? 'Para pagar a tu proveedor por transferencia internacional (T-T) necesitamos sus datos bancarios.'
+                : 'Para pagar a tu proveedor necesitamos 2 datos de su vendedor.';
+            $closing = $hasBankForm
+                ? 'Apenas lo envíes, lo recibimos y continuamos con el proceso.'
+                : 'Apenas los tengamos, continuamos con el proceso.';
+        } elseif ($hasBankForm && $hasYuan) {
+            $intro = 'Para pagar a tus proveedores necesitamos lo siguiente de cada uno:';
+            $closing = 'Los datos del vendedor compártelos por aquí; los datos bancarios, en cada formulario. Apenas los tengamos, continuamos con el proceso.';
+        } elseif ($hasBankForm) {
+            $intro = 'Para pagar a tus proveedores por transferencia internacional (T-T) necesitamos sus datos bancarios:';
+            $closing = 'Completa un formulario por cada proveedor y continuamos con el proceso.';
+        } else {
+            $intro = 'Para pagar a tus proveedores necesitamos 2 datos del vendedor de cada uno:';
+            $closing = 'Compártelos por aquí y continuamos con el proceso.';
+        }
+
+        return "Hola, {$name} 🙋🏻‍♀️\n{$intro}\n\n" . implode("\n\n", $blocks) . "\n\n👉 {$closing}";
     }
 
     /**

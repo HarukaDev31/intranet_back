@@ -30,7 +30,15 @@ class PagoProveedorSolicitud extends Model
 {
     public const ORIGIN_SALES = 'sales';
     public const ORIGIN_MANUAL = 'china_manual';
-    public const PARTNER_OWN = 'Pro Business';
+    public const PARTNER_OWN = 'Pro Business - PE';
+    public const PARTNERS = [self::PARTNER_OWN, 'Genuino - BOG', 'Javiandy / ECU-DAV'];
+
+    public static function partnerLabel(?string $partner): string
+    {
+        $name = trim((string) $partner);
+
+        return $name === '' || stripos($name, 'pro business') !== false ? self::PARTNER_OWN : $name;
+    }
     protected $table = 'pago_proveedor_solicitudes';
 
     protected $fillable = [

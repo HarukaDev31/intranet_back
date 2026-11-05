@@ -148,7 +148,11 @@ class PagoProveedorAprobacionController extends Controller
                 'data' => [
                     'usd' => [$tariff->bancariaUsdBaja, $tariff->bancariaUsdMedia, $tariff->bancariaUsdAlta],
                     'rmb' => [$tariff->bancariaRmbBaja, $tariff->bancariaRmbMedia, $tariff->bancariaRmbAlta],
+                    'tramo_medio' => $tariff->limiteMedio,
+                    'tramo_alto' => $tariff->limiteAlto,
                     'admin' => $tariff->administrativa,
+                    'admin_usd' => $tariff->administrativaUsd,
+                    'admin_rmb' => $tariff->administrativaRmb,
                 ],
             ]);
         });
@@ -159,16 +163,40 @@ class PagoProveedorAprobacionController extends Controller
         return $this->responder(function () use ($request) {
             $this->authorization->requireAdministration($request->user());
             $data = $request->validate([
-                'usd' => ['required', 'array', 'size:3'],
+                'usd' => ['nullable', 'array', 'size:3'],
                 'usd.*' => ['numeric', 'min:0'],
-                'rmb' => ['required', 'array', 'size:3'],
+                'rmb' => ['nullable', 'array', 'size:3'],
                 'rmb.*' => ['numeric', 'min:0'],
-                'admin' => ['required', 'numeric', 'min:0'],
+                'tramo_medio' => ['nullable', 'numeric', 'min:0'],
+                'tramo_alto' => ['nullable', 'numeric', 'min:0'],
+                'admin' => ['nullable', 'numeric', 'min:0'],
+                'admin_usd' => ['nullable', 'numeric', 'min:0'],
+                'admin_rmb' => ['nullable', 'numeric', 'min:0'],
+                'tipo' => ['nullable', 'in:bancaria,admin'],
             ]);
             $configuration = app(PagoProveedorConfiguracionService::class);
-            $configuration->save('tarifa_bancaria_usd', array_map('floatval', $data['usd']));
-            $configuration->save('tarifa_bancaria_rmb', array_map('floatval', $data['rmb']));
-            $configuration->save('comision_administrativa', (float) $data['admin']);
+            $tipo = (string) ($data['tipo'] ?? 'bancaria');
+
+            if ($tipo === 'admin') {
+                $adminUsd = (float) ($data['admin_usd'] ?? $data['admin'] ?? 0);
+                $adminRmb = (float) ($data['admin_rmb'] ?? $data['admin'] ?? $adminUsd);
+                $configuration->save('comision_administrativa_usd', $adminUsd);
+                $configuration->save('comision_administrativa_rmb', $adminRmb);
+                $configuration->save('comision_administrativa', $adminUsd);
+            } else {
+                if (isset($data['usd'])) {
+                    $configuration->save('tarifa_bancaria_usd', array_map('floatval', $data['usd']));
+                }
+                if (isset($data['rmb'])) {
+                    $configuration->save('tarifa_bancaria_rmb', array_map('floatval', $data['rmb']));
+                }
+                if (isset($data['tramo_medio'])) {
+                    $configuration->save('tramo_medio', (float) $data['tramo_medio']);
+                }
+                if (isset($data['tramo_alto'])) {
+                    $configuration->save('tramo_alto', (float) $data['tramo_alto']);
+                }
+            }
 
             return response()->json(['success' => true, 'data' => $configuration->all()]);
         });
