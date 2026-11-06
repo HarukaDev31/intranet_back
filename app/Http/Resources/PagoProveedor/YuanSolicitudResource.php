@@ -34,6 +34,7 @@ class YuanSolicitudResource extends JsonResource
             'date' => $yuan->dateOf($solicitud),
             'country' => $yuan->countryOf($solicitud),
             'partner' => PagoProveedorSolicitud::partnerLabel($solicitud->partner),
+            'client' => $solicitud->client_name ?: $solicitud->partner,
             'organization_id' => $solicitud->organizacion_id,
             'organization' => $solicitud->organizacion?->No_Organizacion,
             'manual' => $manual,
