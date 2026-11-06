@@ -111,6 +111,7 @@ class PagoProveedorSolicitudProveedor extends Model
     public const CHINA_REASON_WECHAT = 'wechat_wrong';
     public const CHINA_REASON_NO_REPLY = 'no_reply';
     public const CHINA_REASON_MISMATCH = 'data_mismatch';
+    public const CHINA_REASON_FREE_TEXT = 'free_text';
 
     protected $table = 'pago_proveedor_solicitud_proveedores';
 
@@ -120,6 +121,7 @@ class PagoProveedorSolicitudProveedor extends Model
         'code_supplier',
         'consolidated_provider_id',
         'supplier_name',
+        'client_name',
         'product',
         'currency',
         'payment_type',

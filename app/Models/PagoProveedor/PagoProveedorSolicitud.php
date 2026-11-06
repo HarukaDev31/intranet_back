@@ -19,12 +19,17 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $client_whatsapp
  * @property string|null $client_email
  * @property string|null $consolidation
+ * @property string|null $partner
+ * @property string|null $country
+ * @property \Illuminate\Support\Carbon|null $request_date
+ * @property string|null $origin
  * @property int|null $user_id
  * @property \Illuminate\Support\Carbon|null $created_at
  * @property \Illuminate\Support\Carbon|null $updated_at
  * @property PagoProveedorCotizacion|null $cotizacion
  * @property \Illuminate\Database\Eloquent\Collection<int, PagoProveedorSolicitudProveedor> $proveedores
  * @property \Illuminate\Database\Eloquent\Collection<int, PagoProveedorAbono> $abonos
+ * @property \Illuminate\Database\Eloquent\Collection<int, PagoProveedorIngreso> $ingresos
  */
 class PagoProveedorSolicitud extends Model
 {
@@ -32,6 +37,10 @@ class PagoProveedorSolicitud extends Model
     public const ORIGIN_MANUAL = 'china_manual';
     public const PARTNER_OWN = 'Pro Business - PE';
     public const PARTNERS = [self::PARTNER_OWN, 'Genuino - BOG', 'Javiandy / ECU-DAV'];
+    public const COUNTRY_PERU = 'Perú';
+    public const COUNTRY_ECUADOR = 'Ecuador';
+    public const COUNTRY_BOLIVIA = 'Bolivia';
+    public const COUNTRIES = [self::COUNTRY_PERU, self::COUNTRY_ECUADOR, self::COUNTRY_BOLIVIA];
 
     public static function partnerLabel(?string $partner): string
     {
@@ -54,6 +63,8 @@ class PagoProveedorSolicitud extends Model
         'client_email',
         'consolidation',
         'partner',
+        'country',
+        'request_date',
         'origin',
         'user_id',
     ];
@@ -61,6 +72,7 @@ class PagoProveedorSolicitud extends Model
     protected $casts = [
         'exchange_rate' => 'float',
         'exchange_rate_confirmed' => 'boolean',
+        'request_date' => 'date',
     ];
 
     /**
@@ -77,6 +89,14 @@ class PagoProveedorSolicitud extends Model
     public function proveedores(): HasMany
     {
         return $this->hasMany(PagoProveedorSolicitudProveedor::class, 'request_id')->orderBy('position');
+    }
+
+    /**
+     * @return HasMany<PagoProveedorIngreso, $this>
+     */
+    public function ingresos(): HasMany
+    {
+        return $this->hasMany(PagoProveedorIngreso::class, 'request_id')->orderBy('id');
     }
 
     /**

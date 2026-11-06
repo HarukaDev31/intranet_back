@@ -29,13 +29,8 @@ class YuanPagoResource extends JsonResource
         if (!$execution && (int) $provider->stage >= PagoProveedorSolicitudProveedor::STAGE_CONFIRMATION) {
             $execution = $provider->ejecuciones->sortByDesc('id')->first();
         }
-        $observed = $provider->status === PagoProveedorSolicitudProveedor::STATUS_OBSERVED
-            && $provider->china_observation_reason !== null;
-        $status = $observed
-            ? 'observado'
-            : ($execution && (int) $provider->stage >= PagoProveedorSolicitudProveedor::STAGE_CONFIRMATION
-                ? 'pagado'
-                : 'pendiente');
+        $status = $yuan->statusOf($provider);
+        $manual = $provider->solicitud?->origin === \App\Models\PagoProveedor\PagoProveedorSolicitud::ORIGIN_MANUAL;
 
         return [
             'provider_id' => $provider->id,
@@ -44,13 +39,14 @@ class YuanPagoResource extends JsonResource
             'request_code' => $provider->request_code,
             'supplier_code' => $provider->code_supplier,
             'supplier_name' => $provider->supplier_name,
+            'client' => $provider->client_name ?: $provider->solicitud?->client_name,
             'product' => $provider->product,
             'wechat' => $provider->datos?->wechat,
             'seller_name' => $provider->datos?->seller_name,
             'client_name' => $provider->solicitud?->client_name,
             'consolidation' => $provider->solicitud?->consolidation,
             'partner' => \App\Models\PagoProveedor\PagoProveedorSolicitud::partnerLabel($provider->solicitud?->partner),
-            'manual' => $provider->solicitud?->origin === \App\Models\PagoProveedor\PagoProveedorSolicitud::ORIGIN_MANUAL,
+            'manual' => $manual,
             'payment_mode' => $provider->supplier_payment_mode,
             'usd_amount' => $quote['usd'],
             'quoted_rate' => $quote['quoted_rate'],
@@ -63,21 +59,22 @@ class YuanPagoResource extends JsonResource
             'difference_result' => $execution?->exchange_result,
             'difference_label' => $execution?->exchange_result ? $yuan->resultLabel((string) $execution->exchange_result) : null,
             'status' => $status,
-            'status_label' => match ($status) {
-                'observado' => 'Observado',
-                'pagado' => 'Pagado',
-                default => 'Pendiente',
-            },
+            'status_label' => $yuan->statusLabel($status),
+            'proforma_name' => $provider->proforma_name,
             'proforma_url' => $provider->proforma_path ? $this->cdnStorageUrl($provider->proforma_path) : null,
             'receipt_url' => $execution?->receipt_path ? $this->cdnStorageUrl($execution->receipt_path) : null,
+            'receipt_name' => $execution?->receipt_name,
+            'paid_on' => $execution?->executed_on?->toDateString(),
             'current_payment' => (int) $provider->current_payment,
             'supplier_payments' => is_array($provider->summary_json['pagos_proveedor'] ?? null)
                 ? count($provider->summary_json['pagos_proveedor'])
                 : 1,
             'can_register' => $status === 'pendiente',
             'can_observe' => $status === 'pendiente',
-            'can_edit' => $status === 'pendiente' && $provider->solicitud?->origin === \App\Models\PagoProveedor\PagoProveedorSolicitud::ORIGIN_MANUAL,
-            'can_lift' => $status === 'observado' && $provider->solicitud?->origin === \App\Models\PagoProveedor\PagoProveedorSolicitud::ORIGIN_MANUAL,
+            'can_undo' => $yuan->canUndo($provider),
+            'can_lift' => $status === 'observado',
+            'needs_notice' => !$manual,
+            'needs_receipt' => !$manual,
             'observation_reason' => $provider->china_observation_reason,
             'observation_label' => $provider->china_observation_reason
                 ? $yuan->reasonLabel((string) $provider->china_observation_reason)

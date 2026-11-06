@@ -63,7 +63,7 @@ Route::group(['prefix' => 'pago-proveedor', 'middleware' => 'jwt.auth'], functio
     Route::post('reembolsos/{id}/aprobar', [PagoProveedorReembolsoController::class, 'approve'])->whereNumber('id');
     Route::post('reembolsos/{id}/rechazar', [PagoProveedorReembolsoController::class, 'reject'])->whereNumber('id');
     Route::post('yuanes/manual', [PagoProveedorYuanController::class, 'storeManual']);
-    Route::post('yuanes/{providerId}/editar', [PagoProveedorYuanController::class, 'updateManual'])->whereNumber('providerId');
+    Route::post('yuanes/solicitudes/{requestId}/editar', [PagoProveedorYuanController::class, 'updateManual'])->whereNumber('requestId');
     Route::post('solicitudes/{id}/abonos', [PagoProveedorEtapa1Controller::class, 'registrarAbono'])->whereNumber('id');
     Route::post('solicitudes/{id}/abonos/{abonoId}', [PagoProveedorEtapa1Controller::class, 'actualizarAbono'])->whereNumber(['id', 'abonoId']);
     Route::post('solicitudes/{id}/abonos/{abonoId}/anular', [PagoProveedorEtapa1Controller::class, 'anularAbono'])->whereNumber(['id', 'abonoId']);
@@ -99,6 +99,8 @@ Route::group(['prefix' => 'pago-proveedor', 'middleware' => 'jwt.auth'], functio
     Route::post('yuanes/{providerId}/aviso', [PagoProveedorYuanController::class, 'notice'])->whereNumber('providerId');
     Route::post('yuanes/{providerId}/observar', [PagoProveedorYuanController::class, 'observe'])->whereNumber('providerId');
     Route::post('yuanes/{providerId}/levantar', [PagoProveedorYuanController::class, 'lift'])->whereNumber('providerId');
+    Route::post('yuanes/{providerId}/deshacer', [PagoProveedorYuanController::class, 'undo'])->whereNumber('providerId');
+    Route::post('yuanes/solicitudes/{requestId}/ingresos', [PagoProveedorYuanController::class, 'storeIncome'])->whereNumber('requestId');
+    Route::delete('yuanes/ingresos/{incomeId}', [PagoProveedorYuanController::class, 'destroyIncome'])->whereNumber('incomeId');
     Route::post('yuanes/{providerId}', [PagoProveedorYuanController::class, 'store'])->whereNumber('providerId');
-    Route::delete('yuanes/{providerId}', [PagoProveedorYuanController::class, 'destroy'])->whereNumber('providerId');
 });
