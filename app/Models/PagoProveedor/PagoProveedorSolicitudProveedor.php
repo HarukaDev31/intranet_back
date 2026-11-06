@@ -149,6 +149,7 @@ class PagoProveedorSolicitudProveedor extends Model
         'assumed_reason',
         'collect_amount',
         'collect_until',
+        'registration_error_note',
         'approved_at',
         'approved_by_user_id',
         'second_installment_choice',
@@ -283,13 +284,6 @@ class PagoProveedorSolicitudProveedor extends Model
         if ($this->approval_status === self::APPROVAL_REGISTRATION_ERROR) {
             return self::TASK_OBSERVED;
         }
-        if ($this->client_payment_mode === PagoProveedorCotizacionProveedor::MODE_SPLIT
-            && (int) $this->current_installment === self::FIRST_INSTALLMENT
-            && $this->second_installment_choice === null
-            && $this->second_installment_on
-            && $this->second_installment_on->copy()->startOfDay()->lte(now('America/Lima')->startOfDay()->addDays(2))) {
-            return self::TASK_CONFIRMATION;
-        }
         if ((int) $this->stage === self::STAGE_CONFIRMATION
             && $this->client_payment_mode === PagoProveedorCotizacionProveedor::MODE_SPLIT
             && (int) $this->current_installment === self::FIRST_INSTALLMENT
@@ -313,7 +307,14 @@ class PagoProveedorSolicitudProveedor extends Model
             return self::TASK_OBSERVED;
         }
         if ((int) $this->stage !== self::STAGE_DATA) {
-            return null;
+            // RN-18: aunque esté en otra área, Ventas recuerda el compromiso 2 días antes.
+            $reminderDue = $this->client_payment_mode === PagoProveedorCotizacionProveedor::MODE_SPLIT
+                && (int) $this->current_installment === self::FIRST_INSTALLMENT
+                && $this->second_installment_choice === null
+                && $this->second_installment_on
+                && $this->second_installment_on->copy()->startOfDay()->lte(now('America/Lima')->startOfDay()->addDays(2));
+
+            return $reminderDue ? self::TASK_CONFIRMATION : null;
         }
 
         $data = $this->datos;

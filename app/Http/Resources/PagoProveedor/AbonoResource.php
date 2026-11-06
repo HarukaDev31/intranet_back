@@ -58,7 +58,12 @@ class AbonoResource extends JsonResource
             'operacion_repetida' => $abono->repeated_operation,
             // Sales corrects an observed deposit in any stage; voiding stays limited to stage 1 (RN-45, RN-56).
             'puede_editar' => $abono->status === PagoProveedorAbono::STATUS_OBSERVED
-                || ($abono->status === PagoProveedorAbono::STATUS_IN_VALIDATION && !$advanced),
+                || ($abono->status === PagoProveedorAbono::STATUS_IN_VALIDATION && !$advanced)
+                || ($abono->status !== PagoProveedorAbono::STATUS_CANCELLED && $abono->aplicaciones->contains(function (PagoProveedorAbonoAplicacion $aplicacion) use ($solicitud) {
+                    $provider = $solicitud?->proveedores?->firstWhere('id', $aplicacion->request_provider_id);
+
+                    return $provider && $provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR;
+                })),
             'puede_anular' => in_array($abono->status, [PagoProveedorAbono::STATUS_IN_VALIDATION, PagoProveedorAbono::STATUS_OBSERVED], true) && !$advanced,
             'observacion' => $abono->status === PagoProveedorAbono::STATUS_OBSERVED ? [
                 'motivo' => app(\App\Services\PagoProveedor\PagoProveedorVerificacionService::class)->reasonLabel((string) $abono->observation_reason),

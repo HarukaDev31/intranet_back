@@ -43,7 +43,10 @@ class PagoProveedorReembolsoService
         return PagoProveedorReembolso::query()->where('status', PagoProveedorReembolso::STATUS_REQUESTED)->count();
     }
 
-    public function ensureSurplus(PagoProveedorAbono $deposit, array $actor): PagoProveedorReembolso
+    /**
+     * El reembolso lo solicita Ventas a pedido del cliente (RN-120): nace por consultar salvo que Ventas ya lo haya decidido.
+     */
+    public function ensureSurplus(PagoProveedorAbono $deposit, array $actor, bool $requested = false): PagoProveedorReembolso
     {
         $existing = PagoProveedorReembolso::query()->where('deposit_id', $deposit->id)->where('origin', PagoProveedorReembolso::ORIGIN_SURPLUS)->first();
         if ($existing) {
@@ -61,12 +64,14 @@ class PagoProveedorReembolsoService
             'request_provider_id' => $providerId,
             'deposit_id' => $deposit->id,
             'origin' => PagoProveedorReembolso::ORIGIN_SURPLUS,
-            'status' => PagoProveedorReembolso::STATUS_REQUESTED,
+            'status' => $requested ? PagoProveedorReembolso::STATUS_REQUESTED : PagoProveedorReembolso::STATUS_CONSULT,
             'amount' => $amount,
             'breakdown' => ['surplus' => $amount],
-            'requested_at' => now(),
+            'requested_at' => $requested ? now() : null,
         ]);
-        $this->history->registrar(PagoProveedorHistorial::ENTITY_REQUEST, (int) $deposit->request_id, 'Reembolso solicitado', $actor, 'Excedente $'.number_format($amount, 2, '.', ''));
+        if ($requested) {
+            $this->history->registrar(PagoProveedorHistorial::ENTITY_REQUEST, (int) $deposit->request_id, 'Reembolso solicitado', $actor, 'Excedente $'.number_format($amount, 2, '.', ''));
+        }
 
         return $refund;
     }
@@ -143,8 +148,12 @@ class PagoProveedorReembolsoService
             }
             $refund->status = PagoProveedorReembolso::STATUS_REQUESTED;
             $refund->requested_at = now();
+            // El motivo del rechazo anterior ya se atendió; el del pago 2 anulado sigue siendo el origen.
+            if ($refund->origin !== PagoProveedorReembolso::ORIGIN_PAYMENT) {
+                $refund->reason = null;
+            }
             $refund->save();
-            $this->history->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $requestId, 'Reembolso solicitado', $actor, 'Diferencia de cambio $'.number_format((float) $refund->amount, 2, '.', ''));
+            $this->history->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $requestId, 'Reembolso solicitado', $actor, ($refund->origin === PagoProveedorReembolso::ORIGIN_SURPLUS ? 'Excedente $' : 'Diferencia de cambio $').number_format((float) $refund->amount, 2, '.', ''));
 
             return app(PagoProveedorEtapa1Service::class)->detalle($requestId);
         });

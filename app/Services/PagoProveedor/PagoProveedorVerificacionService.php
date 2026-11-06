@@ -118,21 +118,47 @@ class PagoProveedorVerificacionService
         return DB::transaction(function () use ($id, $data, $actor) {
             $deposit = $this->find($id, true);
             $this->requireOpen($deposit);
+            $changes = $this->detailChanges($deposit, $data);
             $deposit->bank = $data['bank'];
             $deposit->paid_on = \Illuminate\Support\Carbon::parse($data['paid_on']);
             $deposit->operation_number = trim($data['operation_number']);
             $deposit->corrected_by_admin = true;
+            $deposit->admin_corrections = array_merge($deposit->admin_corrections ?? [], $changes);
             $deposit->save();
             $this->history->registrar(
                 PagoProveedorHistorial::ENTITY_REQUEST,
                 (int) $deposit->request_id,
                 'Depósito corregido',
                 $actor,
-                $deposit->operation_number
+                collect($changes)->map(fn (array $change) => $change['field'].': '.$change['from'].' → '.$change['to'])->implode(' · ') ?: $deposit->operation_number
             );
 
             return $deposit->fresh(['solicitud.proveedores', 'aplicaciones']);
         });
+    }
+
+    /**
+     * @param  array{bank: string, paid_on: string, operation_number: string}  $data
+     * @return array<int, array{field: string, from: string, to: string}>
+     */
+    private function detailChanges(PagoProveedorAbono $deposit, array $data): array
+    {
+        $banks = [PagoProveedorAbono::BANK_INTERBANK => 'Interbank'];
+        $label = fn (?string $bank) => $banks[$bank] ?? 'BCP';
+        $date = fn ($value) => \Illuminate\Support\Carbon::parse($value)->format('d/m/Y');
+        $candidates = [
+            ['Banco', $label($deposit->bank), $label($data['bank'])],
+            ['Fecha', $deposit->paid_on ? $date($deposit->paid_on) : '—', $date($data['paid_on'])],
+            ['N.° de operación', (string) $deposit->operation_number, trim($data['operation_number'])],
+        ];
+        $changes = [];
+        foreach ($candidates as [$field, $from, $to]) {
+            if ($from !== $to) {
+                $changes[] = ['field' => $field, 'from' => $from, 'to' => $to];
+            }
+        }
+
+        return $changes;
     }
 
     /**

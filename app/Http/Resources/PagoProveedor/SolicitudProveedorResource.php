@@ -37,6 +37,7 @@ class SolicitudProveedorResource extends JsonResource
             'exchange_result' => $provider->exchange_result,
             'second_payment_choice' => $provider->second_payment_choice,
             'second_installment_on' => optional($provider->second_installment_on)->format('Y-m-d'),
+            'current_installment' => (int) $provider->current_installment,
             'decision_due_at' => optional($provider->decision_due_at)->toIso8601String(),
             'decision_due_text' => $provider->decision_due_at
                 ? ($provider->decision_due_at->isPast()

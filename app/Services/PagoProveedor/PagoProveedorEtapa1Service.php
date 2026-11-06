@@ -130,10 +130,11 @@ class PagoProveedorEtapa1Service
         return DB::transaction(function () use ($solicitudId, $proveedorId, $actor) {
             $proveedor = $this->proveedorEtapa1($solicitudId, $proveedorId);
             $datos = $this->datosDe($proveedor);
-            if ($datos->status !== PagoProveedorDatoProveedor::STATUS_RECEIVED) {
-                throw new PagoProveedorException('Solo se pide una nueva validación cuando el cliente ya autorizó los datos.');
+            // Por autorizar: el borrador de Ventas lo revisa el cliente. Recibido: se le pide validarlo de nuevo.
+            if (!in_array($datos->status, [PagoProveedorDatoProveedor::STATUS_RECEIVED, PagoProveedorDatoProveedor::STATUS_AWAITING_AUTHORIZATION], true)) {
+                throw new PagoProveedorException('Solo se pide validación de datos ya llenados.');
             }
-            $datos->correction_requested = true;
+            $datos->correction_requested = $datos->status === PagoProveedorDatoProveedor::STATUS_RECEIVED;
             $datos->save();
             $enlace = $this->enlace($datos);
             $texto = "Hola, " . ($this->solicitudDe($proveedor)->client_name ?: 'cliente') . " 🙋🏻‍♀️\n|\nNecesitamos que revises los datos bancarios de " . $proveedor->code_supplier . ".\n" . $enlace;
@@ -207,14 +208,18 @@ class PagoProveedorEtapa1Service
             if (!$proveedor) {
                 throw new PagoProveedorException('El proveedor no pertenece a esta solicitud.', 404);
             }
-            if (!$proveedor->sales_observation) {
-                throw new PagoProveedorException('Este proveedor no tiene una observación de Ventas.');
+            $registrationError = $proveedor->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR;
+            if (!$proveedor->sales_observation && !$registrationError) {
+                throw new PagoProveedorException('Este proveedor no tiene una observación que puedas levantar.');
             }
             $proveedor->status = PagoProveedorSolicitudProveedor::STATUS_IN_PROGRESS;
             $proveedor->sales_observation = null;
             $proveedor->sales_observed_at = null;
             $proveedor->save();
             $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, 'Observación levantada', $actor, $proveedor->code_supplier . ' · ' . $motivo);
+            if ($registrationError) {
+                app(PagoProveedorAprobacionService::class)->liftRegistrationError($proveedor, $actor);
+            }
             $this->intentarAvanzar($solicitud, $actor);
 
             return $this->recargar($solicitud);
@@ -413,7 +418,7 @@ class PagoProveedorEtapa1Service
                 $abono = $this->abonoEditable($solicitud, $abonoId, true);
             }
 
-            $correctedProviderIds = $abono?->status === PagoProveedorAbono::STATUS_OBSERVED
+            $correctedProviderIds = $abono && ($abono->status === PagoProveedorAbono::STATUS_OBSERVED || $this->tieneErrorDeRegistro($solicitud, $abono))
                 ? $abono->aplicaciones->pluck('request_provider_id')->map(fn ($id) => (int) $id)->all()
                 : [];
             $saldos = [];
@@ -485,6 +490,8 @@ class PagoProveedorEtapa1Service
                 'verified_at' => null,
                 'verified_by_user_id' => null,
                 'bank_amount' => null,
+                'recorded_amount' => null,
+                'admin_corrections' => null,
             ];
 
             if ($abono) {
@@ -504,10 +511,6 @@ class PagoProveedorEtapa1Service
                     'request_provider_id' => $proveedorId,
                     'amount' => $monto,
                 ]);
-            }
-
-            if ($abono->surplus_decision === PagoProveedorAbono::EXCESS_REFUND) {
-                app(PagoProveedorReembolsoService::class)->ensureSurplus($abono->fresh(['aplicaciones']), $actor);
             }
 
             $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, $abonoId ? 'Abono editado' : 'Abono registrado', $actor, $abono->operation_number);
@@ -565,7 +568,7 @@ class PagoProveedorEtapa1Service
             $abono->save();
             $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, 'Excedente', $actor, $decision);
             if ($decision === PagoProveedorAbono::EXCESS_REFUND) {
-                app(PagoProveedorReembolsoService::class)->ensureSurplus($abono, $actor);
+                app(PagoProveedorReembolsoService::class)->ensureSurplus($abono, $actor, true);
             }
 
             return $this->recargar($solicitud);
@@ -896,6 +899,10 @@ class PagoProveedorEtapa1Service
         if (!$abono) {
             throw new PagoProveedorException('El abono no existe.', 404);
         }
+        // Con un error de registro Ventas corrige su voucher aunque ya esté validado (ES-02).
+        if ($correcting && $this->tieneErrorDeRegistro($solicitud, $abono)) {
+            return $abono;
+        }
         if (!in_array($abono->status, [PagoProveedorAbono::STATUS_IN_VALIDATION, PagoProveedorAbono::STATUS_OBSERVED], true)) {
             throw new PagoProveedorException('Solo se edita o anula un abono pendiente o observado.');
         }
@@ -913,6 +920,15 @@ class PagoProveedorEtapa1Service
         }
 
         return $abono;
+    }
+
+    private function tieneErrorDeRegistro(PagoProveedorSolicitud $solicitud, PagoProveedorAbono $abono): bool
+    {
+        return $abono->status !== PagoProveedorAbono::STATUS_CANCELLED && $abono->aplicaciones->contains(function ($aplicacion) use ($solicitud) {
+            $proveedor = $solicitud->proveedores->firstWhere('id', $aplicacion->request_provider_id);
+
+            return $proveedor && $proveedor->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR;
+        });
     }
 
     private function enlace(PagoProveedorDatoProveedor $datos): string

@@ -18,6 +18,9 @@ class PagoProveedorConfirmacionService
 {
     use UsesObjectStorage;
 
+    /** @var array<int, string|null> */
+    private array $userNames = [];
+
     public function __construct(
         private readonly PagoProveedorConfiguracionService $configuration,
         private readonly PagoProveedorHistorialService $history,
@@ -335,6 +338,9 @@ class PagoProveedorConfirmacionService
                 'id' => $execution->id,
                 'cargo_amount' => (float) $execution->cargo_amount,
                 'executed_on' => optional($execution->executed_on)->toDateString(),
+                'registered_at' => optional($execution->created_at)->toIso8601String(),
+                'registered_by' => $this->userName($execution->user_id),
+                'paid_yuan' => $execution->yuan_paid !== null ? (float) $execution->yuan_paid : null,
                 'receipt_name' => $execution->receipt_name,
                 'receipt_path' => $execution->receipt_path,
             ])->values()->all(),
@@ -353,6 +359,11 @@ class PagoProveedorConfirmacionService
                 'can_send_balance' => in_array($provider->exchange_result, [PagoProveedorEjecucion::RESULT_COLLECT, PagoProveedorEjecucion::RESULT_REFUND], true)
                     && !app(PagoProveedorMensajeService::class)->balanceStored($provider),
                 'can_download_balance' => $provider->ejecuciones->isNotEmpty(),
+                'balance_sent' => app(PagoProveedorMensajeService::class)->balanceStored($provider),
+                'exchange_result' => $provider->exchange_result,
+                'exchange_amount_usd' => round(abs((float) $provider->ejecuciones->sum('exchange_difference_usd')), 2),
+                'exchange_covered' => $provider->exchange_result === PagoProveedorEjecucion::RESULT_COLLECT && $this->exchangeCovered($provider),
+                'exchange_validating' => $provider->exchangeDeposits->contains(fn (PagoProveedorAbono $deposit) => $deposit->status === PagoProveedorAbono::STATUS_IN_VALIDATION),
                 'can_request_refund' => $provider->refunds->contains(fn (PagoProveedorReembolso $refund) => $refund->status === PagoProveedorReembolso::STATUS_CONSULT),
                 'exchange_due_usd' => $this->exchangeDue($provider),
                 'payment_two_refund' => $this->awaitsPaymentChoice($provider) ? $this->paymentTwoRefund($provider) : null,
@@ -513,7 +524,9 @@ class PagoProveedorConfirmacionService
                 'key' => 'supplier_payment',
                 'label' => 'Decisión del pago 2',
                 'done' => $provider->second_payment_choice !== null,
-                'blocks' => $provider->second_payment_choice === null,
+                // Sin cuota 2 no hay dinero para el pago 2: al cerrar, ya no queda por decidir.
+                'blocks' => $provider->second_payment_choice === null
+                    && $provider->status !== PagoProveedorSolicitudProveedor::STATUS_COMPLETED,
                 'owner' => PagoProveedorSolicitudProveedor::OWNER_SALES,
             ];
         }
@@ -563,15 +576,41 @@ class PagoProveedorConfirmacionService
      */
     private function verification(PagoProveedorSolicitudProveedor $provider): array
     {
+        $verifyHours = max(1, (int) $this->configuration->value(PagoProveedorSolicitudProveedor::SETTING_VERIFY_HOURS, 2));
         $deposits = [];
         foreach ($provider->aplicaciones as $application) {
             $deposit = $application->abono;
             if (!$deposit || $deposit->status === PagoProveedorAbono::STATUS_CANCELLED) {
                 continue;
             }
+            $bank = (float) ($deposit->bank_amount ?? $deposit->amount);
+            $recorded = $deposit->recorded_amount !== null && abs((float) $deposit->recorded_amount - $bank) >= PagoProveedorSolicitudProveedor::MONEY_EPSILON
+                ? (float) $deposit->recorded_amount
+                : null;
+            $corrections = is_array($deposit->admin_corrections) ? $deposit->admin_corrections : [];
+            $registrationError = $provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR;
+            $inValidation = $deposit->status === PagoProveedorAbono::STATUS_IN_VALIDATION;
+            $deadline = $inValidation && $deposit->created_at ? $deposit->created_at->copy()->addHours($verifyHours) : null;
             $deposits[] = [
                 'id' => $deposit->id,
-                'amount' => (float) ($deposit->bank_amount ?? $deposit->amount),
+                'applied_amount' => (float) $application->amount,
+                'recorded_amount' => $recorded,
+                'corrections' => $corrections,
+                'modified' => $recorded !== null || $corrections !== [],
+                'shared' => $deposit->aplicaciones->count() > 1,
+                'bank_label' => $deposit->bank === PagoProveedorAbono::BANK_INTERBANK ? 'Interbank' : 'BCP',
+                'voucher_path' => $deposit->voucher_path,
+                'can_edit' => $deposit->status === PagoProveedorAbono::STATUS_OBSERVED || $registrationError,
+                'verified_at' => optional($deposit->verified_at)->toIso8601String(),
+                'verified_by' => $this->userName($deposit->verified_by_user_id),
+                'deadline_text' => $deadline ? ($deadline->isPast() ? 'plazo vencido' : PagoProveedorPlazo::remainingText($deadline)) : null,
+                'deadline_overdue' => $deadline ? $deadline->isPast() : false,
+                'observation' => $deposit->status === PagoProveedorAbono::STATUS_OBSERVED ? [
+                    'reason' => app(PagoProveedorVerificacionService::class)->reasonLabel((string) $deposit->observation_reason),
+                    'detail' => $deposit->observation_detail,
+                    'deadline_text' => $deposit->observe_until ? PagoProveedorPlazo::remainingText($deposit->observe_until) : null,
+                ] : null,
+                'amount' => $bank,
                 'status' => $deposit->status,
                 'status_label' => match ($deposit->status) {
                     PagoProveedorAbono::STATUS_VALIDATED => 'Validado',
@@ -585,6 +624,8 @@ class PagoProveedorConfirmacionService
 
         return [
             'deposits' => $deposits,
+            'approval' => $this->approvalSummary($provider),
+            'surpluses' => $this->surplusSummary($provider),
             'approval_status' => $provider->approval_status,
             'approval_label' => match ($provider->approval_status) {
                 PagoProveedorSolicitudProveedor::APPROVAL_APPROVED => $provider->approval_mode === PagoProveedorSolicitudProveedor::APPROVAL_AUTOMATIC
@@ -595,6 +636,98 @@ class PagoProveedorConfirmacionService
                 default => (int) $provider->stage < PagoProveedorSolicitudProveedor::STAGE_VALIDATION ? 'Aún no llega' : 'En validación',
             },
         ];
+    }
+
+    /**
+     * Lo que ve Ventas en la tarjeta «Aprobación de pago» (VW-12).
+     *
+     * @return array<string, mixed>
+     */
+    private function approvalSummary(PagoProveedorSolicitudProveedor $provider): array
+    {
+        $summary = [
+            'automatic' => $provider->approval_mode === PagoProveedorSolicitudProveedor::APPROVAL_AUTOMATIC,
+            'decided_at' => optional($provider->approved_at)->toIso8601String(),
+            'decided_by' => $this->userName($provider->approved_by_user_id),
+            'assumed_amount' => $provider->assumed_amount !== null ? (float) $provider->assumed_amount : null,
+            'assumed_reason' => $provider->assumed_reason,
+            'collect_amount' => $provider->collect_amount !== null ? (float) $provider->collect_amount : null,
+            'deadline_text' => $provider->collect_until ? PagoProveedorPlazo::remainingText($provider->collect_until) : null,
+            'note' => $provider->registration_error_note,
+            'surplus' => round((float) $provider->aplicaciones->sum(fn ($application) => $application->abono && $application->abono->status !== PagoProveedorAbono::STATUS_CANCELLED ? (float) $application->abono->surplus : 0.0), 2),
+            'surplus_applied' => $provider->aplicaciones->contains(fn ($application) => $application->abono && $application->abono->surplus_decision === PagoProveedorAbono::EXCESS_APPLIED),
+            'difference' => 0.0,
+            'tolerance' => (float) $this->configuration->value(PagoProveedorSolicitudProveedor::SETTING_TOLERANCE, 1),
+        ];
+        if ($provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_APPROVED
+            || (int) $provider->stage > PagoProveedorSolicitudProveedor::STAGE_VALIDATION) {
+            return ['state' => 'approved'] + $summary;
+        }
+        if ($provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT) {
+            return ['state' => 'to_collect'] + $summary;
+        }
+        if ($provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR) {
+            return ['state' => 'registration_error'] + $summary;
+        }
+        $comparison = app(PagoProveedorAprobacionService::class)->compare($provider);
+        $summary['difference'] = (float) $comparison['difference'];
+        $allValidated = $comparison['unverified'] === 0 && $comparison['observed'] === 0 && $comparison['has_validated'];
+        $withinTolerance = abs($comparison['difference']) <= $comparison['tolerance'] + 0.001;
+        $state = match (true) {
+            $comparison['observed'] > 0 => 'waiting_money',
+            $comparison['shared_pending'] => 'waiting_shared',
+            $allValidated && !$comparison['data_ready'] => 'missing_data',
+            $allValidated && !$withinTolerance => 'difference',
+            $comparison['unverified'] > 0 => 'waiting_verification',
+            default => 'evaluating',
+        };
+
+        return ['state' => $state] + $summary;
+    }
+
+    /**
+     * Excedentes de los abonos de este proveedor y su reembolso (ES-60).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function surplusSummary(PagoProveedorSolicitudProveedor $provider): array
+    {
+        $provider->loadMissing('refunds');
+        $hasInstallments = (int) $provider->current_installment < 2
+            && $provider->client_payment_mode === PagoProveedorCotizacionProveedor::MODE_SPLIT;
+        $rows = [];
+        foreach ($provider->aplicaciones as $application) {
+            $deposit = $application->abono;
+            if (!$deposit || $deposit->status === PagoProveedorAbono::STATUS_CANCELLED || (float) $deposit->surplus <= 0 || !$deposit->surplus_decision) {
+                continue;
+            }
+            $refund = $provider->refunds->first(fn (PagoProveedorReembolso $row) => (int) $row->deposit_id === (int) $deposit->id
+                && $row->origin === PagoProveedorReembolso::ORIGIN_SURPLUS);
+            $rows[] = [
+                'deposit_id' => $deposit->id,
+                'amount' => (float) ($refund->amount ?? $deposit->surplus),
+                'decision' => $deposit->surplus_decision,
+                'refund_status' => $refund?->status,
+                'rejection' => $refund && $refund->status === PagoProveedorReembolso::STATUS_CONSULT ? $refund->reason : null,
+                'voucher_path' => $refund?->voucher_path,
+                'can_apply_installment' => $hasInstallments,
+            ];
+        }
+
+        return $rows;
+    }
+
+    private function userName(?int $id): ?string
+    {
+        if (!$id) {
+            return null;
+        }
+        if (!array_key_exists($id, $this->userNames)) {
+            $user = \App\Models\Usuario::query()->find($id);
+            $this->userNames[$id] = $user ? (string) ($user->getAttribute('No_Nombres_Apellidos') ?: $user->getAttribute('No_Usuario')) : null;
+        }
+
+        return $this->userNames[$id];
     }
 
     private function openRefund(PagoProveedorSolicitudProveedor $provider): ?PagoProveedorReembolso
@@ -659,6 +792,7 @@ class PagoProveedorConfirmacionService
         return [
             'amount' => round((float) $refund->amount, 2),
             'status' => $refund->status,
+            'rejection' => $refund->status === PagoProveedorReembolso::STATUS_CONSULT ? $refund->reason : null,
             'status_label' => $statusLabel,
             'origin_label' => $originLabel,
             'blocks_close' => true,

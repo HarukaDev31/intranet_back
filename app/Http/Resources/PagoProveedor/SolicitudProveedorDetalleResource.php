@@ -47,6 +47,10 @@ class SolicitudProveedorDetalleResource extends JsonResource
             'valor_carga_usd' => $provider->cargo_value_usd,
             'modalidad_abono' => $provider->client_payment_mode,
             'modalidad_pago' => $provider->supplier_payment_mode,
+            'cuota_actual' => (int) $provider->current_installment,
+            'cuota_carga' => isset($provider->summary_json['cuotas'][max(0, ((int) $provider->current_installment) - 1)]['carga'])
+                ? (float) $provider->summary_json['cuotas'][max(0, ((int) $provider->current_installment) - 1)]['carga']
+                : null,
             'bancaria_monto' => $provider->bank_fee_amount,
             'administrativa_monto' => $provider->admin_fee_amount,
             'total_monto' => $provider->total_amount,
@@ -85,6 +89,7 @@ class SolicitudProveedorDetalleResource extends JsonResource
             'motivo_anulacion' => $provider->cancellation_reason,
             'progreso' => $this->progress($provider),
             'documento_balance' => $this->documentoBalance($provider),
+            'puede_levantar' => $provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR,
             'puede_registrar_diferencia' => !$cancelled && $collecting && $balance > PagoProveedorSolicitudProveedor::MONEY_EPSILON,
             'codigo_solicitud' => $provider->request_code,
             'puede_editar_etapa1' => (int) $provider->stage === PagoProveedorSolicitudProveedor::STAGE_DATA && !$cancelled,
@@ -146,6 +151,16 @@ class SolicitudProveedorDetalleResource extends JsonResource
     private function progress(PagoProveedorSolicitudProveedor $provider): array
     {
         $progress = app(PagoProveedorConfirmacionService::class)->present($provider);
+        foreach ($progress['verification']['deposits'] as $index => $deposit) {
+            $path = $deposit['voucher_path'] ?? null;
+            $progress['verification']['deposits'][$index]['voucher_url'] = is_string($path) && $path !== '' ? $this->cdnStorageUrl($path) : null;
+            unset($progress['verification']['deposits'][$index]['voucher_path']);
+        }
+        foreach ($progress['verification']['surpluses'] as $index => $surplus) {
+            $path = $surplus['voucher_path'] ?? null;
+            $progress['verification']['surpluses'][$index]['voucher_url'] = is_string($path) && $path !== '' ? $this->cdnStorageUrl($path) : null;
+            unset($progress['verification']['surpluses'][$index]['voucher_path']);
+        }
         foreach ($progress['executions'] as $index => $execution) {
             $path = $execution['receipt_path'] ?? null;
             $progress['executions'][$index]['receipt_url'] = is_string($path) && $path !== '' ? $this->cdnStorageUrl($path) : null;

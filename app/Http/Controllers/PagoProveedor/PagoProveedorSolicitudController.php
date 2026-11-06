@@ -43,7 +43,7 @@ class PagoProveedorSolicitudController extends Controller
     public function show(Request $request, int $id): JsonResponse
     {
         return $this->responder(function () use ($request, $id) {
-            $this->autorizacion->exigirVentas($request->user());
+            $this->autorizacion->requireRequestReader($request->user());
 
             return $this->ok(new \App\Http\Resources\PagoProveedor\SolicitudDetalleResource($this->etapa1->detalle($id)));
         });

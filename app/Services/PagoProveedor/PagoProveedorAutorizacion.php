@@ -63,6 +63,27 @@ class PagoProveedorAutorizacion
     }
 
     /**
+     * Ventas gestiona la solicitud y Administración la consulta en solo lectura.
+     * Operaciones China no entra al detalle: solo ve nombre del cliente y consolidado (RN-98).
+     *
+     * @return array{id: int|null, nombre: string, area: string}
+     */
+    public function requireRequestReader(Usuario $usuario): array
+    {
+        $usuario->loadMissing('grupo');
+        $grupoRelacion = $usuario->getRelationValue('grupo');
+        $grupo = trim((string) ($grupoRelacion instanceof \Illuminate\Database\Eloquent\Model ? $grupoRelacion->getAttribute('No_Grupo') : ''));
+
+        $area = match ($grupo) {
+            Usuario::ROL_COTIZADOR => PagoProveedorHistorial::AREA_SALES,
+            Usuario::ROL_ADMINISTRACION => PagoProveedorHistorial::AREA_ADMINISTRATION,
+            default => throw new PagoProveedorException('No tienes permiso para ver esta solicitud.', 403),
+        };
+
+        return $this->actor($usuario, $area);
+    }
+
+    /**
      * @return array{id: int|null, nombre: string, area: string}
      */
     private function actor(Usuario $usuario, string $area): array

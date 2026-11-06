@@ -127,6 +127,10 @@ class PagoProveedorAprobacionService
 
         $this->expireCollect($provider);
         $this->escalateRegistrationError($provider);
+        // Un error de registro espera a que Ventas corrija y levante: no vuelve solo a Pendiente (ES-02).
+        if ($provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR) {
+            return;
+        }
         $comparison = $this->compare($provider);
         if (!$this->readyForDecision($comparison)) {
             return;
@@ -224,6 +228,7 @@ class PagoProveedorAprobacionService
             $provider->status = PagoProveedorSolicitudProveedor::STATUS_OBSERVED;
             $provider->collect_amount = null;
             $provider->collect_until = now()->addDays($this->remedyDays());
+            $provider->registration_error_note = $note;
             $provider->save();
             $this->history->registrar(
                 PagoProveedorHistorial::ENTITY_REQUEST,
@@ -287,6 +292,7 @@ class PagoProveedorAprobacionService
             $provider->status = PagoProveedorSolicitudProveedor::STATUS_CANCELLED;
             $provider->approval_status = null;
             $provider->collect_until = null;
+            $provider->registration_error_note = null;
             $provider->save();
             $this->history->registrar(
                 PagoProveedorHistorial::ENTITY_REQUEST,
@@ -506,6 +512,7 @@ class PagoProveedorAprobacionService
         $provider->status = PagoProveedorSolicitudProveedor::STATUS_IN_PROGRESS;
         $provider->collect_amount = null;
         $provider->collect_until = null;
+        $provider->registration_error_note = null;
         $provider->save();
 
         if ($comparison['category'] === PagoProveedorSolicitudProveedor::GAP_OVER) {
@@ -537,10 +544,10 @@ class PagoProveedorAprobacionService
             if (!$deposit || $deposit->status !== PagoProveedorAbono::STATUS_VALIDATED) {
                 continue;
             }
-            if ($deposit->surplus_decision || (float) $deposit->surplus <= 0) {
+            if ((float) $deposit->surplus <= 0) {
                 continue;
             }
-            $decision = $evaluador->decisionExcedente((float) $deposit->surplus, (bool) $hayCuota2, $this->tolerance());
+            $decision = $deposit->surplus_decision ?: $evaluador->decisionExcedente((float) $deposit->surplus, (bool) $hayCuota2, $this->tolerance());
             if ($decision === null) {
                 continue;
             }
@@ -554,6 +561,22 @@ class PagoProveedorAprobacionService
                 ]);
             }
         }
+    }
+
+    /**
+     * Ventas corrigió el error de registro: el pago vuelve a evaluarse (ES-02).
+     *
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    public function liftRegistrationError(PagoProveedorSolicitudProveedor $provider, array $actor): void
+    {
+        $provider->approval_status = null;
+        $provider->approval_mode = null;
+        $provider->collect_until = null;
+        $provider->registration_error_note = null;
+        $provider->status = PagoProveedorSolicitudProveedor::STATUS_IN_PROGRESS;
+        $provider->save();
+        $this->evaluate($provider->fresh($this->relations()) ?: $provider, $actor);
     }
 
     public function expireCollect(PagoProveedorSolicitudProveedor $provider): void
