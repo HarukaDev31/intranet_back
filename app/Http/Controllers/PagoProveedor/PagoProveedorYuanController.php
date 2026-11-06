@@ -6,13 +6,11 @@ use App\Exceptions\PagoProveedorException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\PagoProveedor\YuanPagoResource;
 use App\Http\Resources\PagoProveedor\YuanSolicitudResource;
-use App\Models\PagoProveedor\PagoProveedorSolicitud;
 use App\Services\PagoProveedor\PagoProveedorAutorizacion;
 use App\Services\PagoProveedor\PagoProveedorYuanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class PagoProveedorYuanController extends Controller
@@ -36,9 +34,9 @@ class PagoProveedorYuanController extends Controller
                 'pending_count' => $this->yuan->pendingCount(),
                 'indicators' => $this->yuan->indicators(),
                 'counts' => $this->yuan->counts(),
-                'countries' => PagoProveedorSolicitud::COUNTRIES,
-                'partners_by_country' => $this->yuan->partnersByCountry(),
-                'clients_by_country' => $this->yuan->clientsByCountry(),
+                'countries' => $this->yuan->countries(),
+                'organizations' => $this->yuan->organizations(),
+                'suggestions' => $this->yuan->suggestions(),
                 'pagination' => [
                     'current_page' => $page->currentPage(),
                     'last_page' => $page->lastPage(),
@@ -101,6 +99,28 @@ class PagoProveedorYuanController extends Controller
             $this->yuan->removeIncome($incomeId, $actor);
 
             return response()->json(['success' => true, 'message' => 'El ingreso se quitó.']);
+        });
+    }
+
+    public function countries(Request $request): JsonResponse
+    {
+        return $this->responder(function () use ($request) {
+            $this->authorization->requireWarehouse($request->user());
+
+            return response()->json(['success' => true, 'data' => $this->yuan->countryCatalog()]);
+        });
+    }
+
+    public function storeOrganization(Request $request): JsonResponse
+    {
+        return $this->responder(function () use ($request) {
+            $actor = $this->authorization->requireWarehouse($request->user());
+            $data = $request->validate([
+                'name' => ['required', 'string', 'max:100'],
+                'country_id' => ['required', 'integer', 'exists:pais,ID_Pais'],
+            ]);
+
+            return response()->json(['success' => true, 'data' => $this->yuan->createOrganization($data['name'], (int) $data['country_id'], $actor)], 201);
         });
     }
 
@@ -182,7 +202,7 @@ class PagoProveedorYuanController extends Controller
     private function manualRules(): array
     {
         return [
-            'country' => ['required', 'string', Rule::in(PagoProveedorSolicitud::COUNTRIES)],
+            'organizacion_id' => ['required', 'integer'],
             'partner' => ['required', 'string', 'max:80'],
             'request_date' => ['required', 'date'],
             'exchange_rate' => ['required', 'numeric', 'gt:0'],

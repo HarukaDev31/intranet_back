@@ -2,6 +2,7 @@
 
 namespace App\Models\PagoProveedor;
 
+use App\Models\Organizacion;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -20,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $client_email
  * @property string|null $consolidation
  * @property string|null $partner
+ * @property int|null $organizacion_id
  * @property string|null $country
  * @property \Illuminate\Support\Carbon|null $request_date
  * @property string|null $origin
@@ -30,6 +32,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property \Illuminate\Database\Eloquent\Collection<int, PagoProveedorSolicitudProveedor> $proveedores
  * @property \Illuminate\Database\Eloquent\Collection<int, PagoProveedorAbono> $abonos
  * @property \Illuminate\Database\Eloquent\Collection<int, PagoProveedorIngreso> $ingresos
+ * @property Organizacion|null $organizacion
  */
 class PagoProveedorSolicitud extends Model
 {
@@ -63,6 +66,7 @@ class PagoProveedorSolicitud extends Model
         'client_email',
         'consolidation',
         'partner',
+        'organizacion_id',
         'country',
         'request_date',
         'origin',
@@ -89,6 +93,14 @@ class PagoProveedorSolicitud extends Model
     public function proveedores(): HasMany
     {
         return $this->hasMany(PagoProveedorSolicitudProveedor::class, 'request_id')->orderBy('position');
+    }
+
+    /**
+     * @return BelongsTo<Organizacion, $this>
+     */
+    public function organizacion(): BelongsTo
+    {
+        return $this->belongsTo(Organizacion::class, 'organizacion_id', 'ID_Organizacion');
     }
 
     /**

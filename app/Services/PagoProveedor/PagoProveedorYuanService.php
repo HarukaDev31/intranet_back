@@ -3,6 +3,8 @@
 namespace App\Services\PagoProveedor;
 
 use App\Exceptions\PagoProveedorException;
+use App\Models\Organizacion;
+use App\Models\Pais;
 use App\Models\PagoProveedor\PagoProveedorConfiguracion;
 use App\Models\PagoProveedor\PagoProveedorCotizacion;
 use App\Models\PagoProveedor\PagoProveedorCotizacionProveedor;
@@ -19,13 +21,20 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class PagoProveedorYuanService
 {
     use UsesObjectStorage;
 
-    private const SETTING_PARTNERS = 'china_partner_clients';
+    /** La organización 1 es Pro Business: sus pagos nacen en Ventas, no aquí. */
+    private const OWN_ORGANIZATION = 1;
+
+    /** Una petición de la lista pide las filas varias veces: lista, indicadores, conteos y sugerencias. */
+    private ?Collection $rowsMemo = null;
+
+    private ?Collection $groupsMemo = null;
 
     public function __construct(
         private readonly PagoProveedorConfiguracionService $configuration,
@@ -108,51 +117,109 @@ class PagoProveedorYuanService
     }
 
     /**
-     * Clientes con precio de socio por país, para elegir en la solicitud.
+     * Socios a los que China puede crearles pagos: toda organización activa menos Pro Business.
      *
-     * @return array<string, array<int, string>>
+     * @return array<int, array{id: int, name: string, country: string}>
      */
-    public function partnersByCountry(): array
+    public function organizations(): array
     {
-        $options = array_fill_keys(PagoProveedorSolicitud::COUNTRIES, []);
-        $saved = $this->configuration->value(self::SETTING_PARTNERS, []);
-        foreach (is_array($saved) ? $saved : [] as $row) {
-            if (is_array($row) && isset($options[$row['country'] ?? '']) && !empty($row['name'])) {
-                $options[$row['country']][] = (string) $row['name'];
-            }
-        }
-        foreach (PagoProveedorSolicitud::PARTNERS as $partner) {
-            if ($partner !== PagoProveedorSolicitud::PARTNER_OWN) {
-                $options[$this->countryOfPartner($partner)][] = $partner;
-            }
-        }
-        foreach ($options as $country => $names) {
-            $options[$country] = array_values(array_unique($names));
-            sort($options[$country]);
-        }
-
-        return $options;
+        return Organizacion::query()
+            ->with(['pais', 'paisesHabilitados'])
+            ->where('Nu_Estado', 1)
+            ->where('ID_Organizacion', '!=', self::OWN_ORGANIZATION)
+            ->orderBy('No_Organizacion')
+            ->get()
+            ->map(fn (Organizacion $organization) => $this->organizationItem($organization))
+            ->values()
+            ->all();
     }
 
     /**
-     * Clientes ya usados en cada país, para sugerirlos al escribir.
+     * Solo crea la fila de la organización. Darle usuarios y menús es del comando organizacion:crear.
      *
-     * @return array<string, array<int, string>>
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     * @return array{id: int, name: string, country: string}
      */
-    public function clientsByCountry(): array
+    public function createOrganization(string $name, int $countryId, array $actor): array
     {
-        $options = array_fill_keys(PagoProveedorSolicitud::COUNTRIES, []);
+        return DB::transaction(function () use ($name, $countryId, $actor) {
+            $name = trim($name);
+            $exists = Organizacion::query()->whereRaw('LOWER(No_Organizacion) = ?', [mb_strtolower($name)])->lockForUpdate()->exists();
+            if ($exists) {
+                throw new PagoProveedorException('Ya existe un socio con ese nombre.');
+            }
+            $own = Organizacion::query()->find(self::OWN_ORGANIZATION);
+            $organization = Organizacion::query()->create([
+                'ID_Empresa' => $own?->ID_Empresa,
+                'No_Organizacion' => $name,
+                'id_pais' => $countryId,
+                'Nu_Estado' => 1,
+            ]);
+            Log::info('Pago a proveedor: socio creado desde China', ['organizacion_id' => $organization->ID_Organizacion, 'nombre' => $name, 'usuario' => $actor['id']]);
+
+            return $this->organizationItem($organization->load(['pais', 'paisesHabilitados']));
+        });
+    }
+
+    /**
+     * @return array<int, array{id: int, name: string}>
+     */
+    public function countryCatalog(): array
+    {
+        return Pais::query()
+            ->where('Nu_Estado', 1)
+            ->orderBy('ID_Pais')
+            ->get(['ID_Pais', 'No_Pais'])
+            ->map(fn (Pais $country) => ['id' => (int) $country->ID_Pais, 'name' => $this->countryName((string) $country->No_Pais)])
+            ->unique('name')
+            ->sortBy('name')
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Países que hoy aparecen en la lista, para filtrarla.
+     *
+     * @return array<int, string>
+     */
+    public function countries(): array
+    {
+        return $this->groups()
+            ->map(fn (array $group) => $this->countryOf($group['request']))
+            ->filter(fn (string $country) => $country !== '')
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Clientes y clientes del socio ya usados por cada organización, para sugerirlos al escribir.
+     *
+     * @return array{partners: array<int, array<int, string>>, clients: array<int, array<int, string>>}
+     */
+    public function suggestions(): array
+    {
+        $partners = [];
+        $clients = [];
         foreach ($this->groups() as $group) {
-            $country = $this->countryOf($group['request']);
+            $organizationId = $group['request']->organizacion_id;
+            if (!$organizationId) {
+                continue;
+            }
+            $partners[$organizationId][(string) $group['request']->partner] = (string) $group['request']->partner;
             foreach ($group['providers'] as $provider) {
-                $name = trim((string) ($provider->client_name ?: $group['request']->client_name));
+                $name = trim((string) $provider->client_name);
                 if ($name !== '') {
-                    $options[$country][$name] = $name;
+                    $clients[$organizationId][$name] = $name;
                 }
             }
         }
 
-        return array_map(fn (array $names) => array_values($names), $options);
+        return [
+            'partners' => array_map(fn (array $names) => array_values($names), $partners),
+            'clients' => array_map(fn (array $names) => array_values($names), $clients),
+        ];
     }
 
     /**
@@ -236,6 +303,10 @@ class PagoProveedorYuanService
 
     public function countryOf(PagoProveedorSolicitud $request): string
     {
+        if ($request->organizacion) {
+            return $this->countryOfOrganization($request->organizacion);
+        }
+
         return $request->country ?: $this->countryOfPartner((string) $request->partner);
     }
 
@@ -627,7 +698,8 @@ class PagoProveedorYuanService
                 'exchange_rate_confirmed' => true,
                 'client_name' => $fields['partner'],
                 'partner' => $fields['partner'],
-                'country' => $fields['country'],
+                'organizacion_id' => $fields['organization']->ID_Organizacion,
+                'country' => $this->countryOfOrganization($fields['organization']),
                 'request_date' => $fields['date'],
                 'origin' => PagoProveedorSolicitud::ORIGIN_MANUAL,
                 'user_id' => $actor['id'],
@@ -636,7 +708,6 @@ class PagoProveedorYuanService
             foreach ($fields['providers'] as $index => $row) {
                 $this->saveManualProvider($request, $row, $fields['rate'], $code, $index + 1, null);
             }
-            $this->rememberPartner($fields['country'], $fields['partner']);
             $this->history->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $request->id, 'Solicitud manual', $actor, $fields['partner']);
 
             return $request;
@@ -676,7 +747,8 @@ class PagoProveedorYuanService
                 'exchange_rate' => $fields['rate'],
                 'client_name' => $fields['partner'],
                 'partner' => $fields['partner'],
-                'country' => $fields['country'],
+                'organizacion_id' => $fields['organization']->ID_Organizacion,
+                'country' => $this->countryOfOrganization($fields['organization']),
                 'request_date' => $fields['date'],
             ])->save();
             if ($request->cotizacion) {
@@ -691,7 +763,6 @@ class PagoProveedorYuanService
                 }
                 $this->saveManualProvider($request, $row, $fields['rate'], $code, $current ? (int) $current->position : ++$position, $current);
             }
-            $this->rememberPartner($fields['country'], $fields['partner']);
             $this->history->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $request->id, 'Solicitud manual editada', $actor, $fields['partner']);
 
             return $request;
@@ -778,7 +849,7 @@ class PagoProveedorYuanService
      */
     private function groups(): Collection
     {
-        return $this->rows()
+        return $this->groupsMemo ??= $this->rows()
             ->groupBy('request_id')
             ->map(fn (Collection $providers) => [
                 'request' => $providers->first()->solicitud,
@@ -834,8 +905,8 @@ class PagoProveedorYuanService
      */
     private function rows(): Collection
     {
-        return PagoProveedorSolicitudProveedor::query()
-            ->with(['solicitud.ingresos', 'datos', 'ejecuciones', 'exchangeDeposits', 'refunds'])
+        return $this->rowsMemo ??= PagoProveedorSolicitudProveedor::query()
+            ->with(['solicitud.ingresos', 'solicitud.organizacion.pais', 'solicitud.organizacion.paisesHabilitados', 'datos', 'ejecuciones', 'exchangeDeposits', 'refunds'])
             ->where('currency', PagoProveedorCotizacionProveedor::CURRENCY_RMB)
             ->orderByDesc('id')
             ->get()
@@ -938,13 +1009,17 @@ class PagoProveedorYuanService
 
     /**
      * @param  array<string, mixed>  $payload
-     * @return array{country: string, partner: string, date: string, rate: float, providers: array<int, array<string, mixed>>}
+     * @return array{organization: Organizacion, partner: string, date: string, rate: float, providers: array<int, array<string, mixed>>}
      */
     private function manualFields(array $payload): array
     {
-        $partner = trim((string) $payload['partner']);
-        if (stripos($partner, 'pro business') !== false) {
-            throw new PagoProveedorException('Las solicitudes de Pro Business llegan desde Aprobación. Aquí van las de otros socios.');
+        $organizationId = (int) $payload['organizacion_id'];
+        if ($organizationId === self::OWN_ORGANIZATION) {
+            throw new PagoProveedorException('Los pagos de Pro Business llegan desde Ventas, ya aprobados. Aquí van los de otros socios.');
+        }
+        $organization = Organizacion::query()->with(['pais', 'paisesHabilitados'])->where('Nu_Estado', 1)->find($organizationId);
+        if (!$organization) {
+            throw new PagoProveedorException('El socio no existe o no está activo.');
         }
         $rate = round((float) $payload['exchange_rate'], 4);
         if ($rate <= 0) {
@@ -952,8 +1027,8 @@ class PagoProveedorYuanService
         }
 
         return [
-            'country' => (string) $payload['country'],
-            'partner' => $partner,
+            'organization' => $organization,
+            'partner' => trim((string) $payload['partner']),
             'date' => (string) $payload['request_date'],
             'rate' => $rate,
             'providers' => array_values($payload['providers']),
@@ -1068,15 +1143,28 @@ class PagoProveedorYuanService
         return str_pad($letters, 4, 'X').$number.'-'.$sequence;
     }
 
-    private function rememberPartner(string $country, string $partner): void
+    /**
+     * @return array{id: int, name: string, country: string}
+     */
+    private function organizationItem(Organizacion $organization): array
     {
-        if (in_array($partner, $this->partnersByCountry()[$country] ?? [], true)) {
-            return;
-        }
-        $saved = $this->configuration->value(self::SETTING_PARTNERS, []);
-        $saved = is_array($saved) ? $saved : [];
-        $saved[] = ['country' => $country, 'name' => $partner];
-        $this->configuration->save(self::SETTING_PARTNERS, array_values($saved));
+        return [
+            'id' => (int) $organization->ID_Organizacion,
+            'name' => (string) $organization->No_Organizacion,
+            'country' => $this->countryOfOrganization($organization),
+        ];
+    }
+
+    private function countryOfOrganization(Organizacion $organization): string
+    {
+        $name = $organization->pais->No_Pais ?? $organization->paisesHabilitados->first()->No_Pais ?? '';
+
+        return $this->countryName((string) $name);
+    }
+
+    private function countryName(string $name): string
+    {
+        return mb_strtoupper($name) === 'PERU' ? PagoProveedorSolicitud::COUNTRY_PERU : mb_convert_case($name, MB_CASE_TITLE);
     }
 
     private function storeFile(UploadedFile $file, string $folder, string $name): string
