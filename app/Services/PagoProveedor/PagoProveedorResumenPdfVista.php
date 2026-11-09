@@ -264,7 +264,7 @@ class PagoProveedorResumenPdfVista
     {
         $filas = [
             ['Cliente', $cotizacion['cliente_nombre'] ?: '—'],
-            ['N.° de consolidado', $cotizacion['consolidado'] ?: '—'],
+            ['N.° de consolidado', $this->soloNumeroConsolidado((string) ($cotizacion['consolidado'] ?? ''))],
             ['Cotización C.C', 'N.° ' . $cotizacion['cod_cotizacion_cc']],
             ['N.° de proveedores', (string) $cantidad],
         ];
@@ -284,11 +284,14 @@ class PagoProveedorResumenPdfVista
         return array_map(function (array $fila, int $indice) use ($pesos, $pesoTotal) {
             $ancho = self::ANCHO_CONTENIDO * $pesos[$fila[0]] / $pesoTotal;
 
+            $disponible = $ancho - ($indice > 0 ? 5.5 : 1.5);
+            $pt = $this->ajustar($fila[1], $disponible, [10, 9.6, 9.2, 8.8, 8.4]);
+
             return [
                 'etiqueta' => $fila[0],
-                'valor' => $fila[1],
+                'valor' => $this->recortar($fila[1], $disponible, $pt),
                 'ancho' => $ancho,
-                'pt' => $this->ajustar($fila[1], $ancho - ($indice > 0 ? 5.5 : 1.5), [10, 9.6, 9.2, 8.8, 8.4]),
+                'pt' => $pt,
             ];
         }, $filas, array_keys($filas));
     }
@@ -542,7 +545,7 @@ class PagoProveedorResumenPdfVista
             }
             $alto1 = (float) array_sum(array_column(array_slice($unidades, 0, $c), 'alto'));
             $alto2 = (float) array_sum(array_column(array_slice($unidades, $c), 'alto'));
-            $parte = $c > 0 && $c < $total && $unidades[$c - 1]['seccion'] === $unidades[$c]['seccion'] ? 8 : 0;
+            $parte = $c > 0 && $c < $total && $unidades[$c - 1]['seccion'] === $unidades[$c]['seccion'] ? 1000 : 0;
             if (abs($alto1 - $alto2) + $parte < $mejor) {
                 $mejor = abs($alto1 - $alto2) + $parte;
                 $corte = $c;
@@ -654,6 +657,27 @@ class PagoProveedorResumenPdfVista
     /**
      * @param  array<int, float|int>  $tamanos
      */
+    /** Solo el número del consolidado: «21 - 2026» pasa a «21». */
+    private function soloNumeroConsolidado(string $consolidado): string
+    {
+        $numero = trim((string) preg_split('/\s*[-–]\s*/u', trim($consolidado))[0]);
+
+        return $numero !== '' ? $numero : '—';
+    }
+
+    /** Si el texto no cabe ni con la letra más chica, lo corta con «…» para que no pise la celda vecina. */
+    private function recortar(string $texto, float $ancho, float $tamano): string
+    {
+        if ($this->anchoMm($texto, $tamano, true) <= $ancho) {
+            return $texto;
+        }
+        while ($texto !== '' && $this->anchoMm($texto . '…', $tamano, true) > $ancho) {
+            $texto = mb_substr($texto, 0, -1);
+        }
+
+        return rtrim($texto) . '…';
+    }
+
     private function ajustar(string $texto, float $ancho, array $tamanos, bool $negrita = true): float
     {
         foreach ($tamanos as $tamano) {
