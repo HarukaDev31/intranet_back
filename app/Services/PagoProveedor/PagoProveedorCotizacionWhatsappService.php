@@ -66,7 +66,7 @@ class PagoProveedorCotizacionWhatsappService
             'puede_enviar' => $puedeEnviar,
             'nota' => match (true) {
                 $forRequest => 'Resumen actualizado de la solicitud. Revisa el mensaje; va con el PDF de resumen.',
-                $puedeEnviar => 'Revisa el mensaje y pulsa Enviar. Se manda desde el número de ventas, con el PDF de resumen.',
+                $puedeEnviar => 'Revisa el mensaje y pulsa Enviar. Se enviará al WhatsApp del cliente junto con el PDF de resumen.',
                 default => 'Falta el WhatsApp del cliente para poder enviar.',
             },
         ];
