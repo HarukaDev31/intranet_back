@@ -77,6 +77,9 @@ require __DIR__.'/modules/carga-consolidada.php';
 // Módulo de Pago a Proveedor
 require __DIR__.'/modules/pago-proveedor.php';
 
+// Módulo de Operaciones y Pagos de China (Almacén China / Socio)
+require __DIR__.'/modules/china-billing.php';
+
 // Módulo de Dashboard por Usuario
 require __DIR__.'/modules/dashboard-usuario.php';
 
