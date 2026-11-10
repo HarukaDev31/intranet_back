@@ -17,7 +17,7 @@ class ChinaDraftService
 {
     /**
      * @param  array<int, int>  $organizationIds
-     * @return Collection<int, array<string, mixed>>
+     * @return Collection<int, array{container_id: int, organization_id: int, issued_on: string, description: string, cbm: float}>
      */
     public function list(array $organizationIds): Collection
     {
@@ -49,7 +49,7 @@ class ChinaDraftService
      * Un borrador aprobable: el consolidado debe seguir cerrado, ser de un socio y no tener operación.
      *
      * @param  array<int, int>  $organizationIds
-     * @return array<string, mixed>
+     * @return array{container_id: int, organization_id: int, issued_on: string, description: string, cbm: float}
      */
     public function find(int $containerId, array $organizationIds): array
     {

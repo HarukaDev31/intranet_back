@@ -16,11 +16,11 @@ class ChinaBankAccountService
         $account = ChinaBankAccount::query()->where('is_active', true)->orderByDesc('id')->first();
 
         return [
-            'company' => (string) ($account?->company ?? ''),
-            'beneficiary' => (string) ($account?->beneficiary ?? ''),
-            'intermediary_bank' => (string) ($account?->intermediary_bank ?? ''),
-            'payer_bank' => (string) ($account?->payer_bank ?? ''),
-            'account_number' => (string) ($account?->account_number ?? ''),
+            'company' => (string) ($account->company ?? ''),
+            'beneficiary' => (string) ($account->beneficiary ?? ''),
+            'intermediary_bank' => (string) ($account->intermediary_bank ?? ''),
+            'payer_bank' => (string) ($account->payer_bank ?? ''),
+            'account_number' => (string) ($account->account_number ?? ''),
         ];
     }
 

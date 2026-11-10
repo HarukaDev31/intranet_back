@@ -40,12 +40,15 @@ class ChinaOperationService
         }
 
         return DB::transaction(function () use ($data, $packing, $actor, $organizationId, $containerId) {
-            $operation = ChinaOperation::query()->create(array_merge($this->fields($data), [
+            $operation = new ChinaOperation();
+            $operation->fill($this->fields($data));
+            $operation->fill([
                 'code' => $this->nextCode(),
                 'organization_id' => $organizationId,
                 'container_id' => $containerId,
                 'created_by' => $actor['id'],
-            ]));
+            ]);
+            $operation->save();
             $this->syncCosts($operation, $data['costs'] ?? []);
             $this->storePacking($operation, $packing);
 

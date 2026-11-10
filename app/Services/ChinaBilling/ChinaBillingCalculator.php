@@ -202,7 +202,7 @@ class ChinaBillingCalculator
     {
         $rows = $operations->map(fn (ChinaOperation $op) => self::operationMetrics($op));
         $active = $rows->reject(fn ($m) => $m['transferred']);
-        $cashed = $payments->filter(fn (ChinaPayment $p) => $p->cashed_at);
+        $cashed = $payments->filter(fn (ChinaPayment $p) => $p->cashed_at !== null);
 
         return [
             'operations_count' => $operations->count(),
