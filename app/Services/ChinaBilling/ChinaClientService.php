@@ -7,6 +7,7 @@ use App\Models\BaseDatos\Clientes\Cliente;
 use App\Models\ChinaBilling\ChinaClient;
 use App\Models\ChinaBilling\ChinaOperation;
 use App\Models\Organizacion;
+use App\Models\Usuario;
 use App\Models\OrganizacionPortal;
 use App\Services\BaseDatos\Clientes\ClienteService;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -179,7 +180,7 @@ class ChinaClientService
     public function database(array $organizationIds, array $filters): array
     {
         $organizationId = (int) ($filters['organization_id'] ?? 0);
-        $ids = in_array($organizationId, $organizationIds, true) ? [$organizationId] : [];
+        $ids = in_array($organizationId, $this->withAdmin($organizationIds), true) ? [$organizationId] : [];
         $search = trim((string) ($filters['search'] ?? ''));
         $perPage = max(1, min(100, (int) ($filters['per_page'] ?? 15)));
 
@@ -255,23 +256,57 @@ class ChinaClientService
 
     /**
      * Una pestaña por organización con la cantidad de clientes que registró.
+     * Incluye la organización 1 (Perú, Pro Business) primero, aunque no sea socio.
      *
      * @param  array<int, int>  $organizationIds
-     * @return array<int, array{organization_id: int, name: string, country: string, count: int}>
+     * @return array<int, array{organization_id: int, label: string, name: string, country: string, count: int}>
      */
     private function groups(array $organizationIds): array
     {
-        $names = $this->reader->organizationNames($organizationIds);
-        $counts = DB::table('clientes')->whereIn('organizacion_id', $organizationIds ?: [0])
+        $ids = $this->withAdmin($organizationIds);
+        $names = $this->reader->organizationNames($ids);
+        $counts = DB::table('clientes')->whereIn('organizacion_id', $ids)
             ->selectRaw('organizacion_id, COUNT(*) as total')->groupBy('organizacion_id')->pluck('total', 'organizacion_id');
 
         $result = [];
         foreach ($names as $organizationId => $org) {
-            $result[] = ['organization_id' => (int) $organizationId, 'name' => $org['name'], 'country' => $org['country'], 'count' => (int) ($counts[$organizationId] ?? 0)];
+            $isAdmin = (int) $organizationId === Usuario::ID_ORGANIZACION_ADMIN;
+            $country = $isAdmin && $org['country'] === '' ? 'Perú' : $org['country'];
+            $result[] = [
+                'organization_id' => (int) $organizationId,
+                // La pestaña se nombra por país, como en la maqueta; sin país se usa el nombre de la organización.
+                'label' => $isAdmin ? 'Perú' : ($country !== '' ? mb_convert_case($country, MB_CASE_TITLE, 'UTF-8') : $org['name']),
+                'name' => $org['name'],
+                'country' => $country,
+                'count' => (int) ($counts[$organizationId] ?? 0),
+            ];
         }
-        usort($result, fn (array $a, array $b) => strcmp($a['name'], $b['name']));
+        // Si dos organizaciones comparten país, la que no es la organización 1 se nombra por sí misma.
+        $labels = array_count_values(array_column($result, 'label'));
+        foreach ($result as $index => $row) {
+            if ($labels[$row['label']] > 1 && $row['organization_id'] !== Usuario::ID_ORGANIZACION_ADMIN) {
+                $result[$index]['label'] = $row['name'];
+            }
+        }
+        usort($result, function (array $a, array $b) {
+            $aAdmin = $a['organization_id'] === Usuario::ID_ORGANIZACION_ADMIN ? 0 : 1;
+            $bAdmin = $b['organization_id'] === Usuario::ID_ORGANIZACION_ADMIN ? 0 : 1;
+
+            return [$aAdmin, $a['label']] <=> [$bAdmin, $b['label']];
+        });
 
         return $result;
+    }
+
+    /**
+     * La base de datos de clientes de la organización 1 (Perú) también se consulta desde aquí.
+     *
+     * @param  array<int, int>  $organizationIds
+     * @return array<int, int>
+     */
+    private function withAdmin(array $organizationIds): array
+    {
+        return array_values(array_unique([Usuario::ID_ORGANIZACION_ADMIN, ...$organizationIds]));
     }
 
     /**
