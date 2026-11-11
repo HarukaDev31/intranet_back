@@ -124,12 +124,12 @@ class PagoProveedorResumenPdfVista
      */
     private function referencia(array $cotizacion, ?string $referenciaSolicitud): string
     {
-        $cotizacionCodigo = !empty($cotizacion['id']) ? 'Cotización ' . $cotizacion['codigo'] : '';
+        // Con solicitud, el PDF solo lleva su número: el código de la cotización de pago a proveedor no va.
         if ($referenciaSolicitud !== null && trim($referenciaSolicitud) !== '') {
-            return trim($referenciaSolicitud . ($cotizacionCodigo !== '' ? ' · ' . $cotizacionCodigo : ''));
+            return trim($referenciaSolicitud);
         }
 
-        return $cotizacionCodigo;
+        return !empty($cotizacion['id']) ? 'Cotización ' . $cotizacion['codigo'] : '';
     }
 
     /**
@@ -258,7 +258,7 @@ class PagoProveedorResumenPdfVista
 
     /**
      * @param  array<string, mixed>  $cotizacion
-     * @return array<int, array{etiqueta: string, valor: string, ancho: float, pt: float}>
+     * @return array<int, array{etiqueta: string, valor: string, segunda_linea: string|null, ancho: float, pt: float}>
      */
     private function datosCliente(array $cotizacion, bool $hayRmb, float $tc, string $fecha, int $cantidad): array
     {
@@ -285,11 +285,24 @@ class PagoProveedorResumenPdfVista
             $ancho = self::ANCHO_CONTENIDO * $pesos[$fila[0]] / $pesoTotal;
 
             $disponible = $ancho - ($indice > 0 ? 5.5 : 1.5);
-            $pt = $this->ajustar($fila[1], $disponible, [10, 9.6, 9.2, 8.8, 8.4]);
+            $tamanos = [10, 9.6, 9.2, 8.8, 8.4];
+            $pt = $this->ajustar($fila[1], $disponible, $tamanos);
+            $segunda = null;
+            // El nombre del cliente va completo: si no cabe, nombres arriba y apellidos en una segunda línea.
+            $palabras = preg_split('/\s+/', trim($fila[1])) ?: [];
+            if ($fila[0] === 'Cliente' && count($palabras) >= 2 && $this->anchoMm($fila[1], $pt, true) > $disponible) {
+                $corte = count($palabras) >= 3 ? count($palabras) - 2 : 1;
+                $primera = implode(' ', array_slice($palabras, 0, $corte));
+                $segunda = implode(' ', array_slice($palabras, $corte));
+                $pt = min($this->ajustar($primera, $disponible, $tamanos), $this->ajustar($segunda, $disponible, $tamanos));
+                $fila[1] = $primera;
+                $segunda = $this->recortar($segunda, $disponible, $pt);
+            }
 
             return [
                 'etiqueta' => $fila[0],
                 'valor' => $this->recortar($fila[1], $disponible, $pt),
+                'segunda_linea' => $segunda,
                 'ancho' => $ancho,
                 'pt' => $pt,
             ];
