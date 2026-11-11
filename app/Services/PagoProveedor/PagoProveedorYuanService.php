@@ -5,7 +5,6 @@ namespace App\Services\PagoProveedor;
 use App\Exceptions\PagoProveedorException;
 use App\Models\Organizacion;
 use App\Models\Pais;
-use App\Models\PagoProveedor\PagoProveedorConfiguracion;
 use App\Models\PagoProveedor\PagoProveedorCotizacion;
 use App\Models\PagoProveedor\PagoProveedorCotizacionProveedor;
 use App\Models\PagoProveedor\PagoProveedorDatoProveedor;
@@ -704,7 +703,7 @@ class PagoProveedorYuanService
                 'origin' => PagoProveedorSolicitud::ORIGIN_MANUAL,
                 'user_id' => $actor['id'],
             ]);
-            $code = app(PagoProveedorCodigoSolicitud::class)->armar(PagoProveedorCotizacionProveedor::CURRENCY_RMB, $this->nextCorrelative());
+            $code = app(PagoProveedorCodigoSolicitud::class)->deSolicitud($request);
             foreach ($fields['providers'] as $index => $row) {
                 $this->saveManualProvider($request, $row, $fields['rate'], $code, $index + 1, null);
             }
@@ -822,26 +821,6 @@ class PagoProveedorYuanService
         $match = collect($this->reasons())->firstWhere('code', $code);
 
         return $match['label'] ?? $code;
-    }
-
-    private function nextCorrelative(): int
-    {
-        $row = PagoProveedorConfiguracion::query()->where('setting_key', 'correlativo_solicitud')->lockForUpdate()->first();
-        if (!$row) {
-            $row = PagoProveedorConfiguracion::query()->create([
-                'setting_key' => 'correlativo_solicitud',
-                'setting_value' => ['n' => 0],
-            ]);
-            $row = PagoProveedorConfiguracion::query()->whereKey($row->id)->lockForUpdate()->first();
-        }
-        if (!$row) {
-            throw new PagoProveedorException('No se pudo reservar el correlativo de la solicitud.');
-        }
-        $next = ((int) ($row->setting_value['n'] ?? 0)) + 1;
-        $row->setting_value = ['n' => $next];
-        $row->save();
-
-        return $next;
     }
 
     /**

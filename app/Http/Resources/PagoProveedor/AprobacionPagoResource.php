@@ -76,11 +76,8 @@ class AprobacionPagoResource extends JsonResource
                     PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR,
                 ], true)
                 && $comparison['difference'] < -PagoProveedorSolicitudProveedor::MONEY_EPSILON,
-            'can_mark_registration_error' => $open
-                && !in_array($provider->approval_status, [
-                    PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT,
-                    PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR,
-                ], true),
+            // PRY-26-0003: sin «Error de registro»; Administración edita lo registrado en Verificación.
+            'can_mark_registration_error' => false,
             // RN-72: «Por cobrar» vencido vuelve a Pendiente. RN-112: «Error de registro» vencido → extender o anular.
             'can_extend' => $provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR
                 && $provider->collect_until
@@ -200,6 +197,7 @@ class AprobacionPagoResource extends JsonResource
             $sharedCount = $deposit->aplicaciones->count();
             $rows[] = [
                 'id' => $deposit->id,
+                'number' => $deposit->numero(),
                 'paid_on' => optional($deposit->paid_on)->toDateString(),
                 'bank' => $deposit->bank,
                 'bank_label' => $deposit->bank === PagoProveedorAbono::BANK_INTERBANK ? 'Interbank' : 'BCP',

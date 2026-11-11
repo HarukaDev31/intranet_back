@@ -593,6 +593,7 @@ class PagoProveedorConfirmacionService
             $deadline = $inValidation && $deposit->created_at ? $deposit->created_at->copy()->addHours($verifyHours) : null;
             $deposits[] = [
                 'id' => $deposit->id,
+                'number' => $deposit->numero(),
                 'applied_amount' => (float) $application->amount,
                 'recorded_amount' => $recorded,
                 'corrections' => $corrections,

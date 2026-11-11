@@ -3,6 +3,8 @@
 namespace App\Models\PagoProveedor;
 
 use App\Models\CargaConsolidada\CotizacionProveedor;
+use App\Services\PagoProveedor\PagoProveedorCodigoSolicitud;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -185,6 +187,23 @@ class PagoProveedorSolicitudProveedor extends Model
         'china_observed_at' => 'datetime',
         'china_observe_until' => 'datetime',
     ];
+
+    /**
+     * Los códigos guardados con el formato anterior (CN57NOV26) se muestran con el actual: socio + N.° de orden.
+     *
+     * @return Attribute<string|null, never>
+     */
+    protected function requestCode(): Attribute
+    {
+        return Attribute::get(function (?string $value): ?string {
+            if ($value === null || $value === '' || str_contains($value, PagoProveedorCodigoSolicitud::SEPARADOR)) {
+                return $value;
+            }
+            $solicitud = $this->solicitud;
+
+            return $solicitud ? app(PagoProveedorCodigoSolicitud::class)->deSolicitud($solicitud) : $value;
+        });
+    }
 
     /**
      * @return BelongsTo<PagoProveedorSolicitud, $this>

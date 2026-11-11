@@ -39,8 +39,27 @@ class AbonoResource extends JsonResource
             $decideText = $decideOverdue ? 'plazo de decisión vencido' : $raw;
         }
 
+        // Plazo de Administración para validar el depósito (mismo cálculo que la bandeja de Verificación).
+        $validacion = null;
+        if ($abono->status === PagoProveedorAbono::STATUS_IN_VALIDATION && $abono->created_at) {
+            $verifyHours = max(1, (int) app(PagoProveedorConfiguracionService::class)->value(PagoProveedorSolicitudProveedor::SETTING_VERIFY_HOURS, 2));
+            $deadline = $abono->created_at->copy()->addHours($verifyHours);
+            $remaining = (int) now()->diffInMinutes($deadline, false);
+            $validacion = [
+                'registered_at' => $abono->created_at->toIso8601String(),
+                'deadline_at' => $deadline->toIso8601String(),
+                'server_now' => now()->toIso8601String(),
+                'hours' => $verifyHours,
+                'remaining_minutes' => $remaining,
+                'overdue' => $remaining < 0,
+                'text' => \App\Services\PagoProveedor\PagoProveedorPlazo::remainingText($deadline),
+            ];
+        }
+
         return [
             'id' => $abono->id,
+            'numero' => $abono->numero(),
+            'validacion_sla' => $validacion,
             'importe' => $abono->amount,
             'fecha_pago' => optional($abono->paid_on)->format('Y-m-d'),
             'numero_operacion' => $abono->operation_number,
@@ -59,6 +78,7 @@ class AbonoResource extends JsonResource
             // Sales corrects an observed deposit in any stage; voiding stays limited to stage 1 (RN-45, RN-56).
             'puede_editar' => $abono->status === PagoProveedorAbono::STATUS_OBSERVED
                 || ($abono->status === PagoProveedorAbono::STATUS_IN_VALIDATION && !$advanced)
+                || \App\Services\PagoProveedor\PagoProveedorEtapa1Service::abonoCorregibleEnValidacion($solicitud, $abono)
                 || ($abono->status !== PagoProveedorAbono::STATUS_CANCELLED && $abono->aplicaciones->contains(function (PagoProveedorAbonoAplicacion $aplicacion) use ($solicitud) {
                     $provider = $solicitud?->proveedores?->firstWhere('id', $aplicacion->request_provider_id);
 
