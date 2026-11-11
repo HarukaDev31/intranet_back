@@ -163,7 +163,7 @@ class PagoProveedorSolicitudService
             $cotizacion->status = PagoProveedorCotizacion::STATUS_CONFIRMED;
             $cotizacion->save();
             $this->historial->registrar(PagoProveedorHistorial::ENTITY_QUOTE, $cotizacion->id, 'Confirmada', $actor, 'Solicitud N.° ' . $numero);
-            $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitud->id, 'Creada', $actor, 'Proveedores en etapa 1.');
+            $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitud->id, 'Solicitud creada desde la cotización ' . $cotizacion->code, $actor);
 
             return $solicitud->load(['proveedores.datos', 'cotizacion']);
         });
