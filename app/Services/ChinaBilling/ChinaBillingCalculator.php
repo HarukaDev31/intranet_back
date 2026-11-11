@@ -202,14 +202,15 @@ class ChinaBillingCalculator
     {
         $rows = $operations->map(fn (ChinaOperation $op) => self::operationMetrics($op));
         $active = $rows->reject(fn ($m) => $m['transferred']);
-        $cashed = $payments->filter(fn (ChinaPayment $p) => $p->cashed_at !== null);
+        // Ingresado a caja = todo pago con ingreso confirmado (recibido) y los RMB de los que ya pasaron a caja.
+        $income = $payments->filter(fn (ChinaPayment $p) => $p->confirmed_at !== null);
 
         return [
             'operations_count' => $operations->count(),
             'services_amount' => self::round($rows->sum('service_amount')),
             'receivable' => self::round($active->sum(fn ($m) => max(0, $m['total'] - $m['received']))),
-            'cashed_usd' => self::round($cashed->sum('amount_received')),
-            'cashed_rmb' => self::round($cashed->sum('yuan_amount')),
+            'income_usd' => self::round($income->sum('amount_received')),
+            'income_rmb' => self::round($payments->sum('yuan_amount')),
             'total_billed' => self::round($rows->sum('total')),
             'paid' => self::round($rows->sum('confirmed')),
             'in_confirmation' => self::round($rows->sum('in_confirmation')),

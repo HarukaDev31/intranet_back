@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\ChinaBilling;
 
 use App\Exceptions\ChinaBillingException;
+use App\Models\ChinaBilling\ChinaBankAccount;
 use App\Http\Controllers\Controller;
 use App\Services\ChinaBilling\ChinaBankAccountService;
 use App\Services\ChinaBilling\ChinaBillingAuthorization;
@@ -39,15 +40,22 @@ class ChinaBankAccountController extends Controller
     {
         return $this->responder(function () use ($request) {
             $this->authorization->requireWarehouse($request->user());
-            $data = $request->validate([
-                'company' => ['required', 'string', 'max:150'],
-                'beneficiary' => ['nullable', 'string', 'max:150'],
-                'intermediary_bank' => ['nullable', 'string', 'max:150'],
-                'payer_bank' => ['nullable', 'string', 'max:150'],
-                'account_number' => ['nullable', 'string', 'max:100'],
-            ]);
+            $data = $request->validate($this->rules());
 
             return response()->json(['success' => true, 'data' => $this->accounts->update($data)]);
         });
+    }
+
+    /**
+     * @return array<string, array<int, string>>
+     */
+    private function rules(): array
+    {
+        $rules = [];
+        foreach (ChinaBankAccount::FIELDS as $field) {
+            $rules[$field] = $field === 'company' ? ['required', 'string', 'max:150'] : ['nullable', 'string', 'max:255'];
+        }
+
+        return $rules;
     }
 }

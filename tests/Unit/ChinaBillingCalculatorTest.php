@@ -127,4 +127,22 @@ class ChinaBillingCalculatorTest extends TestCase
         $this->assertSame(0.0, $m['pending']);
         $this->assertSame('paid', $m['partner_status']);
     }
+
+    public function test_summary_income_counts_every_confirmed_payment_and_rmb_only_cashed(): void
+    {
+        $op = $this->op(1);
+        $cashed = $this->pay(1, 900, 900, null, true);
+        $cashed->yuan_amount = 6480;
+        $confirmed = $this->pay(2, 500, 500);
+        $pending = $this->pay(3, 200);
+        $this->allocate($op, $cashed, 900);
+        $this->allocate($op, $confirmed, 500);
+        $this->allocate($op, $pending, 200);
+
+        $summary = Calc::summary(new Collection([$op]), new Collection([$cashed, $confirmed, $pending]));
+
+        $this->assertSame(1400.0, $summary['income_usd']);
+        $this->assertSame(6480.0, $summary['income_rmb']);
+        $this->assertSame(100.0, $summary['receivable']);
+    }
 }

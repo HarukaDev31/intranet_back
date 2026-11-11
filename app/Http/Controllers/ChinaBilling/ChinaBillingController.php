@@ -40,6 +40,15 @@ class ChinaBillingController extends Controller
         });
     }
 
+    public function summary(Request $request): JsonResponse
+    {
+        return $this->responder(function () use ($request) {
+            $actor = $this->authorization->requireWarehouse($request->user());
+
+            return response()->json(['success' => true] + $this->reader->warehouseSummary($actor['organization_ids'], $request->only(['from', 'to'])));
+        });
+    }
+
     public function storeOperation(Request $request): JsonResponse
     {
         return $this->responder(function () use ($request) {
@@ -131,6 +140,16 @@ class ChinaBillingController extends Controller
             $actor = $this->authorization->requireWarehouse($request->user());
 
             return $this->listResponse($this->reader->warehousePayments($actor['organization_ids'], $request->all()));
+        });
+    }
+
+    public function showPayment(Request $request, int $id): JsonResponse
+    {
+        return $this->responder(function () use ($request, $id) {
+            $actor = $this->authorization->requireWarehouse($request->user());
+            $this->payments->find($id, $actor, false);
+
+            return $this->ok(new ChinaBillingRowResource($this->reader->paymentDetail($id)));
         });
     }
 

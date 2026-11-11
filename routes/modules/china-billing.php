@@ -12,6 +12,7 @@ Route::group(['prefix' => 'china-billing', 'middleware' => 'jwt.auth'], function
     Route::put('bank-account', [ChinaBankAccountController::class, 'update']);
 
     // Almacén China
+    Route::get('summary', [ChinaBillingController::class, 'summary']);
     Route::get('operations', [ChinaBillingController::class, 'operations']);
     Route::post('operations', [ChinaBillingController::class, 'storeOperation']);
     Route::post('operations/{id}', [ChinaBillingController::class, 'updateOperation'])->whereNumber('id');
@@ -23,6 +24,7 @@ Route::group(['prefix' => 'china-billing', 'middleware' => 'jwt.auth'], function
     Route::delete('credit-applications/{id}', [ChinaBillingController::class, 'undoCredit'])->whereNumber('id');
 
     Route::get('payments', [ChinaBillingController::class, 'payments']);
+    Route::get('payments/{id}', [ChinaBillingController::class, 'showPayment'])->whereNumber('id');
     Route::post('payments', [ChinaBillingController::class, 'storePayment']);
     Route::post('payments/{id}', [ChinaBillingController::class, 'updatePayment'])->whereNumber('id');
     Route::post('payments/{id}/confirm', [ChinaBillingController::class, 'confirmPayment'])->whereNumber('id');

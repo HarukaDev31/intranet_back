@@ -43,7 +43,14 @@ class ChinaBillingReader
         $search = mb_strtolower(trim((string) ($filters['search'] ?? '')));
         $status = (string) ($filters['status'] ?? '');
 
-        $counts = ['all' => $all->count(), 'draft' => $drafts->count()];
+        $operationsTotal = $this->operations($organizationIds, null, null)->count();
+        $counts = [
+            'all' => $all->count(),
+            'draft' => $drafts->count(),
+            // Sin rango, búsqueda ni estado: para los contadores "N de M" y de la pestaña.
+            'operations_total' => $operationsTotal,
+            'overall' => $operationsTotal + $this->drafts->list($organizationIds)->count(),
+        ];
         foreach ([ChinaBillingCalculator::STATUS_PENDING, ChinaBillingCalculator::STATUS_TO_CONFIRM, ChinaBillingCalculator::STATUS_CONFIRMED, ChinaBillingCalculator::STATUS_IN_CASH] as $key) {
             $counts[$key] = $rows->where('status', $key)->count();
         }
@@ -68,6 +75,24 @@ class ChinaBillingReader
     }
 
     /**
+     * KPIs del encabezado (operaciones y pagos del rango) y saldos a favor de los clientes.
+     *
+     * @param  array<int, int>  $organizationIds
+     * @param  array<string, mixed>  $filters  from, to
+     * @return array<string, mixed>
+     */
+    public function warehouseSummary(array $organizationIds, array $filters): array
+    {
+        $operations = $this->operations($organizationIds, $filters['from'] ?? null, $filters['to'] ?? null);
+        $payments = $this->payments($organizationIds, $filters['from'] ?? null, $filters['to'] ?? null);
+
+        return [
+            'summary' => ChinaBillingCalculator::summary($operations, $payments),
+            'credits' => $this->creditsByOrganization($organizationIds, $this->organizationNames($organizationIds)),
+        ];
+    }
+
+    /**
      * @param  array<int, int>  $organizationIds
      * @param  array<string, mixed>  $filters
      * @return array<string, mixed>
@@ -81,13 +106,15 @@ class ChinaBillingReader
 
         $status = (string) ($filters['status'] ?? '');
         $search = mb_strtolower(trim((string) ($filters['search'] ?? '')));
-        $counts = ['all' => $rows->count()];
+        $counts = ['all' => $rows->count(), 'overall' => $this->payments($organizationIds, null, null)->count()];
         foreach ([ChinaBillingCalculator::STATUS_TO_CONFIRM, ChinaBillingCalculator::STATUS_CONFIRMED, ChinaBillingCalculator::STATUS_IN_CASH] as $key) {
             $counts[$key] = $rows->where('status', $key)->count();
         }
 
         $filtered = $rows->filter(fn (array $row) => ($status === '' || $status === 'all' || $row['status'] === $status)
-            && ($search === '' || str_contains(mb_strtolower($row['code'].' '.$row['organization']['name']), $search)))->values();
+            && ($search === '' || str_contains(mb_strtolower(implode(' ', [
+                $row['code'], $row['organization']['name'], $row['organization']['country'], implode(' ', array_column($row['allocations'], 'code')),
+            ])), $search)))->values();
 
         return ['page' => $this->paginate($filtered, $filters), 'counts' => $counts];
     }
@@ -308,10 +335,18 @@ class ChinaBillingReader
             'cash_voucher_name' => $payment->cash_voucher_name,
             'confirmed_at' => $payment->confirmed_at?->toIso8601String(),
             'cashed_at' => $payment->cashed_at?->toIso8601String(),
+            'unassigned' => ChinaBillingCalculator::round(max(0, (float) $payment->amount_sent - ChinaBillingCalculator::allocatedTotal($payment))),
             'allocations' => $payment->allocations->map(fn ($allocation) => [
                 'operation_id' => (int) $allocation->operation_id,
                 'code' => $allocation->operation->code,
+                'label' => trim($allocation->operation->service_name.' · '.$allocation->operation->description),
                 'amount' => (float) $allocation->amount,
+                // Lo que realmente cuenta para la operación: el faltante se descuenta de la elegida al confirmar.
+                'real_amount' => ChinaBillingCalculator::round(
+                    (int) $payment->shortfall_operation_id === (int) $allocation->operation_id
+                        ? max(0, (float) $allocation->amount - ChinaBillingCalculator::paymentShortfall($payment))
+                        : (float) $allocation->amount
+                ),
             ])->values()->all(),
         ];
     }
