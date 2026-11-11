@@ -37,15 +37,16 @@ class ChinaBillingDocumentController extends Controller
         });
     }
 
-    public function balanceHistory(Request $request, ?int $organizationId = null): JsonResponse
+    public function balanceHistory(Request $request): JsonResponse
     {
-        return $this->responder(fn () => $this->history($request, ChinaDocument::TYPE_BALANCE, null, $organizationId));
+        return $this->responder(fn () => $this->history($request, ChinaDocument::TYPE_BALANCE, null, $this->routeOrganizationId($request)));
     }
 
-    public function issueBalance(Request $request, ?int $organizationId = null): JsonResponse
+    public function issueBalance(Request $request): JsonResponse
     {
-        return $this->responder(function () use ($request, $organizationId) {
+        return $this->responder(function () use ($request) {
             $actor = $this->actor($request);
+            $organizationId = $this->routeOrganizationId($request);
             $document = $this->documents->issueBalance($organizationId ?? $actor['organization_ids'][0], $actor);
 
             return response()->json(['success' => true, 'data' => $this->documents->present($document)], 201);
@@ -57,6 +58,16 @@ class ChinaBillingDocumentController extends Controller
         $actor = $this->actor($request);
 
         return response()->json(['success' => true, 'data' => $this->documents->history($type, $operationId, $organizationId, $actor)]);
+    }
+
+    /**
+     * Las rutas del socio no traen organizationId: el default `scope` se inyectaría por posición en un parámetro tipado.
+     */
+    private function routeOrganizationId(Request $request): ?int
+    {
+        $id = $request->route('organizationId');
+
+        return $id !== null ? (int) $id : null;
     }
 
     /**
