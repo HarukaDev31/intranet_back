@@ -480,6 +480,11 @@ class ViaticoController extends Controller
             }
 
             unset($viatico->nueva_retribucion);
+            try {
+                \App\Services\Verificacion\VerificacionContadoresBroadcaster::emit(['viaticos']);
+            } catch (\Exception $e) {
+                Log::warning('No se pudo emitir contadores tras actualizar viático: ' . $e->getMessage());
+            }
             return response()->json([
                 'success' => true,
                 'message' => 'Viático actualizado exitosamente',

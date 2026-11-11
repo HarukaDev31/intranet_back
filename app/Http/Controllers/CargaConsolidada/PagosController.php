@@ -792,6 +792,15 @@ class PagosController extends Controller
                 ->first();
 
             DB::commit();
+            try {
+                $conceptoId = (int) $pago->id_concept;
+                $keys = $conceptoId === PagoConcept::CONCEPT_PAGO_DELIVERY
+                    ? ['delivery']
+                    : ['consolidado'];
+                \App\Services\Verificacion\VerificacionContadoresBroadcaster::emit($keys);
+            } catch (\Exception $e) {
+                Log::warning('No se pudo emitir contadores de verificación tras actualizar pago: ' . $e->getMessage());
+            }
             // Después de commit, sincronizar el estado de la cotización asociado
             try {
                 $this->syncEstadoCotizacionFromPayments($cotizacionId, false);
@@ -1468,6 +1477,12 @@ class PagosController extends Controller
             $pedidoCurso->status = $request->input('status');
             $pedidoCurso->timestamps = false;
             $pedidoCurso->save();
+
+            try {
+                \App\Services\Verificacion\VerificacionContadoresBroadcaster::emit(['cursos']);
+            } catch (\Exception $e) {
+                Log::warning('No se pudo emitir contadores de verificación tras pago de curso: ' . $e->getMessage());
+            }
 
             if ($request->input('status') === 'CONFIRMADO') {
                 try {

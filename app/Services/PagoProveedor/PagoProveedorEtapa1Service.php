@@ -518,6 +518,8 @@ class PagoProveedorEtapa1Service
 
             $presentado = $this->recargar($solicitud);
 
+            \App\Services\Verificacion\VerificacionContadoresBroadcaster::emit(['supplier_payment']);
+
             return [
                 'solicitud' => $presentado,
                 'aviso_operacion_repetida' => $repetida

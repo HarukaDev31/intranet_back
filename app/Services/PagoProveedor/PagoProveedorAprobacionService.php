@@ -165,7 +165,7 @@ class PagoProveedorAprobacionService
      */
     public function approve(int $id, ?string $reason, array $actor): PagoProveedorSolicitudProveedor
     {
-        return DB::transaction(function () use ($id, $reason, $actor) {
+        $result = DB::transaction(function () use ($id, $reason, $actor) {
             $provider = $this->find($id, true);
             $this->requireOpen($provider);
             $comparison = $this->compare($provider);
@@ -180,6 +180,12 @@ class PagoProveedorAprobacionService
 
             return $this->refreshed($provider);
         });
+        \App\Services\Verificacion\VerificacionContadoresBroadcaster::emit([
+            'supplier_approvals',
+            'supplier_executions',
+        ]);
+
+        return $result;
     }
 
     /**
@@ -187,7 +193,7 @@ class PagoProveedorAprobacionService
      */
     public function sendToCollect(int $id, array $actor): PagoProveedorSolicitudProveedor
     {
-        return DB::transaction(function () use ($id, $actor) {
+        $result = DB::transaction(function () use ($id, $actor) {
             $provider = $this->find($id, true);
             $this->requireOpen($provider);
             $comparison = $this->compare($provider);
@@ -210,6 +216,9 @@ class PagoProveedorAprobacionService
 
             return $this->refreshed($provider);
         });
+        \App\Services\Verificacion\VerificacionContadoresBroadcaster::emit(['supplier_approvals']);
+
+        return $result;
     }
 
     /**
@@ -217,7 +226,7 @@ class PagoProveedorAprobacionService
      */
     public function markRegistrationError(int $id, string $detail, array $actor): PagoProveedorSolicitudProveedor
     {
-        return DB::transaction(function () use ($id, $detail, $actor) {
+        $result = DB::transaction(function () use ($id, $detail, $actor) {
             $provider = $this->find($id, true);
             $this->requireOpen($provider);
             $note = trim($detail);
@@ -240,6 +249,9 @@ class PagoProveedorAprobacionService
 
             return $this->refreshed($provider);
         });
+        \App\Services\Verificacion\VerificacionContadoresBroadcaster::emit(['supplier_approvals']);
+
+        return $result;
     }
 
     /**

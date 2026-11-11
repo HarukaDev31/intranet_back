@@ -114,7 +114,7 @@ class PagoProveedorEjecucionService
      */
     public function register(int $providerId, float $realBankFee, UploadedFile $receipt, array $actor): PagoProveedorEjecucion
     {
-        return DB::transaction(function () use ($providerId, $realBankFee, $receipt, $actor) {
+        $result = DB::transaction(function () use ($providerId, $realBankFee, $receipt, $actor) {
             $provider = PagoProveedorSolicitudProveedor::query()
                 ->with(['solicitud', 'datos', 'ejecuciones'])
                 ->lockForUpdate()
@@ -179,6 +179,9 @@ class PagoProveedorEjecucionService
 
             return $execution;
         });
+        \App\Services\Verificacion\VerificacionContadoresBroadcaster::emit(['supplier_executions']);
+
+        return $result;
     }
 
     /**

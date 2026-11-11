@@ -164,7 +164,7 @@ class PagoProveedorReembolsoService
      */
     public function approve(int $id, float $amount, string $paidOn, string $bank, ?string $operation, UploadedFile $photo, array $actor): PagoProveedorReembolso
     {
-        return DB::transaction(function () use ($id, $amount, $paidOn, $bank, $operation, $photo, $actor) {
+        $result = DB::transaction(function () use ($id, $amount, $paidOn, $bank, $operation, $photo, $actor) {
             $refund = $this->lockRequested($id);
             if ($amount <= 0) {
                 throw new PagoProveedorException('El importe del voucher tiene que ser mayor que cero.');
@@ -190,6 +190,9 @@ class PagoProveedorReembolsoService
 
             return $refund->load(['solicitud', 'proveedor']);
         });
+        \App\Services\Verificacion\VerificacionContadoresBroadcaster::emit(['supplier_approvals']);
+
+        return $result;
     }
 
     /**
@@ -197,7 +200,7 @@ class PagoProveedorReembolsoService
      */
     public function reject(int $id, string $reason, array $actor): PagoProveedorReembolso
     {
-        return DB::transaction(function () use ($id, $reason, $actor) {
+        $result = DB::transaction(function () use ($id, $reason, $actor) {
             $refund = $this->lockRequested($id);
             $note = trim($reason);
             if ($note === '') {
@@ -215,6 +218,9 @@ class PagoProveedorReembolsoService
 
             return $refund->load(['solicitud', 'proveedor']);
         });
+        \App\Services\Verificacion\VerificacionContadoresBroadcaster::emit(['supplier_approvals']);
+
+        return $result;
     }
 
     /**

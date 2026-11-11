@@ -207,6 +207,12 @@ class PagoProveedorVerificacionService
                 }
             }
 
+            \App\Services\Verificacion\VerificacionContadoresBroadcaster::emit([
+                'supplier_payment',
+                'supplier_approvals',
+                'supplier_executions',
+            ]);
+
             return $deposit->fresh(['solicitud.proveedores', 'aplicaciones']);
         });
     }
@@ -237,6 +243,7 @@ class PagoProveedorVerificacionService
                 $actor,
                 trim($label.' '.($deposit->observation_detail ?? '').' · plazo '.$this->remedyDays().' días')
             );
+            \App\Services\Verificacion\VerificacionContadoresBroadcaster::emit(['supplier_payment']);
 
             return $deposit->fresh(['solicitud.proveedores', 'aplicaciones']);
         });
@@ -290,6 +297,12 @@ class PagoProveedorVerificacionService
                 $actor,
                 $notifies ? 'Se avisó a Ventas.' : 'Corrección dentro del plazo corto.'
             );
+
+            \App\Services\Verificacion\VerificacionContadoresBroadcaster::emit([
+                'supplier_payment',
+                'supplier_approvals',
+                'supplier_executions',
+            ]);
 
             return $deposit->fresh(['solicitud.proveedores', 'aplicaciones']);
         });
