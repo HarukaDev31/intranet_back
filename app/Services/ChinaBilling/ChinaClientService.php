@@ -282,9 +282,11 @@ class ChinaClientService
             ];
         }
         // Si dos organizaciones comparten país, la que no es la organización 1 se nombra por sí misma.
-        $labels = array_count_values(array_column($result, 'label'));
+        // «Perú» y «PERU» cuentan como el mismo país.
+        $key = fn (string $label): string => strtolower((string) preg_replace('/[^A-Za-z]/', '', (string) iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $label)));
+        $labels = array_count_values(array_map($key, array_column($result, 'label')));
         foreach ($result as $index => $row) {
-            if ($labels[$row['label']] > 1 && $row['organization_id'] !== Usuario::ID_ORGANIZACION_ADMIN) {
+            if ($labels[$key($row['label'])] > 1 && $row['organization_id'] !== Usuario::ID_ORGANIZACION_ADMIN) {
                 $result[$index]['label'] = $row['name'];
             }
         }
