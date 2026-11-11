@@ -3,14 +3,19 @@
 namespace App\Services\ChinaBilling;
 
 use App\Exceptions\ChinaBillingException;
+use App\Models\BaseDatos\Clientes\Cliente;
 use App\Models\ChinaBilling\ChinaClient;
 use App\Models\ChinaBilling\ChinaOperation;
+use App\Models\Organizacion;
+use App\Models\OrganizacionPortal;
+use App\Services\BaseDatos\Clientes\ClienteService;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Clientes de Almacén China para cobrar servicios: socios (una fila por organización) e importadores.
- * Es independiente de la base de datos de clientes de Carga Consolidada.
+ * Cada socio es una organización; los clientes que registró se muestran aparte, solo de lectura.
  * Los totales salen de las operaciones del socio y se calculan aquí, nunca en el front.
  */
 class ChinaClientService
@@ -56,6 +61,7 @@ class ChinaClientService
                 ChinaClient::TYPE_IMPORTER => $rows->where('type', ChinaClient::TYPE_IMPORTER)->count(),
             ],
             'organizations' => $this->reader->organizationOptions($organizationIds),
+            'groups' => $this->groups($organizationIds),
         ];
     }
 
@@ -92,14 +98,18 @@ class ChinaClientService
      * @param  array<int, int>  $organizationIds
      * @return array<string, mixed>
      */
-    public function create(array $data, array $organizationIds, ?int $userId): array
+    public function create(array $data, array $organizationIds, ?int $userId, ?int $companyId = null): array
     {
         $type = (string) $data['type'];
         $this->requireUniqueName((string) $data['name'], null, $type === ChinaClient::TYPE_PARTNER ? (int) ($data['organization_id'] ?? 0) : null);
 
         if ($type === ChinaClient::TYPE_PARTNER) {
             $organizationId = (int) ($data['organization_id'] ?? 0);
-            if (!in_array($organizationId, $organizationIds, true)) {
+            if ($organizationId <= 0) {
+                // Socio nuevo: se crea su organización y desde ahí se agrupan sus clientes.
+                $organizationId = $this->createOrganization($data, $companyId);
+                $organizationIds[] = $organizationId;
+            } elseif (!in_array($organizationId, $organizationIds, true)) {
                 throw new ChinaBillingException('Elige la organización del socio.');
             }
             $this->syncPartners([$organizationId], $userId);
@@ -146,6 +156,122 @@ class ChinaClientService
             throw new ChinaBillingException('Los socios se administran desde su organización.');
         }
         $client->delete();
+    }
+
+    /**
+     * Países disponibles para crear una organización.
+     *
+     * @return array<int, array{value: int, label: string}>
+     */
+    public function countryOptions(): array
+    {
+        return DB::table('pais')->orderBy('No_Pais')->get(['ID_Pais', 'No_Pais'])
+            ->map(fn ($row) => ['value' => (int) $row->ID_Pais, 'label' => (string) $row->No_Pais])->all();
+    }
+
+    /**
+     * Clientes que registró una organización (solo lectura).
+     *
+     * @param  array<int, int>  $organizationIds
+     * @param  array<string, mixed>  $filters  organization_id, search, page, per_page
+     * @return array<string, mixed>
+     */
+    public function database(array $organizationIds, array $filters): array
+    {
+        $organizationId = (int) ($filters['organization_id'] ?? 0);
+        $ids = in_array($organizationId, $organizationIds, true) ? [$organizationId] : [];
+        $search = trim((string) ($filters['search'] ?? ''));
+        $perPage = max(1, min(100, (int) ($filters['per_page'] ?? 15)));
+
+        $query = Cliente::query()->withoutGlobalScopes()->whereIn('organizacion_id', $ids ?: [0])
+            ->when($search !== '', function ($q) use ($search) {
+                $like = '%'.$search.'%';
+                $q->where(fn ($w) => $w->where('nombre', 'like', $like)->orWhere('documento', 'like', $like)
+                    ->orWhere('telefono', 'like', $like)->orWhere('correo', 'like', $like)->orWhere('empresa', 'like', $like));
+            })
+            ->orderByDesc('fecha')->orderByDesc('id');
+
+        $page = $query->paginate($perPage, ['*'], 'page', max(1, (int) ($filters['page'] ?? 1)));
+        $service = app(ClienteService::class);
+        $startNumber = ($page->currentPage() - 1) * $page->perPage();
+
+        $rows = collect($page->items())->values()->map(function (Cliente $cliente, int $index) use ($service, $startNumber) {
+            $first = $cliente->primer_servicio;
+            $origin = $first ? $service->getProvinciaYOrigenParaCliente($cliente, [$first]) : ['provincia' => null, 'origen' => null];
+
+            return [
+                'id' => (int) $cliente->id,
+                'number' => $startNumber + $index + 1,
+                'registered_on' => $cliente->getAttribute('fecha') instanceof \DateTimeInterface ? $cliente->getAttribute('fecha')->format('Y-m-d') : null,
+                'name' => (string) $cliente->getAttribute('nombre'),
+                'document' => (string) ($cliente->documento ?? ''),
+                'phone' => (string) ($cliente->telefono ?? ''),
+                'email' => (string) ($cliente->correo ?? ''),
+                'province' => (string) ($origin['provincia'] ?? ''),
+                'origin' => (string) ($origin['origen'] ?? ''),
+                'service' => $first ? trim(($first['servicio'] ?? '').' '.($first['detalle'] ?? '')) : '',
+                'category' => $first ? (string) ($first['categoria'] ?? 'Cliente') : 'Prospecto',
+            ];
+        })->all();
+
+        return [
+            'page' => new LengthAwarePaginator($rows, $page->total(), $page->perPage(), $page->currentPage()),
+            'organization_id' => $organizationId,
+        ];
+    }
+
+    /**
+     * Crea la organización de un socio nuevo (nombre y país) con su portal.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function createOrganization(array $data, ?int $companyId): int
+    {
+        $name = trim((string) ($data['name'] ?? ''));
+        $countryId = (int) ($data['country_id'] ?? 0);
+        if ($name === '') {
+            throw new ChinaBillingException('Ingresa el nombre de la organización.');
+        }
+        if ($countryId <= 0 || !DB::table('pais')->where('ID_Pais', $countryId)->exists()) {
+            throw new ChinaBillingException('Elige el país de la organización.');
+        }
+        if (Organizacion::query()->whereRaw('LOWER(No_Organizacion) = ?', [mb_strtolower($name)])->exists()) {
+            throw new ChinaBillingException('Ya existe una organización con ese nombre.');
+        }
+
+        return DB::transaction(function () use ($name, $countryId, $companyId) {
+            $organization = Organizacion::query()->create([
+                'ID_Empresa' => $companyId ?: 1,
+                'No_Organizacion' => $name,
+                'Nu_Estado' => 1,
+                'id_pais' => $countryId,
+            ]);
+            $organizationId = (int) $organization->getAttribute('ID_Organizacion');
+            OrganizacionPortal::firstOrCreateForOrganizacion($organizationId);
+
+            return $organizationId;
+        });
+    }
+
+    /**
+     * Una pestaña por organización con la cantidad de clientes que registró.
+     *
+     * @param  array<int, int>  $organizationIds
+     * @return array<int, array{organization_id: int, name: string, country: string, count: int}>
+     */
+    private function groups(array $organizationIds): array
+    {
+        $names = $this->reader->organizationNames($organizationIds);
+        $counts = DB::table('clientes')->whereIn('organizacion_id', $organizationIds ?: [0])
+            ->selectRaw('organizacion_id, COUNT(*) as total')->groupBy('organizacion_id')->pluck('total', 'organizacion_id');
+
+        $result = [];
+        foreach ($names as $organizationId => $org) {
+            $result[] = ['organization_id' => (int) $organizationId, 'name' => $org['name'], 'country' => $org['country'], 'count' => (int) ($counts[$organizationId] ?? 0)];
+        }
+        usort($result, fn (array $a, array $b) => strcmp($a['name'], $b['name']));
+
+        return $result;
     }
 
     /**

@@ -43,6 +43,8 @@ Route::group(['prefix' => 'china-billing', 'middleware' => 'jwt.auth'], function
 
     // Clientes de Almacén China (socios e importadores)
     Route::get('clients', [ChinaClientController::class, 'index']);
+    Route::get('clients/database', [ChinaClientController::class, 'database']);
+    Route::get('clients/countries', [ChinaClientController::class, 'countries']);
     Route::post('clients', [ChinaClientController::class, 'store']);
     Route::get('clients/{id}', [ChinaClientController::class, 'show'])->whereNumber('id');
     Route::post('clients/{id}', [ChinaClientController::class, 'update'])->whereNumber('id');

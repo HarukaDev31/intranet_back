@@ -11,7 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Clientes de Almacén China para cobrar servicios: socios e importadores.
+ * Clientes de Almacén China para cobrar servicios (socios e importadores) y los clientes que registró cada organización.
  */
 class ChinaClientController extends Controller
 {
@@ -47,7 +47,7 @@ class ChinaClientController extends Controller
             $actor = $this->authorization->requireWarehouse($request->user());
             $data = $request->validate($this->rules(true));
 
-            return $this->ok(new ChinaBillingRowResource($this->clients->create($data, $actor['organization_ids'], $actor['id'])), 201);
+            return $this->ok(new ChinaBillingRowResource($this->clients->create($data, $actor['organization_ids'], $actor['id'], $this->companyId($request))), 201);
         });
     }
 
@@ -71,6 +71,33 @@ class ChinaClientController extends Controller
         });
     }
 
+    /** Clientes que registró una organización (solo lectura). */
+    public function database(Request $request): JsonResponse
+    {
+        return $this->responder(function () use ($request) {
+            $actor = $this->authorization->requireWarehouse($request->user());
+
+            return $this->listResponse($this->clients->database($actor['organization_ids'], $request->all()));
+        });
+    }
+
+    /** Países para crear la organización de un socio nuevo. */
+    public function countries(Request $request): JsonResponse
+    {
+        return $this->responder(function () use ($request) {
+            $this->authorization->requireWarehouse($request->user());
+
+            return response()->json(['success' => true, 'data' => $this->clients->countryOptions()]);
+        });
+    }
+
+    private function companyId(Request $request): ?int
+    {
+        $companyId = (int) $request->user()?->getAttribute('ID_Empresa');
+
+        return $companyId > 0 ? $companyId : null;
+    }
+
     /**
      * @return array<string, array<int, string>>
      */
@@ -79,6 +106,7 @@ class ChinaClientController extends Controller
         $rules = [
             'name' => ['required', 'string', 'max:150'],
             'country' => ['nullable', 'string', 'max:80'],
+            'country_id' => ['nullable', 'integer'],
             'whatsapp' => ['required', 'string', 'max:40'],
             'contact_name' => ['nullable', 'string', 'max:150'],
             'email' => ['nullable', 'email', 'max:150'],
