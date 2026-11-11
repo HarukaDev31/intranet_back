@@ -793,7 +793,8 @@ class PagosController extends Controller
 
             DB::commit();
             try {
-                $conceptoId = (int) $pago->id_concept;
+                // find() queda tipado como Pago|Collection; la columna no se lee como propiedad.
+                $conceptoId = (int) data_get($pago, 'id_concept');
                 $keys = $conceptoId === PagoConcept::CONCEPT_PAGO_DELIVERY
                     ? ['delivery']
                     : ['consolidado'];
