@@ -427,7 +427,7 @@ class CalculadoraImportacionExcelService
      */
     public function generateCodeSupplier(string $string, $carga, $rowCount, int $index): string
     {
-        return CodeSupplierHelper::generate($string, $carga, $index);
+        return CodeSupplierHelper::generateOrg1($string, $carga, $index);
     }
 
     public function incrementColumn(string $column, int $increment = 1): string

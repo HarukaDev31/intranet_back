@@ -2518,7 +2518,7 @@ class CalculadoraImportacionService
 
     public function codeSupplierBasePrefix(string $nombreCliente, $carga): string
     {
-        return CodeSupplierHelper::basePrefix($nombreCliente, $carga);
+        return CodeSupplierHelper::basePrefixOrg1($nombreCliente, $carga);
     }
 
     public function maxCodeSupplierSuffixForBase(string $base, iterable $codeSuppliers): int
@@ -2542,7 +2542,7 @@ class CalculadoraImportacionService
      */
     private function generateCodeSupplier($string, $carga, $rowCount, $index)
     {
-        return CodeSupplierHelper::generate((string) $string, $carga, (int) $index);
+        return CodeSupplierHelper::generateOrg1((string) $string, $carga, (int) $index);
     }
 
     /**
