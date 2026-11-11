@@ -5,7 +5,6 @@ namespace App\Services\PagoProveedor;
 use App\Exceptions\PagoProveedorException;
 use App\Models\PagoProveedor\PagoProveedorAbono;
 use App\Models\PagoProveedor\PagoProveedorAbonoAplicacion;
-use App\Models\PagoProveedor\PagoProveedorConfiguracion;
 use App\Models\PagoProveedor\PagoProveedorCotizacionProveedor;
 use App\Models\PagoProveedor\PagoProveedorDatoProveedor;
 use App\Models\PagoProveedor\PagoProveedorHistorial;
@@ -862,7 +861,7 @@ class PagoProveedorEtapa1Service
                 continue;
             }
             if (!$proveedor->request_code) {
-                $proveedor->request_code = $this->codes->armar($proveedor->currency, $this->siguienteCorrelativo(), $solicitud->created_at);
+                $proveedor->request_code = $this->codes->deSolicitud($solicitud);
             }
             $proveedor->stage = PagoProveedorSolicitudProveedor::STAGE_VALIDATION;
             $proveedor->save();
@@ -882,23 +881,6 @@ class PagoProveedorEtapa1Service
         }
 
         return $datos->status === PagoProveedorDatoProveedor::STATUS_RECEIVED;
-    }
-
-    private function siguienteCorrelativo(): int
-    {
-        $fila = PagoProveedorConfiguracion::query()->where('setting_key', 'correlativo_solicitud')->lockForUpdate()->first();
-        if (!$fila) {
-            $fila = PagoProveedorConfiguracion::query()->create([
-                'setting_key' => 'correlativo_solicitud',
-                'setting_value' => ['n' => 0],
-            ]);
-            $fila = PagoProveedorConfiguracion::query()->whereKey($fila->id)->lockForUpdate()->first();
-        }
-        $siguiente = ((int) ($fila->setting_value['n'] ?? 0)) + 1;
-        $fila->setting_value = ['n' => $siguiente];
-        $fila->save();
-
-        return $siguiente;
     }
 
     private function abonoEditable(PagoProveedorSolicitud $solicitud, int $abonoId, bool $correcting = false): PagoProveedorAbono

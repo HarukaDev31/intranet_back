@@ -67,6 +67,7 @@ class DepositoVerificacionResource extends JsonResource
 
         return [
             'id' => $deposit->id,
+            'number' => $deposit->numero(),
             'request_id' => $deposit->request_id,
             'order_number' => $solicitud?->order_number,
             'client_name' => $solicitud?->client_name,

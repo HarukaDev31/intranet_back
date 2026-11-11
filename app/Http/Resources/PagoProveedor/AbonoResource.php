@@ -39,11 +39,6 @@ class AbonoResource extends JsonResource
             $decideText = $decideOverdue ? 'plazo de decisión vencido' : $raw;
         }
 
-        // N.° de abono dentro de la solicitud (1, 2…), en el orden en que se registraron.
-        $numero = $solicitud && $solicitud->relationLoaded('abonos')
-            ? $solicitud->abonos->filter(fn (PagoProveedorAbono $item) => $item->id <= $abono->id)->count()
-            : PagoProveedorAbono::query()->where('request_id', $abono->request_id)->where('id', '<=', $abono->id)->count();
-
         // Plazo de Administración para validar el depósito (mismo cálculo que la bandeja de Verificación).
         $validacion = null;
         if ($abono->status === PagoProveedorAbono::STATUS_IN_VALIDATION && $abono->created_at) {
@@ -63,7 +58,7 @@ class AbonoResource extends JsonResource
 
         return [
             'id' => $abono->id,
-            'numero' => max(1, $numero),
+            'numero' => $abono->numero(),
             'validacion_sla' => $validacion,
             'importe' => $abono->amount,
             'fecha_pago' => optional($abono->paid_on)->format('Y-m-d'),

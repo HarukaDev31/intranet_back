@@ -62,13 +62,14 @@
         <div class="seccion-linea"></div>
     </div>
     @php($x = 0)
-    <div style="position: relative; height: 10.4mm;">
+    @php($altoCliente = collect($datos_cliente)->contains(fn ($dato) => !empty($dato['segunda_linea'])) ? 14 : 10.4)
+    <div style="position: relative; height: {{ $altoCliente }}mm;">
         @foreach($datos_cliente as $indice => $dato)
             @if($indice > 0)
-                <div style="position: absolute; left: {{ $x }}mm; top: -0.4mm; height: 10.4mm; border-left: 0.3mm solid #e2e2e2;"></div>
+                <div style="position: absolute; left: {{ $x }}mm; top: -0.4mm; height: {{ $altoCliente }}mm; border-left: 0.3mm solid #e2e2e2;"></div>
             @endif
             <div style="position: absolute; left: {{ $x + ($indice > 0 ? 4 : 0) }}mm; top: 0.3mm; font-size: 7.8pt; color: #737373; white-space: nowrap;">{{ $dato['etiqueta'] }}</div>
-            <div style="position: absolute; left: {{ $x + ($indice > 0 ? 4 : 0) }}mm; top: 5.3mm; font-weight: bold; color: #181818; font-size: {{ $dato['pt'] }}pt; white-space: nowrap;">{{ $dato['valor'] }}</div>
+            <div style="position: absolute; left: {{ $x + ($indice > 0 ? 4 : 0) }}mm; top: 5.3mm; font-weight: bold; color: #181818; font-size: {{ $dato['pt'] }}pt; white-space: nowrap;">{{ $dato['valor'] }}@if(!empty($dato['segunda_linea']))<br>{{ $dato['segunda_linea'] }}@endif</div>
             @php($x += $dato['ancho'])
         @endforeach
     </div>

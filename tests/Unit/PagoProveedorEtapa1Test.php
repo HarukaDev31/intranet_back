@@ -6,7 +6,6 @@ use App\Exceptions\PagoProveedorException;
 use App\Services\PagoProveedor\PagoProveedorAbonoEvaluador;
 use App\Services\PagoProveedor\PagoProveedorCodigoSolicitud;
 use App\Services\PagoProveedor\PagoProveedorDatosReglas;
-use Carbon\Carbon;
 use PHPUnit\Framework\TestCase;
 
 class PagoProveedorEtapa1Test extends TestCase
@@ -92,13 +91,11 @@ class PagoProveedorEtapa1Test extends TestCase
 
     public function test_codigo_de_solicitud_interno(): void
     {
-        $codigo = (new PagoProveedorCodigoSolicitud())->armar(
-            'RMB',
-            15,
-            Carbon::parse('2026-10-29 12:00:00', 'America/Lima')
-        );
+        $codigos = new PagoProveedorCodigoSolicitud();
 
-        $this->assertSame('CN15OCT26', $codigo);
-        $this->assertSame('PE', substr((new PagoProveedorCodigoSolicitud())->armar('USD', 9, Carbon::parse('2026-10-29', 'America/Lima')), 0, 2));
+        $this->assertSame('PE¥01', $codigos->armar('Perú', 1));
+        $this->assertSame('PE¥67', $codigos->armar('Perú', 67));
+        $this->assertSame('EC¥120', $codigos->armar('Ecuador', 120));
+        $this->assertSame('PE¥05', $codigos->armar(null, 5));
     }
 }
