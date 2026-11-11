@@ -132,6 +132,34 @@ class CodeSupplierHelper
         return $code ?? ('SUP-' . $index);
     }
 
+    /** Prefijo de los códigos de proveedor de la organización 1 (Perú): PE-FRUR16-1. */
+    public const PREFIJO_ORG1 = 'PE';
+
+    /**
+     * Prefijo del code_supplier de la org 1 antes de "-N" (ej. "PE-JUPE5").
+     *
+     * @param mixed $carga
+     */
+    public static function basePrefixOrg1(string $nombreCliente, $carga): string
+    {
+        $rest = self::basePrefix($nombreCliente, $carga);
+
+        return $rest !== '' ? (self::PREFIJO_ORG1 . '-' . $rest) : self::PREFIJO_ORG1;
+    }
+
+    /**
+     * code_supplier de la org 1 (calculadora → cotizado): {PE}-{INICIALES}{CARGA}-{N}
+     * Cliente "Fruta Rural", carga 16, índice 1 → PE-FRUR16-1
+     *
+     * @param mixed $carga
+     */
+    public static function generateOrg1(string $nombreCliente, $carga, int $index): string
+    {
+        $code = self::sanitize(self::basePrefixOrg1($nombreCliente, $carga) . '-' . $index);
+
+        return $code ?? ('SUP-' . $index);
+    }
+
     /**
      * Primeras 3 letras del país (ASCII). Ecuador → ECU, Argentina → ARG, Perú → PER.
      *

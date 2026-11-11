@@ -562,7 +562,7 @@ class RotuladoPdfService
         if ($orgId <= 0 || $orgId === OrganizacionMensajeriaService::ID_ORGANIZACION_ADMIN) {
             return array(
                 'color' => '#E10613',
-                'marca' => '',
+                'marca' => 'PE-PRO',
                 'marca_size' => '50pt',
                 'socio' => 'PROBUSINESS',
                 'iso2' => '',
@@ -572,7 +572,7 @@ class RotuladoPdfService
         if ($orgId === 2) {
             return array(
                 'color' => '#0455C3',
-                'marca' => 'ECU-DAV',
+                'marca' => 'ECU1-DAV',
                 'marca_size' => '32pt',
                 'socio' => 'DAVID',
                 'iso2' => 'ec',
@@ -582,8 +582,8 @@ class RotuladoPdfService
         if ($orgId === 3) {
             return array(
                 'color' => '#00AA4E',
-                'marca' => 'BOG',
-                'marca_size' => '50pt',
+                'marca' => 'BOL2-GE',
+                'marca_size' => '40pt',
                 'socio' => 'GENUINO',
                 'iso2' => 'bo',
                 'banner' => 'BOLIVIA',
