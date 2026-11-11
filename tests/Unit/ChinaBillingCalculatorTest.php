@@ -8,7 +8,7 @@ use App\Models\ChinaBilling\ChinaPayment;
 use App\Models\ChinaBilling\ChinaPaymentAllocation;
 use App\Services\ChinaBilling\ChinaBillingCalculator as Calc;
 use Illuminate\Database\Eloquent\Collection;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 class ChinaBillingCalculatorTest extends TestCase
 {
