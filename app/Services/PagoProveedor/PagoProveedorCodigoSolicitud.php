@@ -2,23 +2,30 @@
 
 namespace App\Services\PagoProveedor;
 
-use Carbon\Carbon;
+use App\Models\PagoProveedor\PagoProveedorSolicitud;
 
 /**
- * Código interno CN/PE + correlativo + mes + año (RN-03). No se muestra al cliente.
- * El formato definitivo entre socios sigue abierto (PV-01); este es el de la maqueta.
+ * Código interno de la solicitud: código de socio + N.° de orden (PE¥01, PE¥02). No se muestra al cliente.
  */
 class PagoProveedorCodigoSolicitud
 {
-    public function armar(string $moneda, int $correlativo, ?Carbon $fecha = null): string
-    {
-        $fecha = ($fecha ?: Carbon::now(PagoProveedorVigenciaService::ZONA))->timezone(PagoProveedorVigenciaService::ZONA);
-        $prefijo = strtoupper($moneda) === 'RMB' ? 'CN' : 'PE';
-        $meses = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+    public const SEPARADOR = '¥';
 
-        return $prefijo
-            . str_pad((string) $correlativo, 2, '0', STR_PAD_LEFT)
-            . $meses[(int) $fecha->format('n') - 1]
-            . $fecha->format('y');
+    private const SOCIOS = [
+        PagoProveedorSolicitud::COUNTRY_PERU => 'PE',
+        PagoProveedorSolicitud::COUNTRY_ECUADOR => 'EC',
+        PagoProveedorSolicitud::COUNTRY_BOLIVIA => 'BO',
+    ];
+
+    public function armar(?string $pais, int $numeroOrden): string
+    {
+        return (self::SOCIOS[(string) $pais] ?? 'PE')
+            . self::SEPARADOR
+            . str_pad((string) $numeroOrden, 2, '0', STR_PAD_LEFT);
+    }
+
+    public function deSolicitud(PagoProveedorSolicitud $solicitud): string
+    {
+        return $this->armar($solicitud->country, (int) $solicitud->order_number);
     }
 }

@@ -99,6 +99,18 @@ class PagoProveedorAbono extends Model
     ];
 
     /**
+     * Correlativo del abono dentro de la solicitud (Abono 1, Abono 2...), no el id de la tabla.
+     */
+    public function numero(): int
+    {
+        if ($this->relationLoaded('solicitud') && $this->solicitud?->relationLoaded('abonos')) {
+            return $this->solicitud->abonos->where('id', '<=', $this->id)->count();
+        }
+
+        return self::query()->where('request_id', $this->request_id)->where('id', '<=', $this->id)->count();
+    }
+
+    /**
      * @return BelongsTo<PagoProveedorSolicitud, $this>
      */
     public function solicitud(): BelongsTo

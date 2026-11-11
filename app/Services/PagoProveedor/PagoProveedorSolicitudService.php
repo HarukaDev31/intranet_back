@@ -48,29 +48,27 @@ class PagoProveedorSolicitudService
             $query->where('consolidation', $consolidado);
         }
 
-        $tipoPago = trim((string) ($filtros['tipo_pago'] ?? ''));
-        if ($tipoPago !== '' && strtolower($tipoPago) !== 'todos') {
-            $query->whereHas('proveedores', function ($proveedores) use ($tipoPago) {
-                if (strtoupper($tipoPago) === 'RMB') {
-                    $proveedores->where('currency', 'RMB');
-                } elseif (strtoupper($tipoPago) === 'USD') {
-                    $proveedores->where('currency', 'USD');
-                }
-            });
-        }
-
-        $etapa = $filtros['etapa'] ?? null;
-        if ($etapa !== null && $etapa !== '' && strtolower((string) $etapa) !== 'todos') {
-            $query->whereHas('proveedores', function ($proveedores) use ($etapa) {
-                $proveedores->where('stage', (int) $etapa);
-            });
-        }
-
+        // Moneda, etapa y estado son de cada proveedor: la orden solo muestra los proveedores que cumplen el filtro.
+        $tipoPago = strtoupper(trim((string) ($filtros['tipo_pago'] ?? '')));
+        $etapa = trim((string) ($filtros['etapa'] ?? ''));
         $estado = trim((string) ($filtros['estado'] ?? ''));
-        if ($estado !== '' && strtolower($estado) !== 'todos') {
-            $query->whereHas('proveedores', function ($proveedores) use ($estado) {
-                $proveedores->where('status', $estado);
-            });
+        $filtraMoneda = in_array($tipoPago, ['RMB', 'USD'], true);
+        $filtraEtapa = $etapa !== '' && strtolower($etapa) !== 'todos';
+        $filtraEstado = $estado !== '' && strtolower($estado) !== 'todos';
+        if ($filtraMoneda || $filtraEtapa || $filtraEstado) {
+            $delProveedor = function ($proveedores) use ($filtraMoneda, $tipoPago, $filtraEtapa, $etapa, $filtraEstado, $estado) {
+                if ($filtraMoneda) {
+                    $proveedores->where('currency', $tipoPago);
+                }
+                if ($filtraEtapa) {
+                    $proveedores->where('stage', (int) $etapa);
+                }
+                if ($filtraEstado) {
+                    $proveedores->where('status', $estado);
+                }
+            };
+            $query->whereHas('proveedores', $delProveedor)
+                ->with(['proveedores' => $delProveedor, 'proveedores.datos', 'proveedores.consolidatedProvider']);
         }
 
         return $query->paginate((int) ($filtros['per_page'] ?? 15));

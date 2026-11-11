@@ -200,6 +200,7 @@ class AprobacionPagoResource extends JsonResource
             $sharedCount = $deposit->aplicaciones->count();
             $rows[] = [
                 'id' => $deposit->id,
+                'number' => $deposit->numero(),
                 'paid_on' => optional($deposit->paid_on)->toDateString(),
                 'bank' => $deposit->bank,
                 'bank_label' => $deposit->bank === PagoProveedorAbono::BANK_INTERBANK ? 'Interbank' : 'BCP',

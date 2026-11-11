@@ -41,6 +41,7 @@ class AbonoResource extends JsonResource
 
         return [
             'id' => $abono->id,
+            'numero' => $abono->numero(),
             'importe' => $abono->amount,
             'fecha_pago' => optional($abono->paid_on)->format('Y-m-d'),
             'numero_operacion' => $abono->operation_number,
