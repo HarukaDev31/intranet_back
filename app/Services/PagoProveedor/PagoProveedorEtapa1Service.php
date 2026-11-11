@@ -418,7 +418,10 @@ class PagoProveedorEtapa1Service
                 $abono = $this->abonoEditable($solicitud, $abonoId, true);
             }
 
-            $correctedProviderIds = $abono && ($abono->status === PagoProveedorAbono::STATUS_OBSERVED || $this->tieneErrorDeRegistro($solicitud, $abono))
+            $editandoEnValidacion = $abono
+                && $abono->status === PagoProveedorAbono::STATUS_IN_VALIDATION
+                && !$this->tieneErrorDeRegistro($solicitud, $abono);
+            $correctedProviderIds = $abono && ($abono->status === PagoProveedorAbono::STATUS_OBSERVED || $editandoEnValidacion || $this->tieneErrorDeRegistro($solicitud, $abono))
                 ? $abono->aplicaciones->pluck('request_provider_id')->map(fn ($id) => (int) $id)->all()
                 : [];
             $saldos = [];
@@ -514,6 +517,9 @@ class PagoProveedorEtapa1Service
             }
 
             $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, $abonoId ? 'Abono editado' : 'Abono registrado', $actor, $abono->operation_number);
+            if ($editandoEnValidacion) {
+                $this->regresarSinCobertura($this->recargar($solicitud, ['proveedores.datos', 'proveedores.aplicaciones.abono']), $correctedProviderIds, $actor);
+            }
             $this->intentarAvanzar($this->recargar($solicitud, ['proveedores.datos', 'proveedores.aplicaciones.abono']), $actor);
 
             $presentado = $this->recargar($solicitud);
@@ -912,6 +918,10 @@ class PagoProveedorEtapa1Service
         if ($correcting && $abono->status === PagoProveedorAbono::STATUS_OBSERVED) {
             return $abono;
         }
+        // Mientras Administración no lo valide, Ventas corrige su abono aunque el proveedor ya esté en Validación de pago.
+        if ($correcting && $abono->status === PagoProveedorAbono::STATUS_IN_VALIDATION && self::abonoCorregibleEnValidacion($solicitud, $abono)) {
+            return $abono;
+        }
         $avanzados =$abono->aplicaciones->contains(function ($aplicacion) use ($solicitud) {
             $proveedor = $solicitud->proveedores->firstWhere('id', $aplicacion->request_provider_id);
 
@@ -922,6 +932,45 @@ class PagoProveedorEtapa1Service
         }
 
         return $abono;
+    }
+
+    /**
+     * Un abono en validación se corrige si ninguno de sus proveedores pasó de Validación de pago ni tiene el pago aprobado.
+     */
+    public static function abonoCorregibleEnValidacion(?PagoProveedorSolicitud $solicitud, PagoProveedorAbono $abono): bool
+    {
+        if ($abono->status !== PagoProveedorAbono::STATUS_IN_VALIDATION) {
+            return false;
+        }
+
+        return !$abono->aplicaciones->contains(function ($aplicacion) use ($solicitud) {
+            $proveedor = $solicitud?->proveedores?->firstWhere('id', $aplicacion->request_provider_id);
+
+            return !$proveedor
+                || $proveedor->status === PagoProveedorSolicitudProveedor::STATUS_CANCELLED
+                || (int) $proveedor->stage > PagoProveedorSolicitudProveedor::STAGE_VALIDATION
+                || $proveedor->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_APPROVED;
+        });
+    }
+
+    /**
+     * Si al corregir un abono en validación un proveedor deja de estar cubierto, vuelve a la etapa 1.
+     *
+     * @param  array<int, int>  $providerIds
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    private function regresarSinCobertura(PagoProveedorSolicitud $solicitud, array $providerIds, array $actor): void
+    {
+        foreach ($solicitud->proveedores as $proveedor) {
+            if (!in_array((int) $proveedor->id, $providerIds, true)
+                || (int) $proveedor->stage !== PagoProveedorSolicitudProveedor::STAGE_VALIDATION
+                || $this->balance($proveedor) <= 0.009) {
+                continue;
+            }
+            $proveedor->stage = PagoProveedorSolicitudProveedor::STAGE_DATA;
+            $proveedor->save();
+            $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitud->id, 'Volvió a etapa 1', $actor, $proveedor->code_supplier . ': el abono corregido ya no cubre el total.');
+        }
     }
 
     private function tieneErrorDeRegistro(PagoProveedorSolicitud $solicitud, PagoProveedorAbono $abono): bool
