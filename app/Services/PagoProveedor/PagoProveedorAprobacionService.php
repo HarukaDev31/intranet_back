@@ -226,32 +226,8 @@ class PagoProveedorAprobacionService
      */
     public function markRegistrationError(int $id, string $detail, array $actor): PagoProveedorSolicitudProveedor
     {
-        $result = DB::transaction(function () use ($id, $detail, $actor) {
-            $provider = $this->find($id, true);
-            $this->requireOpen($provider);
-            $note = trim($detail);
-            if ($note === '') {
-                throw new PagoProveedorException('Indica qué debe corregir Ventas.');
-            }
-            $provider->approval_status = PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR;
-            $provider->status = PagoProveedorSolicitudProveedor::STATUS_OBSERVED;
-            $provider->collect_amount = null;
-            $provider->collect_until = now()->addDays($this->remedyDays());
-            $provider->registration_error_note = $note;
-            $provider->save();
-            $this->history->registrar(
-                PagoProveedorHistorial::ENTITY_REQUEST,
-                (int) $provider->request_id,
-                'Error de registro',
-                $actor,
-                $note
-            );
-
-            return $this->refreshed($provider);
-        });
-        \App\Services\Verificacion\VerificacionContadoresBroadcaster::emit(['supplier_approvals']);
-
-        return $result;
+        // PRY-26-0003: ya no se marca error de registro; si Ventas registró mal, Administración edita el depósito en Verificación.
+        throw new PagoProveedorException('Ya no se marca «Error de registro»: corrige los datos del depósito en Verificación (botón Editar).');
     }
 
     /**
