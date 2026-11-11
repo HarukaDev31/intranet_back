@@ -2708,7 +2708,9 @@ class CotizacionFinalController extends Controller
      * Suma pendiente (deuda) y a favor (sobrepago) por cotización, sin netear.
      * Así un cliente con deuda no se oculta detrás del sobrepago de otro.
      *
-     * @return array{pendiente: float, favor: float}
+     * También devuelve el detalle por cliente (solo los que tienen saldo distinto de 0).
+     *
+     * @return array{pendiente: float, favor: float, por_cliente: array<int, array{nombre: string, diferencia: float}>}
      */
     private function computeSaldosPagosFinal($idContenedor)
     {
@@ -2716,6 +2718,7 @@ class CotizacionFinalController extends Controller
         $rows = $this->buildPagosFinalCollection($request, $idContenedor);
         $pendiente = 0.0;
         $favor = 0.0;
+        $porCliente = [];
         foreach ($rows as $row) {
             $diff = (float) (is_array($row) ? ($row['diferencia'] ?? 0) : ($row->diferencia ?? 0));
             if ($diff > 0) {
@@ -2723,10 +2726,22 @@ class CotizacionFinalController extends Controller
             } elseif ($diff < 0) {
                 $pendiente += abs($diff);
             }
+            if (round($diff, 2) != 0) {
+                $nombre = trim((string) (is_array($row) ? ($row['nombre'] ?? '') : ($row->nombre ?? '')));
+                $porCliente[] = [
+                    'nombre' => $nombre !== '' ? $nombre : 'Sin nombre',
+                    'diferencia' => round($diff, 2),
+                ];
+            }
         }
+        // Primero los que deben (más deuda arriba), luego los que tienen saldo a favor
+        usort($porCliente, function ($a, $b) {
+            return $a['diferencia'] <=> $b['diferencia'];
+        });
         return [
             'pendiente' => round($pendiente, 2),
             'favor' => round($favor, 2),
+            'por_cliente' => $porCliente,
         ];
     }
 
@@ -2796,7 +2811,7 @@ class CotizacionFinalController extends Controller
         );
         $favorTxt = $this->formatCurrencyWithSign($saldos['favor'], true);
 
-        return [
+        $headers = [
             'saldos' => [
                 'value' => $pendienteTxt . ' · ' . $favorTxt,
                 'label' => 'Saldos',
@@ -2808,6 +2823,26 @@ class CotizacionFinalController extends Controller
                 ],
             ],
         ];
+
+        // Detalle por cliente: al hacer clic en el KPI se abre la lista (cliente: saldo)
+        $porCliente = $saldos['por_cliente'] ?? [];
+        if (!empty($porCliente)) {
+            $detalle = [];
+            foreach ($porCliente as $item) {
+                $tipo = $item['diferencia'] < 0 ? 'Pendiente' : 'A favor';
+                $key = $item['nombre'] . ' (' . $tipo . ')';
+                $base = $key;
+                $n = 2;
+                while (array_key_exists($key, $detalle)) {
+                    $key = $base . ' #' . $n++;
+                }
+                $detalle[$key] = $this->formatCurrencyWithSign($item['diferencia'], true);
+            }
+            $headers['saldos']['por_usuario'] = $detalle;
+            $headers['saldos']['sublines'][] = ['label' => 'Por cliente', 'value' => 'Clic para ver'];
+        }
+
+        return $headers;
     }
 
     /**
