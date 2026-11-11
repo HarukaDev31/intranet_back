@@ -31,7 +31,7 @@ class CodeSupplierPaisPrefixTest extends TestCase
 
     public function test_org1_lleva_prefijo_pe()
     {
-        $this->assertSame('PE-FRUR16-1', CodeSupplierHelper::generateOrg1('Fruta Rural', 16, 1));
+        $this->assertSame('PE-FRUR16-1', CodeSupplierHelper::generateOrg1('Fruta Urbana', 16, 1));
         $this->assertSame('PE-JUPE5', CodeSupplierHelper::basePrefixOrg1('Juan Perez', '05'));
     }
 }
