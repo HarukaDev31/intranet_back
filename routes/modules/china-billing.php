@@ -4,6 +4,7 @@ use App\Http\Controllers\ChinaBilling\ChinaBankAccountController;
 use App\Http\Controllers\ChinaBilling\ChinaBillingController;
 use App\Http\Controllers\ChinaBilling\ChinaBillingDocumentController;
 use App\Http\Controllers\ChinaBilling\ChinaBillingPartnerController;
+use App\Http\Controllers\ChinaBilling\ChinaClientController;
 use Illuminate\Support\Facades\Route;
 
 Route::group(['prefix' => 'china-billing', 'middleware' => 'jwt.auth'], function () {
@@ -39,6 +40,13 @@ Route::group(['prefix' => 'china-billing', 'middleware' => 'jwt.auth'], function
     Route::post('operations/{operationId}/documents', [ChinaBillingDocumentController::class, 'issueInvoice'])->whereNumber('operationId');
     Route::get('organizations/{organizationId}/balance-documents', [ChinaBillingDocumentController::class, 'balanceHistory'])->whereNumber('organizationId');
     Route::post('organizations/{organizationId}/balance-documents', [ChinaBillingDocumentController::class, 'issueBalance'])->whereNumber('organizationId');
+
+    // Clientes de Almacén China (socios e importadores)
+    Route::get('clients', [ChinaClientController::class, 'index']);
+    Route::post('clients', [ChinaClientController::class, 'store']);
+    Route::get('clients/{id}', [ChinaClientController::class, 'show'])->whereNumber('id');
+    Route::post('clients/{id}', [ChinaClientController::class, 'update'])->whereNumber('id');
+    Route::delete('clients/{id}', [ChinaClientController::class, 'destroy'])->whereNumber('id');
 
     // Socio
     Route::prefix('partner')->group(function () {

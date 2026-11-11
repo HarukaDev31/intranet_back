@@ -375,8 +375,14 @@ class ChinaBillingReader
      */
     public function organizationOptions(array $organizationIds): array
     {
+        $prices = \App\Models\ChinaBilling\ChinaClient::query()->whereIn('organization_id', $organizationIds)->pluck('prices', 'organization_id');
+
         return collect($this->organizationNames($organizationIds))
-            ->map(fn (array $row, int $id) => ['id' => $id, 'name' => $row['name'], 'country' => $row['country'], 'country_id' => $row['country_id']])
+            ->map(fn (array $row, int $id) => [
+                'id' => $id, 'name' => $row['name'], 'country' => $row['country'], 'country_id' => $row['country_id'],
+                // Tarifas del socio: precargan la tarifa de la operación.
+                'prices' => isset($prices[$id]) ? array_map('floatval', (array) $prices[$id]) : null,
+            ])
             ->sortBy('name')->values()->all();
     }
 
