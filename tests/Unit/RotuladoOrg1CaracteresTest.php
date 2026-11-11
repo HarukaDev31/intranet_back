@@ -32,6 +32,7 @@ class RotuladoOrg1CaracteresTest extends TestCase
             'HECHO EN CHINA',
             'PRO MUNDO COMEX S.A.C',
             'MAYS19-1',
+            'PE-PRO',
         );
     }
 
@@ -69,7 +70,7 @@ class RotuladoOrg1CaracteresTest extends TestCase
             'pais_destino' => 'PERU',
             'iso2' => 'pe',
         ));
-        $this->assertStringContainsString('ECU-DAV', $ecuador);
+        $this->assertStringContainsString('ECU1-DAV', $ecuador);
         $this->assertStringContainsString('SOCIO', $ecuador);
         $this->assertStringContainsString('DAVID', $ecuador);
         $this->assertStringContainsString('#0455C3', $ecuador);
@@ -82,7 +83,7 @@ class RotuladoOrg1CaracteresTest extends TestCase
             'pais_destino' => 'PERU',
             'iso2' => 'pe',
         ));
-        $this->assertStringContainsString('>BOG<', $bolivia);
+        $this->assertStringContainsString('>BOL2-GE<', $bolivia);
         $this->assertStringContainsString('GENUINO', $bolivia);
         $this->assertStringContainsString('#00AA4E', $bolivia);
         $this->assertStringContainsString('BOLIVIA', $bolivia);
@@ -91,7 +92,7 @@ class RotuladoOrg1CaracteresTest extends TestCase
         $otra = $service->buildHtml('CONTACTO', 'COD-1', '11', array(
             'organizacion_id' => 4,
         ));
-        $this->assertStringNotContainsString('ECU-DAV', $otra);
+        $this->assertStringNotContainsString('ECU1-DAV', $otra);
         $this->assertStringNotContainsString('{{sheet_color}}', $otra);
     }
 
