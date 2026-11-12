@@ -111,6 +111,21 @@ class PagoProveedorComisionTest extends TestCase
         $this->assertSame(4200.0, $calculo['total']);
     }
 
+    public function test_las_dos_cuotas_suman_exacto_el_valor_de_carga(): void
+    {
+        $linea = $this->linea('USD', 1428.57, 1);
+        $linea['modalidad_abono'] = 'fraccionado';
+        $linea['modalidad_pago'] = 'fraccionado';
+        $linea['porcentaje_1'] = 50;
+        $linea['porcentaje_2'] = 50;
+
+        $proveedor = $this->comisiones->calcular([$linea], $this->tarifa)['proveedores'][0];
+
+        $this->assertSame(714.29, $proveedor['cuotas'][0]['carga']);
+        $this->assertSame(714.28, $proveedor['cuotas'][1]['carga']);
+        $this->assertSame(1428.57, round($proveedor['pagos_proveedor'][0]['carga'] + $proveedor['pagos_proveedor'][1]['carga'], 2));
+    }
+
     public function test_abono_fraccionado_y_pago_total_cobra_la_bancaria_una_vez(): void
     {
         $linea = $this->linea('RMB', 4000, 1);
