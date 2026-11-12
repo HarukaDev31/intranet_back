@@ -153,7 +153,10 @@ class PagoProveedorSolicitudService
                     'admin_fee_amount' => $linea['administrativa'] ?? 0,
                     'total_amount' => $linea['total'] ?? 0,
                     'bank_fee_on_position' => $linea['bancaria_incluida_en'] ?? null,
-                    'summary_json' => $linea,
+                    // Valor en yuanes tal como lo digitó Ventas: China lo lee de summary_json['rmb'] (sin reconvertir desde USD).
+                    'summary_json' => $proveedor->cargo_value_rmb !== null && (float) $proveedor->cargo_value_rmb > 0
+                        ? array_merge($linea, ['rmb' => round((float) $proveedor->cargo_value_rmb, 2)])
+                        : $linea,
                     'proforma_path' => $proveedor->proforma_path,
                     'proforma_name' => $proveedor->proforma_name,
                     'stage' => PagoProveedorSolicitudProveedor::STAGE_DATA,
