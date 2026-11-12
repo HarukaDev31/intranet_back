@@ -191,18 +191,21 @@ class PagoProveedorSolicitudProveedor extends Model
     /**
      * Los códigos guardados con el formato anterior (CN57NOV26) se muestran con el actual: socio + N.° de orden.
      *
-     * @return Attribute<string|null, never>
+     * @return Attribute<string|null, string|null>
      */
     protected function requestCode(): Attribute
     {
-        return Attribute::get(function (?string $value): ?string {
-            if ($value === null || $value === '' || str_contains($value, PagoProveedorCodigoSolicitud::SEPARADOR)) {
-                return $value;
-            }
-            $solicitud = $this->solicitud;
+        return Attribute::make(
+            get: function (?string $value): ?string {
+                if ($value === null || $value === '' || str_contains($value, PagoProveedorCodigoSolicitud::SEPARADOR)) {
+                    return $value;
+                }
+                $solicitud = $this->solicitud;
 
-            return $solicitud ? app(PagoProveedorCodigoSolicitud::class)->deSolicitud($solicitud) : $value;
-        });
+                return $solicitud ? app(PagoProveedorCodigoSolicitud::class)->deSolicitud($solicitud) : $value;
+            },
+            set: fn (?string $value): ?string => $value,
+        );
     }
 
     /**
