@@ -159,7 +159,8 @@ class PagoProveedorResumenPdfVista
         $tipo = $this->tipo($proveedor);
         $esRmb = $proveedor['moneda'] === 'RMB';
         $valorUsd = (float) ($calculo['valor_carga_usd'] ?? $proveedor['valor_carga_usd']);
-        $valorNativo = $esRmb ? round($valorUsd * $tc, 2) : $valorUsd;
+        $valorRmb = (float) ($proveedor['valor_carga_rmb'] ?? 0);
+        $valorNativo = $esRmb ? ($valorRmb > 0 ? $valorRmb : round($valorUsd * $tc, 2)) : $valorUsd;
         $valorTexto = $esRmb
             ? '¥' . $this->numero($valorNativo) . ' ÷ ' . $this->tasa($tc) . ' = ' . $this->usd($valorUsd)
             : $this->usd($valorUsd);

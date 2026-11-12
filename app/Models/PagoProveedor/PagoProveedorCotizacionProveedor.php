@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $currency
  * @property string $payment_type
  * @property float $cargo_value_usd
+ * @property float|null $cargo_value_rmb
  * @property string $client_payment_mode
  * @property string $supplier_payment_mode
  * @property float $first_share_percent
@@ -51,6 +52,7 @@ class PagoProveedorCotizacionProveedor extends Model
         'currency',
         'payment_type',
         'cargo_value_usd',
+        'cargo_value_rmb',
         'client_payment_mode',
         'supplier_payment_mode',
         'first_share_percent',
@@ -64,6 +66,7 @@ class PagoProveedorCotizacionProveedor extends Model
 
     protected $casts = [
         'cargo_value_usd' => 'float',
+        'cargo_value_rmb' => 'float',
         'first_share_percent' => 'float',
         'second_share_percent' => 'float',
         'second_installment_on' => 'date:Y-m-d',

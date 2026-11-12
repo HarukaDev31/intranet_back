@@ -84,7 +84,46 @@ class PagoProveedorCotizacionCcLookup
     {
         $code = strtoupper(trim($code));
 
-        return $this->cache->rememberConsolidatedQuote($code, fn () => $this->load($code));
+        $data = $this->cache->rememberConsolidatedQuote($code, fn () => $this->load($code));
+
+        // El aviso se arma fuera de la caché: el estado de las cotizaciones cambia (pendiente, vencida, confirmada).
+        return array_merge($data, $this->usage($code));
+    }
+
+    /**
+     * Cotizaciones de pago a proveedor que ya usan este número, para avisar cuál es.
+     *
+     * @return array{ya_usada: bool, aviso: string|null}
+     */
+    private function usage(string $code): array
+    {
+        $quotes = PagoProveedorCotizacion::query()
+            ->where('consolidated_quote_code', $code)
+            ->orderByDesc('id')
+            ->get(['id', 'code', 'status', 'valid_until']);
+        if ($quotes->isEmpty()) {
+            return ['ya_usada' => false, 'aviso' => null];
+        }
+
+        $vigencia = app(PagoProveedorVigenciaService::class);
+        $labels = $quotes->map(function (PagoProveedorCotizacion $quote) use ($vigencia): string {
+            $status = match (true) {
+                $quote->status === PagoProveedorCotizacion::STATUS_CONFIRMED => 'Confirmada',
+                $quote->valid_until !== null && $vigencia->estaVencida($quote->valid_until) => 'Vencida',
+                default => 'Pendiente',
+            };
+
+            return $quote->code . ' (' . $status . ')';
+        })->values()->all();
+        $list = count($labels) > 1
+            ? implode(', ', array_slice($labels, 0, -1)) . ' y ' . $labels[count($labels) - 1]
+            : $labels[0];
+        $prefix = count($labels) > 1 ? 'Ya existen las cotizaciones ' : 'Ya existe la cotización ';
+
+        return [
+            'ya_usada' => true,
+            'aviso' => $prefix . $list . ' con este número. Puedes continuar.',
+        ];
     }
 
     /**
@@ -128,10 +167,6 @@ class PagoProveedorCotizacionCcLookup
             $quoteId = $quote->id;
         }
 
-        $alreadyUsed = PagoProveedorCotizacion::query()
-            ->where('consolidated_quote_code', $code)
-            ->exists();
-
         return [
             'cod_cotizacion_cc' => $code,
             'calculadora_importacion_id' => $calculator->id,
@@ -144,10 +179,6 @@ class PagoProveedorCotizacionCcLookup
             ],
             'consolidado' => $this->consolidationLabel($container),
             'proveedores' => $this->existingProviders($calculator, $quote instanceof Cotizacion ? $quote : null),
-            'ya_usada' => $alreadyUsed,
-            'aviso' => $alreadyUsed
-                ? 'Ya existe una cotización de pago a proveedor con este número. Puedes continuar.'
-                : null,
         ];
     }
 
