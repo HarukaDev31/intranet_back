@@ -24,6 +24,7 @@ class UpdatePagoProveedorCotizacionRequest extends FormRequest
             'proveedores.*.moneda' => ['required', 'in:RMB,USD'],
             'proveedores.*.tipo_pago' => ['required', 'in:transferencia,tt,tarjeta'],
             'proveedores.*.valor_carga_usd' => ['nullable', 'numeric', 'min:0'],
+            'proveedores.*.valor_carga_rmb' => ['nullable', 'numeric', 'min:0'],
             'proveedores.*.modalidad_abono' => ['required', 'in:total,fraccionado'],
             'proveedores.*.modalidad_pago' => ['required', 'in:total,fraccionado'],
             'proveedores.*.porcentaje_1' => ['nullable', 'numeric', 'min:0', 'max:100'],

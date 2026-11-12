@@ -396,6 +396,12 @@ class PagoProveedorCotizacionService
             $pago = $abono;
         }
 
+        // El valor en yuanes se guarda tal cual lo digitó Ventas: reconvertirlo desde el USD
+        // redondeado daba ¥9,999.99 en vez de ¥10,000 en el resumen.
+        $valorRmb = $moneda === PagoProveedorCotizacionProveedor::CURRENCY_RMB && (float) ($fila['valor_carga_rmb'] ?? 0) > 0
+            ? round((float) $fila['valor_carga_rmb'], 2)
+            : null;
+
         $codigo = trim((string) ($fila['code_supplier'] ?? ''));
         $idProveedor = null;
         if ($codigo !== '') {
@@ -427,6 +433,7 @@ class PagoProveedorCotizacionService
             'currency' => $moneda,
             'payment_type' => $tipo,
             'cargo_value_usd' => round((float) ($fila['valor_carga_usd'] ?? 0), 2),
+            'cargo_value_rmb' => $valorRmb,
             'client_payment_mode' => $abono,
             'supplier_payment_mode' => $pago,
             'first_share_percent' => $p1,

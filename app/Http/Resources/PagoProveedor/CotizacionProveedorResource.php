@@ -43,6 +43,7 @@ class CotizacionProveedorResource extends JsonResource
             'moneda' => $provider->currency,
             'tipo_pago' => $provider->payment_type,
             'valor_carga_usd' => $provider->cargo_value_usd,
+            'valor_carga_rmb' => $provider->cargo_value_rmb,
             'modalidad_abono' => $provider->client_payment_mode,
             'modalidad_pago' => $provider->supplier_payment_mode,
             'porcentaje_1' => $provider->first_share_percent,

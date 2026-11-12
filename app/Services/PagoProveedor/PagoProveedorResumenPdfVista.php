@@ -159,7 +159,8 @@ class PagoProveedorResumenPdfVista
         $tipo = $this->tipo($proveedor);
         $esRmb = $proveedor['moneda'] === 'RMB';
         $valorUsd = (float) ($calculo['valor_carga_usd'] ?? $proveedor['valor_carga_usd']);
-        $valorNativo = $esRmb ? round($valorUsd * $tc, 2) : $valorUsd;
+        $valorRmb = (float) ($proveedor['valor_carga_rmb'] ?? 0);
+        $valorNativo = $esRmb ? ($valorRmb > 0 ? $valorRmb : $this->yuanesDesdeUsd($valorUsd, $tc)) : $valorUsd;
         $valorTexto = $esRmb
             ? '¥' . $this->numero($valorNativo) . ' ÷ ' . $this->tasa($tc) . ' = ' . $this->usd($valorUsd)
             : $this->usd($valorUsd);
@@ -205,6 +206,22 @@ class PagoProveedorResumenPdfVista
                 'texto' => 'El cliente realiza un solo abono de ' . $this->usd($calculo['total'] ?? 0) . '. Pro Business paga al proveedor en 2 partes, según esta distribución. La comisión bancaria se cobra una sola vez y la administrativa dos veces (una por pago).',
             ] : null,
         ];
+    }
+
+    /**
+     * Cotizaciones guardadas antes de tener el valor en yuanes: si un monto entero en yuanes da el mismo
+     * USD guardado (¥10,000 ÷ 7 = $1,428.57, con 1 centavo de margen), se muestra ese y no el reconvertido (¥9,999.99).
+     */
+    private function yuanesDesdeUsd(float $usd, float $tc): float
+    {
+        $exacto = round($usd * $tc, 2);
+        if ($tc <= 0) {
+            return $exacto;
+        }
+        $entero = round($usd * $tc);
+
+        // Hasta 1 centavo de diferencia: el USD pudo recalcularse desde un yuan ya reconvertido.
+        return abs(round($entero / $tc, 2) - round($usd, 2)) <= 0.011 ? $entero : $exacto;
     }
 
     /**
