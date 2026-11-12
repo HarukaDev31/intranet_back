@@ -92,6 +92,7 @@ class CotizacionResource extends JsonResource
             'id' => $cotizacion->id,
             'codigo' => $cotizacion->code,
             'solicitud_id' => $cotizacion->solicitud?->id,
+            'solicitud_numero' => $cotizacion->solicitud?->order_number,
             'estado' => $cotizacion->status,
             'cod_cotizacion_cc' => $cotizacion->consolidated_quote_code,
             'consolidado' => $cotizacion->consolidation,
@@ -103,7 +104,7 @@ class CotizacionResource extends JsonResource
             'tipo_cambio_fecha' => optional($cotizacion->created_at)
                 ?->timezone(PagoProveedorVigenciaService::ZONA)
                 ?->format('d/m/Y'),
-            'tipo_cambio_confirmado' => $cotizacion->exchange_rate_confirmed,
+            'tipo_cambio_confirmado' => $this->tipoCambioConfirmado($cotizacion),
             'vigencia_fin' => optional($cotizacion->valid_until)->toIso8601String(),
             'vigencia_texto' => $cotizacion->status === PagoProveedorCotizacion::STATUS_CONFIRMED
                 ? 'Confirmada'
@@ -214,7 +215,7 @@ class CotizacionResource extends JsonResource
         $missingRequest = $missing;
         // Confirmar el tipo de cambio del día solo se exige para crear la solicitud: el PDF y el
         // WhatsApp siguen disponibles aunque se haya editado la cotización sin reconfirmarlo.
-        if ($hayYuanes && (float) $cotizacion->exchange_rate > 0 && !$cotizacion->exchange_rate_confirmed) {
+        if ($hayYuanes && (float) $cotizacion->exchange_rate > 0 && !$this->tipoCambioConfirmado($cotizacion)) {
             $missingRequest[] = 'Confirma el tipo de cambio.';
         }
         foreach ($cotizacion->proveedores as $provider) {
@@ -238,6 +239,23 @@ class CotizacionResource extends JsonResource
             'faltantes_pdf' => $missingPdf,
             'faltantes' => $missingRequest,
         ];
+    }
+
+    /**
+     * Si la cotización se creó hoy (hora de Lima) y tiene tipo de cambio, ese es el del día:
+     * cuenta como confirmado y no se vuelve a pedir.
+     */
+    private function tipoCambioConfirmado(PagoProveedorCotizacion $cotizacion): bool
+    {
+        if ($cotizacion->exchange_rate_confirmed) {
+            return true;
+        }
+        if ((float) $cotizacion->exchange_rate <= 0 || !$cotizacion->created_at) {
+            return false;
+        }
+
+        return $cotizacion->created_at->copy()->timezone(PagoProveedorVigenciaService::ZONA)->toDateString()
+            === now(PagoProveedorVigenciaService::ZONA)->toDateString();
     }
 
     /**
