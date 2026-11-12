@@ -70,7 +70,8 @@ class PagoProveedorComisionService
         $cuotas = [];
         for ($i = 0; $i < $cuotasCliente; $i++) {
             $porcentaje = $cuotasCliente === 1 ? 100.0 : $porcentajes[$i];
-            $carga = $cuotasCliente === 1 ? $valor : $this->dinero($valor * $porcentaje / 100);
+            // La 2.ª cuota es lo que falta del valor: así las dos suman exacto (50%–50% de 1,428.57 → 714.29 + 714.28).
+            $carga = $cuotasCliente === 1 ? $valor : ($i === 0 ? $this->dinero($valor * $porcentaje / 100) : $this->dinero($valor - $cuotas[0]['carga']));
             $cuotas[] = [
                 'numero' => $i + 1,
                 'porcentaje' => $porcentaje,
@@ -125,7 +126,7 @@ class PagoProveedorComisionService
             $pagos[] = [
                 'numero' => $i + 1,
                 'porcentaje' => $porcentaje,
-                'carga' => $pagosN === 1 ? $valor : $this->dinero($valor * $porcentaje / 100),
+                'carga' => $pagosN === 1 ? $valor : ($i === 0 ? $this->dinero($valor * $porcentaje / 100) : $this->dinero($valor - $pagos[0]['carga'])),
             ];
         }
 
