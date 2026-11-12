@@ -930,7 +930,7 @@ class PagoProveedorEtapa1Service
                 continue;
             }
             if (!$proveedor->request_code) {
-                $proveedor->request_code = $this->codes->deSolicitud($solicitud);
+                $proveedor->request_code = $this->codes->deSolicitud($solicitud, $proveedor->currency);
             }
             $proveedor->stage = PagoProveedorSolicitudProveedor::STAGE_VALIDATION;
             $proveedor->save();

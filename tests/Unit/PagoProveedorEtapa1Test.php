@@ -97,5 +97,10 @@ class PagoProveedorEtapa1Test extends TestCase
         $this->assertSame('PE¥67', $codigos->armar('Perú', 67));
         $this->assertSame('EC¥120', $codigos->armar('Ecuador', 120));
         $this->assertSame('PE¥05', $codigos->armar(null, 5));
+        $this->assertSame('PE$01', $codigos->armar('Perú', 1, 'USD'));
+        $this->assertSame('PE¥01', $codigos->armar('Perú', 1, 'RMB'));
+        $this->assertSame('PE$48', $codigos->conMoneda('PE¥48', 'USD'));
+        $this->assertSame('PE¥48', $codigos->conMoneda('PE$48', 'RMB'));
+        $this->assertNull($codigos->conMoneda('CN57NOV26', 'USD'));
     }
 }

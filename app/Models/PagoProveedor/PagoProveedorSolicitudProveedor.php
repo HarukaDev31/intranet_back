@@ -189,7 +189,7 @@ class PagoProveedorSolicitudProveedor extends Model
     ];
 
     /**
-     * Los códigos guardados con el formato anterior (CN57NOV26) se muestran con el actual: socio + N.° de orden.
+     * Los códigos guardados con el formato anterior (CN57NOV26) se muestran con el actual: socio + ¥/$ según moneda + N.° de orden.
      *
      * @return Attribute<string|null, string|null>
      */
@@ -197,12 +197,18 @@ class PagoProveedorSolicitudProveedor extends Model
     {
         return Attribute::make(
             get: function (?string $value): ?string {
-                if ($value === null || $value === '' || str_contains($value, PagoProveedorCodigoSolicitud::SEPARADOR)) {
+                if ($value === null || $value === '') {
                     return $value;
+                }
+                $codigos = app(PagoProveedorCodigoSolicitud::class);
+                // Formato actual: solo se ajusta el símbolo a la moneda (¥ yuanes, $ dólares).
+                $actual = $codigos->conMoneda($value, $this->currency);
+                if ($actual !== null) {
+                    return $actual;
                 }
                 $solicitud = $this->solicitud;
 
-                return $solicitud ? app(PagoProveedorCodigoSolicitud::class)->deSolicitud($solicitud) : $value;
+                return $solicitud ? $codigos->deSolicitud($solicitud, $this->currency) : $value;
             },
             set: fn (?string $value): ?string => $value,
         );
