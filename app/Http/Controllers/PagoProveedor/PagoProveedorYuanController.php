@@ -138,7 +138,16 @@ class PagoProveedorYuanController extends Controller
     {
         return $this->responder(function () use ($request, $requestId) {
             $actor = $this->authorization->requireWarehouse($request->user());
-            $request_ = $this->yuan->updateManual($requestId, $request->validate($this->manualRules()), $actor);
+            // Las solicitudes de Ventas también se editan aquí, pero solo los datos del proveedor que maneja China.
+            $request_ = $this->yuan->isManual($requestId)
+                ? $this->yuan->updateManual($requestId, $request->validate($this->manualRules()), $actor)
+                : $this->yuan->updateSupplierData($requestId, $request->validate([
+                    'providers' => ['required', 'array', 'min:1'],
+                    'providers.*.id' => ['required', 'integer'],
+                    'providers.*.supplier_name' => ['nullable', 'string', 'max:255'],
+                    'providers.*.wechat' => ['nullable', 'string', 'max:30'],
+                    'providers.*.seller_name' => ['nullable', 'string', 'max:255'],
+                ]), $actor);
 
             return response()->json(['success' => true, 'data' => ['request_id' => $request_->id]]);
         });

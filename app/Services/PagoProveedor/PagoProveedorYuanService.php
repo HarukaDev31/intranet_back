@@ -768,6 +768,61 @@ class PagoProveedorYuanService
         });
     }
 
+    public function isManual(int $requestId): bool
+    {
+        $request = PagoProveedorSolicitud::query()->find($requestId, ['id', 'origin']);
+        if (!$request) {
+            throw new PagoProveedorException('La solicitud no existe.', 404);
+        }
+
+        return $request->origin === PagoProveedorSolicitud::ORIGIN_MANUAL;
+    }
+
+    /**
+     * Solicitud que llegó de Ventas: China corrige solo nombre del proveedor, WeChat ID y vendedor.
+     * Cliente, montos, modalidad y proforma los corrige Ventas.
+     *
+     * @param  array<string, mixed>  $payload
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    public function updateSupplierData(int $requestId, array $payload, array $actor): PagoProveedorSolicitud
+    {
+        return DB::transaction(function () use ($requestId, $payload, $actor) {
+            $request = PagoProveedorSolicitud::query()->with('proveedores.datos')->lockForUpdate()->find($requestId);
+            if (!$request) {
+                throw new PagoProveedorException('La solicitud no existe.', 404);
+            }
+            $existing = $request->proveedores->keyBy('id');
+            /** @var array<int, array<string, mixed>> $rows */
+            $rows = array_values($payload['providers']);
+            foreach ($rows as $row) {
+                $provider = $existing->get((int) $row['id']);
+                if (!$provider) {
+                    throw new PagoProveedorException('Uno de los proveedores ya no pertenece a esta solicitud.');
+                }
+                $provider->supplier_name = trim((string) ($row['supplier_name'] ?? '')) ?: null;
+                $provider->save();
+                $wechat = trim((string) ($row['wechat'] ?? ''));
+                $seller = trim((string) ($row['seller_name'] ?? ''));
+                $data = $provider->datos;
+                if (!$data && $wechat === '' && $seller === '') {
+                    continue;
+                }
+                $data ??= $provider->datos()->make([
+                    'status' => PagoProveedorDatoProveedor::STATUS_RECEIVED,
+                    'source' => 'china',
+                    'token' => Str::random(40),
+                ]);
+                $data->wechat = $wechat === '' ? null : PagoProveedorDatosReglas::wechat($wechat);
+                $data->seller_name = $seller === '' ? null : $seller;
+                $data->save();
+            }
+            $this->history->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $request->id, 'Datos del proveedor editados por China', $actor, (string) $request->client_name);
+
+            return $request;
+        });
+    }
+
     /**
      * @return array{usd: float, quoted_rate: float, quoted_yuan: float}
      */
