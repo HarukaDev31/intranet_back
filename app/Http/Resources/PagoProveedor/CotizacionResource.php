@@ -187,8 +187,8 @@ class CotizacionResource extends JsonResource
     {
         $missing = [];
         $hayYuanes = $cotizacion->proveedores->contains('currency', PagoProveedorCotizacionProveedor::CURRENCY_RMB);
-        if ($hayYuanes && (!$cotizacion->exchange_rate_confirmed || (float) $cotizacion->exchange_rate <= 0)) {
-            $missing[] = 'Confirma el tipo de cambio.';
+        if ($hayYuanes && (float) $cotizacion->exchange_rate <= 0) {
+            $missing[] = 'Falta el tipo de cambio.';
         }
 
         foreach ($cotizacion->proveedores as $provider) {
@@ -212,6 +212,11 @@ class CotizacionResource extends JsonResource
 
         $missingPdf = $missing;
         $missingRequest = $missing;
+        // Confirmar el tipo de cambio del día solo se exige para crear la solicitud: el PDF y el
+        // WhatsApp siguen disponibles aunque se haya editado la cotización sin reconfirmarlo.
+        if ($hayYuanes && (float) $cotizacion->exchange_rate > 0 && !$cotizacion->exchange_rate_confirmed) {
+            $missingRequest[] = 'Confirma el tipo de cambio.';
+        }
         foreach ($cotizacion->proveedores as $provider) {
             $n = $provider->position;
             if (!$provider->proforma_path) {
