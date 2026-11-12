@@ -115,9 +115,28 @@ class PagoProveedorEtapa1Controller extends Controller
             $datos = $request->validate([
                 'proveedores' => ['nullable', 'array'],
                 'proveedores.*' => ['integer'],
+                'vista_previa' => ['nullable', 'boolean'],
             ]);
 
             return $this->datos($this->etapa1->vistaPreviaPedirDatos(
+                $solicitudId,
+                $actor,
+                $datos['proveedores'] ?? null,
+                (bool) ($datos['vista_previa'] ?? false)
+            ));
+        });
+    }
+
+    public function enviarPedirDatos(Request $request, int $solicitudId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $solicitudId) {
+            $actor = $this->autorizacion->exigirVentas($request->user());
+            $datos = $request->validate([
+                'proveedores' => ['nullable', 'array'],
+                'proveedores.*' => ['integer'],
+            ]);
+
+            return $this->datos($this->etapa1->enviarPedirDatos(
                 $solicitudId,
                 $actor,
                 $datos['proveedores'] ?? null
