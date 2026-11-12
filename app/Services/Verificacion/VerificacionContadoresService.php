@@ -10,8 +10,8 @@ use App\Models\PedidoCursoPago;
 use App\Models\Viatico;
 
 /**
- * Conteos baratos (COUNT) de lo pendiente de verificación / viáticos.
- * Una sola respuesta para sidebar, tabs y home de Administración.
+ * Conteos baratos (COUNT) de lo pendiente de verificacion / viaticos.
+ * Una sola respuesta para sidebar, tabs y home de Administracion.
  */
 class VerificacionContadoresService
 {
@@ -60,7 +60,7 @@ class VerificacionContadoresService
     }
 
     /**
-     * @param  array  $partial  claves a devolver (si vacío, todas)
+     * @param  array  $partial  claves a devolver (si vacio, todas)
      * @return array
      */
     public function slice(array $partial = [])

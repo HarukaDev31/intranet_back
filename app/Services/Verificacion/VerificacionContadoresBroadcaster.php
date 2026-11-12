@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace App\Services\Verificacion;
 
@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Emite un único evento con los conteos actuales (o un subconjunto).
- * Se llama después de validar / observar / crear viático, etc.
+ * Se llama después de validar / observar / aprobar / crear viático, etc.
  */
 class VerificacionContadoresBroadcaster
 {
@@ -17,12 +17,10 @@ class VerificacionContadoresBroadcaster
     /** @var bool */
     private static $flushScheduled = false;
 
-    /**
-     * @param  array  $keys  claves a incluir; vacío = todas
-     */
     public static function emit(array $keys = [])
     {
         try {
+            // Vacío = pedimos el bloque completo en el flush.
             if (empty($keys)) {
                 self::$pendingKeys = ['*'];
             } elseif (!in_array('*', self::$pendingKeys, true)) {
@@ -38,6 +36,7 @@ class VerificacionContadoresBroadcaster
             }
             self::$flushScheduled = true;
 
+            // Agrupa ráfagas del mismo request/segundo en un solo broadcast.
             $runner = function () {
                 self::$flushScheduled = false;
                 $keys = self::$pendingKeys;
@@ -49,7 +48,7 @@ class VerificacionContadoresBroadcaster
                 event(new VerificacionContadoresActualizados($counts));
             };
 
-            if (function_exists('app') && method_exists(app(), 'terminating')) {
+            if (function_exists('app') && app()->bound('events') && method_exists(app(), 'terminating')) {
                 app()->terminating($runner);
             } else {
                 $runner();
