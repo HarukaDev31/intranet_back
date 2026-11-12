@@ -457,6 +457,9 @@ class PagoProveedorEtapa1Service
                 ...array_map(fn (string $line) => '➡️ ' . $line, $lineas),
                 '',
                 '💰 *Total a depositar: $' . number_format($total, 2, '.', ',') . '*',
+                '',
+                '🧾 Una vez realizado el depósito, envíanos tu comprobante de pago por este medio para registrarlo.',
+                '¡Gracias! 😊',
             ]);
             $this->guardarMensaje($primero, 'cuentas', $texto, $actor);
 
