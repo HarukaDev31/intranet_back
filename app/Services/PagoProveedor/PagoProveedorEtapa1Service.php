@@ -299,60 +299,126 @@ class PagoProveedorEtapa1Service
     }
 
     /**
+     * Vista previa de «Pedir datos del proveedor». Con $soloVista no cambia nada (se usa mientras
+     * Ventas elige proveedores en la misma ventana); sin él queda registrado el pedido (flujo anterior).
+     *
      * @param  array{id: int|null, nombre: string, area: string}  $actor
      * @param  array<int, int>|null  $providerIds
      * @return array<string, mixed>
      */
-    public function vistaPreviaPedirDatos(int $solicitudId, array $actor, ?array $providerIds = null): array
+    public function vistaPreviaPedirDatos(int $solicitudId, array $actor, ?array $providerIds = null, bool $soloVista = false): array
     {
+        if ($soloVista) {
+            $pedido = $this->armarPedidoDatos($this->solicitud($solicitudId), $providerIds, false);
+
+            return [
+                'texto' => $pedido['texto'],
+                'destinatario' => $pedido['destinatario'],
+                'puede_enviar' => $pedido['destinatario'] !== null,
+                'nota' => $pedido['destinatario'] !== null
+                    ? 'Revisa el mensaje y pulsa Enviar. Se enviará al WhatsApp del cliente desde el número de ventas.'
+                    : 'Falta el WhatsApp del cliente para poder enviar.',
+            ];
+        }
+
         return DB::transaction(function () use ($solicitudId, $actor, $providerIds) {
             $solicitud = $this->solicitud($solicitudId, true);
-            $selected = $providerIds === null ? null : array_map('intval', $providerIds);
-            $hasYuan = false;
-            $hasBankForm = false;
-            $bloques = [];
-            $primero = null;
-            foreach ($solicitud->proveedores as $proveedor) {
-                if ($proveedor->status === PagoProveedorSolicitudProveedor::STATUS_CANCELLED || (int) $proveedor->stage !== PagoProveedorSolicitudProveedor::STAGE_DATA) {
-                    continue;
-                }
-                if ($selected !== null && !in_array((int) $proveedor->id, $selected, true)) {
-                    continue;
-                }
-                $primero ??= $proveedor;
-                if ($proveedor->currency === PagoProveedorCotizacionProveedor::CURRENCY_RMB) {
-                    $datos = $proveedor->datos;
-                    if ($datos && trim((string) $datos->seller_name) !== '' && trim((string) $datos->wechat) !== '') {
-                        continue;
-                    }
-                    $bloques[] = "✅ Proveedor: *{$proveedor->code_supplier} | {$proveedor->product}*\n📝 Datos:\n▪️ *Nombre del vendedor*\n▪️ *N.° de WeChat*";
-                    $hasYuan = true;
-                    continue;
-                }
-                $datos = $this->datosDe($proveedor);
-                if ($datos->status === PagoProveedorDatoProveedor::STATUS_RECEIVED && !$datos->correction_requested) {
-                    continue;
-                }
-                if ($datos->status === PagoProveedorDatoProveedor::STATUS_PENDING) {
-                    $datos->status = PagoProveedorDatoProveedor::STATUS_SENT;
-                    $datos->save();
-                }
-                $bloques[] = "✅ Proveedor: *{$proveedor->code_supplier} | {$proveedor->product}*\n📝 Datos:\n▪️ *Formulario bancario:* {$this->enlace($datos)}";
-                $hasBankForm = true;
-            }
-            if ($bloques === [] || !$primero) {
-                throw new PagoProveedorException('Los proveedores de esta solicitud ya tienen los datos.');
-            }
-            $texto = $this->dataRequestText($this->mensajes()->firstName($solicitud->client_name), $bloques, $hasYuan, $hasBankForm);
-            $this->guardarMensaje($primero, 'pedir_datos', $texto, $actor);
+            $pedido = $this->armarPedidoDatos($solicitud, $providerIds, true);
+            $this->guardarMensaje($pedido['primero'], 'pedir_datos', $pedido['texto'], $actor);
             $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, 'Pedido de datos', $actor, null);
 
             return [
-                'texto' => $texto,
+                'texto' => $pedido['texto'],
                 'nota' => 'Quedó la vista previa. El envío real por WhatsApp se habilita con la plantilla de Meta.',
                 'solicitud' => $this->recargar($solicitud),
             ];
         });
+    }
+
+    /**
+     * Envía por WhatsApp (número de ventas) el pedido de datos de los proveedores elegidos y lo registra.
+     *
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     * @param  array<int, int>|null  $providerIds
+     * @return array<string, mixed>
+     */
+    public function enviarPedirDatos(int $solicitudId, array $actor, ?array $providerIds = null): array
+    {
+        return DB::transaction(function () use ($solicitudId, $actor, $providerIds) {
+            $solicitud = $this->solicitud($solicitudId, true);
+            $pedido = $this->armarPedidoDatos($solicitud, $providerIds, true);
+            if ($pedido['destinatario'] === null) {
+                throw new PagoProveedorException('Falta el WhatsApp del cliente.');
+            }
+            app(PagoProveedorCotizacionWhatsappService::class)
+                ->enviarTextoCliente($pedido['destinatario'], $pedido['texto'], 'pedir_datos solicitud ' . $solicitudId);
+            $this->guardarMensaje($pedido['primero'], 'pedir_datos', $pedido['texto'], $actor);
+            $this->historial->registrar(
+                PagoProveedorHistorial::ENTITY_REQUEST,
+                $solicitudId,
+                'Pedido de datos enviado por WhatsApp',
+                $actor,
+                'Enviado desde el número de ventas a ' . $pedido['destinatario']
+            );
+
+            return [
+                'texto' => $pedido['texto'],
+                'enviado' => true,
+                'nota' => 'Pedido de datos enviado por WhatsApp desde el número de ventas.',
+                'solicitud' => $this->recargar($solicitud),
+            ];
+        });
+    }
+
+    /**
+     * @param  array<int, int>|null  $providerIds
+     * @return array{texto: string, primero: PagoProveedorSolicitudProveedor, destinatario: string|null}
+     */
+    private function armarPedidoDatos(PagoProveedorSolicitud $solicitud, ?array $providerIds, bool $marcarEnviado): array
+    {
+        $selected = $providerIds === null ? null : array_map('intval', $providerIds);
+        $hasYuan = false;
+        $hasBankForm = false;
+        $bloques = [];
+        $primero = null;
+        foreach ($solicitud->proveedores as $proveedor) {
+            if ($proveedor->status === PagoProveedorSolicitudProveedor::STATUS_CANCELLED || (int) $proveedor->stage !== PagoProveedorSolicitudProveedor::STAGE_DATA) {
+                continue;
+            }
+            if ($selected !== null && !in_array((int) $proveedor->id, $selected, true)) {
+                continue;
+            }
+            $primero ??= $proveedor;
+            if ($proveedor->currency === PagoProveedorCotizacionProveedor::CURRENCY_RMB) {
+                $datos = $proveedor->datos;
+                if ($datos && trim((string) $datos->seller_name) !== '' && trim((string) $datos->wechat) !== '') {
+                    continue;
+                }
+                $bloques[] = "✅ Proveedor: *{$proveedor->code_supplier} | {$proveedor->product}*\n📝 Datos:\n▪️ *Nombre del vendedor:*\n▪️ *N.° de WeChat:*";
+                $hasYuan = true;
+                continue;
+            }
+            $datos = $this->datosDe($proveedor);
+            if ($datos->status === PagoProveedorDatoProveedor::STATUS_RECEIVED && !$datos->correction_requested) {
+                continue;
+            }
+            if ($marcarEnviado && $datos->status === PagoProveedorDatoProveedor::STATUS_PENDING) {
+                $datos->status = PagoProveedorDatoProveedor::STATUS_SENT;
+                $datos->save();
+            }
+            $bloques[] = "✅ Proveedor: *{$proveedor->code_supplier} | {$proveedor->product}*\n📝 Datos:\n▪️ *Formulario bancario:* {$this->enlace($datos)}";
+            $hasBankForm = true;
+        }
+        if ($bloques === [] || !$primero) {
+            throw new PagoProveedorException('Los proveedores de esta solicitud ya tienen los datos.');
+        }
+        $whatsapp = trim((string) $solicitud->client_whatsapp);
+
+        return [
+            'texto' => $this->dataRequestText($this->mensajes()->firstName($solicitud->client_name), $bloques, $hasYuan, $hasBankForm),
+            'primero' => $primero,
+            'destinatario' => $whatsapp !== '' ? $whatsapp : null,
+        ];
     }
 
     /**
