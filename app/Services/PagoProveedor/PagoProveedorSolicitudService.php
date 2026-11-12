@@ -31,8 +31,8 @@ class PagoProveedorSolicitudService
 
         if (!empty($filtros['search'])) {
             $texto = '%' . trim((string) $filtros['search']) . '%';
-            // «PE¥67» también encuentra la orden 67 aunque su código se haya guardado con el formato anterior.
-            $orden = preg_match('/^[A-Z]{2}¥0*(\d+)$/iu', trim((string) $filtros['search']), $partes) ? (int) $partes[1] : null;
+            // «PE¥67» o «PE$67» también encuentra la orden 67 aunque su código se haya guardado con el formato anterior.
+            $orden = preg_match('/^[A-Z]{2}[¥$]0*(\d+)$/iu', trim((string) $filtros['search']), $partes) ? (int) $partes[1] : null;
             $query->where(function ($q) use ($texto, $orden) {
                 $q->where('client_name', 'like', $texto);
                 if ($orden !== null) {

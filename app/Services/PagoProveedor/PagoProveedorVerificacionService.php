@@ -36,11 +36,18 @@ class PagoProveedorVerificacionService
 
         if (!empty($filters['search'])) {
             $text = '%'.trim((string) $filters['search']).'%';
-            $query->where(function ($inner) use ($text) {
+            // «PE¥48» o «PE$48»: el código se arma con el N.° de orden, así que también se busca por él.
+            $order = preg_match('/^[A-Z]{2}[¥$]0*(\d+)$/iu', trim((string) $filters['search']), $parts) ? (int) $parts[1] : null;
+            $query->where(function ($inner) use ($text, $order) {
                 $inner->where('operation_number', 'like', $text)
                     ->orWhere('amount', 'like', $text)
-                    ->orWhereHas('solicitud', function ($request) use ($text) {
-                        $request->where('client_name', 'like', $text)
+                    ->orWhereHas('solicitud', function ($request) use ($text, $order) {
+                        if ($order !== null) {
+                            $request->where('order_number', $order)->orWhere('client_name', 'like', $text);
+                        } else {
+                            $request->where('client_name', 'like', $text);
+                        }
+                        $request
                             ->orWhere('consolidation', 'like', $text)
                             ->orWhereHas('proveedores', function ($providers) use ($text) {
                                 $providers->where('request_code', 'like', $text)
