@@ -472,6 +472,8 @@ class BoletinQuimicoController extends Controller
             $pagoData = $pago->toArray();
             $pagoData['voucher_url'] = $this->generateImageUrl($pago->voucher_url);
 
+            \App\Services\Verificacion\VerificacionContadoresBroadcaster::emit(['boletin_quimico']);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Pago registrado',
@@ -507,6 +509,8 @@ class BoletinQuimicoController extends Controller
 
             $pagoData = $pago->toArray();
             $pagoData['voucher_url'] = $this->generateImageUrl($pago->voucher_url);
+
+            \App\Services\Verificacion\VerificacionContadoresBroadcaster::emit(['boletin_quimico']);
 
             return response()->json([
                 'success' => true,

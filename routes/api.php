@@ -104,7 +104,10 @@ require __DIR__.'/modules/news.php';
 // Manual de usuario (contenido MD por rol + PDF)
 require __DIR__.'/modules/manual-usuario.php';
 
-// Módulo de Vi?ticos
+// Contadores de Verificación / Viáticos (sidebar + tabs + home Admin)
+require __DIR__.'/modules/verificacion.php';
+
+// Módulo de Viáticos
 require __DIR__.'/modules/viaticos.php';
 
 //Clientes

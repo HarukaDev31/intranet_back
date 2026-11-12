@@ -50,6 +50,7 @@ class ViaticoService
 
             $user = $viatico->usuario;
             ViaticoCreado::dispatch($viatico, $user, 'Viático creado exitosamente');
+            \App\Services\Verificacion\VerificacionContadoresBroadcaster::emit(['viaticos']);
             DB::commit();
 
             return $viatico->load(['usuario', 'pagos']);

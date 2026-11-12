@@ -1149,6 +1149,12 @@ class TramiteAduanaDocumentoService
             }
         }
 
+        try {
+            \App\Services\Verificacion\VerificacionContadoresBroadcaster::emit(['permisos']);
+        } catch (\Exception $e) {
+            Log::warning('No se pudo emitir contadores tras verificación de permisos: ' . $e->getMessage());
+        }
+
         return ['success' => true];
     }
 
