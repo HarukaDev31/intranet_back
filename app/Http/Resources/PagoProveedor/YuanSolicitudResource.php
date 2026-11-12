@@ -40,7 +40,8 @@ class YuanSolicitudResource extends JsonResource
             'manual' => $manual,
             'consolidation' => $solicitud->consolidation,
             ...$summary,
-            'can_edit' => $manual,
+            // China edita todas: las manuales completas y las de Ventas solo en los datos del proveedor.
+            'can_edit' => true,
             'providers' => YuanPagoResource::collection($group['providers'])->resolve($request),
             'incomes' => $solicitud->ingresos->map(fn (PagoProveedorIngreso $income) => [
                 'id' => $income->id,
