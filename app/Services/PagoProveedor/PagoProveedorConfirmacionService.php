@@ -601,7 +601,7 @@ class PagoProveedorConfirmacionService
                 'shared' => $deposit->aplicaciones->count() > 1,
                 'bank_label' => $deposit->bank === PagoProveedorAbono::BANK_INTERBANK ? 'Interbank' : 'BCP',
                 'voucher_path' => $deposit->voucher_path,
-                'can_edit' => $deposit->status === PagoProveedorAbono::STATUS_OBSERVED || $registrationError,
+                'can_edit' => $deposit->status === PagoProveedorAbono::STATUS_OBSERVED || $registrationError || $inValidation,
                 'verified_at' => optional($deposit->verified_at)->toIso8601String(),
                 'verified_by' => $this->userName($deposit->verified_by_user_id),
                 'deadline_text' => $deadline ? ($deadline->isPast() ? 'plazo vencido' : PagoProveedorPlazo::remainingText($deadline)) : null,
