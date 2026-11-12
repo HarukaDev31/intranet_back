@@ -33,7 +33,7 @@ class PagoProveedorCotizacionWhatsappService
     {
         unset($actor);
 
-        return $this->armarVistaPrevia($this->cotizaciones->encontrar($id));
+        return $this->armarVistaPrevia($this->cotizaciones->encontrar($id), true);
     }
 
     /**
@@ -48,7 +48,7 @@ class PagoProveedorCotizacionWhatsappService
     /**
      * @return array{texto: string, destinatario: string|null, puede_enviar: bool, nota: string}
      */
-    private function armarVistaPrevia(PagoProveedorCotizacion $cotizacion): array
+    private function armarVistaPrevia(PagoProveedorCotizacion $cotizacion, bool $guardada = false): array
     {
         $presentado = $this->presenter->cotizacion($cotizacion, $this->configuracion->tariff());
         $forRequest = $this->belongsToRequest($cotizacion);
@@ -58,14 +58,15 @@ class PagoProveedorCotizacionWhatsappService
 
         $texto = $this->armarTexto($cotizacion, $presentado, $forRequest);
         $destinatario = trim((string) $cotizacion->client_whatsapp);
-        $puedeEnviar = !$forRequest && $destinatario !== '';
+        // Desde la solicitud también se envía el resumen actualizado (solo de la cotización guardada, no de un borrador).
+        $puedeEnviar = $destinatario !== '' && (!$forRequest || $guardada);
 
         return [
             'texto' => $texto,
             'destinatario' => $destinatario !== '' ? $destinatario : null,
             'puede_enviar' => $puedeEnviar,
             'nota' => match (true) {
-                $forRequest => 'Resumen actualizado de la solicitud. Revisa el mensaje; va con el PDF de resumen.',
+                $forRequest && $puedeEnviar => 'Resumen actualizado de la solicitud. Revisa el mensaje y pulsa Enviar; va al WhatsApp del cliente con el PDF de resumen.',
                 $puedeEnviar => 'Revisa el mensaje y pulsa Enviar. Se enviará al WhatsApp del cliente junto con el PDF de resumen.',
                 default => 'Falta el WhatsApp del cliente para poder enviar.',
             },
@@ -84,7 +85,8 @@ class PagoProveedorCotizacionWhatsappService
         return $this->enviarCotizacion(
             $this->cotizaciones->encontrar($id),
             $actor,
-            fn () => $pdfService->resumenTemporal($id, $actor)
+            fn () => $pdfService->resumenTemporal($id, $actor),
+            true
         );
     }
 
@@ -107,12 +109,16 @@ class PagoProveedorCotizacionWhatsappService
      * @param  callable(): array{path: string, filename: string}  $generarPdf
      * @return array{texto: string, destinatario: string, enviado: bool, nota: string}
      */
-    private function enviarCotizacion(PagoProveedorCotizacion $cotizacion, array $actor, callable $generarPdf): array
+    private function enviarCotizacion(PagoProveedorCotizacion $cotizacion, array $actor, callable $generarPdf, bool $guardada = false): array
     {
         $presentado = $this->presenter->cotizacion($cotizacion, $this->configuracion->tariff());
-        $this->exigirListoParaEnviar($presentado, true);
+        // Cotización ya convertida en solicitud: se reenvía el resumen actualizado (sin vigencia).
+        $forRequest = $guardada && $this->belongsToRequest($cotizacion);
+        if (!$forRequest) {
+            $this->exigirListoParaEnviar($presentado, true);
+        }
 
-        $texto = $this->armarTexto($cotizacion, $presentado);
+        $texto = $this->armarTexto($cotizacion, $presentado, $forRequest);
         $telefono = $this->telefonoCliente((string) $cotizacion->client_whatsapp);
         $archivo = $generarPdf();
 
@@ -167,6 +173,16 @@ class PagoProveedorCotizacionWhatsappService
                 $actor,
                 'Enviado desde el número de ventas a ' . $cotizacion->client_whatsapp
             );
+            $solicitud = $forRequest ? $cotizacion->solicitud()->first() : null;
+            if ($solicitud) {
+                $this->historial->registrar(
+                    PagoProveedorHistorial::ENTITY_REQUEST,
+                    (int) $solicitud->id,
+                    'Resumen enviado por WhatsApp',
+                    $actor,
+                    'Enviado desde el número de ventas a ' . $cotizacion->client_whatsapp
+                );
+            }
         } else {
             Log::info('Pago proveedor: resumen enviado sin cotización guardada', [
                 'cod_cotizacion_cc' => $cotizacion->consolidated_quote_code,
@@ -180,6 +196,24 @@ class PagoProveedorCotizacionWhatsappService
             'enviado' => true,
             'nota' => 'Resumen y PDF enviados por WhatsApp desde el número de ventas.',
         ];
+    }
+
+    /**
+     * Envía un texto al WhatsApp del cliente desde el número de ventas (p. ej. «Pedir datos del proveedor»).
+     */
+    public function enviarTextoCliente(string $whatsapp, string $texto, string $contexto): void
+    {
+        $respuesta = $this->sendMessageVentas($texto, $this->telefonoCliente($whatsapp), 0);
+        if (empty($respuesta['status'])) {
+            Log::warning('Pago proveedor WA texto sin status ok', [
+                'context' => $contexto,
+                'response' => $respuesta,
+            ]);
+            if (!empty($respuesta['skipped'])) {
+                throw new PagoProveedorException('El envío de WhatsApp está deshabilitado para esta organización.');
+            }
+            throw new PagoProveedorException('No se pudo enviar el mensaje de WhatsApp.');
+        }
     }
 
     /**
