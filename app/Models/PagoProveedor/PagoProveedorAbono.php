@@ -48,6 +48,8 @@ class PagoProveedorAbono extends Model
     public const REASON_NOT_RECEIVED = 'did_not_arrive';
     public const REASON_OTHER_ACCOUNT = 'other_account';
     public const REASON_FAKE_VOUCHER = 'fake_voucher';
+    /** «Otro motivo»: el detalle pasa a ser obligatorio. */
+    public const REASON_OTHER = 'other';
     public const FILTER_ALL = 'all';
     public const SETTING_OBSERVATION_REASONS = 'deposit_observation_reasons';
     public const PURPOSE_CLIENT = 'client_deposit';
