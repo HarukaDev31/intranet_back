@@ -111,8 +111,7 @@ class PagosController extends Controller
                     DB::raw($extrasServiciosSubquery . ' as servicios_extras_monto')
                 ])
                 ->join('carga_consolidada_contenedor', 'carga_consolidada_contenedor.id', '=', 'contenedor_consolidado_cotizacion.id_contenedor')
-                ->whereNull('contenedor_consolidado_cotizacion.id_cliente_importacion')
-                ->orderByRaw('(SELECT MAX(ccp.id) FROM contenedor_consolidado_cotizacion_coordinacion_pagos ccp JOIN cotizacion_coordinacion_pagos_concept ccpc ON ccp.id_concept = ccpc.id WHERE ccp.id_cotizacion = contenedor_consolidado_cotizacion.id AND (ccpc.name = "LOGISTICA" OR ccpc.name = "IMPUESTOS")) IS NULL ASC, (SELECT MAX(ccp.id) FROM contenedor_consolidado_cotizacion_coordinacion_pagos ccp JOIN cotizacion_coordinacion_pagos_concept ccpc ON ccp.id_concept = ccpc.id WHERE ccp.id_cotizacion = contenedor_consolidado_cotizacion.id AND (ccpc.name = "LOGISTICA" OR ccpc.name = "IMPUESTOS")) DESC, contenedor_consolidado_cotizacion.id DESC');
+                ->whereNull('contenedor_consolidado_cotizacion.id_cliente_importacion');
 
 
             //if idCotizacion is not null, then add where id_cotizacion = $idCotizacion
@@ -257,6 +256,16 @@ class PagosController extends Controller
                         ELSE (contenedor_consolidado_cotizacion.logistica_final + contenedor_consolidado_cotizacion.impuestos_final + ' . $extrasServiciosSubquery . ') 
                     END');
                 }
+            }
+
+            // Orden: adelantos_pendientes = COUNT de pagos LOGISTICA/IMPUESTOS con status PENDIENTE.
+            $sortBy = strtolower(trim((string) $request->input('sort_by', '')));
+            $sortDir = strtolower(trim((string) $request->input('sort_dir', 'desc'))) === 'asc' ? 'asc' : 'desc';
+            if ($sortBy === 'adelantos_pendientes') {
+                $pendingCount = '(SELECT COUNT(*) FROM contenedor_consolidado_cotizacion_coordinacion_pagos ccp JOIN cotizacion_coordinacion_pagos_concept ccpc ON ccp.id_concept = ccpc.id WHERE ccp.id_cotizacion = contenedor_consolidado_cotizacion.id AND (ccpc.name = "LOGISTICA" OR ccpc.name = "IMPUESTOS") AND ccp.status = "PENDIENTE")';
+                $query->orderByRaw("{$pendingCount} {$sortDir}")->orderByDesc('contenedor_consolidado_cotizacion.id');
+            } else {
+                $query->orderByRaw('(SELECT MAX(ccp.id) FROM contenedor_consolidado_cotizacion_coordinacion_pagos ccp JOIN cotizacion_coordinacion_pagos_concept ccpc ON ccp.id_concept = ccpc.id WHERE ccp.id_cotizacion = contenedor_consolidado_cotizacion.id AND (ccpc.name = "LOGISTICA" OR ccpc.name = "IMPUESTOS")) IS NULL ASC, (SELECT MAX(ccp.id) FROM contenedor_consolidado_cotizacion_coordinacion_pagos ccp JOIN cotizacion_coordinacion_pagos_concept ccpc ON ccp.id_concept = ccpc.id WHERE ccp.id_cotizacion = contenedor_consolidado_cotizacion.id AND (ccpc.name = "LOGISTICA" OR ccpc.name = "IMPUESTOS")) DESC, contenedor_consolidado_cotizacion.id DESC');
             }
 
             // Total general de todos los registros que coinciden con los filtros
@@ -1103,8 +1112,7 @@ class PagosController extends Controller
                 ->leftJoin('usuario', 'usuario.ID_Entidad', '=', 'entidad.ID_Entidad')
                 ->leftJoin('distrito', 'distrito.ID_Distrito', '=', 'entidad.ID_Distrito')
                 ->leftJoin('provincia', 'provincia.ID_Provincia', '=', 'entidad.ID_Provincia')
-                ->leftJoin('departamento', 'departamento.ID_Departamento', '=', 'entidad.ID_Departamento')
-                ->orderByRaw('(SELECT MAX(cccp.id) FROM pedido_curso_pagos cccp WHERE cccp.id_pedido_curso = pedido_curso.ID_Pedido_Curso AND cccp.id_concept = ' . PedidoCursoPagoConcept::CONCEPT_PAGO_ADELANTO_CURSO . ') IS NULL ASC, (SELECT MAX(cccp.id) FROM pedido_curso_pagos cccp WHERE cccp.id_pedido_curso = pedido_curso.ID_Pedido_Curso AND cccp.id_concept = ' . PedidoCursoPagoConcept::CONCEPT_PAGO_ADELANTO_CURSO . ') DESC, pedido_curso.ID_Pedido_Curso DESC');
+                ->leftJoin('departamento', 'departamento.ID_Departamento', '=', 'entidad.ID_Departamento');
 
             // Filtro por empresa del usuario autenticado
 
@@ -1231,6 +1239,17 @@ class PagosController extends Controller
                         ELSE (pedido_curso.logistica_final + pedido_curso.impuestos_final) 
                     END');
                 }
+            }
+
+            // Orden: adelantos_pendientes = COUNT de pagos ADELANTO con status PENDIENTE.
+            $sortBy = strtolower(trim((string) $request->input('sort_by', '')));
+            $sortDir = strtolower(trim((string) $request->input('sort_dir', 'desc'))) === 'asc' ? 'asc' : 'desc';
+            $adelantoConceptId = PedidoCursoPagoConcept::CONCEPT_PAGO_ADELANTO_CURSO;
+            if ($sortBy === 'adelantos_pendientes') {
+                $pendingCount = "(SELECT COUNT(*) FROM pedido_curso_pagos cccp WHERE cccp.id_pedido_curso = pedido_curso.ID_Pedido_Curso AND cccp.id_concept = {$adelantoConceptId} AND cccp.status = 'PENDIENTE')";
+                $query->orderByRaw("{$pendingCount} {$sortDir}")->orderByDesc('pedido_curso.ID_Pedido_Curso');
+            } else {
+                $query->orderByRaw("(SELECT MAX(cccp.id) FROM pedido_curso_pagos cccp WHERE cccp.id_pedido_curso = pedido_curso.ID_Pedido_Curso AND cccp.id_concept = {$adelantoConceptId}) IS NULL ASC, (SELECT MAX(cccp.id) FROM pedido_curso_pagos cccp WHERE cccp.id_pedido_curso = pedido_curso.ID_Pedido_Curso AND cccp.id_concept = {$adelantoConceptId}) DESC, pedido_curso.ID_Pedido_Curso DESC");
             }
 
             // Total general de todos los registros que coinciden con los filtros

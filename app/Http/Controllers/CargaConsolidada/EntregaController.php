@@ -1921,17 +1921,26 @@ class EntregaController extends Controller
             });
         }
 
-        // Filtro por estado (PENDIENTE/ADELANTO/PAGADO/SOBREPAGO)
+        // Filtro por estado (PENDIENTE/ADELANTO/PAGADO/SOBREPAGO).
+        // Usar WHERE (no HAVING): paginate() arma un COUNT que pierde los alias del SELECT.
+        $tablePagos = $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos;
+        $tableConcept = $this->table_pagos_concept;
+        $pagoSub = "(SELECT IFNULL(SUM(cccp.monto), 0) FROM {$tablePagos} cccp JOIN {$tableConcept} ccp ON cccp.id_concept = ccp.id WHERE cccp.id_cotizacion = CC.id AND ccp.name = 'DELIVERY')";
+        $importeSub = "COALESCE((
+            SELECT SUM(s3.importe) FROM {$this->table_delivery_servicio} s3
+            WHERE s3.id_cotizacion = CC.id
+            AND UPPER(TRIM(s3.tipo_servicio)) IN ('DELIVERY', 'MONTACARGA')
+        ), CC.total_pago_delivery, 0)";
         if ($request->has('estado') && $request->estado) {
             $estado = $request->estado;
             if ($estado === 'PENDIENTE') {
-                $query->havingRaw('pagado = 0');
+                $query->whereRaw("{$pagoSub} = 0");
             } elseif ($estado === 'ADELANTO') {
-                $query->havingRaw('pagado > 0 AND pagado < importe');
+                $query->whereRaw("{$pagoSub} > 0 AND {$pagoSub} < {$importeSub}");
             } elseif ($estado === 'PAGADO') {
-                $query->havingRaw('pagado = importe');
+                $query->whereRaw("{$pagoSub} = {$importeSub}");
             } elseif ($estado === 'SOBREPAGO') {
-                $query->havingRaw('pagado > importe');
+                $query->whereRaw("{$pagoSub} > {$importeSub}");
             }
         }
 
@@ -1970,34 +1979,32 @@ class EntregaController extends Controller
             $query->whereDate('CC.fecha', '<=', $request->fecha_fin);
         }
 
-        // Ordenamiento: por fecha de pago DELIVERY más reciente primero
-        $query->orderByDesc('last_delivery_payment_date')->orderByDesc('CC.id');
-
-        // Total general (sin paginación, convirtiendo HAVING en WHERE equivalente)
-        $tablePagos = $this->table_contenedor_consolidado_cotizacion_coordinacion_pagos;
-        $tableConcept = $this->table_pagos_concept;
-        $totalQuery = clone $query;
-        $totalQuery->havings = null;
-        $totalQuery->bindings['having'] = [];
-        if ($request->has('estado') && $request->estado) {
-            $estado = $request->estado;
-            $pagoSub = "(SELECT IFNULL(SUM(cccp.monto), 0) FROM {$tablePagos} cccp JOIN {$tableConcept} ccp ON cccp.id_concept = ccp.id WHERE cccp.id_cotizacion = CC.id AND ccp.name = 'DELIVERY')";
-            if ($estado === 'PENDIENTE') {
-                $totalQuery->whereRaw("{$pagoSub} = 0");
-            } elseif ($estado === 'ADELANTO') {
-                $totalQuery->whereRaw("{$pagoSub} > 0 AND {$pagoSub} < CC.total_pago_delivery");
-            } elseif ($estado === 'PAGADO') {
-                $totalQuery->whereRaw("{$pagoSub} = CC.total_pago_delivery");
-            } elseif ($estado === 'SOBREPAGO') {
-                $totalQuery->whereRaw("{$pagoSub} > CC.total_pago_delivery");
-            }
+        // Orden: adelantos_pendientes = COUNT de pagos DELIVERY con status PENDIENTE.
+        $sortBy = strtolower(trim((string) $request->input('sort_by', '')));
+        $sortDir = strtolower(trim((string) $request->input('sort_dir', 'desc'))) === 'asc' ? 'asc' : 'desc';
+        if ($sortBy === 'adelantos_pendientes') {
+            $pendingCount = "(SELECT COUNT(*) FROM {$tablePagos} cccp JOIN {$tableConcept} ccp ON cccp.id_concept = ccp.id WHERE cccp.id_cotizacion = CC.id AND ccp.name = 'DELIVERY' AND cccp.status = 'PENDIENTE')";
+            $query->orderByRaw("{$pendingCount} {$sortDir}")->orderByDesc('CC.id');
+        } else {
+            $query->orderByDesc('last_delivery_payment_date')->orderByDesc('CC.id');
         }
-        $totalGeneral = round((float) $totalQuery->sum('CC.total_pago_delivery'), 2);
+
+        // Total general (sin paginación)
+        $totalGeneral = round((float) (clone $query)->sum('CC.total_pago_delivery'), 2);
 
         // Paginación
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
-        $data = $query->paginate($perPage, ['*'], 'page', $page);
+        try {
+            $data = $query->paginate($perPage, ['*'], 'page', $page);
+        } catch (\Throwable $e) {
+            Log::error('EntregaController getAllDelivery: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener delivery',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
         //foreach pago_details generate url y formato carga #carga -año
         foreach ($data->items() as $item) {
             $item->pagos_details = json_decode($item->pagos_details, true);
