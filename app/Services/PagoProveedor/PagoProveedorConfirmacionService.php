@@ -655,7 +655,7 @@ class PagoProveedorConfirmacionService
             'collect_amount' => $provider->collect_amount !== null ? (float) $provider->collect_amount : null,
             'deadline_text' => $provider->collect_until ? PagoProveedorPlazo::remainingText($provider->collect_until) : null,
             'note' => $provider->registration_error_note,
-            'surplus' => round((float) $provider->aplicaciones->sum(fn ($application) => $application->abono && $application->abono->status !== PagoProveedorAbono::STATUS_CANCELLED ? (float) $application->abono->surplus : 0.0), 2),
+            'surplus' => round((float) $provider->aplicaciones->sum(fn ($application) => $application->abono && $application->abono->status !== PagoProveedorAbono::STATUS_CANCELLED && $this->carriesSurplus($provider, $application->abono) ? (float) $application->abono->surplus : 0.0), 2),
             'surplus_applied' => $provider->aplicaciones->contains(fn ($application) => $application->abono && $application->abono->surplus_decision === PagoProveedorAbono::EXCESS_APPLIED),
             'difference' => 0.0,
             'tolerance' => (float) $this->configuration->value(PagoProveedorSolicitudProveedor::SETTING_TOLERANCE, 1),
@@ -702,6 +702,9 @@ class PagoProveedorConfirmacionService
             if (!$deposit || $deposit->status === PagoProveedorAbono::STATUS_CANCELLED || (float) $deposit->surplus <= 0 || !$deposit->surplus_decision) {
                 continue;
             }
+            if (!$this->carriesSurplus($provider, $deposit)) {
+                continue;
+            }
             $refund = $provider->refunds->first(fn (PagoProveedorReembolso $row) => (int) $row->deposit_id === (int) $deposit->id
                 && $row->origin === PagoProveedorReembolso::ORIGIN_SURPLUS);
             $rows[] = [
@@ -738,6 +741,19 @@ class PagoProveedorConfirmacionService
         return $provider->refunds->first(fn (PagoProveedorReembolso $refund) => $this->refundOpen($refund));
     }
 
+    /**
+     * En un voucher compartido el excedente (y su reembolso) lo lleva un solo proveedor.
+     */
+    private function carriesSurplus(PagoProveedorSolicitudProveedor $provider, PagoProveedorAbono $deposit): bool
+    {
+        $deposit->loadMissing('aplicaciones');
+        if ($deposit->aplicaciones->count() < 2) {
+            return true;
+        }
+
+        return app(PagoProveedorReembolsoService::class)->surplusOwnerId($deposit) === (int) $provider->id;
+    }
+
     private function hasPendingSurplusRefund(PagoProveedorSolicitudProveedor $provider): bool
     {
         $provider->loadMissing('refunds');
@@ -745,6 +761,9 @@ class PagoProveedorConfirmacionService
         return $provider->aplicaciones->contains(function ($application) use ($provider) {
             $deposit = $application->abono;
             if (!$deposit || $deposit->status === PagoProveedorAbono::STATUS_CANCELLED || $deposit->surplus_decision !== PagoProveedorAbono::EXCESS_REFUND) {
+                return false;
+            }
+            if (!$this->carriesSurplus($provider, $deposit)) {
                 return false;
             }
 
@@ -765,7 +784,7 @@ class PagoProveedorConfirmacionService
             $amount = 0.0;
             foreach ($provider->aplicaciones as $application) {
                 $deposit = $application->abono;
-                if ($deposit && $deposit->surplus_decision === PagoProveedorAbono::EXCESS_REFUND) {
+                if ($deposit && $deposit->surplus_decision === PagoProveedorAbono::EXCESS_REFUND && $this->carriesSurplus($provider, $deposit)) {
                     $amount += (float) $deposit->surplus;
                 }
             }
