@@ -2,11 +2,13 @@
 
 namespace App\Http\Resources\PagoProveedor;
 
+use App\Models\PagoProveedor\PagoProveedorCotizacionProveedor;
 use App\Models\PagoProveedor\PagoProveedorDatoProveedor;
 use App\Models\PagoProveedor\PagoProveedorSolicitudProveedor;
 use App\Services\PagoProveedor\PagoProveedorAprobacionService;
 use App\Services\PagoProveedor\PagoProveedorConfirmacionService;
 use App\Services\PagoProveedor\PagoProveedorEtapa1Service;
+use App\Services\PagoProveedor\PagoProveedorYuanes;
 use App\Traits\FileTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -45,8 +47,8 @@ class SolicitudProveedorDetalleResource extends JsonResource
             'moneda' => $provider->currency,
             'tipo_pago' => $provider->payment_type,
             'valor_carga_usd' => $provider->cargo_value_usd,
-            // Valor en yuanes digitado en la cotización (null en solicitudes antiguas: el front usa USD × TC).
-            'valor_carga_rmb' => isset($provider->summary_json['rmb']) ? (float) $provider->summary_json['rmb'] : null,
+            // Valor en yuanes digitado en la cotización; en solicitudes antiguas se deduce del USD sin reconvertir (¥40,000 y no ¥40,000.03).
+            'valor_carga_rmb' => $this->valorCargaRmb($provider),
             'modalidad_abono' => $provider->client_payment_mode,
             'modalidad_pago' => $provider->supplier_payment_mode,
             'cuota_actual' => (int) $provider->current_installment,
@@ -190,5 +192,18 @@ class SolicitudProveedorDetalleResource extends JsonResource
             PagoProveedorSolicitudProveedor::STAGE_EXECUTION => 'Ejecución de pago',
             PagoProveedorSolicitudProveedor::STAGE_CONFIRMATION => 'Confirmación',
         ][$stage] ?? 'Solicitud y datos de pago';
+    }
+
+    private function valorCargaRmb(PagoProveedorSolicitudProveedor $provider): ?float
+    {
+        if (isset($provider->summary_json['rmb'])) {
+            return (float) $provider->summary_json['rmb'];
+        }
+        $tc = (float) ($provider->solicitud?->exchange_rate ?? 0);
+        if ($provider->currency !== PagoProveedorCotizacionProveedor::CURRENCY_RMB || $tc <= 0) {
+            return null;
+        }
+
+        return PagoProveedorYuanes::desdeUsd((float) $provider->cargo_value_usd, $tc);
     }
 }
