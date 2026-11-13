@@ -325,7 +325,7 @@ class PagoProveedorEtapa1Service
             $solicitud = $this->solicitud($solicitudId, true);
             $pedido = $this->armarPedidoDatos($solicitud, $providerIds, true);
             $this->guardarMensaje($pedido['primero'], 'pedir_datos', $pedido['texto'], $actor);
-            $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, 'Pedido de datos', $actor, null);
+            $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, 'Pedido de datos', $actor, $pedido['codigos']);
 
             return [
                 'texto' => $pedido['texto'],
@@ -358,7 +358,7 @@ class PagoProveedorEtapa1Service
                 $solicitudId,
                 'Pedido de datos enviado por WhatsApp',
                 $actor,
-                'Enviado desde el número de ventas a ' . $pedido['destinatario']
+                $pedido['codigos'] . ' · enviado desde el número de ventas a ' . $pedido['destinatario']
             );
 
             return [
@@ -371,8 +371,32 @@ class PagoProveedorEtapa1Service
     }
 
     /**
+     * Detalle del abono para el historial: N.° de operación, importe y lo aplicado a cada proveedor
+     * (p. ej. «0241552 · $9,000.00 (interbancaria): JUCE19-1 $2,977.14, JUCE19-2 $5,744.29 · excedente $278.57»).
+     *
+     * @param  array<int|string, float|int>  $aplicaciones
+     */
+    private function detalleHistorialAbono(PagoProveedorSolicitud $solicitud, PagoProveedorAbono $abono, array $aplicaciones): string
+    {
+        $partes = [];
+        foreach ($aplicaciones as $proveedorId => $monto) {
+            $codigo = $solicitud->proveedores->firstWhere('id', (int) $proveedorId)?->code_supplier ?: 'Proveedor';
+            $partes[] = $codigo . ' $' . number_format((float) $monto, 2, '.', ',');
+        }
+        $detalle = $abono->operation_number . ' · $' . number_format((float) $abono->amount, 2, '.', ',') . ($abono->interbank ? ' (interbancaria)' : '');
+        if ($partes !== []) {
+            $detalle .= ': ' . implode(', ', $partes);
+        }
+        if ((float) $abono->surplus > 0.004) {
+            $detalle .= ' · excedente $' . number_format((float) $abono->surplus, 2, '.', ',');
+        }
+
+        return $detalle;
+    }
+
+    /**
      * @param  array<int, int>|null  $providerIds
-     * @return array{texto: string, primero: PagoProveedorSolicitudProveedor, destinatario: string|null}
+     * @return array{texto: string, primero: PagoProveedorSolicitudProveedor, destinatario: string|null, codigos: string}
      */
     private function armarPedidoDatos(PagoProveedorSolicitud $solicitud, ?array $providerIds, bool $marcarEnviado): array
     {
@@ -380,6 +404,7 @@ class PagoProveedorEtapa1Service
         $hasYuan = false;
         $hasBankForm = false;
         $bloques = [];
+        $codigos = [];
         $primero = null;
         foreach ($solicitud->proveedores as $proveedor) {
             if ($proveedor->status === PagoProveedorSolicitudProveedor::STATUS_CANCELLED || (int) $proveedor->stage !== PagoProveedorSolicitudProveedor::STAGE_DATA) {
@@ -395,6 +420,7 @@ class PagoProveedorEtapa1Service
                     continue;
                 }
                 $bloques[] = "✅ Proveedor: *{$proveedor->code_supplier} | {$proveedor->product}*\n📝 Datos:\n▪️ *Nombre del vendedor:*\n▪️ *N.° de WeChat:*";
+                $codigos[] = (string) $proveedor->code_supplier;
                 $hasYuan = true;
                 continue;
             }
@@ -407,6 +433,7 @@ class PagoProveedorEtapa1Service
                 $datos->save();
             }
             $bloques[] = "✅ Proveedor: *{$proveedor->code_supplier} | {$proveedor->product}*\n📝 Datos:\n▪️ *Formulario bancario:* {$this->enlace($datos)}";
+            $codigos[] = (string) $proveedor->code_supplier;
             $hasBankForm = true;
         }
         if ($bloques === [] || !$primero) {
@@ -418,6 +445,7 @@ class PagoProveedorEtapa1Service
             'texto' => $this->dataRequestText($this->mensajes()->firstName($solicitud->client_name), $bloques, $hasYuan, $hasBankForm),
             'primero' => $primero,
             'destinatario' => $whatsapp !== '' ? $whatsapp : null,
+            'codigos' => implode(', ', $codigos),
         ];
     }
 
@@ -584,7 +612,7 @@ class PagoProveedorEtapa1Service
                 ]);
             }
 
-            $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, $abonoId ? 'Abono editado' : 'Abono registrado', $actor, $abono->operation_number);
+            $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, $abonoId ? 'Abono editado' : 'Abono registrado', $actor, $this->detalleHistorialAbono($solicitud, $abono, $evaluacion['aplicaciones']));
             if ($editandoEnValidacion) {
                 $this->regresarSinCobertura($this->recargar($solicitud, ['proveedores.datos', 'proveedores.aplicaciones.abono']), $correctedProviderIds, $actor);
             }
