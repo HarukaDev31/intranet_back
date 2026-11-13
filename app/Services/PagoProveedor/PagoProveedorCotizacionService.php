@@ -219,6 +219,7 @@ class PagoProveedorCotizacionService
 
             $cotizacion->exchange_rate = isset($datos['tipo_cambio']) ? (float) $datos['tipo_cambio'] : null;
             $cotizacion->exchange_rate_confirmed = (bool) $datos['tipo_cambio_confirmado'] && (float) $cotizacion->exchange_rate > 0;
+            $cotizacion->exchange_rate_confirmed_at = $cotizacion->exchange_rate_confirmed ? now() : null;
             $cotizacion->save();
 
             $conservar = [];
@@ -298,6 +299,7 @@ class PagoProveedorCotizacionService
                 $cotizacion->exchange_rate = $tipoCambio;
             }
             $cotizacion->exchange_rate_confirmed = false;
+            $cotizacion->exchange_rate_confirmed_at = null;
             $cotizacion->valid_until = $this->vigencia->sumarHoras(
                 now(),
                 $this->configuracion->validityHours(),

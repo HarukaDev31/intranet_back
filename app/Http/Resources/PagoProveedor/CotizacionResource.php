@@ -242,20 +242,12 @@ class CotizacionResource extends JsonResource
     }
 
     /**
-     * Si la cotización se creó hoy (hora de Lima) y tiene tipo de cambio, ese es el del día:
-     * cuenta como confirmado y no se vuelve a pedir.
+     * Tipo de cambio del día: la cotización se creó hoy o Ventas lo confirmó hoy (hora de Lima).
+     * El flag guardado otro día ya no vale (#1656).
      */
     private function tipoCambioConfirmado(PagoProveedorCotizacion $cotizacion): bool
     {
-        if ($cotizacion->exchange_rate_confirmed) {
-            return true;
-        }
-        if ((float) $cotizacion->exchange_rate <= 0 || !$cotizacion->created_at) {
-            return false;
-        }
-
-        return $cotizacion->created_at->copy()->timezone(PagoProveedorVigenciaService::ZONA)->toDateString()
-            === now(PagoProveedorVigenciaService::ZONA)->toDateString();
+        return $cotizacion->exchangeRateConfirmedToday();
     }
 
     /**

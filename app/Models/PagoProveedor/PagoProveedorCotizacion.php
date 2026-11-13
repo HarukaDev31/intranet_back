@@ -2,6 +2,7 @@
 
 namespace App\Models\PagoProveedor;
 
+use App\Services\PagoProveedor\PagoProveedorVigenciaService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -16,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property \Carbon\Carbon|null $valid_until
  * @property float|null $exchange_rate
  * @property bool $exchange_rate_confirmed
+ * @property \Illuminate\Support\Carbon|null $exchange_rate_confirmed_at
  * @property string|null $client_name
  * @property string|null $client_document
  * @property string|null $client_whatsapp
@@ -45,6 +47,7 @@ class PagoProveedorCotizacion extends Model
         'valid_until',
         'exchange_rate',
         'exchange_rate_confirmed',
+        'exchange_rate_confirmed_at',
         'client_name',
         'client_document',
         'client_whatsapp',
@@ -57,6 +60,7 @@ class PagoProveedorCotizacion extends Model
         'valid_until' => 'datetime',
         'exchange_rate' => 'float',
         'exchange_rate_confirmed' => 'boolean',
+        'exchange_rate_confirmed_at' => 'datetime',
     ];
 
     /**
@@ -83,5 +87,24 @@ class PagoProveedorCotizacion extends Model
         return $this->hasMany(PagoProveedorHistorial::class, 'entity_id')
             ->where('entity_type', PagoProveedorHistorial::ENTITY_QUOTE)
             ->orderByDesc('id');
+    }
+
+    /**
+     * El tipo de cambio vale para crear la solicitud solo si es del día (hora de Lima): la cotización se
+     * creó hoy o Ventas lo confirmó hoy. Una confirmación de otro día ya no cuenta (#1656).
+     */
+    public function exchangeRateConfirmedToday(): bool
+    {
+        if ((float) $this->exchange_rate <= 0) {
+            return false;
+        }
+        $hoy = now(PagoProveedorVigenciaService::ZONA)->toDateString();
+        if ($this->exchange_rate_confirmed && $this->exchange_rate_confirmed_at
+            && $this->exchange_rate_confirmed_at->copy()->timezone(PagoProveedorVigenciaService::ZONA)->toDateString() === $hoy) {
+            return true;
+        }
+
+        return $this->created_at !== null
+            && $this->created_at->copy()->timezone(PagoProveedorVigenciaService::ZONA)->toDateString() === $hoy;
     }
 }
