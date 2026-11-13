@@ -99,19 +99,25 @@ class PagoProveedorYuanService
     }
 
     /**
-     * Se cuenta por proveedor: cada uno avanza por separado.
+     * Conteos por solicitud (fila de la lista China).
+     * Completados: todos los proveedores pagados. Abiertos: falta al menos uno.
      *
-     * @return array{all: int, pending: int, observed: int, paid: int}
+     * @return array{open: int, completed: int, all: int, pending: int, observed: int, paid: int}
      */
     public function counts(): array
     {
-        $statuses = $this->rows()->map(fn (PagoProveedorSolicitudProveedor $provider) => $this->statusOf($provider));
+        $statuses = $this->groups()->map(fn (array $group) => $this->summary($group)['status']);
+        $completed = $statuses->filter(fn (string $status) => $status === 'pagado')->count();
+        $open = $statuses->count() - $completed;
+        $observed = $statuses->filter(fn (string $status) => $status === 'observado')->count();
 
         return [
+            'open' => $open,
+            'completed' => $completed,
             'all' => $statuses->count(),
-            'pending' => $statuses->filter(fn (string $status) => $status === 'pendiente')->count(),
-            'observed' => $statuses->filter(fn (string $status) => $status === 'observado')->count(),
-            'paid' => $statuses->filter(fn (string $status) => $status === 'pagado')->count(),
+            'pending' => $open,
+            'observed' => $observed,
+            'paid' => $completed,
         ];
     }
 
@@ -903,13 +909,22 @@ class PagoProveedorYuanService
     private function matches(array $group, array $filters): bool
     {
         $request = $group['request'];
-        $status = match ((string) ($filters['bucket'] ?? 'all')) {
-            PagoProveedorEjecucion::BUCKET_PENDING => 'pendiente',
-            'observed' => 'observado',
-            PagoProveedorEjecucion::BUCKET_PAID => 'pagado',
-            default => null,
-        };
-        if ($status !== null && !$group['providers']->contains(fn (PagoProveedorSolicitudProveedor $provider) => $this->statusOf($provider) === $status)) {
+        // Abiertos/Completados miran la solicitud entera: solo Completados si TODOS los proveedores están pagados.
+        $requestStatus = $this->summary($group)['status'];
+        $bucket = (string) ($filters['bucket'] ?? 'open');
+        if ($bucket === 'completed' || $bucket === PagoProveedorEjecucion::BUCKET_PAID) {
+            if ($requestStatus !== 'pagado') {
+                return false;
+            }
+        } elseif ($bucket === 'open' || $bucket === PagoProveedorEjecucion::BUCKET_PENDING) {
+            if ($requestStatus === 'pagado') {
+                return false;
+            }
+        } elseif ($bucket === 'observed') {
+            if ($requestStatus !== 'observado') {
+                return false;
+            }
+        } elseif ($bucket !== 'all' && $bucket !== '') {
             return false;
         }
         $country = trim((string) ($filters['country'] ?? ''));
