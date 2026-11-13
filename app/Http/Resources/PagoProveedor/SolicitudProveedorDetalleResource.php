@@ -199,7 +199,7 @@ class SolicitudProveedorDetalleResource extends JsonResource
         if (isset($provider->summary_json['rmb'])) {
             return (float) $provider->summary_json['rmb'];
         }
-        $tc = (float) ($provider->solicitud?->exchange_rate ?? 0);
+        $tc = (float) ($provider->solicitud->exchange_rate ?? 0);
         if ($provider->currency !== PagoProveedorCotizacionProveedor::CURRENCY_RMB || $tc <= 0) {
             return null;
         }
