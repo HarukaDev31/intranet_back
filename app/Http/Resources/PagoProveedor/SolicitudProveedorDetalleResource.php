@@ -45,6 +45,8 @@ class SolicitudProveedorDetalleResource extends JsonResource
             'moneda' => $provider->currency,
             'tipo_pago' => $provider->payment_type,
             'valor_carga_usd' => $provider->cargo_value_usd,
+            // Valor en yuanes digitado en la cotización (null en solicitudes antiguas: el front usa USD × TC).
+            'valor_carga_rmb' => isset($provider->summary_json['rmb']) ? (float) $provider->summary_json['rmb'] : null,
             'modalidad_abono' => $provider->client_payment_mode,
             'modalidad_pago' => $provider->supplier_payment_mode,
             'cuota_actual' => (int) $provider->current_installment,
