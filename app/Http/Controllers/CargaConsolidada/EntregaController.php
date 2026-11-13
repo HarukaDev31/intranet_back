@@ -1979,8 +1979,15 @@ class EntregaController extends Controller
             $query->whereDate('CC.fecha', '<=', $request->fecha_fin);
         }
 
-        // Ordenamiento: por fecha de pago DELIVERY más reciente primero
-        $query->orderByDesc('last_delivery_payment_date')->orderByDesc('CC.id');
+        // Orden: adelantos_pendientes = COUNT de pagos DELIVERY con status PENDIENTE.
+        $sortBy = strtolower(trim((string) $request->input('sort_by', '')));
+        $sortDir = strtolower(trim((string) $request->input('sort_dir', 'desc'))) === 'asc' ? 'asc' : 'desc';
+        if ($sortBy === 'adelantos_pendientes') {
+            $pendingCount = "(SELECT COUNT(*) FROM {$tablePagos} cccp JOIN {$tableConcept} ccp ON cccp.id_concept = ccp.id WHERE cccp.id_cotizacion = CC.id AND ccp.name = 'DELIVERY' AND cccp.status = 'PENDIENTE')";
+            $query->orderByRaw("{$pendingCount} {$sortDir}")->orderByDesc('CC.id');
+        } else {
+            $query->orderByDesc('last_delivery_payment_date')->orderByDesc('CC.id');
+        }
 
         // Total general (sin paginación)
         $totalGeneral = round((float) (clone $query)->sum('CC.total_pago_delivery'), 2);
