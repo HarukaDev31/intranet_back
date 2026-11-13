@@ -2,9 +2,11 @@
 
 namespace App\Http\Resources\PagoProveedor;
 
+use App\Models\PagoProveedor\PagoProveedorCotizacionProveedor;
 use App\Models\PagoProveedor\PagoProveedorSolicitudProveedor;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Carbon;
 
 class SolicitudProveedorResource extends JsonResource
 {
@@ -17,6 +19,7 @@ class SolicitudProveedorResource extends JsonResource
         $provider = $this->resource;
         $task = $provider->salesTask();
         $solicitud = $provider->solicitud;
+        $deadline = $task !== null ? $this->taskDeadline($provider) : null;
 
         return [
             'id' => $provider->id,
@@ -54,7 +57,40 @@ class SolicitudProveedorResource extends JsonResource
                 ? app(\App\Services\PagoProveedor\PagoProveedorYuanService::class)->reasonLabel((string) $provider->china_observation_reason)
                 : null,
             'sales_task' => $task,
+            // Fecha límite de la tarea pendiente de Ventas (#1732: tablero y lista ordenan por ella).
+            'deadline_at' => $deadline !== null ? $deadline['at']->toIso8601String() : null,
+            'deadline_kind' => $deadline !== null ? $deadline['kind'] : null,
             'owner' => $task ? PagoProveedorSolicitudProveedor::OWNER_SALES : PagoProveedorSolicitudProveedor::OWNER_OTHER,
         ];
+    }
+
+    /**
+     * Fecha límite de lo que Ventas tiene pendiente: cobro de diferencia, observación de China,
+     * plazo para decidir o compromiso de la 2.ª cuota del cliente (en ese orden).
+     *
+     * @return array{at: Carbon, kind: string}|null
+     */
+    private function taskDeadline(PagoProveedorSolicitudProveedor $provider): ?array
+    {
+        if ($provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT && $provider->collect_until !== null) {
+            return ['at' => $provider->collect_until, 'kind' => 'collect'];
+        }
+        $observeUntil = $provider->china_observe_until;
+        if ($provider->status === PagoProveedorSolicitudProveedor::STATUS_OBSERVED && $observeUntil instanceof Carbon) {
+            return ['at' => $observeUntil, 'kind' => 'observation'];
+        }
+        if ($provider->decision_due_at !== null) {
+            return ['at' => $provider->decision_due_at, 'kind' => 'decision'];
+        }
+        if ($provider->client_payment_mode === PagoProveedorCotizacionProveedor::MODE_SPLIT
+            && (int) $provider->current_installment === PagoProveedorSolicitudProveedor::FIRST_INSTALLMENT
+            && $provider->second_installment_on !== null) {
+            return [
+                'at' => Carbon::parse($provider->second_installment_on->format('Y-m-d'), 'America/Lima')->endOfDay(),
+                'kind' => 'commitment',
+            ];
+        }
+
+        return null;
     }
 }
