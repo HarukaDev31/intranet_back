@@ -232,10 +232,19 @@ class PagoProveedorVerificacionService
         return DB::transaction(function () use ($id, $reason, $detail, $newLabel, $actor) {
             $deposit = $this->find($id, true);
             $this->requireOpen($deposit);
-            $code = $this->resolveReason($reason, $newLabel);
+            $detail = $detail !== null && trim($detail) !== '' ? trim($detail) : null;
+            // «Otro motivo» sin etiqueta nueva: el detalle es obligatorio; en los demás motivos es opcional.
+            if (trim($reason) === PagoProveedorAbono::REASON_OTHER && trim((string) $newLabel) === '') {
+                if ($detail === null) {
+                    throw new PagoProveedorException('Con «Otro motivo» escribe el detalle de la observación.');
+                }
+                $code = PagoProveedorAbono::REASON_OTHER;
+            } else {
+                $code = $this->resolveReason($reason, $newLabel);
+            }
             $deposit->status = PagoProveedorAbono::STATUS_OBSERVED;
             $deposit->observation_reason = $code;
-            $deposit->observation_detail = $detail !== null && trim($detail) !== '' ? trim($detail) : null;
+            $deposit->observation_detail = $detail;
             $deposit->observe_until = now()->addDays($this->remedyDays());
             $deposit->observation_escalated_at = null;
             $deposit->verified_at = now();
@@ -566,6 +575,9 @@ class PagoProveedorVerificacionService
 
     public function reasonLabel(string $code): string
     {
+        if ($code === PagoProveedorAbono::REASON_OTHER) {
+            return 'Otro motivo';
+        }
         $match = collect($this->reasons())->firstWhere('code', $code);
 
         return $match['label'] ?? $code;
