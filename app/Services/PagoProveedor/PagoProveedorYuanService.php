@@ -1002,7 +1002,7 @@ class PagoProveedorYuanService
             return round((float) $summary['rmb'], 2);
         }
 
-        return round((float) $provider->cargo_value_usd * (float) ($provider->solicitud->exchange_rate ?? 0), 2);
+        return PagoProveedorYuanes::desdeUsd((float) $provider->cargo_value_usd, (float) ($provider->solicitud->exchange_rate ?? 0));
     }
 
     /**
