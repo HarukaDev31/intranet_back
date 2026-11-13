@@ -351,6 +351,11 @@ class PagoProveedorEjecucionService
         if ($search === '') {
             return true;
         }
+        // «PE¥70»: el proveedor con ese correlativo propio (#1686), no los que lo contienen (PE¥700).
+        $number = app(PagoProveedorCodigoSolicitud::class)->numeroBuscado($search);
+        if ($number !== null && $provider->request_number !== null) {
+            return $provider->request_code !== null && $provider->request_number === $number;
+        }
         $request = $provider->solicitud;
         $haystack = mb_strtolower(implode(' ', array_filter([
             $request?->client_name,

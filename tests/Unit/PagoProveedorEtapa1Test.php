@@ -3,6 +3,8 @@
 namespace Tests\Unit;
 
 use App\Exceptions\PagoProveedorException;
+use App\Models\PagoProveedor\PagoProveedorSolicitud;
+use App\Models\PagoProveedor\PagoProveedorSolicitudProveedor;
 use App\Services\PagoProveedor\PagoProveedorAbonoEvaluador;
 use App\Services\PagoProveedor\PagoProveedorCodigoSolicitud;
 use App\Services\PagoProveedor\PagoProveedorDatosReglas;
@@ -102,5 +104,25 @@ class PagoProveedorEtapa1Test extends TestCase
         $this->assertSame('PE$48', $codigos->conMoneda('PE¥48', 'USD'));
         $this->assertSame('PE¥48', $codigos->conMoneda('PE$48', 'RMB'));
         $this->assertNull($codigos->conMoneda('CN57NOV26', 'USD'));
+
+        // Cada proveedor tiene su correlativo propio (#1686): misma orden, códigos distintos.
+        $solicitud = new PagoProveedorSolicitud();
+        $solicitud->forceFill(['country' => 'Perú', 'order_number' => 70]);
+        $primero = new PagoProveedorSolicitudProveedor();
+        $primero->forceFill(['request_number' => 70, 'currency' => 'RMB']);
+        $segundo = new PagoProveedorSolicitudProveedor();
+        $segundo->forceFill(['request_number' => 71, 'currency' => 'USD']);
+        $this->assertSame('PE¥70', $codigos->deProveedor($primero, $solicitud));
+        $this->assertSame('PE$71', $codigos->deProveedor($segundo, $solicitud));
+        $sinNumero = new PagoProveedorSolicitudProveedor();
+        $sinNumero->forceFill(['currency' => 'RMB']);
+        $this->assertSame('PE¥70', $codigos->deProveedor($sinNumero, $solicitud));
+        $this->assertSame('PE¥71', $codigos->conNumero('PE¥70', 71, 'RMB'));
+        $this->assertSame('EC$09', $codigos->conNumero('EC¥70', 9, 'USD'));
+        $this->assertNull($codigos->conNumero('CN57NOV26', 71, 'RMB'));
+        $this->assertSame(71, $codigos->numeroBuscado(' PE¥71 '));
+        $this->assertSame(5, $codigos->numeroBuscado('pe$05'));
+        $this->assertNull($codigos->numeroBuscado('Julio'));
+        $this->assertNull($codigos->numeroBuscado('PE¥'));
     }
 }

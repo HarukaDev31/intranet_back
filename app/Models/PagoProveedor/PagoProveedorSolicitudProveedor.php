@@ -36,6 +36,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property string|null $proforma_path
  * @property string|null $proforma_name
  * @property string|null $request_code
+ * @property int|null $request_number
  * @property int $stage
  * @property string $status
  * @property int $current_installment
@@ -186,10 +187,26 @@ class PagoProveedorSolicitudProveedor extends Model
         'exchange_rate_pending' => 'boolean',
         'china_observed_at' => 'datetime',
         'china_observe_until' => 'datetime',
+        'request_number' => 'integer',
     ];
 
+    protected static function booted(): void
+    {
+        // Cada proveedor lleva su propio correlativo, único en todo Pago a Proveedor (#1686): PE¥70 y PE¥71 en la misma orden.
+        // Se crea dentro de la transacción de la solicitud; el bloqueo evita que dos altas tomen el mismo número.
+        static::creating(function (self $proveedor): void {
+            if ($proveedor->request_number === null) {
+                $proveedor->request_number = (int) static::query()->lockForUpdate()->max('request_number') + 1;
+            }
+            if (($proveedor->getAttributes()['request_code'] ?? null) !== null) {
+                $proveedor->request_code = app(PagoProveedorCodigoSolicitud::class)->deProveedor($proveedor);
+            }
+        });
+    }
+
     /**
-     * Los códigos guardados con el formato anterior (CN57NOV26) se muestran con el actual: socio + ¥/$ según moneda + N.° de orden.
+     * Con correlativo propio (request_number) el código siempre se arma con él: socio + ¥/$ según moneda + correlativo.
+     * Sin correlativo, los códigos guardados con el formato anterior (CN57NOV26) se muestran con socio + ¥/$ + N.° de orden.
      *
      * @return Attribute<string|null, string|null>
      */
@@ -201,6 +218,11 @@ class PagoProveedorSolicitudProveedor extends Model
                     return $value;
                 }
                 $codigos = app(PagoProveedorCodigoSolicitud::class);
+                $numero = $this->attributes['request_number'] ?? null;
+                if ($numero !== null) {
+                    // El socio sale del código guardado; solo los del formato anterior consultan la solicitud.
+                    return $codigos->conNumero($value, (int) $numero, $this->currency) ?? $codigos->deProveedor($this);
+                }
                 // Formato actual: solo se ajusta el símbolo a la moneda (¥ yuanes, $ dólares).
                 $actual = $codigos->conMoneda($value, $this->currency);
                 if ($actual !== null) {
