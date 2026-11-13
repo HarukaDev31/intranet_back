@@ -57,8 +57,7 @@ class PagoProveedorReembolsoService
         if ($amount <= 0) {
             throw new PagoProveedorException('No hay excedente para reembolsar.');
         }
-        $top = $deposit->aplicaciones->sortByDesc(fn ($row) => (float) $row->amount)->first();
-        $providerId = $top ? $top->request_provider_id : null;
+        $providerId = $this->surplusOwnerId($deposit);
         $refund = PagoProveedorReembolso::query()->create([
             'request_id' => $deposit->request_id,
             'request_provider_id' => $providerId,
@@ -74,6 +73,32 @@ class PagoProveedorReembolsoService
         }
 
         return $refund;
+    }
+
+    /**
+     * Proveedor que lleva el excedente de un abono y su reembolso. En un voucher compartido el excedente
+     * no es de ningún proveedor: lo lleva uno solo para no duplicarlo. Si ya hay reembolso, el de ese
+     * reembolso; si no, el primero (por orden) que ya pasó a Validación de pago, o el primero activo.
+     */
+    public function surplusOwnerId(PagoProveedorAbono $deposit): ?int
+    {
+        $refund = PagoProveedorReembolso::query()
+            ->where('deposit_id', $deposit->id)
+            ->where('origin', PagoProveedorReembolso::ORIGIN_SURPLUS)
+            ->first();
+        if ($refund && $refund->request_provider_id) {
+            return (int) $refund->request_provider_id;
+        }
+        $deposit->loadMissing('aplicaciones.proveedor');
+        $providers = $deposit->aplicaciones
+            ->map(fn ($row) => $row->proveedor)
+            ->filter(fn (?PagoProveedorSolicitudProveedor $provider) => $provider !== null && $provider->status !== PagoProveedorSolicitudProveedor::STATUS_CANCELLED)
+            ->sortBy(fn (PagoProveedorSolicitudProveedor $provider) => [(int) $provider->position, (int) $provider->id])
+            ->values();
+        $owner = $providers->first(fn (PagoProveedorSolicitudProveedor $provider) => (int) $provider->stage >= PagoProveedorSolicitudProveedor::STAGE_VALIDATION)
+            ?? $providers->first();
+
+        return $owner ? (int) $owner->id : null;
     }
 
     /**

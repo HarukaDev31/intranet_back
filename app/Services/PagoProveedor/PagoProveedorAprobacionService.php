@@ -503,9 +503,7 @@ class PagoProveedorAprobacionService
         $provider->registration_error_note = null;
         $provider->save();
 
-        if ($comparison['category'] === PagoProveedorSolicitudProveedor::GAP_OVER) {
-            $this->markSurplusToConsult($provider);
-        }
+        $this->markSurplusToConsult($provider, $comparison['category'] === PagoProveedorSolicitudProveedor::GAP_OVER);
 
         $detail = $automatic ? 'Aprobación automática' : ($reason ?: 'Importes coinciden');
         if ($comparison['category'] === PagoProveedorSolicitudProveedor::GAP_OVER) {
@@ -520,7 +518,10 @@ class PagoProveedorAprobacionService
         );
     }
 
-    private function markSurplusToConsult(PagoProveedorSolicitudProveedor $provider): void
+    /**
+     * @param  bool  $over  El proveedor recibió más de lo cobrado (abono propio con excedente).
+     */
+    private function markSurplusToConsult(PagoProveedorSolicitudProveedor $provider, bool $over): void
     {
         $provider->loadMissing(['solicitud.proveedores', 'aplicaciones.abono.aplicaciones']);
         $hayCuota2 = $provider->solicitud?->proveedores?->contains(
@@ -533,6 +534,14 @@ class PagoProveedorAprobacionService
                 continue;
             }
             if ((float) $deposit->surplus <= 0) {
+                continue;
+            }
+            // Voucher compartido: el excedente no suma a ningún proveedor; lo lleva uno solo.
+            if ($deposit->aplicaciones->count() > 1) {
+                if (app(PagoProveedorReembolsoService::class)->surplusOwnerId($deposit) !== (int) $provider->id) {
+                    continue;
+                }
+            } elseif (!$over) {
                 continue;
             }
             $decision = $deposit->surplus_decision ?: $evaluador->decisionExcedente((float) $deposit->surplus, (bool) $hayCuota2, $this->tolerance());
