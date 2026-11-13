@@ -36,25 +36,25 @@ class PagoProveedorVerificacionService
 
         if (!empty($filters['search'])) {
             $text = '%'.trim((string) $filters['search']).'%';
-            // «PE¥48» o «PE$48»: el código se arma con el N.° de orden, así que también se busca por él.
-            $order = preg_match('/^[A-Z]{2}[¥$]0*(\d+)$/iu', trim((string) $filters['search']), $parts) ? (int) $parts[1] : null;
-            $query->where(function ($inner) use ($text, $order) {
-                $inner->where('operation_number', 'like', $text)
-                    ->orWhere('amount', 'like', $text)
-                    ->orWhereHas('solicitud', function ($request) use ($text, $order) {
-                        if ($order !== null) {
-                            $request->where('order_number', $order)->orWhere('client_name', 'like', $text);
-                        } else {
-                            $request->where('client_name', 'like', $text);
-                        }
-                        $request
-                            ->orWhere('consolidation', 'like', $text)
-                            ->orWhereHas('proveedores', function ($providers) use ($text) {
-                                $providers->where('request_code', 'like', $text)
-                                    ->orWhere('code_supplier', 'like', $text);
-                            });
-                    });
-            });
+            // «PE¥70» o «PE$70»: abonos del proveedor con ese correlativo propio (#1686).
+            $number = app(PagoProveedorCodigoSolicitud::class)->numeroBuscado((string) $filters['search']);
+            if ($number !== null) {
+                $withNumber = fn ($providers) => $providers->where('request_number', $number)->whereNotNull('request_code');
+                $query->where(fn ($inner) => $inner->whereHas('aplicaciones.proveedor', $withNumber)->orWhereHas('exchangeProvider', $withNumber));
+            } else {
+                $query->where(function ($inner) use ($text) {
+                    $inner->where('operation_number', 'like', $text)
+                        ->orWhere('amount', 'like', $text)
+                        ->orWhereHas('solicitud', function ($request) use ($text) {
+                            $request->where('client_name', 'like', $text)
+                                ->orWhere('consolidation', 'like', $text)
+                                ->orWhereHas('proveedores', function ($providers) use ($text) {
+                                    $providers->where('request_code', 'like', $text)
+                                        ->orWhere('code_supplier', 'like', $text);
+                                });
+                        });
+                });
+            }
         }
 
         $bank = (string) ($filters['bank'] ?? '');
