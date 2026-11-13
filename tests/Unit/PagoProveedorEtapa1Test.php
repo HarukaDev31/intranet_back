@@ -53,6 +53,25 @@ class PagoProveedorEtapa1Test extends TestCase
         $this->assertSame([10], $resultado['cubiertos']);
     }
 
+    public function test_al_validar_con_menos_el_abono_de_un_proveedor_toma_el_importe_del_banco(): void
+    {
+        $evaluador = new PagoProveedorAbonoEvaluador();
+
+        $this->assertSame([7 => 1045.0], $evaluador->ajusteAlBanco(1045, [7 => 1050]));
+        // Ventas registró de más (excedente) pero al banco llegó menos que lo aplicado.
+        $this->assertSame([7 => 990.0], $evaluador->ajusteAlBanco(990, [7 => 1000]));
+    }
+
+    public function test_al_validar_no_se_ajusta_si_llego_lo_mismo_o_mas_ni_el_voucher_compartido(): void
+    {
+        $evaluador = new PagoProveedorAbonoEvaluador();
+
+        $this->assertSame([], $evaluador->ajusteAlBanco(1050, [7 => 1050]));
+        $this->assertSame([], $evaluador->ajusteAlBanco(1060, [7 => 1050]));
+        $this->assertSame([], $evaluador->ajusteAlBanco(1049.999, [7 => 1050]));
+        $this->assertSame([], $evaluador->ajusteAlBanco(1500, [7 => 1000, 8 => 600]));
+    }
+
     public function test_abono_que_completa_al_proveedor(): void
     {
         $resultado = (new PagoProveedorAbonoEvaluador())->evaluar(1000, [
