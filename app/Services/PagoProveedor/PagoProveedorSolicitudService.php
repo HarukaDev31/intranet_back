@@ -29,13 +29,12 @@ class PagoProveedorSolicitudService
             $own->whereNull('origin')->orWhere('origin', '!=', PagoProveedorSolicitud::ORIGIN_MANUAL);
         });
 
+        $numero = null;
         if (!empty($filtros['search'])) {
             $texto = '%' . trim((string) $filtros['search']) . '%';
-            // «PE¥70» o «PE$70» busca el correlativo propio del proveedor (#1686), sin importar cómo se guardó el texto del código.
+            // «PE¥70» o «PE$70» busca el correlativo propio del proveedor (#1686); se filtra abajo, por proveedor.
             $numero = app(PagoProveedorCodigoSolicitud::class)->numeroBuscado((string) $filtros['search']);
-            if ($numero !== null) {
-                $query->whereHas('proveedores', fn ($proveedores) => $proveedores->where('request_number', $numero)->whereNotNull('request_code'));
-            } else {
+            if ($numero === null) {
                 $query->where(function ($q) use ($texto) {
                     $q->where('client_name', 'like', $texto)
                         ->orWhere('consolidated_quote_code', 'like', $texto)
@@ -61,8 +60,12 @@ class PagoProveedorSolicitudService
         $filtraMoneda = in_array($tipoPago, ['RMB', 'USD'], true);
         $filtraEtapa = $etapa !== '' && strtolower($etapa) !== 'todos';
         $filtraEstado = $estado !== '' && strtolower($estado) !== 'todos';
-        if ($filtraMoneda || $filtraEtapa || $filtraEstado) {
-            $delProveedor = function ($proveedores) use ($filtraMoneda, $tipoPago, $filtraEtapa, $etapa, $filtraEstado, $estado) {
+        if ($filtraMoneda || $filtraEtapa || $filtraEstado || $numero !== null) {
+            $delProveedor = function ($proveedores) use ($filtraMoneda, $tipoPago, $filtraEtapa, $etapa, $filtraEstado, $estado, $numero) {
+                if ($numero !== null) {
+                    // Solo el proveedor de ese código, no toda la orden.
+                    $proveedores->where('request_number', $numero)->whereNotNull('request_code');
+                }
                 if ($filtraMoneda) {
                     $proveedores->where('currency', $tipoPago);
                 }
