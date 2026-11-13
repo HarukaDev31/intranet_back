@@ -1,0 +1,147 @@
+<?php
+
+namespace Tests\Unit;
+
+use App\Exceptions\PagoProveedorException;
+use App\Models\PagoProveedor\PagoProveedorSolicitud;
+use App\Models\PagoProveedor\PagoProveedorSolicitudProveedor;
+use App\Services\PagoProveedor\PagoProveedorAbonoEvaluador;
+use App\Services\PagoProveedor\PagoProveedorCodigoSolicitud;
+use App\Services\PagoProveedor\PagoProveedorDatosReglas;
+use PHPUnit\Framework\TestCase;
+
+class PagoProveedorEtapa1Test extends TestCase
+{
+    public function test_wechat_solo_acepta_digitos(): void
+    {
+        $this->assertSame('8613800138000', PagoProveedorDatosReglas::wechat('86 138 0013 8000'));
+        $this->expectException(PagoProveedorException::class);
+        PagoProveedorDatosReglas::wechat('wechat-li');
+    }
+
+    public function test_swift_rechaza_siete_caracteres_y_acepta_ocho_u_once(): void
+    {
+        $this->assertSame('DEUTDEFF', PagoProveedorDatosReglas::codigoBanco('SWIFT', 'deutdeff'));
+        $this->assertSame('DEUTDEFF500', PagoProveedorDatosReglas::codigoBanco('SWIFT', 'DEUTDEFF500'));
+
+        $this->expectException(PagoProveedorException::class);
+        PagoProveedorDatosReglas::codigoBanco('SWIFT', 'DEUTDEF');
+    }
+
+    public function test_abono_parcial_no_marca_cubierto_si_usa_todo_el_importe(): void
+    {
+        $resultado = (new PagoProveedorAbonoEvaluador())->evaluar(400, [
+            10 => 400,
+        ], [
+            10 => 1000,
+        ]);
+
+        $this->assertSame(400.0, $resultado['aplicado']);
+        $this->assertSame(0.0, $resultado['excedente']);
+        $this->assertSame([], $resultado['cubiertos']);
+    }
+
+    public function test_lo_que_sobra_despues_de_cubrir_el_saldo_es_excedente(): void
+    {
+        $resultado = (new PagoProveedorAbonoEvaluador())->evaluar(1200, [
+            10 => 1000,
+        ], [
+            10 => 1000,
+        ]);
+
+        $this->assertSame(200.0, $resultado['excedente']);
+        $this->assertSame([10], $resultado['cubiertos']);
+    }
+
+    public function test_al_validar_con_menos_el_abono_de_un_proveedor_toma_el_importe_del_banco(): void
+    {
+        $evaluador = new PagoProveedorAbonoEvaluador();
+
+        $this->assertSame([7 => 1045.0], $evaluador->ajusteAlBanco(1045, [7 => 1050]));
+        // Ventas registró de más (excedente) pero al banco llegó menos que lo aplicado.
+        $this->assertSame([7 => 990.0], $evaluador->ajusteAlBanco(990, [7 => 1000]));
+    }
+
+    public function test_al_validar_no_se_ajusta_si_llego_lo_mismo_o_mas_ni_el_voucher_compartido(): void
+    {
+        $evaluador = new PagoProveedorAbonoEvaluador();
+
+        $this->assertSame([], $evaluador->ajusteAlBanco(1050, [7 => 1050]));
+        $this->assertSame([], $evaluador->ajusteAlBanco(1060, [7 => 1050]));
+        $this->assertSame([], $evaluador->ajusteAlBanco(1049.999, [7 => 1050]));
+        $this->assertSame([], $evaluador->ajusteAlBanco(1500, [7 => 1000, 8 => 600]));
+    }
+
+    public function test_abono_que_completa_al_proveedor(): void
+    {
+        $resultado = (new PagoProveedorAbonoEvaluador())->evaluar(1000, [
+            10 => 1000,
+            11 => 0,
+        ], [
+            10 => 1000,
+            11 => 500,
+        ]);
+
+        $this->assertSame([10], $resultado['cubiertos']);
+        $this->assertSame(0.0, $resultado['excedente']);
+    }
+
+    public function test_no_permite_aplicar_mas_que_el_saldo_ni_un_abono_vacio(): void
+    {
+        $evaluador = new PagoProveedorAbonoEvaluador();
+
+        try {
+            $evaluador->evaluar(50, [10 => 80], [10 => 40]);
+            $this->fail('Debió rechazar el monto mayor al saldo.');
+        } catch (PagoProveedorException $e) {
+            $this->assertStringContainsString('saldo', $e->getMessage());
+        }
+
+        $this->expectException(PagoProveedorException::class);
+        $evaluador->evaluar(50, [10 => 0], [10 => 40]);
+    }
+
+    public function test_excedente_menor_a_un_dolar_con_cuota_2_se_aplica(): void
+    {
+        $evaluador = new PagoProveedorAbonoEvaluador();
+        $this->assertSame('aplicado_cuota', $evaluador->decisionExcedente(0.8, true));
+        $this->assertSame('no_devuelve', $evaluador->decisionExcedente(0.8, false));
+        $this->assertSame('por_consultar', $evaluador->decisionExcedente(25, true));
+        $this->assertNull($evaluador->decisionExcedente(0, true));
+    }
+
+    public function test_codigo_de_solicitud_interno(): void
+    {
+        $codigos = new PagoProveedorCodigoSolicitud();
+
+        $this->assertSame('PE¥01', $codigos->armar('Perú', 1));
+        $this->assertSame('PE¥67', $codigos->armar('Perú', 67));
+        $this->assertSame('EC¥120', $codigos->armar('Ecuador', 120));
+        $this->assertSame('PE¥05', $codigos->armar(null, 5));
+        $this->assertSame('PE$01', $codigos->armar('Perú', 1, 'USD'));
+        $this->assertSame('PE¥01', $codigos->armar('Perú', 1, 'RMB'));
+        $this->assertSame('PE$48', $codigos->conMoneda('PE¥48', 'USD'));
+        $this->assertSame('PE¥48', $codigos->conMoneda('PE$48', 'RMB'));
+        $this->assertNull($codigos->conMoneda('CN57NOV26', 'USD'));
+
+        // Cada proveedor tiene su correlativo propio (#1686): misma orden, códigos distintos.
+        $solicitud = new PagoProveedorSolicitud();
+        $solicitud->forceFill(['country' => 'Perú', 'order_number' => 70]);
+        $primero = new PagoProveedorSolicitudProveedor();
+        $primero->forceFill(['request_number' => 70, 'currency' => 'RMB']);
+        $segundo = new PagoProveedorSolicitudProveedor();
+        $segundo->forceFill(['request_number' => 71, 'currency' => 'USD']);
+        $this->assertSame('PE¥70', $codigos->deProveedor($primero, $solicitud));
+        $this->assertSame('PE$71', $codigos->deProveedor($segundo, $solicitud));
+        $sinNumero = new PagoProveedorSolicitudProveedor();
+        $sinNumero->forceFill(['currency' => 'RMB']);
+        $this->assertSame('PE¥70', $codigos->deProveedor($sinNumero, $solicitud));
+        $this->assertSame('PE¥71', $codigos->conNumero('PE¥70', 71, 'RMB'));
+        $this->assertSame('EC$09', $codigos->conNumero('EC¥70', 9, 'USD'));
+        $this->assertNull($codigos->conNumero('CN57NOV26', 71, 'RMB'));
+        $this->assertSame(71, $codigos->numeroBuscado(' PE¥71 '));
+        $this->assertSame(5, $codigos->numeroBuscado('pe$05'));
+        $this->assertNull($codigos->numeroBuscado('Julio'));
+        $this->assertNull($codigos->numeroBuscado('PE¥'));
+    }
+}

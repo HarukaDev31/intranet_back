@@ -37,6 +37,7 @@ return [
     'allowed_origins_patterns' => [
         '#^https?://(?:[a-zA-Z0-9-]+\.)?probusiness\.pe(:\d+)?$#',
         '#^http://localhost(:\d+)?$#',
+        '#^http://127\.0\.0\.1(:\d+)?$#',
     ],
 
     'allowed_headers' => ['*'],

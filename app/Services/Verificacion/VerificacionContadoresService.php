@@ -8,15 +8,24 @@ use App\Models\CargaConsolidada\PagoConcept;
 use App\Models\CargaConsolidada\TramiteAduanaPago;
 use App\Models\PedidoCursoPago;
 use App\Models\Viatico;
+use App\Services\PagoProveedor\PagoProveedorAprobacionService;
+use App\Services\PagoProveedor\PagoProveedorEjecucionService;
+use App\Services\PagoProveedor\PagoProveedorReembolsoService;
+use App\Services\PagoProveedor\PagoProveedorVerificacionService;
 
 /**
- * Conteos baratos (COUNT) de lo pendiente de verificacion / viaticos.
- * Una sola respuesta para sidebar, tabs y home de Administracion.
+ * Conteos baratos (COUNT) de lo pendiente de verificación / aprobación.
+ * Una sola respuesta para sidebar, tabs y home de Administración.
  */
 class VerificacionContadoresService
 {
     public function all()
     {
+        $deposits = app(PagoProveedorVerificacionService::class)->pendingCount();
+        $approvals = app(PagoProveedorAprobacionService::class)->pendingCount()
+            + app(PagoProveedorReembolsoService::class)->pendingCount();
+        $executions = app(PagoProveedorEjecucionService::class)->pendingCount();
+
         $consolidado = (int) Pago::query()
             ->where('status', Pago::ESTADOS['PENDIENTE'])
             ->whereIn('id_concept', [PagoConcept::CONCEPT_PAGO_LOGISTICA, PagoConcept::CONCEPT_PAGO_IMPUESTOS])
@@ -43,7 +52,7 @@ class VerificacionContadoresService
             ->where('status', 'PENDING')
             ->count();
 
-        $verificacionTotal = $consolidado + $cursos + $delivery + $permisos + $boletin;
+        $verificacionTotal = $consolidado + $cursos + $delivery + $permisos + $boletin + $deposits;
 
         return [
             'consolidado' => $consolidado,
@@ -51,16 +60,16 @@ class VerificacionContadoresService
             'delivery' => $delivery,
             'permisos' => $permisos,
             'boletin_quimico' => $boletin,
-            'supplier_payment' => 0,
-            'supplier_approvals' => 0,
-            'supplier_executions' => 0,
+            'supplier_payment' => $deposits,
+            'supplier_approvals' => $approvals,
+            'supplier_executions' => $executions,
             'viaticos' => $viaticos,
             'verificacion_total' => $verificacionTotal,
         ];
     }
 
     /**
-     * @param  array  $partial  claves a devolver (si vacio, todas)
+     * @param  array  $partial  claves a devolver (si vacío, todas)
      * @return array
      */
     public function slice(array $partial = [])

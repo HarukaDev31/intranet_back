@@ -74,6 +74,12 @@ Route::get('/carga-consolidada/contenedor/factura-guia/general/guia-remision/{id
 // Módulo de Carga Consolidada
 require __DIR__.'/modules/carga-consolidada.php';
 
+// Módulo de Pago a Proveedor
+require __DIR__.'/modules/pago-proveedor.php';
+
+// Módulo de Operaciones y Pagos de China (Almacén China / Socio)
+require __DIR__.'/modules/china-billing.php';
+
 // Módulo de Dashboard por Usuario
 require __DIR__.'/modules/dashboard-usuario.php';
 
@@ -104,7 +110,7 @@ require __DIR__.'/modules/news.php';
 // Manual de usuario (contenido MD por rol + PDF)
 require __DIR__.'/modules/manual-usuario.php';
 
-// Contadores de Verificación / Viáticos (sidebar + tabs + home Admin)
+// Contadores de Verificación / Pago a Proveedor / Viáticos (sidebar + tabs)
 require __DIR__.'/modules/verificacion.php';
 
 // Módulo de Viáticos

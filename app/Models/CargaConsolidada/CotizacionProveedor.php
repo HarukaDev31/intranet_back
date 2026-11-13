@@ -43,6 +43,7 @@ use App\Models\CargaConsolidada\Concerns\SincronizaOrganizacionId;
  * @property string|null $packing_list
  * @property-read Cotizacion|null $cotizacion
  * @property-read Contenedor|null $contenedor
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, CotizacionProveedorItems> $items
  */
 class CotizacionProveedor extends Model
 {
