@@ -74,6 +74,31 @@ class PagoProveedorAbonoEvaluador
         ];
     }
 
+    /**
+     * Al validar, el abono que registró Ventas toma el importe del banco (#1724): si al banco llegó menos de lo
+     * aplicado y el voucher es de un solo proveedor, su aplicación baja al importe del banco y la diferencia queda
+     * como faltante (tolerancia / Por cobrar). Un voucher compartido conserva su reparto: Ventas elige quién
+     * continúa (RN-66). Si llegó de más, la aplicación no cambia y lo que sobra es excedente.
+     *
+     * @param  array<int, float>  $aplicaciones  id de aplicación => monto aplicado por Ventas
+     * @return array<int, float>  id de aplicación => monto ajustado (solo las que cambian)
+     */
+    public function ajusteAlBanco(float $importeBanco, array $aplicaciones): array
+    {
+        if (count($aplicaciones) !== 1) {
+            return [];
+        }
+        $banco = round(max(0.0, $importeBanco), 2);
+        $ajuste = [];
+        foreach ($aplicaciones as $id => $monto) {
+            if (round($monto, 2) - $banco >= 0.005) {
+                $ajuste[$id] = $banco;
+            }
+        }
+
+        return $ajuste;
+    }
+
     public function decisionExcedente(float $excedente, bool $hayCuota2, float $tolerance = 1.0): ?string
     {
         if ($excedente <= 0) {

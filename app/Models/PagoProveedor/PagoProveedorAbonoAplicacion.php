@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $deposit_id
  * @property int $request_provider_id
  * @property float $amount
+ * @property float|null $recorded_amount  Lo que aplicó Ventas cuando Administración lo ajustó al importe del banco
  * @property PagoProveedorAbono|null $abono
  * @property PagoProveedorSolicitudProveedor|null $proveedor
  */
@@ -21,11 +22,13 @@ class PagoProveedorAbonoAplicacion extends Model
         'deposit_id',
         'request_provider_id',
         'amount',
+        'recorded_amount',
         'continues',
     ];
 
     protected $casts = [
         'amount' => 'float',
+        'recorded_amount' => 'float',
     ];
 
     /**

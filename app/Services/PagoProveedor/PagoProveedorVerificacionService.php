@@ -183,6 +183,7 @@ class PagoProveedorVerificacionService
             if (abs($bankAmount - (float) $deposit->amount) >= 0.005 && $deposit->recorded_amount === null) {
                 $deposit->recorded_amount = $deposit->amount;
             }
+            $adjusted = $this->adjustApplicationsToBank($deposit, $bankAmount);
             $applied = round((float) $deposit->aplicaciones->sum('amount'), 2);
             $deposit->amount = round($bankAmount, 2);
             $deposit->bank_amount = round($bankAmount, 2);
@@ -200,6 +201,9 @@ class PagoProveedorVerificacionService
             $note = $deposit->recorded_amount !== null && abs((float) $deposit->recorded_amount - $bankAmount) >= 0.005
                 ? 'Ventas registró '.$deposit->recorded_amount.' · se ajustó al importe del banco '.$deposit->bank_amount
                 : 'Importe del banco '.$deposit->bank_amount;
+            if ($adjusted) {
+                $note .= ' · el abono de Ventas se actualizó solo al importe del banco';
+            }
             $this->history->registrar(
                 PagoProveedorHistorial::ENTITY_REQUEST,
                 (int) $deposit->request_id,
@@ -293,6 +297,7 @@ class PagoProveedorVerificacionService
                 $deposit->amount = $deposit->recorded_amount;
                 $deposit->recorded_amount = null;
             }
+            $this->restoreRecordedApplications($deposit);
             $deposit->bank_amount = null;
             $deposit->status = PagoProveedorAbono::STATUS_IN_VALIDATION;
             $deposit->observation_reason = null;
@@ -523,6 +528,48 @@ class PagoProveedorVerificacionService
 
             return $provider && (int) $provider->stage > PagoProveedorSolicitudProveedor::STAGE_VALIDATION;
         });
+    }
+
+    /**
+     * El abono de Ventas toma el importe del banco al validar (#1724): la aplicación guarda lo que registró Ventas
+     * en recorded_amount (para «Ventas registró $X» y para deshacer) y pasa al importe del banco.
+     *
+     * @return bool  true si alguna aplicación cambió
+     */
+    private function adjustApplicationsToBank(PagoProveedorAbono $deposit, float $bankAmount): bool
+    {
+        $amounts = [];
+        foreach ($deposit->aplicaciones as $application) {
+            $amounts[(int) $application->id] = (float) $application->amount;
+        }
+        $changes = app(PagoProveedorAbonoEvaluador::class)->ajusteAlBanco($bankAmount, $amounts);
+        foreach ($deposit->aplicaciones as $application) {
+            if (!array_key_exists((int) $application->id, $changes)) {
+                continue;
+            }
+            if ($application->recorded_amount === null) {
+                $application->recorded_amount = (float) $application->amount;
+            }
+            $application->amount = $changes[(int) $application->id];
+            $application->save();
+        }
+
+        return $changes !== [];
+    }
+
+    /**
+     * Deshacer la validación devuelve a cada aplicación el importe que registró Ventas.
+     */
+    private function restoreRecordedApplications(PagoProveedorAbono $deposit): void
+    {
+        foreach ($deposit->aplicaciones as $application) {
+            if ($application->recorded_amount === null) {
+                continue;
+            }
+            $application->amount = (float) $application->recorded_amount;
+            $application->recorded_amount = null;
+            $application->save();
+        }
     }
 
     private function find(int $id, bool $lock = false): PagoProveedorAbono
