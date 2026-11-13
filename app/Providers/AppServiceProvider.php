@@ -40,6 +40,10 @@ class AppServiceProvider extends ServiceProvider
     {
         WslLocalDatabaseConnection::applyForQueueWorkers();
 
+        // tymon/jwt-auth registra jwt.auth al boot y pisa el alias del Kernel:
+        // su Authenticate responde HTML 401 sin Accept. Forzar el middleware propio (JSON).
+        $this->app['router']->aliasMiddleware('jwt.auth', \App\Http\Middleware\JWTMiddleware::class);
+
         // Registrar observer para sincronizar estados entre Cotizacion y CalculadoraImportacion
         Contenedor::observe(ContenedorObserver::class);
         Cotizacion::observe(CotizacionObserver::class);

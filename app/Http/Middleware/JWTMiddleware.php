@@ -21,8 +21,18 @@ class JWTMiddleware
     public function handle($request, Closure $next)
     {
         try {
+            // Multipart a veces llega sin Authorization en proxies; aceptar token en query/body.
+            if (!$request->headers->has('Authorization')) {
+                $token = $request->bearerToken()
+                    ?: $request->input('token')
+                    ?: $request->query('token');
+                if (is_string($token) && $token !== '') {
+                    $request->headers->set('Authorization', 'Bearer ' . $token);
+                }
+            }
+
             $user = JWTAuth::parseToken()->authenticate();
-            
+
             if (!$user) {
                 Log::info('Usuario no encontrado');
                 return response()->json([
@@ -30,7 +40,7 @@ class JWTMiddleware
                     'message' => 'Usuario no encontrado'
                 ], 401);
             }
-            
+
         } catch (TokenExpiredException $e) {
             Log::info('Token expirado');
             return response()->json([
@@ -53,4 +63,4 @@ class JWTMiddleware
 
         return $next($request);
     }
-} 
+}
