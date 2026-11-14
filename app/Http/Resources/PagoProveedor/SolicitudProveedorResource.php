@@ -20,6 +20,12 @@ class SolicitudProveedorResource extends JsonResource
         /** @var PagoProveedorSolicitudProveedor $provider */
         $provider = $this->resource;
         $task = $provider->salesTask();
+        $waiting = $this->waitingOn($provider);
+        // Reembolso por consultar al cliente: es tarea de Ventas, no de otra área.
+        $ventasConsulta = $waiting !== null && $waiting['area'] === 'Ventas';
+        if ($task === null && $ventasConsulta) {
+            $task = PagoProveedorSolicitudProveedor::TASK_CONFIRMATION;
+        }
         $solicitud = $provider->solicitud;
         $deadline = $task !== null ? $this->taskDeadline($provider) : null;
 
@@ -64,7 +70,7 @@ class SolicitudProveedorResource extends JsonResource
             'deadline_kind' => $deadline !== null ? $deadline['kind'] : null,
             'owner' => $task ? PagoProveedorSolicitudProveedor::OWNER_SALES : PagoProveedorSolicitudProveedor::OWNER_OTHER,
             // #1745: si no le toca a Ventas, quién lo tiene y qué falta para cerrar.
-            'waiting_on' => $task === null ? $this->waitingOn($provider) : null,
+            'waiting_on' => $task === null || $ventasConsulta ? $waiting : null,
         ];
     }
 
