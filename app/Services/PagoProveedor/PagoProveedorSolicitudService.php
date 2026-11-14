@@ -22,7 +22,7 @@ class PagoProveedorSolicitudService
 
     public function listar(array $filtros): LengthAwarePaginator
     {
-        $query = PagoProveedorSolicitud::query()->with(['proveedores.datos', 'proveedores.consolidatedProvider', 'cotizacion'])->orderByDesc('id');
+        $query = PagoProveedorSolicitud::query()->with(['proveedores.datos', 'proveedores.consolidatedProvider', 'proveedores.refunds', 'cotizacion'])->orderByDesc('id');
 
         // China's manual requests belong to other partners and never reach Sales (RN-97).
         $query->where(function ($own) {
@@ -77,7 +77,7 @@ class PagoProveedorSolicitudService
                 }
             };
             $query->whereHas('proveedores', $delProveedor)
-                ->with(['proveedores' => $delProveedor, 'proveedores.datos', 'proveedores.consolidatedProvider']);
+                ->with(['proveedores' => $delProveedor, 'proveedores.datos', 'proveedores.consolidatedProvider', 'proveedores.refunds']);
         }
 
         return $query->paginate((int) ($filtros['per_page'] ?? 15));
@@ -85,7 +85,7 @@ class PagoProveedorSolicitudService
 
     public function ver(int $id): PagoProveedorSolicitud
     {
-        $solicitud = PagoProveedorSolicitud::query()->with(['proveedores.datos', 'proveedores.consolidatedProvider', 'cotizacion'])->find($id);
+        $solicitud = PagoProveedorSolicitud::query()->with(['proveedores.datos', 'proveedores.consolidatedProvider', 'proveedores.refunds', 'cotizacion'])->find($id);
         if (!$solicitud) {
             throw new PagoProveedorException('La solicitud no existe.', 404);
         }

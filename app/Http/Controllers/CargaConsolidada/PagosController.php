@@ -1265,18 +1265,31 @@ class PagosController extends Controller
             $index = ($page - 1) * $perPage + 1;
 
             foreach ($cursos->items() as $curso) {
-                $aPagar = ($curso->logistica_final + $curso->impuestos_final) == 0 ?
-                    $curso->Ss_Total : ($curso->logistica_final + $curso->impuestos_final);
+                $logistica = (float) ($curso->logistica_final ?? 0);
+                $impuestos = (float) ($curso->impuestos_final ?? 0);
+                $aPagar = ($logistica + $impuestos) == 0.0
+                    ? (float) ($curso->Ss_Total ?? 0)
+                    : ($logistica + $impuestos);
+                $totalPagado = (float) ($curso->total_pagos ?? 0);
 
                 // Determinar estado de pago
-                $estadoPago = $this->determinarEstadoPago($curso->pagos_count, $curso->total_pagos, $aPagar);
+                $estadoPago = $this->determinarEstadoPago((int) ($curso->pagos_count ?? 0), $totalPagado, $aPagar);
 
                 $pagosDetalle = $this->procesarPagosDetalleCurso($curso->pagos_details);
+
+                $fechaRegistro = null;
+                if (!empty($curso->Fe_Registro)) {
+                    try {
+                        $fechaRegistro = Carbon::parse($curso->Fe_Registro)->format('d-m-Y');
+                    } catch (\Throwable $e) {
+                        $fechaRegistro = null;
+                    }
+                }
 
                 $data[] = [
                     'id' => $curso->ID_Pedido_Curso,
                     'index' => $index,
-                    'fecha_registro' => Carbon::parse($curso->Fe_Registro)->format('d-m-Y'),
+                    'fecha_registro' => $fechaRegistro,
                     'nombre' => $curso->No_Entidad,
                     'telefono' => $curso->Nu_Celular_Entidad,
                     'tipo' => "Curso",
@@ -1285,8 +1298,8 @@ class PagosController extends Controller
 
                     'monto_a_pagar' => $aPagar,
                     'monto_a_pagar_formateado' => number_format($aPagar, 2, '.', ''),
-                    'total_pagado' => $curso->total_pagos,
-                    'total_pagado_formateado' => number_format($curso->total_pagos, 2, '.', ''),
+                    'total_pagado' => $totalPagado,
+                    'total_pagado_formateado' => number_format($totalPagado, 2, '.', ''),
                     'pagos_detalle' => $pagosDetalle,
                     'note_administracion' => $curso->note_administracion
                 ];
@@ -1334,14 +1347,15 @@ class PagosController extends Controller
                 return (int) ($b['id_pago'] ?? 0) - (int) ($a['id_pago'] ?? 0);
             });
             foreach ($pagos as $pago) {
+                $monto = (float) ($pago['monto'] ?? 0);
                 $pagosProcesados[] = [
-                    'id' => $pago['id_pago'],
-                    'monto' => $pago['monto'],
-                    'monto_formateado' => number_format($pago['monto'], 2, '.', ''),
-                    'status' => $pago['status'],
-                    'payment_date' => $pago['payment_date'],
-                    'banco' => $pago['banco'],
-                    'voucher_url' => $this->generateImageUrl($pago['voucher_url'])
+                    'id' => $pago['id_pago'] ?? null,
+                    'monto' => $monto,
+                    'monto_formateado' => number_format($monto, 2, '.', ''),
+                    'status' => $pago['status'] ?? null,
+                    'payment_date' => $pago['payment_date'] ?? null,
+                    'banco' => $pago['banco'] ?? null,
+                    'voucher_url' => $this->generateImageUrl($pago['voucher_url'] ?? null)
                 ];
             }
         }

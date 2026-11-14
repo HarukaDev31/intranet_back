@@ -37,6 +37,9 @@ class YuanSolicitudResource extends JsonResource
             'client' => $solicitud->client_name ?: $solicitud->partner,
             'organization_id' => $solicitud->organizacion_id,
             'organization' => $solicitud->organizacion?->No_Organizacion,
+            // #1747: nombre del socio que envía los dólares (organización; las de Ventas son de Pro Business).
+            'partner_name' => $solicitud->organizacion?->No_Organizacion
+                ?: ($manual ? PagoProveedorSolicitud::partnerLabel($solicitud->partner) : PagoProveedorSolicitud::PARTNER_OWN_NAME),
             'manual' => $manual,
             'consolidation' => $solicitud->consolidation,
             ...$summary,
