@@ -43,9 +43,13 @@ class SolicitudDetalleResource extends JsonResource
             $pending += $balance;
         }
         foreach ($solicitud->abonos as $abono) {
-            if ($abono->status !== PagoProveedorAbono::STATUS_CANCELLED) {
-                $excess += (float) $abono->surplus;
+            if ($abono->status === PagoProveedorAbono::STATUS_CANCELLED) {
+                continue;
             }
+            if ($abono->purpose === PagoProveedorAbono::PURPOSE_EXCHANGE) {
+                continue;
+            }
+            $excess += (float) $abono->surplus;
         }
 
         return [

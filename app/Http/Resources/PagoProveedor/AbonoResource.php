@@ -69,7 +69,7 @@ class AbonoResource extends JsonResource
             'voucher_url' => $this->cdnStorageUrl($abono->voucher_path),
             'estado' => $abono->status,
             'estado_nombre' => self::statusLabel($abono->status),
-            'excedente' => $abono->surplus,
+            'excedente' => $abono->purpose === PagoProveedorAbono::PURPOSE_EXCHANGE ? 0 : $abono->surplus,
             'excedente_decision' => $abono->surplus_decision,
             'excedente_decide_until' => optional($decideUntil)->toIso8601String(),
             'excedente_decide_overdue' => $decideOverdue,
@@ -95,12 +95,34 @@ class AbonoResource extends JsonResource
                 && $abono->aplicaciones->contains(fn (PagoProveedorAbonoAplicacion $aplicacion) => $aplicacion->continues === null)
                 && (float) $abono->aplicaciones->sum('amount') - (float) ($abono->bank_amount ?? $abono->amount)
                     > (float) app(PagoProveedorConfiguracionService::class)->value(PagoProveedorSolicitudProveedor::SETTING_TOLERANCE, 1) + 0.001,
-            'aplicaciones' => $abono->aplicaciones->map(fn (PagoProveedorAbonoAplicacion $aplicacion) => [
+            'aplicaciones' => $this->aplicacionesVisibles($abono),
+        ];
+    }
+
+    /**
+     * La diferencia de cambio se aplicó a ese proveedor, aunque no reparte el abono de la cotización.
+     *
+     * @return array<int, array{solicitud_proveedor_id: int, monto: float, continua: bool|null}>
+     */
+    private function aplicacionesVisibles(PagoProveedorAbono $abono): array
+    {
+        $aplicaciones = $abono->aplicaciones->map(function (PagoProveedorAbonoAplicacion $aplicacion) {
+            return [
                 'solicitud_proveedor_id' => $aplicacion->request_provider_id,
                 'monto' => $aplicacion->amount,
                 'continua' => $aplicacion->continues,
-            ])->values()->all(),
-        ];
+            ];
+        })->values()->all();
+
+        if ($aplicaciones === [] && $abono->purpose === PagoProveedorAbono::PURPOSE_EXCHANGE && $abono->exchange_provider_id) {
+            $aplicaciones[] = [
+                'solicitud_proveedor_id' => (int) $abono->exchange_provider_id,
+                'monto' => (float) $abono->amount,
+                'continua' => null,
+            ];
+        }
+
+        return $aplicaciones;
     }
 
     public static function statusLabel(string $status): string
