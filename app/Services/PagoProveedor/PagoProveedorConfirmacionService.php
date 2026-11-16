@@ -665,6 +665,13 @@ class PagoProveedorConfirmacionService
             return ['state' => 'approved'] + $summary;
         }
         if ($provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT) {
+            // Ventas ya registró el voucher de la diferencia: se evalúa cuando Administración lo valide.
+            $aprobacion = app(PagoProveedorAprobacionService::class);
+            if ($aprobacion->compare($provider)['unverified'] > 0
+                && $aprobacion->outstanding($provider) <= PagoProveedorSolicitudProveedor::MONEY_EPSILON) {
+                return ['state' => 'waiting_verification'] + $summary;
+            }
+
             return ['state' => 'to_collect'] + $summary;
         }
         if ($provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR) {

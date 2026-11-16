@@ -318,10 +318,19 @@ class PagoProveedorYuanService
     /**
      * @param  Collection<int, PagoProveedorSolicitudProveedor>  $providers
      */
-    public function canRemoveIncome(PagoProveedorSolicitud $request, Collection $providers): bool
+    public function canRemoveIncome(PagoProveedorSolicitud $request, Collection $providers, ?PagoProveedorIngreso $income = null): bool
     {
-        return $request->origin === PagoProveedorSolicitud::ORIGIN_MANUAL
-            || !$providers->contains(fn (PagoProveedorSolicitudProveedor $provider) => $provider->ejecuciones->isNotEmpty());
+        if ($request->origin === PagoProveedorSolicitud::ORIGIN_MANUAL) {
+            return true;
+        }
+
+        // Un ingreso registrado después del último pago no se usó para calcular ningún pago: se puede quitar.
+        return !$providers->contains(fn (PagoProveedorSolicitudProveedor $provider) => $provider->ejecuciones->contains(
+            fn ($execution) => $income === null
+                || $income->created_at === null
+                || ($execution->updated_at ?? $execution->created_at) === null
+                || ($execution->updated_at ?? $execution->created_at)->greaterThanOrEqualTo($income->created_at)
+        ));
     }
 
     /**
@@ -562,7 +571,7 @@ class PagoProveedorYuanService
             }
             $request = $income->solicitud;
             $providers = $request->proveedores()->with('ejecuciones')->get();
-            if (!$this->canRemoveIncome($request, $providers->toBase())) {
+            if (!$this->canRemoveIncome($request, $providers->toBase(), $income)) {
                 throw new PagoProveedorException('Ya hay pagos calculados con este ingreso. Deshaz primero el pago.');
             }
             $income->delete();
