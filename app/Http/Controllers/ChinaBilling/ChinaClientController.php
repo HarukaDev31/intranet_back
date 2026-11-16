@@ -4,14 +4,13 @@ namespace App\Http\Controllers\ChinaBilling;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ChinaBilling\ChinaBillingRowResource;
-use App\Models\ChinaBilling\ChinaClient;
 use App\Services\ChinaBilling\ChinaBillingAuthorization;
 use App\Services\ChinaBilling\ChinaClientService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Clientes de Almacén China para cobrar servicios (socios e importadores) y los clientes que registró cada organización.
+ * Clientes de Almacén China para cobrar servicios (organizaciones socio o importador) y los clientes que registró cada organización.
  */
 class ChinaClientController extends Controller
 {
@@ -28,7 +27,7 @@ class ChinaClientController extends Controller
         return $this->responder(function () use ($request) {
             $actor = $this->authorization->requireWarehouse($request->user());
 
-            return $this->listResponse($this->clients->list($actor['organization_ids'], $request->all(), $actor['id']));
+            return $this->listResponse($this->clients->list($actor['organization_ids'], $request->all()));
         });
     }
 
@@ -45,9 +44,9 @@ class ChinaClientController extends Controller
     {
         return $this->responder(function () use ($request) {
             $actor = $this->authorization->requireWarehouse($request->user());
-            $data = $request->validate($this->rules(true));
+            $data = $request->validate($this->rules());
 
-            return $this->ok(new ChinaBillingRowResource($this->clients->create($data, $actor['organization_ids'], $actor['id'], $this->companyId($request))), 201);
+            return $this->ok(new ChinaBillingRowResource($this->clients->create($data, $actor['organization_ids'], $actor['id'])), 201);
         });
     }
 
@@ -55,9 +54,9 @@ class ChinaClientController extends Controller
     {
         return $this->responder(function () use ($request, $id) {
             $actor = $this->authorization->requireWarehouse($request->user());
-            $data = $request->validate($this->rules(false));
+            $data = $request->validate($this->rules());
 
-            return $this->ok(new ChinaBillingRowResource($this->clients->update($id, $data, $actor['organization_ids'])));
+            return $this->ok(new ChinaBillingRowResource($this->clients->update($id, $data, $actor['organization_ids'], $actor['id'])));
         });
     }
 
@@ -81,7 +80,7 @@ class ChinaClientController extends Controller
         });
     }
 
-    /** Países para crear la organización de un socio nuevo. */
+    /** Países para el formulario del cliente (lista completa). */
     public function countries(Request $request): JsonResponse
     {
         return $this->responder(function () use ($request) {
@@ -91,34 +90,35 @@ class ChinaClientController extends Controller
         });
     }
 
-    private function companyId(Request $request): ?int
+    /**
+     * Países paginados para el autocompletado de «Nueva operación» (search, page, per_page=5);
+     * primero los países donde hay clientes.
+     */
+    public function countrySearch(Request $request): JsonResponse
     {
-        $companyId = (int) $request->user()?->getAttribute('ID_Empresa');
+        return $this->responder(function () use ($request) {
+            $actor = $this->authorization->requireWarehouse($request->user());
 
-        return $companyId > 0 ? $companyId : null;
+            return $this->listResponse($this->clients->countriesPage($actor['organization_ids'], $request->only(['search', 'page', 'per_page'])));
+        });
     }
 
     /**
      * @return array<string, array<int, string>>
      */
-    private function rules(bool $creating): array
+    private function rules(): array
     {
-        $rules = [
-            'name' => ['required', 'string', 'max:150'],
-            'country' => ['nullable', 'string', 'max:80'],
-            'country_id' => ['nullable', 'integer'],
+        return [
+            'type' => ['required', 'in:partner,importer'],
+            'name' => ['required', 'string', 'max:100'],
+            'origin_country_id' => ['required', 'integer', 'exists:pais,ID_Pais'],
+            'consolidation_country_ids' => ['nullable', 'array'],
+            'consolidation_country_ids.*' => ['integer', 'exists:pais,ID_Pais'],
             'whatsapp' => ['required', 'string', 'max:40'],
             'contact_name' => ['nullable', 'string', 'max:150'],
-            'email' => ['nullable', 'email', 'max:150'],
-            'prices' => ['nullable', 'array'],
-            'prices.consol' => ['nullable', 'numeric', 'min:0'],
-            'prices.consol_2' => ['nullable', 'numeric', 'min:0'],
+            'email' => ['nullable', 'email', 'max:100'],
+            'rate_1' => ['nullable', 'numeric', 'min:0'],
+            'rate_2' => ['nullable', 'numeric', 'min:0'],
         ];
-        if ($creating) {
-            $rules['type'] = ['required', 'in:'.ChinaClient::TYPE_PARTNER.','.ChinaClient::TYPE_IMPORTER];
-            $rules['organization_id'] = ['nullable', 'integer'];
-        }
-
-        return $rules;
     }
 }

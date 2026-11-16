@@ -261,6 +261,7 @@ class ChinaBillingController extends Controller
             'description' => ['required', 'string', 'max:255'],
             'cbm' => ['nullable', 'numeric', 'min:0'],
             'rate' => ['nullable', 'numeric', 'min:0'],
+            'rate_tier' => ['nullable', 'integer', 'in:1,2'],
             'amount' => ['nullable', 'numeric', 'min:0'],
             'fob' => ['nullable', 'numeric', 'min:0'],
             'freight' => ['nullable', 'numeric', 'min:0'],
