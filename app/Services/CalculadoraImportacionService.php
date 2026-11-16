@@ -1011,7 +1011,7 @@ class CalculadoraImportacionService
             ->join('entidad as e', 'pc.ID_Entidad', '=', 'e.ID_Entidad')
             ->where('pc.Nu_Estado', 2)
             ->whereIn('pc.id_cliente', $clienteIds)
-            ->select('pc.id_cliente', 'e.Fe_Registro as fecha', DB::raw("'Curso' as servicio"), DB::raw('NULL as monto'))
+            ->select('pc.id_cliente', 'pc.Fe_Registro as fecha', DB::raw("'Curso' as servicio"), DB::raw('NULL as monto'))
             ->get();
         $cotizaciones = DB::table('contenedor_consolidado_cotizacion')
             ->where('estado_cotizador', 'CONFIRMADO')

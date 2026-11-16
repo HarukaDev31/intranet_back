@@ -672,7 +672,7 @@ class ClienteService
             ->whereIn('pc.id_cliente', $clienteIds)
             ->select(
                 'pc.id_cliente',
-                'e.Fe_Registro as fecha',
+                'pc.Fe_Registro as fecha',
                 DB::raw("'Curso' as servicio"),
                 DB::raw('NULL as monto')
             )
@@ -1329,7 +1329,7 @@ class ClienteService
             ->where('pc.Nu_Estado', 2)
             ->whereNotNull('pc.id_cliente')
             ->groupBy('pc.id_cliente')
-            ->select('pc.id_cliente', DB::raw('MIN(e.Fe_Registro) as min_curso'));
+            ->select('pc.id_cliente', DB::raw('MIN(pc.Fe_Registro) as min_curso'));
 
         // Fecha mínima de CONSOLIDADO por cliente (solo confirmados)
         $minConsolidado = DB::table('contenedor_consolidado_cotizacion as ccc')
