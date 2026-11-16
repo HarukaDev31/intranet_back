@@ -61,6 +61,10 @@ class ChinaPaymentService
 
             $payment->update(['paid_on' => $data['paid_on'], 'amount_sent' => $data['amount_sent']]);
             $this->syncAllocations($payment, $data['allocations'] ?? []);
+            // Maqueta: el comprobante del paso 1 se puede reemplazar o eliminar mientras el pago esté por confirmar.
+            if (!$receipt && !empty($data['remove_receipt'])) {
+                $payment->update(['receipt_path' => null, 'receipt_name' => null]);
+            }
             $this->storeReceipt($payment, $receipt);
 
             return $payment;
@@ -83,7 +87,7 @@ class ChinaPaymentService
             }
 
             $allocated = ChinaBillingCalculator::allocatedTotal($payment);
-            $shortfall = ChinaBillingCalculator::round(max(0, $allocated - $amountReceived));
+            $shortfall = ChinaBillingCalculator::expectedShortfall((float) $payment->amount_sent, $allocated, $amountReceived);
             if ($shortfall > 0) {
                 $valid = $payment->allocations->first(
                     fn (ChinaPaymentAllocation $a) => (int) $a->operation_id === (int) $shortfallOperationId && (float) $a->amount >= $shortfall

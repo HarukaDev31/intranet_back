@@ -49,24 +49,38 @@ class ChinaBillingCalculator
         return self::round((float) $payment->allocations->sum('amount'));
     }
 
-    /** Faltante: lo asignado que no llegó (solo cobro confirmado). */
-    public static function paymentShortfall(ChinaPayment $payment): float
+    /**
+     * Diferencia que no llegó al banco (maqueta): lo enviado menos lo recibido, con tope en lo asignado.
+     * Se carga a una operación; lo que no se asignó sigue siendo saldo a favor.
+     * Ej.: enviado 12,000, asignado 11,310, recibido 11,990 → diferencia 10 y saldo a favor 690.
+     */
+    public static function expectedShortfall(float $sent, float $allocated, float $received): float
     {
-        if (!$payment->confirmed_at) {
+        if ($allocated <= 0) {
             return 0.0;
         }
 
-        return self::round(max(0, self::allocatedTotal($payment) - (float) $payment->amount_received));
+        return self::round(min($allocated, max(0, max($sent, $allocated) - $received)));
     }
 
-    /** Excedente que pasa a saldo a favor (cobro confirmado). */
+    /** Faltante cargado a una operación (solo cobro confirmado con operación elegida). */
+    public static function paymentShortfall(ChinaPayment $payment): float
+    {
+        if (!$payment->confirmed_at || !$payment->shortfall_operation_id) {
+            return 0.0;
+        }
+
+        return self::expectedShortfall((float) $payment->amount_sent, self::allocatedTotal($payment), (float) $payment->amount_received);
+    }
+
+    /** Saldo a favor del cobro confirmado: lo recibido más la diferencia cargada, menos lo asignado. */
     public static function paymentCredit(ChinaPayment $payment): float
     {
         if (!$payment->confirmed_at) {
             return 0.0;
         }
 
-        return self::round(max(0, (float) $payment->amount_received - self::allocatedTotal($payment)));
+        return self::round(max(0, (float) $payment->amount_received + self::paymentShortfall($payment) - self::allocatedTotal($payment)));
     }
 
     public static function operationServiceAmount(ChinaOperation $op): float

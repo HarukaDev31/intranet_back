@@ -284,6 +284,7 @@ class ChinaBillingController extends Controller
             'allocations.*.operation_id' => ['required', 'integer'],
             'allocations.*.amount' => ['required', 'numeric', 'min:0'],
             'receipt' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'remove_receipt' => ['nullable', 'boolean'],
         ]);
     }
 }
