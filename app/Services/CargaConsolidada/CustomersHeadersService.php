@@ -515,7 +515,7 @@ class CustomersHeadersService
     }
 
     /**
-     * Inserta las fechas proyectadas a 60 y 65 CBM justo después de CBM Warehouse.
+     * Inserta las fechas proyectadas a 60, 65 y 67 CBM justo después de CBM Warehouse.
      *
      * @param array<string, array<string, mixed>> $headers
      * @param int $idContenedor
@@ -531,19 +531,21 @@ class CustomersHeadersService
             if ($key === 'cbm_warehouse') {
                 $out['fecha_cbm_60'] = $this->headerFechaCbm(60, $proy['fecha_60']);
                 $out['fecha_cbm_65'] = $this->headerFechaCbm(65, $proy['fecha_65']);
+                $out['fecha_cbm_67'] = $this->headerFechaCbm(67, $proy['fecha_67']);
                 $inserted = true;
             }
         }
         if (!$inserted) {
             $out['fecha_cbm_60'] = $this->headerFechaCbm(60, $proy['fecha_60']);
             $out['fecha_cbm_65'] = $this->headerFechaCbm(65, $proy['fecha_65']);
+            $out['fecha_cbm_67'] = $this->headerFechaCbm(67, $proy['fecha_67']);
         }
 
         return $out;
     }
 
     /**
-     * Sublíneas "60 CBM" / "65 CBM" con la fecha proyectada y "Total CBM" con el CBM total proyectado
+     * Sublíneas "60 CBM" / "65 CBM" / "67 CBM" con la fecha proyectada y "Total CBM" con el CBM total proyectado
      * y la fecha estimada en que se llega a ese total, para el header CBM China.
      *
      * @param int $idContenedor
@@ -558,6 +560,7 @@ class CustomersHeadersService
         return [
             ['label' => '60 CBM', 'value' => $this->headerFechaCbm(60, $proy['fecha_60'])['value']],
             ['label' => '65 CBM', 'value' => $this->headerFechaCbm(65, $proy['fecha_65'])['value']],
+            ['label' => '67 CBM', 'value' => $this->headerFechaCbm(67, $proy['fecha_67'])['value']],
             ['label' => 'Total CBM', 'value' => $total . ' CBM ' . $fecha],
         ];
     }
@@ -590,7 +593,7 @@ class CustomersHeadersService
      * si el proveedor ya tiene CBM China, usa ese valor en su lugar.
      *
      * @param int $idContenedor
-     * @return array{fecha_60: string|null, fecha_65: string|null, total: float, fecha_total: string|null}
+     * @return array{fecha_60: string|null, fecha_65: string|null, fecha_67: string|null, total: float, fecha_total: string|null}
      */
     private function fechasProyeccionCbm($idContenedor)
     {
@@ -639,6 +642,7 @@ class CustomersHeadersService
         $fechaTotal = count($items) > 0 ? $items[count($items) - 1]['fecha'] : null;
         $fecha60 = null;
         $fecha65 = null;
+        $fecha67 = null;
         $i = 0;
         $n = count($items);
         while ($i < $n) {
@@ -650,8 +654,11 @@ class CustomersHeadersService
             if ($fecha60 === null && $cum >= 60) {
                 $fecha60 = $day;
             }
-            if ($cum >= 65) {
+            if ($fecha65 === null && $cum >= 65) {
                 $fecha65 = $day;
+            }
+            if ($cum >= 67) {
+                $fecha67 = $day;
                 break;
             }
         }
@@ -659,6 +666,7 @@ class CustomersHeadersService
         return [
             'fecha_60' => $fecha60,
             'fecha_65' => $fecha65,
+            'fecha_67' => $fecha67,
             'total' => $total,
             'fecha_total' => $fechaTotal,
         ];
