@@ -187,7 +187,10 @@ class PagoProveedorVerificacionService
             $applied = round((float) $deposit->aplicaciones->sum('amount'), 2);
             $deposit->amount = round($bankAmount, 2);
             $deposit->bank_amount = round($bankAmount, 2);
-            $deposit->surplus = round(max(0, $bankAmount - $applied), 2);
+            // La diferencia de cambio no es dinero de más de la cotización: no queda como excedente.
+            $deposit->surplus = $deposit->purpose === PagoProveedorAbono::PURPOSE_EXCHANGE
+                ? 0
+                : round(max(0, $bankAmount - $applied), 2);
             $deposit->status = PagoProveedorAbono::STATUS_VALIDATED;
             $deposit->observation_reason = null;
             $deposit->observation_detail = null;

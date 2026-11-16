@@ -427,6 +427,9 @@ class PagoProveedorConfirmacionService
         if ($this->awaitsInstallmentChoice($provider) || $this->awaitsPaymentChoice($provider)) {
             return false;
         }
+        if ($this->hasOpenSurplus($provider)) {
+            return false;
+        }
         $blocking = array_filter($this->items($provider), function (array $item) {
             return $item['blocks'] && !$item['done'];
         });
@@ -440,6 +443,9 @@ class PagoProveedorConfirmacionService
             return;
         }
         if ((int) $provider->stage !== PagoProveedorSolicitudProveedor::STAGE_CONFIRMATION) {
+            return;
+        }
+        if ($this->hasOpenSurplus($provider)) {
             return;
         }
         $blocking = array_filter($this->items($provider), fn (array $item) => $item['blocks'] && !$item['done']);
@@ -746,6 +752,28 @@ class PagoProveedorConfirmacionService
         $provider->loadMissing('refunds');
 
         return $provider->refunds->first(fn (PagoProveedorReembolso $refund) => $this->refundOpen($refund));
+    }
+
+    /**
+     * Hay dinero de más de la cotización todavía sin resolver. La diferencia de cambio no cuenta.
+     */
+    private function hasOpenSurplus(PagoProveedorSolicitudProveedor $provider): bool
+    {
+        $provider->loadMissing('aplicaciones.abono');
+        foreach ($provider->aplicaciones as $application) {
+            $deposit = $application->abono;
+            if (!$deposit || $deposit->status === PagoProveedorAbono::STATUS_CANCELLED) {
+                continue;
+            }
+            if ($deposit->purpose === PagoProveedorAbono::PURPOSE_EXCHANGE) {
+                continue;
+            }
+            if ((float) $deposit->surplus > 0.009 && $this->carriesSurplus($provider, $deposit)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
