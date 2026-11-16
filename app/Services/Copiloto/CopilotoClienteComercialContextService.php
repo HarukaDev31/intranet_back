@@ -3,6 +3,7 @@
 namespace App\Services\Copiloto;
 
 use App\Models\CalculadoraImportacion;
+use App\Services\CalculadoraImportacion\CbmFacturable;
 use App\Services\CalculadoraImportacion\ClienteWhatsappLookupService;
 use App\Services\CalculadoraImportacionService;
 use Illuminate\Support\Facades\Cache;
@@ -67,10 +68,7 @@ class CopilotoClienteComercialContextService
         $cbm = null;
         if ($calculadora) {
             $calculadora->loadMissing('proveedores');
-            $cbm = 0.0;
-            foreach ($calculadora->proveedores as $proveedor) {
-                $cbm += max((float) $proveedor->cbm, (float) $proveedor->maxcbm);
-            }
+            $cbm = (float) CbmFacturable::desdeProveedores($calculadora->proveedores)['facturable'];
             if ($cbm <= 0) {
                 $cbm = $this->parseCbmFromHistorial($historial['cbm'] ?? null);
             }

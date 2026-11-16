@@ -23,12 +23,7 @@ class CalculadoraImportacionCotizacionSyncService
     {
         $calculadora->loadMissing('proveedores');
 
-        return (float) $calculadora->proveedores->sum(function ($proveedor) {
-            $cbm = (float) ($proveedor->cbm ?? 0);
-            $peso = (float) ($proveedor->peso ?? 0);
-            $maxcbm = $proveedor->maxcbm ?? max($cbm, $peso / 1000);
-            return (float) $maxcbm;
-        });
+        return (float) CbmFacturable::desdeProveedores($calculadora->proveedores)['facturable'];
     }
 
     public function actualizarCotizacionDesdeCalculadora(CalculadoraImportacion $calculadora): bool

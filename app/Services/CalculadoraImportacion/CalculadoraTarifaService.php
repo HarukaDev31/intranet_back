@@ -13,24 +13,14 @@ class CalculadoraTarifaService
 
     public function totalCbmFromProveedoresPayload(array $proveedores): float
     {
-        $total = 0.0;
-        foreach ($proveedores as $proveedor) {
-            $total += $this->maxCbmFromProveedorPayload($proveedor);
-        }
-
-        return round($total, 4);
+        return round((float) CbmFacturable::desdeProveedores($proveedores)['facturable'], 4);
     }
 
     public function totalCbmFromCalculadora(CalculadoraImportacion $calculadora): float
     {
         $calculadora->loadMissing('proveedores');
 
-        return round((float) $calculadora->proveedores->sum(function ($proveedor) {
-            $cbm = (float) ($proveedor->cbm ?? 0);
-            $peso = (float) ($proveedor->peso ?? 0);
-
-            return (float) ($proveedor->maxcbm ?? max($cbm, $peso / 1000));
-        }), 4);
+        return round((float) CbmFacturable::desdeProveedores($calculadora->proveedores)['facturable'], 4);
     }
 
     public function cbmChanged(float $before, float $after): bool
@@ -590,17 +580,6 @@ class CalculadoraTarifaService
         return $query
             ->whereRaw('ROUND(limit_inf * 100) <= ?', [$cbmCents])
             ->whereRaw('ROUND(limit_sup * 100) >= ?', [$cbmCents]);
-    }
-
-    private function maxCbmFromProveedorPayload(array $proveedor): float
-    {
-        $cbm = (float) ($proveedor['cbm'] ?? 0);
-        $peso = (float) ($proveedor['peso'] ?? 0);
-        if (isset($proveedor['maxcbm']) && is_numeric($proveedor['maxcbm'])) {
-            return (float) $proveedor['maxcbm'];
-        }
-
-        return max($cbm, $peso / 1000);
     }
 
     private function cbmToCents(float $cbm): int
