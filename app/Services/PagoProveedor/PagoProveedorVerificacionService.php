@@ -183,7 +183,7 @@ class PagoProveedorVerificacionService
             if (abs($bankAmount - (float) $deposit->amount) >= 0.005 && $deposit->recorded_amount === null) {
                 $deposit->recorded_amount = $deposit->amount;
             }
-            $adjusted = $this->adjustApplicationsToBank($deposit, $bankAmount);
+            $this->adjustApplicationsToBank($deposit, $bankAmount);
             $applied = round((float) $deposit->aplicaciones->sum('amount'), 2);
             $deposit->amount = round($bankAmount, 2);
             $deposit->bank_amount = round($bankAmount, 2);
@@ -198,11 +198,10 @@ class PagoProveedorVerificacionService
             $deposit->save();
             $this->releaseObservedProviders($deposit);
 
-            $note = $deposit->recorded_amount !== null && abs((float) $deposit->recorded_amount - $bankAmount) >= 0.005
-                ? 'Ventas registró '.$deposit->recorded_amount.' · se ajustó al importe del banco '.$deposit->bank_amount
-                : 'Importe del banco '.$deposit->bank_amount;
-            if ($adjusted) {
-                $note .= ' · el abono de Ventas se actualizó solo al importe del banco';
+            // Texto de la maqueta: «Abono #1 validado en el banco: $1,045.00 (Ventas registró $1,050.00: se ajustó al importe del banco)».
+            $note = 'Abono #'.$deposit->numero().' validado en el banco: $'.number_format((float) $deposit->bank_amount, 2);
+            if ($deposit->recorded_amount !== null && abs((float) $deposit->recorded_amount - $bankAmount) >= 0.005) {
+                $note .= ' (Ventas registró $'.number_format((float) $deposit->recorded_amount, 2).': se ajustó al importe del banco)';
             }
             $this->history->registrar(
                 PagoProveedorHistorial::ENTITY_REQUEST,

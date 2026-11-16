@@ -66,6 +66,30 @@ class PagoProveedorEtapa1Service
     }
 
     /**
+     * Borra el vendedor y el WeChat registrados (RMB, etapa 1): el proveedor vuelve a datos pendientes.
+     *
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    public function eliminarRmb(int $solicitudId, int $proveedorId, array $actor): PagoProveedorSolicitud
+    {
+        return DB::transaction(function () use ($solicitudId, $proveedorId, $actor) {
+            $proveedor = $this->proveedorEtapa1($solicitudId, $proveedorId);
+            if ($proveedor->currency !== PagoProveedorCotizacionProveedor::CURRENCY_RMB) {
+                throw new PagoProveedorException('El vendedor y el WeChat son solo para pagos en yuanes.');
+            }
+            $datos = $this->datosDe($proveedor);
+            $datos->seller_name = null;
+            $datos->wechat = null;
+            $datos->status = PagoProveedorDatoProveedor::STATUS_PENDING;
+            $datos->source = null;
+            $datos->save();
+            $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, 'Datos del proveedor eliminados', $actor, $proveedor->code_supplier);
+
+            return $this->recargar($this->solicitudDe($proveedor));
+        });
+    }
+
+    /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
      * @return array<string, mixed>
      */

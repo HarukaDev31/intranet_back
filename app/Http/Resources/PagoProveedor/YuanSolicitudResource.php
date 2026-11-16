@@ -54,7 +54,7 @@ class YuanSolicitudResource extends JsonResource
                 'received_on' => $income->received_on->toDateString(),
                 'receipt_name' => $income->receipt_name,
                 'receipt_url' => $income->receipt_path ? $this->cdnStorageUrl($income->receipt_path) : null,
-                'can_remove' => $yuan->canRemoveIncome($solicitud, $group['providers']),
+                'can_remove' => $yuan->canRemoveIncome($solicitud, $group['providers'], $income),
             ])->values()->all(),
         ];
     }
