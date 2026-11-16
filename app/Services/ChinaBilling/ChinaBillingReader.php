@@ -2,6 +2,7 @@
 
 namespace App\Services\ChinaBilling;
 
+use App\Models\CargaConsolidada\Contenedor;
 use App\Models\ChinaBilling\ChinaOperation;
 use App\Models\ChinaBilling\ChinaPayment;
 use App\Traits\FileTrait;
@@ -339,7 +340,7 @@ class ChinaBillingReader
             'allocations' => $payment->allocations->map(fn ($allocation) => [
                 'operation_id' => (int) $allocation->operation_id,
                 'code' => $allocation->operation->code,
-                'label' => trim($allocation->operation->service_name.' · '.$allocation->operation->description),
+                'label' => $this->allocationLabel($allocation->operation),
                 'amount' => (float) $allocation->amount,
                 // Lo que realmente cuenta para la operación: el faltante se descuenta de la elegida al confirmar.
                 'real_amount' => ChinaBillingCalculator::round(
@@ -349,6 +350,27 @@ class ChinaBillingReader
                 ),
             ])->values()->all(),
         ];
+    }
+
+    /**
+     * Etiqueta de la operación en el cobro (maqueta): servicio · N.° de consolidado · producto.
+     * Ej.: «Consolidado · Consolidado #46 · herramientas eléctricas».
+     */
+    private function allocationLabel(ChinaOperation $op): string
+    {
+        $parts = [$op->service_name];
+        if ($op->container_id) {
+            $container = Contenedor::query()->withoutGlobalScopes()->find($op->container_id);
+            if ($container) {
+                $parts[] = 'Consolidado #'.$container->cargaConParte();
+            }
+        }
+        $description = trim((string) $op->description);
+        if ($description !== '' && !in_array($description, $parts, true)) {
+            $parts[] = $description;
+        }
+
+        return implode(' · ', array_filter($parts, fn ($part) => trim((string) $part) !== ''));
     }
 
     /**

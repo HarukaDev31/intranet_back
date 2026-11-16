@@ -93,6 +93,32 @@ class ChinaBillingCalculatorTest extends TestCase
         $this->assertSame(500.0, Calc::operationMetrics($other)['received']);
     }
 
+    public function test_shortfall_against_sent_keeps_unassigned_as_credit(): void
+    {
+        // Maqueta: enviado 12,000, asignado 11,310, llegan 11,990 → diferencia 10 a OP-0007 y saldo a favor 690.
+        $op = $this->op(1);
+        $other = $this->op(2);
+        $payment = $this->pay(1, 12000, 11990, 2);
+        $this->allocate($op, $payment, 7660);
+        $this->allocate($other, $payment, 3650);
+
+        $this->assertSame(10.0, Calc::expectedShortfall(12000, 11310, 11990));
+        $this->assertSame(10.0, Calc::paymentShortfall($payment));
+        $this->assertSame(690.0, Calc::paymentCredit($payment));
+        $this->assertSame(3640.0, Calc::operationMetrics($other)['received']);
+    }
+
+    public function test_confirmed_without_shortfall_operation_keeps_previous_credit(): void
+    {
+        // Cobros confirmados antes del cambio (sin operación elegida): el saldo a favor no cambia.
+        $op = $this->op(1);
+        $payment = $this->pay(1, 5000, 4990);
+        $this->allocate($op, $payment, 610);
+
+        $this->assertSame(0.0, Calc::paymentShortfall($payment));
+        $this->assertSame(4380.0, Calc::paymentCredit($payment));
+    }
+
     public function test_excess_received_becomes_credit(): void
     {
         $op = $this->op(1);
