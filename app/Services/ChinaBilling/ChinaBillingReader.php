@@ -255,6 +255,7 @@ class ChinaBillingReader
             'billing_type' => $op->billing_type,
             'variant_name' => $op->variant_name,
             'container_id' => $op->container_id,
+            'consolidado_label' => $this->consolidadoLabel($op->container_id),
             'cbm' => $op->cbm,
             'rate' => $op->rate,
             'amount' => $op->amount,
@@ -352,6 +353,17 @@ class ChinaBillingReader
         ];
     }
 
+    /** «Consolidado #46» del consolidado de la operación, si viene de uno. */
+    private function consolidadoLabel(?int $containerId): ?string
+    {
+        if (!$containerId) {
+            return null;
+        }
+        $container = Contenedor::query()->withoutGlobalScopes()->find($containerId);
+
+        return $container ? 'Consolidado #'.$container->cargaConParte() : null;
+    }
+
     /**
      * Etiqueta de la operación en el cobro (maqueta): servicio · N.° de consolidado · producto.
      * Ej.: «Consolidado · Consolidado #46 · herramientas eléctricas».
@@ -359,12 +371,7 @@ class ChinaBillingReader
     private function allocationLabel(ChinaOperation $op): string
     {
         $parts = [$op->service_name];
-        if ($op->container_id) {
-            $container = Contenedor::query()->withoutGlobalScopes()->find($op->container_id);
-            if ($container) {
-                $parts[] = 'Consolidado #'.$container->cargaConParte();
-            }
-        }
+        $parts[] = $this->consolidadoLabel($op->container_id);
         $description = trim((string) $op->description);
         if ($description !== '' && !in_array($description, $parts, true)) {
             $parts[] = $description;
