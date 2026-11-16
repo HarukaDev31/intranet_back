@@ -133,14 +133,15 @@ class Cliente extends Model
                     });
                 }
             })
-            ->orderBy('e.Fe_Registro', 'asc')
+            ->select('pc.Fe_Registro as fecha_pedido')
+            ->orderBy('pc.Fe_Registro', 'asc')
             ->first();
 
         if ($pedidoCurso) {
             return [
                 'servicio' => 'Curso',
-                'fecha' => $pedidoCurso->Fe_Registro,
-                'categoria' => $this->determinarCategoria($pedidoCurso->Fe_Registro)
+                'fecha' => $pedidoCurso->fecha_pedido,
+                'categoria' => $this->determinarCategoria($pedidoCurso->fecha_pedido)
             ];
         }
 
@@ -228,7 +229,14 @@ class Cliente extends Model
                 }
             })
             ->where('pc.id_cliente', $this->id)
-            ->orderBy('e.Fe_Registro', 'asc')
+            ->select(
+                'pc.ID_Pedido_Curso',
+                'pc.Fe_Registro as fecha_pedido',
+                'pc.Ss_Total',
+                'pc.id_cliente_importacion',
+                'cc.Fe_Inicio'
+            )
+            ->orderBy('pc.Fe_Registro', 'asc')
             ->get();
         //from Fe_Inicio get month in spanish
         foreach ($pedidosCurso as $pedido) {
@@ -242,8 +250,8 @@ class Cliente extends Model
                 'servicio' => 'Curso',
                 'carga' => null,
                 'empresa' => null,
-                'fecha' => $pedido->Fe_Registro,
-                'categoria' => $this->determinarCategoria($pedido->Fe_Registro)
+                'fecha' => $pedido->fecha_pedido,
+                'categoria' => $this->determinarCategoria($pedido->fecha_pedido)
             ];
         }
 
@@ -354,13 +362,14 @@ class Cliente extends Model
                 }
             })
             ->where('pc.id_cliente', $this->id)
-            ->orderBy('e.Fe_Registro', 'asc')
+            ->select('pc.Fe_Registro as fecha_pedido')
+            ->orderBy('pc.Fe_Registro', 'asc')
             ->get();
 
         foreach ($pedidosCurso as $pedido) {
             $servicios[] = [
                 'servicio' => 'Curso',
-                'fecha' => $pedido->Fe_Registro
+                'fecha' => $pedido->fecha_pedido
             ];
         }
 
@@ -547,7 +556,7 @@ class Cliente extends Model
                         MAX(fecha_servicio) as ultima_fecha,
                         MIN(fecha_servicio) as primera_fecha
                     FROM (
-                        SELECT e.Fe_Registro as fecha_servicio
+                        SELECT pc.Fe_Registro as fecha_servicio
                         FROM pedido_curso pc 
                         JOIN entidad e ON pc.ID_Entidad = e.ID_Entidad 
                         WHERE pc.Nu_Estado = 2 

@@ -379,7 +379,7 @@ class ClienteExportService
             ->whereIn('pc.id_cliente', $clienteIds)
             ->select(
                 'pc.id_cliente',
-                'e.Fe_Registro as fecha',
+                'pc.Fe_Registro as fecha',
                 DB::raw("'Curso' as servicio"),
                 DB::raw('NULL as monto')
             )
