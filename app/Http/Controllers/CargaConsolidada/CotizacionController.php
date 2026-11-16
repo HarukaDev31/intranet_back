@@ -850,8 +850,8 @@ class CotizacionController extends Controller
             ],
         ];
 
-        // Org 3 (Bolivia): proyección 60/65 CBM y Total CBM con fechas por Arrive Date China, igual que org 1.
-        if ($contenedor && (int) $contenedor->getAttribute('organizacion_id') === 3) {
+        // Proyección 60/65/67 CBM y Total CBM con fechas por Arrive Date China (todas las orgs).
+        if ($contenedor) {
             $data['cbm_total_china']['sublines'] = app(CustomersHeadersService::class)
                 ->sublineasProyeccionCbm((int) $contenedor->getAttribute('id'));
         }
@@ -1094,6 +1094,12 @@ class CotizacionController extends Controller
             $headersData = array_filter($headersData, function ($key) use ($allowedKeys) {
                 return in_array($key, $allowedKeys);
             }, ARRAY_FILTER_USE_KEY);
+        }
+
+        // Fechas proyectadas a 60/65/67 CBM bajo el indicador CBM China en todos los perfiles.
+        if (isset($headersData['cbm_total_china']) && empty($headersData['cbm_total_china']['sublines'])) {
+            $headersData['cbm_total_china']['sublines'] = app(CustomersHeadersService::class)
+                ->sublineasProyeccionCbm($idContenedor);
         }
 
         // Headers exclusivos para el tab de pagos (solo contabilidad) - solo en cotizacion-final
