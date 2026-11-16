@@ -52,9 +52,8 @@ class PagoProveedorCotizacionService
         if (!empty($filtros['estado']) && $filtros['estado'] !== 'todos') {
             if ($filtros['estado'] === PagoProveedorCotizacion::FILTER_EXPIRED) {
                 $query->where('status', PagoProveedorCotizacion::STATUS_PENDING)->where('valid_until', '<=', now());
-            } elseif ($filtros['estado'] === PagoProveedorCotizacion::STATUS_PENDING) {
-                $query->where('status', PagoProveedorCotizacion::STATUS_PENDING)->where('valid_until', '>', now());
             } else {
+                // «Pendiente» incluye las vencidas: el vencimiento solo se ve en la columna Vigencia.
                 $query->where('status', $filtros['estado']);
             }
         }
@@ -431,7 +430,7 @@ class PagoProveedorCotizacionService
             'code_supplier' => $codigo !== '' ? $codigo : null,
             'consolidated_provider_id' => $idProveedor,
             'supplier_name' => $this->vacio($fila['nombre_proveedor'] ?? null),
-            'product' => $this->vacio($fila['producto'] ?? null),
+            'product' => $this->nombreProducto($fila['producto'] ?? null),
             'currency' => $moneda,
             'payment_type' => $tipo,
             'cargo_value_usd' => round((float) ($fila['valor_carga_usd'] ?? 0), 2),
@@ -479,5 +478,19 @@ class PagoProveedorCotizacionService
         $texto = trim((string) $valor);
 
         return $texto === '' ? null : $texto;
+    }
+
+    /**
+     * Nombre del producto con solo la primera letra en mayúscula («FAROS AUXILIARES LED» → «Faros auxiliares led»).
+     */
+    private function nombreProducto(mixed $valor): ?string
+    {
+        $texto = $this->vacio($valor);
+        if ($texto === null) {
+            return null;
+        }
+        $texto = mb_strtolower(preg_replace('/\s+/u', ' ', $texto) ?? $texto, 'UTF-8');
+
+        return mb_strtoupper(mb_substr($texto, 0, 1, 'UTF-8'), 'UTF-8').mb_substr($texto, 1, null, 'UTF-8');
     }
 }
