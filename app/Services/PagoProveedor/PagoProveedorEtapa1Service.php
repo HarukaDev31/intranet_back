@@ -952,8 +952,18 @@ class PagoProveedorEtapa1Service
 
         return $proveedor->datos()->create([
             'status' => PagoProveedorDatoProveedor::STATUS_PENDING,
-            'token' => Str::random(48),
+            'token' => $this->tokenCorto(),
         ]);
+    }
+
+    /** Token del link al cliente: 12 caracteres (los links ya enviados con 48 siguen funcionando). */
+    private function tokenCorto(): string
+    {
+        do {
+            $token = Str::random(12);
+        } while (PagoProveedorDatoProveedor::query()->where('token', $token)->exists());
+
+        return $token;
     }
 
     private function datosPorToken(string $token): PagoProveedorDatoProveedor
