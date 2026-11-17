@@ -45,6 +45,8 @@ Route::group(['prefix' => 'china-billing', 'middleware' => 'jwt.auth'], function
     Route::get('clients', [ChinaClientController::class, 'index']);
     Route::get('clients/database', [ChinaClientController::class, 'database']);
     Route::get('clients/countries', [ChinaClientController::class, 'countries']);
+    // Países paginados (autocompletado de «Nueva operación»)
+    Route::get('countries', [ChinaClientController::class, 'countrySearch']);
     Route::post('clients', [ChinaClientController::class, 'store']);
     Route::get('clients/{id}', [ChinaClientController::class, 'show'])->whereNumber('id');
     Route::post('clients/{id}', [ChinaClientController::class, 'update'])->whereNumber('id');

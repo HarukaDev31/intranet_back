@@ -7,9 +7,10 @@ use App\Models\Organizacion;
 use App\Models\OrganizacionPortal;
 use App\Models\Pais;
 use App\Models\PaisFlag;
+use App\Exceptions\OrganizacionClienteException;
 use App\Services\CargaConsolidada\RotuladoPdfService;
+use App\Services\Organizacion\OrganizacionClienteService;
 use App\Services\Organizacion\OrganizacionMensajeriaService;
-use App\Support\Organizacion\OrganizacionPaisesHabilitados;
 use App\Support\Organizacion\OrganizacionPortalUrls;
 use App\Traits\FileTrait;
 use App\Traits\UsesObjectStorage;
@@ -94,20 +95,22 @@ class OrganizacionAdminController extends Controller
                 'paises_habilitados.*'   => 'integer|exists:pais,ID_Pais',
                 'envios_habilitados'     => 'nullable',
                 'rotulado_habilitado'    => 'nullable',
-            ]);
-
-            $organizacion = Organizacion::create([
-                'ID_Empresa'       => $request->id_empresa,
-                'No_Organizacion'  => trim($request->no_organizacion),
-                'Txt_Organizacion' => $request->txt_organizacion,
-                'Nu_Estado'        => $request->input('estado', 1),
-                'id_pais'          => $request->filled('id_pais') ? (int) $request->input('id_pais') : null,
+                'tipo_cliente'           => 'nullable|in:socio,importador',
+                'pais_origen_id'         => 'nullable|integer|exists:pais,ID_Pais',
+                'tarifa_1'               => 'nullable|numeric|min:0',
+                'tarifa_2'               => 'nullable|numeric|min:0',
+                'whatsapp'               => 'nullable|string|max:40',
+                'contacto'               => 'nullable|string|max:150',
+                'correo'                 => 'nullable|email|max:100',
             ]);
 
             $payload = $this->requestPayload($request);
-            if (array_key_exists('paises_habilitados', $payload)) {
-                OrganizacionPaisesHabilitados::sync($organizacion, $payload['paises_habilitados']);
-            }
+            $organizacion = app(OrganizacionClienteService::class)->guardar(
+                $this->datosCliente($payload),
+                null,
+                $this->usuarioId()
+            );
+
             $this->syncPortal($organizacion, $payload);
             $this->syncMensajeria($organizacion, $payload);
 
@@ -116,6 +119,8 @@ class OrganizacionAdminController extends Controller
                 'message' => 'Organización creada exitosamente',
                 'data' => $this->serializar($organizacion->fresh(['empresa', 'portal', 'pais', 'paisFlag', 'paisesHabilitados'])),
             ]);
+        } catch (OrganizacionClienteException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], $e->status);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json(['success' => false, 'message' => $e->errors()], 422);
         } catch (\Exception $e) {
@@ -157,33 +162,21 @@ class OrganizacionAdminController extends Controller
                 'paises_habilitados.*'   => 'integer|exists:pais,ID_Pais',
                 'envios_habilitados'     => 'nullable',
                 'rotulado_habilitado'    => 'nullable',
+                'tipo_cliente'           => 'nullable|in:socio,importador',
+                'pais_origen_id'         => 'nullable|integer|exists:pais,ID_Pais',
+                'tarifa_1'               => 'nullable|numeric|min:0',
+                'tarifa_2'               => 'nullable|numeric|min:0',
+                'whatsapp'               => 'nullable|string|max:40',
+                'contacto'               => 'nullable|string|max:150',
+                'correo'                 => 'nullable|email|max:100',
             ]);
 
             $input = $this->requestPayload($request);
-
-            if ($this->inputFilled($input, 'id_empresa')) {
-                $organizacion->setAttribute('ID_Empresa', $input['id_empresa']);
-            }
-            if ($this->inputFilled($input, 'no_organizacion')) {
-                $organizacion->setAttribute('No_Organizacion', trim((string) $input['no_organizacion']));
-            }
-            if (array_key_exists('txt_organizacion', $input)) {
-                $organizacion->setAttribute('Txt_Organizacion', $input['txt_organizacion']);
-            }
-            if ($this->inputFilled($input, 'estado')) {
-                $organizacion->setAttribute('Nu_Estado', $input['estado']);
-            }
-            if (array_key_exists('id_pais', $input)) {
-                $idPais = $input['id_pais'];
-                $organizacion->setAttribute(
-                    'id_pais',
-                    $idPais !== null && $idPais !== '' && (int) $idPais > 0 ? (int) $idPais : null
-                );
-            }
-            $organizacion->save();
-            if (array_key_exists('paises_habilitados', $input)) {
-                OrganizacionPaisesHabilitados::sync($organizacion, $input['paises_habilitados']);
-            }
+            $organizacion = app(OrganizacionClienteService::class)->guardar(
+                $this->datosCliente($input),
+                (int) $organizacion->getAttribute('ID_Organizacion'),
+                $this->usuarioId()
+            );
             $this->syncPortal($organizacion, $input);
             $this->syncMensajeria($organizacion, $input);
 
@@ -192,6 +185,8 @@ class OrganizacionAdminController extends Controller
                 'message' => 'Organización actualizada exitosamente',
                 'data' => $this->serializar($organizacion->fresh(['empresa', 'portal', 'pais', 'paisFlag', 'paisesHabilitados'])),
             ]);
+        } catch (OrganizacionClienteException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], $e->status);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json(['success' => false, 'message' => $e->errors()], 422);
         } catch (\Exception $e) {
@@ -302,7 +297,7 @@ class OrganizacionAdminController extends Controller
             'drive_folder_id'        => $portal ? $portal->drive_folder_id : null,
             'logo_url'               => $portal ? $portal->logo_url : null,
             'public_key'             => $portal ? $portal->public_key : null,
-        ], $this->serializarMensajeria($o));
+        ], $this->serializarCliente($o), $this->serializarMensajeria($o));
     }
 
     /**
@@ -375,6 +370,49 @@ class OrganizacionAdminController extends Controller
         }
     }
 
+    /**
+     * Campos que maneja OrganizacionClienteService (el mismo servicio de Clientes China).
+     * Solo se pasan las claves que vinieron, para no pisar lo demás al editar.
+     *
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
+     */
+    private function datosCliente(array $input): array
+    {
+        $campos = [
+            'id_empresa', 'no_organizacion', 'txt_organizacion', 'estado', 'id_pais', 'paises_habilitados',
+            'tipo_cliente', 'pais_origen_id', 'tarifa_1', 'tarifa_2', 'whatsapp', 'contacto', 'correo',
+        ];
+
+        return array_intersect_key($input, array_flip($campos));
+    }
+
+    private function usuarioId(): ?int
+    {
+        $id = auth()->user()?->getAttribute('ID_Usuario');
+
+        return $id !== null ? (int) $id : null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializarCliente(Organizacion $o): array
+    {
+        $datos = OrganizacionClienteService::serializar($o);
+
+        return [
+            'tipo_cliente' => $datos['tipo_cliente'],
+            'pais_origen_id' => $datos['pais_origen_id'],
+            'pais_origen' => $datos['pais_origen'],
+            'tarifa_1' => $datos['tarifa_1'],
+            'tarifa_2' => $datos['tarifa_2'],
+            'whatsapp' => $datos['whatsapp'],
+            'contacto' => $datos['contacto'],
+            'correo' => $datos['correo'],
+        ];
+    }
+
     private function normalizarIdPaisRequest(Request $request): void
     {
         $idPais = $request->input('id_pais');
@@ -396,20 +434,6 @@ class OrganizacionAdminController extends Controller
         }
 
         return array_merge($request->query->all(), $request->request->all(), $request->all(), $json);
-    }
-
-    /**
-     * @param  array<string, mixed>  $input
-     */
-    private function inputFilled(array $input, string $key): bool
-    {
-        if (!array_key_exists($key, $input)) {
-            return false;
-        }
-
-        $value = $input[$key];
-
-        return $value !== null && $value !== '';
     }
 
     /**

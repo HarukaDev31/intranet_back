@@ -42,6 +42,7 @@ class ChinaOperationService
         return DB::transaction(function () use ($data, $packing, $actor, $organizationId, $containerId) {
             $operation = new ChinaOperation();
             $operation->fill($this->fields($data));
+            $operation->setAttribute('rate_tier', $this->rateTier($organizationId, $operation->getAttribute('rate'), $data['rate_tier'] ?? null));
             $operation->fill([
                 'code' => $this->nextCode(),
                 'organization_id' => $organizationId,
@@ -66,7 +67,14 @@ class ChinaOperationService
         $this->validateAmounts($data);
 
         return DB::transaction(function () use ($operation, $data, $packing) {
-            $operation->update($this->fields($data));
+            $fields = $this->fields($data);
+            $sameRate = $operation->rate !== null && $fields['rate'] !== null && abs((float) $operation->rate - (float) $fields['rate']) < 0.005;
+            $fields['rate_tier'] = $sameRate && !array_key_exists('rate_tier', $data)
+                ? $operation->rate_tier
+                : ($sameRate && (int) ($data['rate_tier'] ?? 0) === (int) $operation->rate_tier
+                    ? $operation->rate_tier
+                    : $this->rateTier((int) $operation->organization_id, $fields['rate'], $data['rate_tier'] ?? null));
+            $operation->update($fields);
             $this->syncCosts($operation, $data['costs'] ?? []);
             $this->storePacking($operation, $packing);
 
@@ -285,10 +293,26 @@ class ChinaOperationService
             'description' => $data['description'],
             'cbm' => $isCbm ? $data['cbm'] : null,
             'rate' => $isCbm ? $data['rate'] : null,
+            'rate_tier' => null,
             'amount' => $isCbm ? 0 : $data['amount'],
             'fob' => $data['fob'] ?? 0,
             'freight' => $data['freight'] ?? 0,
         ];
+    }
+
+    /**
+     * Tarifa del socio con la que se creó la operación (1 o 2). Si la tarifa no coincide con la tarifa
+     * vigente elegida del socio, se considera manual (null).
+     */
+    private function rateTier(int $organizationId, mixed $rate, mixed $tier): ?int
+    {
+        $tier = (int) $tier;
+        if (!in_array($tier, [1, 2], true) || $rate === null || $rate === '') {
+            return null;
+        }
+        $value = DB::table('organizacion')->where('ID_Organizacion', $organizationId)->value($tier === 1 ? 'tarifa_1' : 'tarifa_2');
+
+        return $value !== null && abs((float) $value - (float) $rate) < 0.005 ? $tier : null;
     }
 
     /**

@@ -15,6 +15,14 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property string|null $No_Organizacion
  * @property string|null $Txt_Organizacion
  * @property int|null $id_pais
+ * @property string|null $tipo_cliente socio o importador (cliente de Almacén China)
+ * @property int|null $pais_origen_id
+ * @property float|null $tarifa_1 USD por CBM, menos de 1 CBM
+ * @property float|null $tarifa_2 USD por CBM, 1 CBM o más
+ * @property string|null $whatsapp
+ * @property string|null $contacto
+ * @property string|null $correo
+ * @property \Illuminate\Support\Carbon|null $fecha_registro
  * @property-read OrganizacionPortal|null $portal
  * @property-read OrganizacionMensajeria|null $mensajeria
  * @property-read Pais|null $pais
@@ -34,6 +42,25 @@ class Organizacion extends Model
         'No_Organizacion',
         'Txt_Organizacion',
         'id_pais',
+        'tipo_cliente',
+        'pais_origen_id',
+        'tarifa_1',
+        'tarifa_2',
+        'whatsapp',
+        'contacto',
+        'correo',
+        'fecha_registro',
+    ];
+
+    public const TIPO_SOCIO = 'socio';
+
+    public const TIPO_IMPORTADOR = 'importador';
+
+    protected $casts = [
+        'tarifa_1' => 'float',
+        'tarifa_2' => 'float',
+        'pais_origen_id' => 'integer',
+        'fecha_registro' => 'datetime',
     ];
 
     /**
@@ -81,6 +108,11 @@ class Organizacion extends Model
     public function paisFlag(): HasOne
     {
         return $this->hasOne(PaisFlag::class, 'id_pais', 'id_pais');
+    }
+
+    public function paisOrigen(): BelongsTo
+    {
+        return $this->belongsTo(Pais::class, 'pais_origen_id', 'ID_Pais');
     }
 
     public function paisesHabilitados(): BelongsToMany

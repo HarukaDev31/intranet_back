@@ -258,6 +258,7 @@ class ChinaBillingReader
             'consolidado_label' => $this->consolidadoLabel($op->container_id),
             'cbm' => $op->cbm,
             'rate' => $op->rate,
+            'rate_tier' => $op->rate_tier,
             'amount' => $op->amount,
             'fob' => $op->fob,
             'freight' => $op->freight,
@@ -399,19 +400,43 @@ class ChinaBillingReader
     }
 
     /**
+     * Clientes (organizaciones) para «Nueva operación»: tipo, país de origen, países donde consolidan y tarifas del socio.
+     *
      * @param  array<int, int>  $organizationIds
-     * @return array<int, array{id: int, name: string, country: string, country_id: int|null}>
+     * @return array<int, array<string, mixed>>
      */
     public function organizationOptions(array $organizationIds): array
     {
-        $prices = \App\Models\ChinaBilling\ChinaClient::query()->whereIn('organization_id', $organizationIds)->pluck('prices', 'organization_id');
+        $ids = $organizationIds ?: [0];
+        $clients = DB::table('organizacion as o')
+            ->leftJoin('pais as p', 'p.ID_Pais', '=', 'o.pais_origen_id')
+            ->whereIn('o.ID_Organizacion', $ids)
+            ->get(['o.ID_Organizacion as id', 'o.tipo_cliente', 'o.pais_origen_id', 'p.No_Pais as origin_country', 'o.tarifa_1', 'o.tarifa_2'])
+            ->keyBy('id');
+        $enabled = DB::table('organizacion_paises_habilitados')->whereIn('organizacion_id', $ids)->orderBy('id')->get(['organizacion_id', 'id_pais'])
+            ->groupBy('organizacion_id');
 
         return collect($this->organizationNames($organizationIds))
-            ->map(fn (array $row, int $id) => [
-                'id' => $id, 'name' => $row['name'], 'country' => $row['country'], 'country_id' => $row['country_id'],
-                // Tarifas del socio: precargan la tarifa de la operación.
-                'prices' => isset($prices[$id]) ? array_map('floatval', (array) $prices[$id]) : null,
-            ])
+            ->map(function (array $row, int $id) use ($clients, $enabled) {
+                $client = $clients->get($id);
+                $isPartner = ($client->tipo_cliente ?? 'socio') !== 'importador';
+                $rate1 = $isPartner && isset($client->tarifa_1) ? (float) $client->tarifa_1 : null;
+                $rate2 = $isPartner && isset($client->tarifa_2) ? (float) $client->tarifa_2 : null;
+
+                return [
+                    'id' => $id, 'name' => $row['name'], 'country' => $row['country'], 'country_id' => $row['country_id'],
+                    'type' => $isPartner ? 'partner' : 'importer',
+                    'origin_country_id' => isset($client->pais_origen_id) ? (int) $client->pais_origen_id : null,
+                    'origin_country' => (string) ($client->origin_country ?? ''),
+                    'consolidation_country_ids' => $isPartner
+                        ? ($enabled->get($id) ?? collect())->pluck('id_pais')->map(fn ($v) => (int) $v)->values()->all()
+                        : [],
+                    'rate_1' => $rate1,
+                    'rate_2' => $rate2,
+                    // Tarifas del socio: precargan la tarifa de la operación (consol = tarifa 1, consol_2 = tarifa 2).
+                    'prices' => $isPartner ? ['consol' => $rate1, 'consol_2' => $rate2] : null,
+                ];
+            })
             ->sortBy('name')->values()->all();
     }
 

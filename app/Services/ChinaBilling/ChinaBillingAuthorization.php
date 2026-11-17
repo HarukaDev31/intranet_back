@@ -4,6 +4,8 @@ namespace App\Services\ChinaBilling;
 
 use App\Exceptions\ChinaBillingException;
 use App\Models\Usuario;
+use App\Services\Organizacion\OrganizacionClienteService;
+use Illuminate\Support\Facades\DB;
 
 class ChinaBillingAuthorization
 {
@@ -27,18 +29,38 @@ class ChinaBillingAuthorization
     }
 
     /**
-     * El socio solo ve y paga lo de su propia organización.
+     * El socio (o importador) solo ve y paga lo de su propia organización.
+     * Entra quien tenga el rol Socio/Importador o el permiso del menú «Pagos» en BD (sin restricción de rol en el front).
      *
      * @return array{id: int|null, name: string, organization_ids: array<int, int>}
      */
     public function requirePartner(Usuario $user): array
     {
         $organizationId = (int) $user->getAttribute('ID_Organizacion');
-        if ($this->groupName($user) !== Usuario::ROL_SOCIO || $organizationId <= 0) {
+        $role = Usuario::normalizarRol($this->groupName($user));
+        $allowed = in_array($role, [Usuario::normalizarRol(Usuario::ROL_SOCIO), Usuario::normalizarRol(OrganizacionClienteService::GRUPO_IMPORTADOR)], true)
+            || $this->hasPaymentsMenu($user);
+        if (!$allowed || $organizationId <= 0) {
             throw new ChinaBillingException('No tienes permiso para ver los pagos del socio.', 403);
         }
 
         return $this->actor($user, [$organizationId]);
+    }
+
+    /** Permiso del menú «Pagos» del socio en menu_acceso (por cualquiera de sus roles). */
+    private function hasPaymentsMenu(Usuario $user): bool
+    {
+        $userId = $user->getAttribute('ID_Usuario');
+        if ($userId === null) {
+            return false;
+        }
+
+        return DB::table('menu_acceso as ma')
+            ->join('grupo_usuario as gu', 'gu.ID_Grupo_Usuario', '=', 'ma.ID_Grupo_Usuario')
+            ->join('menu as m', 'm.ID_Menu', '=', 'ma.ID_Menu')
+            ->where('gu.ID_Usuario', (int) $userId)
+            ->where('m.url_intranet_v2', OrganizacionClienteService::MENU_PAGOS_URL)
+            ->exists();
     }
 
     private function groupName(Usuario $user): string

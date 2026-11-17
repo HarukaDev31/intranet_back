@@ -3,27 +3,33 @@
 namespace App\Services\ChinaBilling;
 
 use App\Exceptions\ChinaBillingException;
+use App\Exceptions\OrganizacionClienteException;
 use App\Models\BaseDatos\Clientes\Cliente;
-use App\Models\ChinaBilling\ChinaClient;
 use App\Models\ChinaBilling\ChinaOperation;
 use App\Models\Organizacion;
 use App\Models\Usuario;
-use App\Models\OrganizacionPortal;
 use App\Services\BaseDatos\Clientes\ClienteService;
+use App\Services\Organizacion\OrganizacionClienteService;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Clientes de Almacén China para cobrar servicios: socios (una fila por organización) e importadores.
- * Cada socio es una organización; los clientes que registró se muestran aparte, solo de lectura.
- * Los totales salen de las operaciones del socio y se calculan aquí, nunca en el front.
+ * Clientes de Almacén China para cobrar servicios: cada cliente es una organización (socio o importador).
+ * El alta y la edición pasan por OrganizacionClienteService (el mismo de Panel de acceso › Organizaciones).
+ * Los clientes que registró cada organización se muestran aparte, solo de lectura.
+ * Los totales salen de las operaciones de la organización y se calculan aquí, nunca en el front.
  */
 class ChinaClientService
 {
+    public const TYPE_PARTNER = 'partner';
+
+    public const TYPE_IMPORTER = 'importer';
+
     public function __construct(
         private readonly ChinaBillingReader $reader,
         private readonly ChinaDraftService $drafts,
+        private readonly OrganizacionClienteService $organizations,
     ) {
     }
 
@@ -32,14 +38,13 @@ class ChinaClientService
      * @param  array<string, mixed>  $filters  type (all|partner|importer), search, page, per_page
      * @return array<string, mixed>
      */
-    public function list(array $organizationIds, array $filters, ?int $userId): array
+    public function list(array $organizationIds, array $filters): array
     {
-        $this->syncPartners($organizationIds, $userId);
         $clients = $this->clients($organizationIds);
-        $metrics = $this->metricsByOrganization($organizationIds);
+        $metrics = $this->metricsByOrganization($clients->map(fn (Organizacion $org) => (int) $org->getKey())->all());
 
-        $rows = $clients->map(fn (ChinaClient $client) => $this->present($client, $metrics[$client->organization_id] ?? null))
-            ->sortByDesc('registered_on')->values()
+        $rows = $clients->map(fn (Organizacion $org) => $this->present($org, $metrics[(int) $org->getKey()] ?? null))
+            ->sortByDesc(fn (array $row) => [$row['registered_on'] ?? '', $row['id']])->values()
             ->map(fn (array $row, int $index) => ['number' => $index + 1] + $row);
 
         $type = (string) ($filters['type'] ?? 'all');
@@ -58,8 +63,8 @@ class ChinaClientService
             'page' => $this->paginate($filtered, $filters),
             'counts' => [
                 'all' => $rows->count(),
-                ChinaClient::TYPE_PARTNER => $rows->where('type', ChinaClient::TYPE_PARTNER)->count(),
-                ChinaClient::TYPE_IMPORTER => $rows->where('type', ChinaClient::TYPE_IMPORTER)->count(),
+                self::TYPE_PARTNER => $rows->where('type', self::TYPE_PARTNER)->count(),
+                self::TYPE_IMPORTER => $rows->where('type', self::TYPE_IMPORTER)->count(),
             ],
             'organizations' => $this->reader->organizationOptions($organizationIds),
             'groups' => $this->groups($organizationIds),
@@ -74,89 +79,116 @@ class ChinaClientService
      */
     public function detail(int $id, array $organizationIds): array
     {
-        $client = $this->find($id, $organizationIds);
-        $metrics = $client->organization_id ? $this->metricsByOrganization($organizationIds)[$client->organization_id] ?? null : null;
-        $names = $client->organization_id ? $this->reader->organizationNames([(int) $client->organization_id]) : [];
+        $org = $this->find($id, $organizationIds);
+        $organizationId = (int) $org->getKey();
+        $metrics = $this->metricsByOrganization([$organizationId])[$organizationId] ?? null;
+        $names = $this->reader->organizationNames([$organizationId]);
 
         $services = [];
-        if ($client->organization_id) {
-            foreach ($this->reader->operations([(int) $client->organization_id], null, null) as $operation) {
-                $services[] = $this->serviceRow($operation, $names);
-            }
-            foreach ($this->drafts->list([(int) $client->organization_id]) as $draft) {
-                $services[] = [
-                    'code' => null, 'issued_on' => $draft['issued_on'], 'service_name' => 'Consolidado', 'description' => $draft['description'],
-                    'total' => null, 'received' => null, 'balance' => null, 'status' => 'draft',
-                ];
-            }
+        foreach ($this->reader->operations([$organizationId], null, null) as $operation) {
+            $services[] = $this->serviceRow($operation, $names);
+        }
+        foreach ($this->drafts->list([$organizationId]) as $draft) {
+            $services[] = [
+                'code' => null, 'issued_on' => $draft['issued_on'], 'service_name' => 'Consolidado', 'description' => $draft['description'],
+                'total' => null, 'received' => null, 'balance' => null, 'status' => 'draft',
+            ];
         }
 
-        return $this->present($client, $metrics) + ['services' => $services];
+        return $this->present($org, $metrics) + ['services' => $services];
     }
 
     /**
-     * @param  array<string, mixed>  $data
-     * @param  array<int, int>  $organizationIds
-     * @return array<string, mixed>
-     */
-    public function create(array $data, array $organizationIds, ?int $userId, ?int $companyId = null): array
-    {
-        $type = (string) $data['type'];
-        $this->requireUniqueName((string) $data['name'], null, $type === ChinaClient::TYPE_PARTNER ? (int) ($data['organization_id'] ?? 0) : null);
-
-        if ($type === ChinaClient::TYPE_PARTNER) {
-            $organizationId = (int) ($data['organization_id'] ?? 0);
-            if ($organizationId <= 0) {
-                // Socio nuevo: se crea su organización y desde ahí se agrupan sus clientes.
-                $organizationId = $this->createOrganization($data, $companyId);
-                $organizationIds[] = $organizationId;
-            } elseif (!in_array($organizationId, $organizationIds, true)) {
-                throw new ChinaBillingException('Elige la organización del socio.');
-            }
-            $this->syncPartners([$organizationId], $userId);
-            $client = ChinaClient::query()->where('organization_id', $organizationId)->firstOrFail();
-            $this->fillContact($client, $data);
-        } else {
-            $client = new ChinaClient();
-            $client->fill([
-                'type' => ChinaClient::TYPE_IMPORTER, 'name' => trim((string) $data['name']), 'country' => trim((string) ($data['country'] ?? '')),
-                'created_by' => $userId,
-            ]);
-            $this->fillContact($client, $data);
-        }
-
-        return $this->detail((int) $client->id, $organizationIds);
-    }
-
-    /**
-     * Los socios toman nombre y país de su organización: aquí solo se editan contacto y tarifas.
+     * Alta de un cliente: crea su organización (socio o importador) con rol, menú de Pagos y usuario si hay correo.
      *
      * @param  array<string, mixed>  $data
      * @param  array<int, int>  $organizationIds
      * @return array<string, mixed>
      */
-    public function update(int $id, array $data, array $organizationIds): array
+    public function create(array $data, array $organizationIds, ?int $userId): array
     {
-        $client = $this->find($id, $organizationIds);
-        if ($client->type === ChinaClient::TYPE_IMPORTER) {
-            $this->requireUniqueName((string) $data['name'], (int) $client->id, null);
-            $client->fill(['name' => trim((string) $data['name']), 'country' => trim((string) ($data['country'] ?? ''))]);
-        }
-        $this->fillContact($client, $data + ['type' => $client->type]);
+        $org = $this->save($data, null, $userId);
+        $organizationIds[] = (int) $org->getKey();
 
-        return $this->detail((int) $client->id, $organizationIds);
+        return $this->detail((int) $org->getKey(), $organizationIds);
     }
 
     /**
+     * @param  array<string, mixed>  $data
+     * @param  array<int, int>  $organizationIds
+     * @return array<string, mixed>
+     */
+    public function update(int $id, array $data, array $organizationIds, ?int $userId = null): array
+    {
+        $org = $this->find($id, $organizationIds);
+        $this->save($data, (int) $org->getKey(), $userId);
+
+        return $this->detail($id, $organizationIds);
+    }
+
+    /**
+     * Solo se pueden quitar importadores sin operaciones: la organización queda inactiva (no se borra).
+     *
      * @param  array<int, int>  $organizationIds
      */
     public function delete(int $id, array $organizationIds): void
     {
-        $client = $this->find($id, $organizationIds);
-        if ($client->type === ChinaClient::TYPE_PARTNER) {
+        $org = $this->find($id, $organizationIds);
+        if (OrganizacionClienteService::normalizarTipo($org->getAttribute('tipo_cliente')) !== Organizacion::TIPO_IMPORTADOR) {
             throw new ChinaBillingException('Los socios se administran desde su organización.');
         }
-        $client->delete();
+        if (ChinaOperation::query()->where('organization_id', $org->getKey())->exists()) {
+            throw new ChinaBillingException('El importador tiene operaciones: no se puede eliminar.');
+        }
+        $org->setAttribute('Nu_Estado', 0);
+        $org->save();
+    }
+
+    /**
+     * Payload de Clientes China → campos de la organización.
+     *
+     * @param  array<string, mixed>  $data  type, name, origin_country_id, consolidation_country_ids, whatsapp, contact_name, email, rate_1, rate_2
+     * @return array<string, mixed>
+     */
+    public static function organizationData(array $data): array
+    {
+        $type = OrganizacionClienteService::normalizarTipo($data['type'] ?? null);
+        $isPartner = $type === Organizacion::TIPO_SOCIO;
+
+        return [
+            'tipo_cliente' => $type,
+            'no_organizacion' => (string) ($data['name'] ?? ''),
+            'pais_origen_id' => $data['origin_country_id'] ?? null,
+            'paises_habilitados' => $isPartner ? (array) ($data['consolidation_country_ids'] ?? []) : [],
+            'whatsapp' => $data['whatsapp'] ?? null,
+            'contacto' => $data['contact_name'] ?? null,
+            'correo' => $data['email'] ?? null,
+            'tarifa_1' => $isPartner ? ($data['rate_1'] ?? null) : null,
+            'tarifa_2' => $isPartner ? ($data['rate_2'] ?? null) : null,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function save(array $data, ?int $organizationId, ?int $userId): Organizacion
+    {
+        $fields = self::organizationData($data);
+        if (!(int) ($fields['pais_origen_id'] ?? 0)) {
+            throw new ChinaBillingException('Elige el país de origen del cliente.');
+        }
+        if (trim((string) $fields['whatsapp']) === '') {
+            throw new ChinaBillingException('Ingresa el WhatsApp del cliente.');
+        }
+        if ($fields['tipo_cliente'] === Organizacion::TIPO_SOCIO && (!((float) $fields['tarifa_1'] > 0) || !((float) $fields['tarifa_2'] > 0))) {
+            throw new ChinaBillingException('Ingresa la tarifa 1 y la tarifa 2 del socio.');
+        }
+
+        try {
+            return $this->organizations->guardar($fields, $organizationId, $userId);
+        } catch (OrganizacionClienteException $exception) {
+            throw new ChinaBillingException($exception->getMessage(), $exception->status);
+        }
     }
 
     /**
@@ -168,6 +200,55 @@ class ChinaClientService
     {
         return DB::table('pais')->orderBy('No_Pais')->get(['ID_Pais', 'No_Pais'])
             ->map(fn ($row) => ['value' => (int) $row->ID_Pais, 'label' => (string) $row->No_Pais])->all();
+    }
+
+    /**
+     * Países de la tabla global `pais` para el autocompletado de «Nueva operación», paginados.
+     * Primero los países donde hay clientes (país de origen o país donde pueden consolidar).
+     *
+     * @param  array<int, int>  $organizationIds
+     * @param  array<string, mixed>  $filters  search, page, per_page (5 por defecto)
+     * @return array<string, mixed>
+     */
+    public function countriesPage(array $organizationIds, array $filters): array
+    {
+        $clientCountries = $this->clientCountryIds($organizationIds);
+        $search = trim((string) ($filters['search'] ?? ''));
+        $perPage = max(1, min(50, (int) ($filters['per_page'] ?? 5)));
+        $ids = implode(',', array_map('intval', $clientCountries));
+
+        $page = DB::table('pais')
+            ->when($search !== '', fn ($q) => $q->where('No_Pais', 'like', '%'.$search.'%'))
+            ->when($ids !== '', fn ($q) => $q->orderByRaw("CASE WHEN ID_Pais IN ({$ids}) THEN 0 ELSE 1 END"))
+            ->orderBy('No_Pais')
+            ->orderBy('ID_Pais')
+            ->paginate($perPage, ['ID_Pais', 'No_Pais'], 'page', max(1, (int) ($filters['page'] ?? 1)));
+
+        $rows = collect($page->items())->map(fn ($row) => [
+            'value' => (int) $row->ID_Pais,
+            'label' => (string) $row->No_Pais,
+            'has_clients' => in_array((int) $row->ID_Pais, $clientCountries, true),
+        ])->values()->all();
+
+        return ['page' => new LengthAwarePaginator($rows, $page->total(), $page->perPage(), $page->currentPage())];
+    }
+
+    /**
+     * Países de origen y países para consolidar de las organizaciones clientes activas.
+     *
+     * @param  array<int, int>  $organizationIds
+     * @return array<int, int>
+     */
+    public function clientCountryIds(array $organizationIds): array
+    {
+        $ids = array_values(array_filter($organizationIds, fn (int $id) => $id !== Usuario::ID_ORGANIZACION_ADMIN)) ?: [0];
+        $origin = DB::table('organizacion')->whereIn('ID_Organizacion', $ids)->where('Nu_Estado', 1)->whereNotNull('pais_origen_id')->pluck('pais_origen_id');
+        $enabled = DB::table('organizacion_paises_habilitados as h')
+            ->join('organizacion as o', 'o.ID_Organizacion', '=', 'h.organizacion_id')
+            ->whereIn('h.organizacion_id', $ids)->where('o.Nu_Estado', 1)
+            ->pluck('h.id_pais');
+
+        return $origin->concat($enabled)->map(fn ($id) => (int) $id)->filter()->unique()->values()->all();
     }
 
     /**
@@ -219,39 +300,6 @@ class ChinaClientService
             'page' => new LengthAwarePaginator($rows, $page->total(), $page->perPage(), $page->currentPage()),
             'organization_id' => $organizationId,
         ];
-    }
-
-    /**
-     * Crea la organización de un socio nuevo (nombre y país) con su portal.
-     *
-     * @param  array<string, mixed>  $data
-     */
-    private function createOrganization(array $data, ?int $companyId): int
-    {
-        $name = trim((string) ($data['name'] ?? ''));
-        $countryId = (int) ($data['country_id'] ?? 0);
-        if ($name === '') {
-            throw new ChinaBillingException('Ingresa el nombre de la organización.');
-        }
-        if ($countryId <= 0 || !DB::table('pais')->where('ID_Pais', $countryId)->exists()) {
-            throw new ChinaBillingException('Elige el país de la organización.');
-        }
-        if (Organizacion::query()->whereRaw('LOWER(No_Organizacion) = ?', [mb_strtolower($name)])->exists()) {
-            throw new ChinaBillingException('Ya existe una organización con ese nombre.');
-        }
-
-        return DB::transaction(function () use ($name, $countryId, $companyId) {
-            $organization = Organizacion::query()->create([
-                'ID_Empresa' => $companyId ?: 1,
-                'No_Organizacion' => $name,
-                'Nu_Estado' => 1,
-                'id_pais' => $countryId,
-            ]);
-            $organizationId = (int) $organization->getAttribute('ID_Organizacion');
-            OrganizacionPortal::firstOrCreateForOrganizacion($organizationId);
-
-            return $organizationId;
-        });
     }
 
     /**
@@ -312,121 +360,31 @@ class ChinaClientService
     }
 
     /**
-     * Cada organización socio tiene su fila de cliente (se crea sola la primera vez).
+     * Organizaciones clientes (todas las que ve Almacén China, menos la organización 1).
      *
      * @param  array<int, int>  $organizationIds
-     */
-    public function syncPartners(array $organizationIds, ?int $userId): void
-    {
-        if (!$organizationIds) {
-            return;
-        }
-        $names = $this->reader->organizationNames($organizationIds);
-        $existing = ChinaClient::query()->whereIn('organization_id', $organizationIds)->get()->keyBy('organization_id');
-
-        foreach ($names as $organizationId => $org) {
-            $client = $existing->get($organizationId) ?? new ChinaClient(['organization_id' => $organizationId, 'type' => ChinaClient::TYPE_PARTNER, 'created_by' => $userId]);
-            $client->fill(['name' => $org['name'], 'country' => $org['country'] !== '' ? $org['country'] : null]);
-            if ($client->isDirty() || !$client->exists) {
-                $client->save();
-            }
-        }
-    }
-
-    /**
-     * Tarifas del socio por organización (para precargar la tarifa al crear una operación).
-     *
-     * @param  array<int, int>  $organizationIds
-     * @return array<int, array{consol: float|null, consol_2: float|null}>
-     */
-    public function pricesByOrganization(array $organizationIds): array
-    {
-        return ChinaClient::query()->whereIn('organization_id', $organizationIds)->get()
-            ->mapWithKeys(fn (ChinaClient $client) => [(int) $client->organization_id => $this->prices($client)])->all();
-    }
-
-    /**
-     * @param  array<int, int>  $organizationIds
-     * @return Collection<int, ChinaClient>
+     * @return Collection<int, Organizacion>
      */
     private function clients(array $organizationIds): Collection
     {
-        return ChinaClient::query()
-            ->where(fn ($q) => $q->whereNull('organization_id')->orWhereIn('organization_id', $organizationIds ?: [0]))
-            ->get();
+        $ids = array_values(array_filter($organizationIds, fn (int $id) => $id !== Usuario::ID_ORGANIZACION_ADMIN));
+
+        return Organizacion::query()->with('paisOrigen')->whereIn('ID_Organizacion', $ids ?: [0])->where('Nu_Estado', 1)->get()->toBase();
     }
 
     /**
      * @param  array<int, int>  $organizationIds
      */
-    private function find(int $id, array $organizationIds): ChinaClient
+    private function find(int $id, array $organizationIds): Organizacion
     {
-        $client = ChinaClient::query()
-            ->where(fn ($q) => $q->whereNull('organization_id')->orWhereIn('organization_id', $organizationIds ?: [0]))
-            ->find($id);
-        if (!$client) {
+        $org = $id !== Usuario::ID_ORGANIZACION_ADMIN && in_array($id, $organizationIds, true)
+            ? Organizacion::query()->with('paisOrigen')->find($id)
+            : null;
+        if (!$org) {
             throw new ChinaBillingException('El cliente no existe o no tienes acceso.', 404);
         }
 
-        return $client;
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     */
-    private function fillContact(ChinaClient $client, array $data): void
-    {
-        $partner = ($data['type'] ?? $client->type) === ChinaClient::TYPE_PARTNER;
-        $prices = null;
-        if ($partner) {
-            $prices = [];
-            foreach (ChinaClient::PRICE_FIELDS as $field) {
-                $value = (float) ($data['prices'][$field] ?? 0);
-                if ($value <= 0) {
-                    throw new ChinaBillingException('Ingresa las dos tarifas de consolidado del socio.');
-                }
-                $prices[$field] = $value;
-            }
-        }
-        $client->fill([
-            'whatsapp' => trim((string) ($data['whatsapp'] ?? '')),
-            'contact_name' => trim((string) ($data['contact_name'] ?? '')) ?: null,
-            'email' => trim((string) ($data['email'] ?? '')) ?: null,
-            'prices' => $prices,
-        ]);
-        if ($client->whatsapp === '') {
-            throw new ChinaBillingException('Ingresa el WhatsApp del cliente.');
-        }
-        $client->save();
-    }
-
-    private function requireUniqueName(string $name, ?int $ignoreId, ?int $organizationId): void
-    {
-        $name = mb_strtolower(trim($name));
-        if ($name === '') {
-            throw new ChinaBillingException('Ingresa el nombre del cliente.');
-        }
-        $duplicate = ChinaClient::query()
-            ->whereRaw('LOWER(name) = ?', [$name])
-            ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
-            ->when($organizationId, fn ($q) => $q->where('organization_id', '!=', $organizationId))
-            ->exists();
-        if ($duplicate) {
-            throw new ChinaBillingException('Ya existe un cliente con ese nombre.');
-        }
-    }
-
-    /**
-     * @return array{consol: float|null, consol_2: float|null}
-     */
-    private function prices(ChinaClient $client): array
-    {
-        $prices = (array) ($client->prices ?? []);
-
-        return [
-            'consol' => isset($prices['consol']) ? (float) $prices['consol'] : null,
-            'consol_2' => isset($prices['consol_2']) ? (float) $prices['consol_2'] : null,
-        ];
+        return $org;
     }
 
     /**
@@ -462,22 +420,30 @@ class ChinaClientService
      * @param  array<string, float|int>|null  $metrics
      * @return array<string, mixed>
      */
-    private function present(ChinaClient $client, ?array $metrics): array
+    private function present(Organizacion $org, ?array $metrics): array
     {
-        $isPartner = $client->type === ChinaClient::TYPE_PARTNER;
+        $data = OrganizacionClienteService::serializar($org);
+        $isPartner = $data['tipo_cliente'] === Organizacion::TIPO_SOCIO;
         $metrics ??= ['operations_count' => 0, 'service_amount' => 0.0, 'total_billed' => 0.0, 'paid' => 0.0, 'receivable' => 0.0, 'open_count' => 0, 'closed_count' => 0];
+        $registered = $org->getAttribute('fecha_registro');
+        $origin = $org->getRelationValue('paisOrigen');
 
         return [
-            'id' => (int) $client->id,
-            'type' => $client->type,
-            'organization_id' => $client->organization_id ? (int) $client->organization_id : null,
-            'name' => (string) $client->name,
-            'country' => (string) ($client->country ?? ''),
-            'registered_on' => $client->created_at?->toDateString(),
-            'whatsapp' => (string) ($client->whatsapp ?? ''),
-            'contact_name' => (string) ($client->contact_name ?? ''),
-            'email' => (string) ($client->email ?? ''),
-            'prices' => $isPartner ? $this->prices($client) : null,
+            'id' => (int) $org->getKey(),
+            'type' => $isPartner ? self::TYPE_PARTNER : self::TYPE_IMPORTER,
+            'organization_id' => (int) $org->getKey(),
+            'name' => (string) $org->getAttribute('No_Organizacion'),
+            'country' => $origin instanceof \App\Models\Pais ? (string) $origin->getAttribute('No_Pais') : (string) ($data['pais_origen'] ?? ''),
+            'origin_country_id' => $data['pais_origen_id'],
+            'consolidation_country_ids' => $isPartner ? $data['paises_consolidar'] : [],
+            'registered_on' => $registered instanceof \DateTimeInterface ? $registered->format('Y-m-d') : null,
+            'whatsapp' => (string) ($data['whatsapp'] ?? ''),
+            'contact_name' => (string) ($data['contacto'] ?? ''),
+            'email' => (string) ($data['correo'] ?? ''),
+            'rate_1' => $isPartner ? $data['tarifa_1'] : null,
+            'rate_2' => $isPartner ? $data['tarifa_2'] : null,
+            // Compatibilidad con la vista anterior (consol = tarifa 1, consol_2 = tarifa 2).
+            'prices' => $isPartner ? ['consol' => $data['tarifa_1'], 'consol_2' => $data['tarifa_2']] : null,
             'operations_count' => (int) $metrics['operations_count'],
             'service_amount' => $metrics['service_amount'],
             'total_billed' => $metrics['total_billed'],
@@ -485,8 +451,8 @@ class ChinaClientService
             'receivable' => $metrics['receivable'],
             'open_count' => (int) $metrics['open_count'],
             'closed_count' => (int) $metrics['closed_count'],
-            'can_delete' => !$isPartner,
-            'can_download_balance' => $isPartner && $client->organization_id !== null,
+            'can_delete' => !$isPartner && (int) $metrics['operations_count'] === 0,
+            'can_download_balance' => true,
         ];
     }
 
