@@ -232,8 +232,19 @@ class PagoProveedorEtapa1Service
                 throw new PagoProveedorException('El proveedor no pertenece a esta solicitud.', 404);
             }
             $registrationError = $proveedor->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR;
-            if (!$proveedor->sales_observation && !$registrationError) {
+            $observados = $this->abonosObservados($proveedor);
+            if (!$proveedor->sales_observation && !$registrationError && $observados->isEmpty()) {
                 throw new PagoProveedorException('Este proveedor no tiene una observación que puedas levantar.');
+            }
+            // Depósito observado por Administración (p. ej. «No ingresó»): al levantarla, el abono vuelve a validación
+            // y Ventas ya puede anular el voucher que no ingresó.
+            foreach ($observados as $observado) {
+                $observado->status = PagoProveedorAbono::STATUS_IN_VALIDATION;
+                $observado->observation_reason = null;
+                $observado->observation_detail = null;
+                $observado->observe_until = null;
+                $observado->observation_escalated_at = null;
+                $observado->save();
             }
             $proveedor->status = PagoProveedorSolicitudProveedor::STATUS_IN_PROGRESS;
             $proveedor->sales_observation = null;
@@ -632,12 +643,13 @@ class PagoProveedorEtapa1Service
                 }
                 $porCobrar = $proveedor->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT;
                 $correcting = in_array((int) $proveedor->id, $correctedProviderIds, true);
-                if ((int) $proveedor->stage !== PagoProveedorSolicitudProveedor::STAGE_DATA && !$porCobrar && !$correcting) {
+                $conObservado = !$abono && $this->abonosObservados($proveedor)->isNotEmpty();
+                if ((int) $proveedor->stage !== PagoProveedorSolicitudProveedor::STAGE_DATA && !$porCobrar && !$correcting && !$conObservado) {
                     continue;
                 }
                 $saldos[$proveedor->id] = $porCobrar
                     ? $aprobacion->outstanding($proveedor)
-                    : $this->balance($proveedor, $abono?->id);
+                    : ($conObservado ? $this->balanceSinObservados($proveedor) : $this->balance($proveedor, $abono?->id));
             }
 
             $aplicaciones = $this->mapaAplicaciones($payload['aplicaciones'] ?? []);
@@ -756,6 +768,9 @@ class PagoProveedorEtapa1Service
         return DB::transaction(function () use ($solicitudId, $abonoId, $actor) {
             $solicitud = $this->solicitud($solicitudId, true);
             $abono = $this->abonoEditable($solicitud, $abonoId);
+            if ($abono->status === PagoProveedorAbono::STATUS_OBSERVED) {
+                throw new PagoProveedorException('Levanta la observación del depósito antes de anular este abono.');
+            }
             $abono->status = PagoProveedorAbono::STATUS_CANCELLED;
             $abono->save();
             $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, 'Abono anulado', $actor, $abono->operation_number);
@@ -1013,6 +1028,34 @@ class PagoProveedorEtapa1Service
         }
 
         return $mapa;
+    }
+
+    /**
+     * Abonos del proveedor que Administración observó (el dinero no ingresó, etc.) y siguen sin levantarse.
+     *
+     * @return \Illuminate\Support\Collection<int, PagoProveedorAbono>
+     */
+    private function abonosObservados(PagoProveedorSolicitudProveedor $proveedor): \Illuminate\Support\Collection
+    {
+        return PagoProveedorAbono::query()
+            ->where('status', PagoProveedorAbono::STATUS_OBSERVED)
+            ->whereHas('aplicaciones', fn ($query) => $query->where('request_provider_id', $proveedor->id))
+            ->get();
+    }
+
+    /** Lo que falta abonar sin contar los abonos observados (el dinero que no ingresó no cuenta). */
+    public function balanceSinObservados(PagoProveedorSolicitudProveedor $proveedor): float
+    {
+        $abonado = 0.0;
+        foreach ($proveedor->aplicaciones as $aplicacion) {
+            $abono = $aplicacion->abono;
+            if (!$abono || in_array($abono->status, [PagoProveedorAbono::STATUS_CANCELLED, PagoProveedorAbono::STATUS_OBSERVED], true)) {
+                continue;
+            }
+            $abonado += $this->creditedAmount($aplicacion, $abono);
+        }
+
+        return round(max(0, $this->requiredAmount($proveedor) - $abonado), 2);
     }
 
     public function balance(PagoProveedorSolicitudProveedor $proveedor, ?int $exceptoAbonoId = null): float
