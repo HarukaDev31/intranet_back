@@ -15,7 +15,7 @@ class PagoProveedorHistorialService
         PagoProveedorHistorial::query()->create([
             'entity_type' => $entidadTipo,
             'entity_id' => $entidadId,
-            'action' => $accion,
+            'action' => mb_substr($accion, 0, 255),
             'detail' => $detalle,
             'user_id' => $actor['id'],
             'user_name' => $actor['nombre'],
