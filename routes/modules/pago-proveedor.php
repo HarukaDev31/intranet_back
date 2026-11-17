@@ -42,6 +42,7 @@ Route::group(['prefix' => 'pago-proveedor', 'middleware' => 'jwt.auth'], functio
     Route::post('solicitudes/{id}/pedir-datos', [PagoProveedorEtapa1Controller::class, 'pedirDatos'])->whereNumber('id');
     Route::post('solicitudes/{id}/pedir-datos/enviar', [PagoProveedorEtapa1Controller::class, 'enviarPedirDatos'])->whereNumber('id');
     Route::post('solicitudes/{id}/cuentas', [PagoProveedorEtapa1Controller::class, 'cuentas'])->whereNumber('id');
+    Route::post('solicitudes/{id}/cuentas/enviar', [PagoProveedorEtapa1Controller::class, 'enviarCuentas'])->whereNumber('id');
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/datos-rmb', [PagoProveedorEtapa1Controller::class, 'guardarRmb'])->whereNumber(['id', 'proveedorId']);
     Route::delete('solicitudes/{id}/proveedores/{proveedorId}/datos-rmb', [PagoProveedorEtapa1Controller::class, 'eliminarRmb'])->whereNumber(['id', 'proveedorId']);
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/enviar-formulario', [PagoProveedorEtapa1Controller::class, 'enviarFormulario'])->whereNumber(['id', 'proveedorId']);

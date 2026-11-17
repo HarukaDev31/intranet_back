@@ -217,6 +217,18 @@ class PagoProveedorCotizacionWhatsappService
     }
 
     /**
+     * Envía una imagen al WhatsApp del cliente desde el número de ventas (p. ej. las cuentas bancarias oficiales).
+     */
+    public function enviarImagenCliente(string $whatsapp, string $ruta, string $contexto): void
+    {
+        $respuesta = $this->sendMedia($ruta, 'image/jpeg', null, $this->telefonoCliente($whatsapp), 0, 'ventas', basename($ruta));
+        if ($respuesta === false || (is_array($respuesta) && isset($respuesta['status']) && !$respuesta['status'])) {
+            Log::warning('Pago proveedor WA imagen sin status ok', ['context' => $contexto, 'response' => $respuesta]);
+            throw new PagoProveedorException('No se pudo enviar la imagen de las cuentas por WhatsApp.');
+        }
+    }
+
+    /**
      * @param  array<string, mixed>  $presentado
      */
     private function exigirListoParaEnviar(array $presentado, bool $exigeWhatsapp): void

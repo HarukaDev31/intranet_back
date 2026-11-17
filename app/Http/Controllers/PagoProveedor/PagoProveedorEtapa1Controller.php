@@ -162,6 +162,15 @@ class PagoProveedorEtapa1Controller extends Controller
         });
     }
 
+    public function enviarCuentas(Request $request, int $solicitudId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $solicitudId) {
+            $actor = $this->autorizacion->exigirVentas($request->user());
+
+            return $this->datos($this->etapa1->enviarCuentas($solicitudId, $actor));
+        });
+    }
+
     public function registrarAbono(Request $request, int $solicitudId): JsonResponse
     {
         return $this->guardarAbono($request, $solicitudId, null);
