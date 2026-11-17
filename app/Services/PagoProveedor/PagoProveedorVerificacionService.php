@@ -132,12 +132,13 @@ class PagoProveedorVerificacionService
             $deposit->corrected_by_admin = true;
             $deposit->admin_corrections = array_merge($deposit->admin_corrections ?? [], $changes);
             $deposit->save();
+            // «Abono #1 corregido: N.° de operación 024158111 → 024158115»
+            $numeroAbono = PagoProveedorAbono::query()->where('request_id', $deposit->request_id)->where('id', '<=', $deposit->id)->count();
             $this->history->registrar(
                 PagoProveedorHistorial::ENTITY_REQUEST,
                 (int) $deposit->request_id,
-                'Depósito corregido',
-                $actor,
-                collect($changes)->map(fn (array $change) => $change['field'].': '.$change['from'].' → '.$change['to'])->implode(' · ') ?: $deposit->operation_number
+                "Abono #{$numeroAbono} corregido: " . (collect($changes)->map(fn (array $change) => $change['field'].' '.$change['from'].' → '.$change['to'])->implode(' · ') ?: $deposit->operation_number),
+                $actor
             );
 
             return $deposit->fresh(['solicitud.proveedores', 'aplicaciones']);

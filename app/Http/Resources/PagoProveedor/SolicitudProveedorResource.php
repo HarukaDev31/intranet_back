@@ -2,10 +2,12 @@
 
 namespace App\Http\Resources\PagoProveedor;
 
+use App\Models\PagoProveedor\PagoProveedorAbono;
 use App\Models\PagoProveedor\PagoProveedorCotizacionProveedor;
 use App\Models\PagoProveedor\PagoProveedorReembolso;
 use App\Models\PagoProveedor\PagoProveedorSolicitudProveedor;
 use App\Services\PagoProveedor\PagoProveedorConfiguracionService;
+use App\Services\PagoProveedor\PagoProveedorVerificacionService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Carbon;
@@ -64,6 +66,8 @@ class SolicitudProveedorResource extends JsonResource
             'observe_label' => $provider->china_observation_reason
                 ? app(\App\Services\PagoProveedor\PagoProveedorYuanService::class)->reasonLabel((string) $provider->china_observation_reason)
                 : null,
+            // Motivo con el que Administración observó el depósito (p. ej. «No ingresó»), si lo hay.
+            'deposit_observation_label' => $this->depositObservationLabel($provider),
             'sales_task' => $task,
             // Fecha límite de la tarea pendiente de Ventas (#1732: tablero y lista ordenan por ella).
             'deadline_at' => $deadline !== null ? $deadline['at']->toIso8601String() : null,
@@ -72,6 +76,23 @@ class SolicitudProveedorResource extends JsonResource
             // #1745: si no le toca a Ventas, quién lo tiene y qué falta para cerrar.
             'waiting_on' => $task === null || $ventasConsulta ? $waiting : null,
         ];
+    }
+
+    private function depositObservationLabel(PagoProveedorSolicitudProveedor $provider): ?string
+    {
+        if ($provider->status !== PagoProveedorSolicitudProveedor::STATUS_OBSERVED) {
+            return null;
+        }
+        $abono = PagoProveedorAbono::query()
+            ->where('status', PagoProveedorAbono::STATUS_OBSERVED)
+            ->whereHas('aplicaciones', fn ($q) => $q->where('request_provider_id', $provider->id))
+            ->orderByDesc('id')
+            ->first();
+        if (!$abono || !$abono->observation_reason) {
+            return null;
+        }
+
+        return app(PagoProveedorVerificacionService::class)->reasonLabel((string) $abono->observation_reason);
     }
 
     /**
