@@ -1001,7 +1001,13 @@ class ClientesController extends Controller
             ->leftJoin('campana_curso as cc', 'pc.ID_Campana', '=', 'cc.ID_Campana')
             ->where('pc.Nu_Estado', 2) // Estado confirmado
             ->whereIn('pc.id_cliente', $clienteIds)
-            ->orderBy('e.Fe_Registro', 'asc')
+            ->select(
+                'pc.id_cliente',
+                'pc.Ss_Total',
+                'pc.Fe_Registro as fecha_pedido',
+                'cc.Fe_Inicio'
+            )
+            ->orderBy('pc.Fe_Registro', 'asc')
             ->get();
 
         //convert to nombre año mes  febrero 2025
@@ -1018,7 +1024,7 @@ class ClientesController extends Controller
                 'servicio' => 'Curso ' . $nombreCampana,
                 'monto' => $pedido->Ss_Total,
                 'nombre' => $nombreCampana,
-                'fecha' => $pedido->Fe_Registro
+                'fecha' => $pedido->fecha_pedido
             ];
         }
 
