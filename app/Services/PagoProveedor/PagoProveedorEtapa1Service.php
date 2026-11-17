@@ -400,6 +400,39 @@ class PagoProveedorEtapa1Service
      *
      * @param  array<int|string, float|int>  $aplicaciones
      */
+    /**
+     * Cambios de un abono editado, «campo antes → después», para el historial.
+     *
+     * @param  array<string, mixed>  $nuevo
+     * @return array<int, string>
+     */
+    private function cambiosAbono(PagoProveedorAbono $abono, array $nuevo): array
+    {
+        $banco = fn ($valor): string => strtolower((string) $valor) === 'interbank' ? 'Interbank' : strtoupper((string) $valor);
+        $fecha = fn ($valor): string => \Illuminate\Support\Carbon::parse((string) $valor)->format('d/m/Y');
+        $cambios = [];
+        if (trim((string) $abono->operation_number) !== trim((string) $nuevo['operation_number'])) {
+            $cambios[] = 'N.° de operación ' . $abono->operation_number . ' → ' . $nuevo['operation_number'];
+        }
+        if (abs((float) $abono->amount - (float) $nuevo['amount']) > 0.004) {
+            $cambios[] = 'importe $' . number_format((float) $abono->amount, 2, '.', ',') . ' → $' . number_format((float) $nuevo['amount'], 2, '.', ',');
+        }
+        if ($fecha($abono->paid_on) !== $fecha($nuevo['paid_on'])) {
+            $cambios[] = 'fecha ' . $fecha($abono->paid_on) . ' → ' . $fecha($nuevo['paid_on']);
+        }
+        if ((string) $abono->bank !== (string) $nuevo['bank']) {
+            $cambios[] = 'banco ' . $banco($abono->bank) . ' → ' . $banco($nuevo['bank']);
+        }
+        if ((bool) $abono->interbank !== (bool) $nuevo['interbank']) {
+            $cambios[] = 'interbancaria ' . ($abono->interbank ? 'sí' : 'no') . ' → ' . ($nuevo['interbank'] ? 'sí' : 'no');
+        }
+        if ((string) $abono->voucher_path !== (string) $nuevo['voucher_path']) {
+            $cambios[] = 'voucher reemplazado';
+        }
+
+        return $cambios;
+    }
+
     private function detalleHistorialAbono(PagoProveedorSolicitud $solicitud, PagoProveedorAbono $abono, array $aplicaciones): string
     {
         $partes = [];
@@ -664,6 +697,7 @@ class PagoProveedorEtapa1Service
                 'admin_corrections' => null,
             ];
 
+            $cambiosAbono = $abono ? $this->cambiosAbono($abono, $datosAbono) : [];
             if ($abono) {
                 $wasObserved = $abono->status === PagoProveedorAbono::STATUS_OBSERVED;
                 $abono->fill($datosAbono);
@@ -683,7 +717,19 @@ class PagoProveedorEtapa1Service
                 ]);
             }
 
-            $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, $abonoId ? 'Abono editado' : 'Abono registrado', $actor, $this->detalleHistorialAbono($solicitud, $abono, $evaluacion['aplicaciones']));
+            if ($abonoId) {
+                // «Abono #1 editado antes de validar: N.° de operación 0241585 → 024158111»
+                $numero = $solicitud->abonos()->where('id', '<=', $abono->id)->count();
+                $cuando = $editandoEnValidacion ? 'antes de validar' : 'tras la observación';
+                $this->historial->registrar(
+                    PagoProveedorHistorial::ENTITY_REQUEST,
+                    $solicitudId,
+                    "Abono #{$numero} editado {$cuando}: " . ($cambiosAbono !== [] ? implode(' · ', $cambiosAbono) : 'se reasignó el importe entre proveedores'),
+                    $actor
+                );
+            } else {
+                $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, 'Abono registrado', $actor, $this->detalleHistorialAbono($solicitud, $abono, $evaluacion['aplicaciones']));
+            }
             if ($editandoEnValidacion) {
                 $this->regresarSinCobertura($this->recargar($solicitud, ['proveedores.datos', 'proveedores.aplicaciones.abono']), $correctedProviderIds, $actor);
             }
@@ -1033,7 +1079,12 @@ class PagoProveedorEtapa1Service
             }
             $proveedor->stage = PagoProveedorSolicitudProveedor::STAGE_VALIDATION;
             $proveedor->save();
-            $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitud->id, 'Pasó a validación', $actor, $proveedor->code_supplier);
+            $this->historial->registrar(
+                PagoProveedorHistorial::ENTITY_REQUEST,
+                $solicitud->id,
+                $proveedor->code_supplier . ' avanzó a Validación de pago — código ' . $proveedor->request_code . ' (automático: importe completo)',
+                $actor
+            );
             app(PagoProveedorAprobacionService::class)->evaluate($proveedor, $actor);
         }
     }

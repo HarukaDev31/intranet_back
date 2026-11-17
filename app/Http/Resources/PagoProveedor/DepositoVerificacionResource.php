@@ -123,6 +123,7 @@ class DepositoVerificacionResource extends JsonResource
             'observation_detail' => $deposit->observation_detail,
             'observe_until' => optional($deposit->observe_until)->toIso8601String(),
             'corrected_by_admin' => $deposit->corrected_by_admin,
+            'admin_corrections' => is_array($deposit->admin_corrections) ? array_values($deposit->admin_corrections) : [],
             'verified_at' => optional($deposit->verified_at)->toIso8601String(),
             'providers' => $providers,
             'shared' => count($providers) > 1,
