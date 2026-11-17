@@ -175,12 +175,12 @@ class ChinaBillingCalculator
             'difference' => $difference,
             'transferred' => $transferred,
             'status' => $status,
-            'partner_status' => self::partnerStatus($status, $transferred, $confirmed, $inConfirmation),
+            'partner_status' => self::partnerStatus($status, $transferred, $confirmed, $inConfirmation, $difference),
         ];
     }
 
     /** Estado visible para el socio: pending, partial, to_confirm, paid. */
-    public static function partnerStatus(string $status, bool $transferred, float $confirmed, float $inConfirmation): string
+    public static function partnerStatus(string $status, bool $transferred, float $confirmed, float $inConfirmation, ?float $difference = null): string
     {
         if ($transferred) {
             return 'paid';
@@ -188,8 +188,12 @@ class ChinaBillingCalculator
         if ($status === self::STATUS_PENDING) {
             return ($confirmed + $inConfirmation) > 0 ? 'partial' : 'pending';
         }
+        if ($status === self::STATUS_TO_CONFIRM) {
+            return 'to_confirm';
+        }
 
-        return $status === self::STATUS_TO_CONFIRM ? 'to_confirm' : 'paid';
+        // Si llegó menos de lo facturado, el socio todavía debe la diferencia: no es «Pagado».
+        return $difference !== null && $difference > 0.005 ? 'partial' : 'paid';
     }
 
     /**
