@@ -102,6 +102,8 @@ class SolicitudProveedorDetalleResource extends JsonResource
             'puede_editar_etapa1' => (int) $provider->stage === PagoProveedorSolicitudProveedor::STAGE_DATA && !$cancelled,
             'datos' => $data ? [
                 'estado' => $data->status,
+                // Fecha en que se envió el formulario al cliente (#2174).
+                'formulario_enviado_el' => $data->status === \App\Models\PagoProveedor\PagoProveedorDatoProveedor::STATUS_SENT ? optional($data->updated_at)->toIso8601String() : null,
                 'origen' => $data->source,
                 'vendedor_nombre' => $data->seller_name,
                 'wechat' => $data->wechat,
