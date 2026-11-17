@@ -84,7 +84,8 @@ class AbonoResource extends JsonResource
 
                     return $provider && $provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR;
                 })),
-            'puede_anular' => in_array($abono->status, [PagoProveedorAbono::STATUS_IN_VALIDATION, PagoProveedorAbono::STATUS_OBSERVED], true) && !$advanced,
+            // Un abono observado no se anula hasta que Ventas levante la observación.
+            'puede_anular' => $abono->status === PagoProveedorAbono::STATUS_IN_VALIDATION && !$advanced,
             'observacion' => $abono->status === PagoProveedorAbono::STATUS_OBSERVED ? [
                 'motivo' => app(\App\Services\PagoProveedor\PagoProveedorVerificacionService::class)->reasonLabel((string) $abono->observation_reason),
                 'detalle' => $abono->observation_detail,

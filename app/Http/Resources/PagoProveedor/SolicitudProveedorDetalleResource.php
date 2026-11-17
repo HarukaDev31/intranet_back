@@ -94,6 +94,9 @@ class SolicitudProveedorDetalleResource extends JsonResource
             'progreso' => $this->progress($provider),
             'documento_balance' => $this->documentoBalance($provider),
             'puede_levantar' => $provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR,
+            // Depósito observado por Administración: Ventas puede agregar un voucher nuevo y levantar la observación.
+            'deposito_observado' => !$cancelled && $provider->aplicaciones->contains(fn ($aplicacion) => $aplicacion->abono && $aplicacion->abono->status === \App\Models\PagoProveedor\PagoProveedorAbono::STATUS_OBSERVED),
+            'saldo_sin_observados' => $cancelled ? 0 : $etapa1->balanceSinObservados($provider),
             'puede_registrar_diferencia' => !$cancelled && $collecting && $balance > PagoProveedorSolicitudProveedor::MONEY_EPSILON,
             'codigo_solicitud' => $provider->request_code,
             'puede_editar_etapa1' => (int) $provider->stage === PagoProveedorSolicitudProveedor::STAGE_DATA && !$cancelled,
