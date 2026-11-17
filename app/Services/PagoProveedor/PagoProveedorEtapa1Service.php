@@ -160,7 +160,7 @@ class PagoProveedorEtapa1Service
             $datos->correction_requested = $datos->status === PagoProveedorDatoProveedor::STATUS_RECEIVED;
             $datos->save();
             $enlace = $this->enlace($datos);
-            $texto = "Hola, " . ($this->solicitudDe($proveedor)->client_name ?: 'cliente') . " 🙋🏻‍♀️\n|\nNecesitamos que revises los datos bancarios de " . $proveedor->code_supplier . ".\n" . $enlace;
+            $texto = $this->textoFormulario($proveedor, $enlace, true);
             $this->guardarMensaje($proveedor, 'validacion_tt', $texto, $actor);
             $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, 'Validación de datos T-T', $actor, $proveedor->code_supplier);
 
@@ -1234,12 +1234,16 @@ class PagoProveedorEtapa1Service
     private function textoFormulario(PagoProveedorSolicitudProveedor $proveedor, string $enlace, bool $porAutorizar): string
     {
         $nombre = $this->mensajes()->firstName($this->solicitudDe($proveedor)->client_name);
-        $pedido = $porAutorizar
-            ? 'Revisa y autoriza los datos bancarios que registramos para el pago.'
-            : 'Para pagar a tu proveedor por transferencia internacional (T-T) necesitamos sus datos bancarios.';
+        if ($porAutorizar) {
+            // Ventas completó los datos: se le pide al cliente revisarlos y autorizarlos (#2178).
+            return "Hola, {$nombre} 🙋🏻‍♀️\n"
+                . "Completamos los datos bancarios de tu proveedor con la información que nos enviaste. Necesitamos que los revises y los autorices.\n\n"
+                . "✅ Proveedor: *{$proveedor->code_supplier} | {$proveedor->product}*\n📝 Datos:\n▪️ *Formulario bancario:*\n{$enlace}\n\n"
+                . '👉 Sin tu autorización no podremos realizar el pago.';
+        }
         $bloque = "✅ Proveedor: *{$proveedor->code_supplier} | {$proveedor->product}*\n📝 Datos:\n▪️ *Formulario bancario:* {$enlace}";
 
-        return "Hola, {$nombre} 🙋🏻‍♀️\n{$pedido}\n\n{$bloque}\n\n👉 Apenas lo envíes, lo recibimos y continuamos con el proceso.";
+        return "Hola, {$nombre} 🙋🏻‍♀️\nPara pagar a tu proveedor por transferencia internacional (T-T) necesitamos sus datos bancarios.\n\n{$bloque}\n\n👉 Apenas lo envíes, lo recibimos y continuamos con el proceso.";
     }
 
     private function mensajes(): PagoProveedorMensajeService
