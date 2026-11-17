@@ -137,12 +137,7 @@ class PagoProveedorSolicitudService
 
             foreach ($cotizacion->proveedores as $proveedor) {
                 $linea = $porOrden[$proveedor->position] ?? [];
-                $solicitud->proveedores()->create(array_merge($this->datosProveedor($proveedor, $linea), [
-                    'stage' => PagoProveedorSolicitudProveedor::STAGE_DATA,
-                    'status' => PagoProveedorSolicitudProveedor::STATUS_IN_PROGRESS,
-                    'current_installment' => PagoProveedorSolicitudProveedor::FIRST_INSTALLMENT,
-                    'current_payment' => PagoProveedorSolicitudProveedor::FIRST_INSTALLMENT,
-                ]));
+                $this->agregarProveedor($solicitud, $this->datosProveedor($proveedor, $linea));
             }
 
             $cotizacion->status = PagoProveedorCotizacion::STATUS_CONFIRMED;
@@ -152,6 +147,20 @@ class PagoProveedorSolicitudService
 
             return $solicitud->load(['proveedores.datos', 'cotizacion']);
         });
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     */
+    private function agregarProveedor(PagoProveedorSolicitud $solicitud, array $datos): void
+    {
+        $fila = new PagoProveedorSolicitudProveedor();
+        $fila->fill($datos);
+        $fila->stage = PagoProveedorSolicitudProveedor::STAGE_DATA;
+        $fila->status = PagoProveedorSolicitudProveedor::STATUS_IN_PROGRESS;
+        $fila->current_installment = PagoProveedorSolicitudProveedor::FIRST_INSTALLMENT;
+        $fila->current_payment = PagoProveedorSolicitudProveedor::FIRST_INSTALLMENT;
+        $solicitud->proveedores()->save($fila);
     }
 
     /**
@@ -224,12 +233,7 @@ class PagoProveedorSolicitudService
                 $fila->fill($datos);
                 $fila->save();
             } else {
-                $solicitud->proveedores()->create(array_merge($datos, [
-                    'stage' => PagoProveedorSolicitudProveedor::STAGE_DATA,
-                    'status' => PagoProveedorSolicitudProveedor::STATUS_IN_PROGRESS,
-                    'current_installment' => PagoProveedorSolicitudProveedor::FIRST_INSTALLMENT,
-                    'current_payment' => PagoProveedorSolicitudProveedor::FIRST_INSTALLMENT,
-                ]));
+                $this->agregarProveedor($solicitud, $datos);
             }
         }
         foreach ($existentes as $posicion => $fila) {
