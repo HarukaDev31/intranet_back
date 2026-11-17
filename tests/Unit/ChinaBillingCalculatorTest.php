@@ -108,6 +108,19 @@ class ChinaBillingCalculatorTest extends TestCase
         $this->assertSame(3640.0, Calc::operationMetrics($other)['received']);
     }
 
+    public function test_partner_sees_partial_while_a_difference_is_owed(): void
+    {
+        // E2E QA: factura $180, llegaron $175 → el socio debe $5; no puede figurar «Pagado».
+        $op = $this->op(1, ['billing_type' => 'fixed', 'amount' => 180, 'fob' => 0, 'freight' => 0]);
+        $payment = $this->pay(1, 180, 175, 1, true);
+        $this->allocate($op, $payment, 180);
+
+        $m = Calc::operationMetrics($op);
+        $this->assertSame(5.0, $m['difference']);
+        $this->assertSame('partial', $m['partner_status']);
+        $this->assertSame('paid', Calc::partnerStatus(Calc::STATUS_IN_CASH, false, 180, 0, 0.0));
+    }
+
     public function test_confirmed_without_shortfall_operation_keeps_previous_credit(): void
     {
         // Cobros confirmados antes del cambio (sin operación elegida): el saldo a favor no cambia.
