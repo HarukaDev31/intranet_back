@@ -31,6 +31,8 @@ return [
         'https://qaintranet.probusiness.pe',
         'https://intranetback.probusiness.pe',
         'https://intranetv2.probusiness.pe',
+        // Deploy beta del front de clientes (rama qa en Netlify).
+        'https://qa--nimble-gumption-e62d9f.netlify.app',
     ],
 
     // ✅ Subdominios Y dominio raíz probusiness.pe (el patrón .*\.probusiness.pe NO cubre el apex)
