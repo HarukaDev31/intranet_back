@@ -1876,6 +1876,15 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 }
             }
 
+            // Columnas numéricas NOT NULL: si llegan vacías (null / ''), se conserva el valor actual
+            // en vez de romper todo el UPDATE (p. ej. peso_china null hacía perder también el CBM).
+            foreach (['peso_china', 'qty_pallet_china', 'qty_box_china', 'cbm_total_china'] as $numericField) {
+                if (array_key_exists($numericField, $data)
+                    && ($data[$numericField] === null || $data[$numericField] === '' || $data[$numericField] === 'null')) {
+                    unset($data[$numericField]);
+                }
+            }
+
             // Persistir estados antes del update masivo (evita perder dirty attrs)
             $proveedor->save();
 
