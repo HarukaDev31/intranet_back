@@ -10,6 +10,7 @@ use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Drawing as SharedDrawing;
 use PhpOffice\PhpSpreadsheet\Style\Font;
+use PhpOffice\PhpSpreadsheet\Style\Protection as StyleProtection;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\MemoryDrawing;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
@@ -145,6 +146,11 @@ class ExcelConfirmacionDocumentosService
                 (string) $codeSupplier,
                 \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
             );
+            // El código de proveedor alimenta el rotulado: el cliente no debe poder editarlo
+            // (en la plantilla J14 viene desbloqueada y se copia a todo el bloque).
+            $sheet->getStyle("J{$startRow}:J{$endRow}")
+                ->getProtection()
+                ->setLocked(StyleProtection::PROTECTION_PROTECTED);
 
             $caracteristicas = $this->mergeUnidadesEnCaracteristicas(
                 is_array($item['caracteristicas'] ?? null) ? $item['caracteristicas'] : []
@@ -215,6 +221,8 @@ class ExcelConfirmacionDocumentosService
             $sheet->setCellValue('G' . $totalRow, '=SUM(G' . $baseStartRow . ':G' . $lastEndRow . ')');
             $sheet->setCellValue('I' . $totalRow, '=SUM(I' . $baseStartRow . ':I' . $lastEndRow . ')');
         }
+
+        $this->asegurarProteccionHoja($sheet);
 
         $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
         $writer->save($outputFullPath);
@@ -292,6 +300,24 @@ class ExcelConfirmacionDocumentosService
                 @unlink($file);
             }
         }
+    }
+
+    /**
+     * Las celdas bloqueadas (p. ej. Código de proveedor) solo quedan protegidas si la hoja está protegida.
+     * La plantilla ya trae la protección; si no la trae, se activa con los mismos permisos.
+     */
+    private function asegurarProteccionHoja(Worksheet $sheet): void
+    {
+        $protection = $sheet->getProtection();
+        if ($protection->getSheet()) {
+            return;
+        }
+
+        $protection->setSheet(true);
+        $protection->setFormatCells(false);
+        $protection->setInsertHyperlinks(false);
+        $protection->setSort(false);
+        $protection->setSelectLockedCells(true);
     }
 
     private function sanitizeExcelSheetTitle(string $title, ?Spreadsheet $spreadsheet = null): string
