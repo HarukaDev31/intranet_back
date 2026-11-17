@@ -1876,6 +1876,16 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 }
             }
 
+            // Columnas numéricas NOT NULL (default 0): si el usuario borra el valor llega null / '',
+            // y eso rompía todo el UPDATE (p. ej. peso_china null hacía perder también el CBM).
+            // Campo borrado = 0, igual que el default de la columna.
+            foreach (['peso_china', 'qty_pallet_china', 'qty_box_china', 'cbm_total_china'] as $numericField) {
+                if (array_key_exists($numericField, $data)
+                    && ($data[$numericField] === null || $data[$numericField] === '' || $data[$numericField] === 'null')) {
+                    $data[$numericField] = 0;
+                }
+            }
+
             // Persistir estados antes del update masivo (evita perder dirty attrs)
             $proveedor->save();
 
