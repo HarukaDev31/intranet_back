@@ -55,7 +55,7 @@ class PagoProveedorAutorizacion
         $grupoRelacion = $usuario->getRelationValue('grupo');
         $grupo = trim((string) ($grupoRelacion instanceof \Illuminate\Database\Eloquent\Model ? $grupoRelacion->getAttribute('No_Grupo') : ''));
 
-        if ($grupo !== Usuario::ROL_ALMACEN_CHINA) {
+        if ($grupo !== Usuario::ROL_ENCARGADO_CHINA) {
             throw new PagoProveedorException('No tienes permiso para pagar en yuanes.', 403);
         }
 

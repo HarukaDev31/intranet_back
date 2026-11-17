@@ -214,6 +214,7 @@ class CotizacionPagosController extends Controller
                     $fieldToFilter = [
                         Usuario::ROL_COORDINACION => 'estado',
                         Usuario::ROL_ALMACEN_CHINA => 'estado_china',
+                        Usuario::ROL_ENCARGADO_CHINA => 'estado_china',
                         Usuario::ROL_CATALOGO_CHINA => 'estado_china',
                         Usuario::ROL_DOCUMENTACION => 'estado',
                         Usuario::ROL_JEFE_IMPORTACION => 'estado',

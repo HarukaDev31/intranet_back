@@ -239,6 +239,7 @@ class CotizacionProveedorController extends Controller
                     $query->where('main.estado_cotizador', 'CONFIRMADO');
                     break;
                 case Usuario::ROL_ALMACEN_CHINA:
+                case Usuario::ROL_ENCARGADO_CHINA:
                     $query->where('main.estado_cotizador', 'CONFIRMADO');
                     break;
             }
@@ -310,7 +311,7 @@ class CotizacionProveedorController extends Controller
                 $proveedores = array_values($proveedores);
 
                 // Filtrar proveedores por estado_china si es necesario
-                if ($rol == Usuario::ROL_ALMACEN_CHINA && $estadoChina != "todos") {
+                if (Usuario::esRolAlmacenChina($rol) && $estadoChina != "todos") {
                     $proveedores = array_filter($proveedores, function ($proveedor) use ($estadoChina) {
                         return ($proveedor['estados_proveedor'] ?? '') === $estadoChina;
                     });
@@ -1593,7 +1594,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             if (
                 isset($data['arrive_date_china']) &&
                 (!isset($data['qty_box_china']) && !isset($data['cbm_total_china']))
-                && $user->getNombreGrupo() == Usuario::ROL_ALMACEN_CHINA
+                && Usuario::esRolAlmacenChina($user->getNombreGrupo())
             ) {
                 $data['arrive_date_china'] = date('Y-m-d', strtotime(str_replace('/', '-', $data['arrive_date_china'])));
                 $estadoProveedorOrder = $this->providerOrderStatus[$estadoProveedor] ?? 0;
@@ -1677,7 +1678,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             }
             if (
                 isset($data['qty_box_china']) && isset($data['cbm_total_china'])
-                && $user->getNombreGrupo() == Usuario::ROL_ALMACEN_CHINA
+                && Usuario::esRolAlmacenChina($user->getNombreGrupo())
             ) {
                 $arriveDateProvided = isset($data['arrive_date_china'])
                     && $data['arrive_date_china'] !== null
@@ -1904,7 +1905,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             $this->verifyContainerIsCompleted($idContenedor);
 
             //just if current roles is almacen china
-            if ($user->getNombreGrupo() == Usuario::ROL_ALMACEN_CHINA) {
+            if (Usuario::esRolAlmacenChina($user->getNombreGrupo())) {
                 $this->sendAlertDifferenceCbmMessage($idCotizacion);
             }
             return response()->json([
@@ -4087,6 +4088,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                     break;
 
                 case Usuario::ROL_ALMACEN_CHINA:
+                case Usuario::ROL_ENCARGADO_CHINA:
                     $query->where('main.estado_cotizador', 'CONFIRMADO');
                     break;
             }
@@ -4139,7 +4141,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 $proveedores = array_values($proveedores);
 
                 // Filtrar proveedores por estado_china si es necesario
-                if ($rol == Usuario::ROL_ALMACEN_CHINA && $estadoChina != "todos") {
+                if (Usuario::esRolAlmacenChina($rol) && $estadoChina != "todos") {
                     $proveedores = array_filter($proveedores, function ($proveedor) use ($estadoChina) {
                         return ($proveedor['estados_proveedor'] ?? '') === $estadoChina;
                     });

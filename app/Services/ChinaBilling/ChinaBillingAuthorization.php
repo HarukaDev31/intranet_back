@@ -16,7 +16,8 @@ class ChinaBillingAuthorization
      */
     public function requireWarehouse(Usuario $user): array
     {
-        if ($this->groupName($user) !== Usuario::ROL_ALMACEN_CHINA) {
+        // Las operaciones de China son del Encargado China (ya no del almacén de Carga Consolidada).
+        if ($this->groupName($user) !== Usuario::ROL_ENCARGADO_CHINA) {
             throw new ChinaBillingException('No tienes permiso para gestionar operaciones de China.', 403);
         }
 
