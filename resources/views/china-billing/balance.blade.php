@@ -27,7 +27,7 @@
     <table style="border-top: 1px solid #ddd; border-bottom: 1px solid #ddd;">
         <tr>
             <td style="padding: 10px 0;"><div class="label">CLIENTE</div><div style="font-size: 14px; font-weight: bold; margin-top: 2px;">{{ $balance['organization']['name'] }}</div></td>
-            <td class="right" style="padding: 10px 0;"><div class="label">CONTACTO</div><div style="margin-top: 2px;">—</div></td>
+            <td class="right" style="padding: 10px 0;"><div class="label">CONTACTO</div><div style="margin-top: 2px;">{{ ($contact ?? '') ?: '—' }}</div></td>
         </tr>
     </table>
 

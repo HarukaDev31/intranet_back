@@ -40,6 +40,7 @@ class ChinaDocumentService
             'issued_on' => now()->toDateString(),
             'bank' => $this->bankAccount->active(),
             'operation' => $this->reader->operationDetail($operationId),
+            'contact' => $this->contact((int) $operation->organization_id),
         ];
 
         return $this->store(
@@ -66,6 +67,7 @@ class ChinaDocumentService
             'issued_on' => now()->toDateString(),
             'bank' => $this->bankAccount->active(),
             'balance' => $this->reader->balance($organizationId),
+            'contact' => $this->contact($organizationId),
         ];
 
         return $this->store(
@@ -77,6 +79,16 @@ class ChinaDocumentService
             'china-billing.balance',
             $actor
         );
+    }
+
+    /**
+     * Contacto del cliente para el documento (contacto y WhatsApp de la organización).
+     */
+    private function contact(int $organizationId): string
+    {
+        $org = \Illuminate\Support\Facades\DB::table('organizacion')->where('ID_Organizacion', $organizationId)->first(['contacto', 'whatsapp']);
+
+        return trim(implode(' · ', array_filter([trim((string) ($org->contacto ?? '')), trim((string) ($org->whatsapp ?? ''))])));
     }
 
     /**

@@ -45,7 +45,7 @@
         <tr>
             <td style="width: 25%; padding-bottom: 10px;"><div class="label">EMPRESA</div><b>{{ $op['organization']['name'] }}</b></td>
             <td style="width: 25%; padding-bottom: 10px;"><div class="label">CONSOLIDADO</div><b>{{ $consolidated }}</b></td>
-            <td style="width: 25%; padding-bottom: 10px;"><div class="label">CONTACTO</div><b>—</b></td>
+            <td style="width: 25%; padding-bottom: 10px;"><div class="label">CONTACTO</div><b>{{ ($contact ?? '') ?: '—' }}</b></td>
             <td style="width: 25%; padding-bottom: 10px;"><div class="label">PAÍS</div><b>{{ $op['organization']['country'] ?: '—' }}</b></td>
         </tr>
     </table>
