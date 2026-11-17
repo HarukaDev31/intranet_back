@@ -1290,6 +1290,14 @@ class AuthController extends Controller
                 (int) ($idGrupo ?? 0)
             );
 
+            // Orden sidebar: override usuario > cargo > menu.Nu_Orden
+            $mapaOrden = app(\App\Services\PanelAcceso\MenuOrdenService::class)
+                ->mapaEfectivo((int) $idUsuario, (int) ($idGrupo ?? 0));
+            if ($mapaOrden !== []) {
+                $arrMenuPadre = app(\App\Services\PanelAcceso\MenuOrdenService::class)
+                    ->aplicarAlArbol($arrMenuPadre, $mapaOrden);
+            }
+
             return $arrMenuPadre;
         } catch (\Exception $e) {
             // En caso de error, devolver array vacío

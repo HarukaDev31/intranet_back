@@ -10,6 +10,7 @@ use App\Http\Controllers\PanelAcceso\PermisoMenuUsuarioController;
 use App\Http\Controllers\PanelAcceso\MenuExternoController;
 use App\Http\Controllers\PanelAcceso\OrganizacionAdminController;
 use App\Http\Controllers\PanelAcceso\ApiClientAdminController;
+use App\Http\Controllers\PanelAcceso\MenuOrdenController;
 
 /*
 |--------------------------------------------------------------------------
@@ -74,6 +75,16 @@ Route::group(['prefix' => 'panel-acceso', 'middleware' => 'jwt.auth'], function 
     // -----------------------------------------------------------------------
     Route::get('menu-acceso/{empresaId}/{orgId}/{grupoId}', [MenuAccesoController::class, 'getMenuPorGrupo']);
     Route::post('menu-acceso', [MenuAccesoController::class, 'guardarPermisos']);
+
+    // -----------------------------------------------------------------------
+    // Orden del sidebar (por cargo / por usuario; usuario pisa cargo)
+    // -----------------------------------------------------------------------
+    Route::get('menu-orden/opciones', [MenuOrdenController::class, 'opciones']);
+    Route::get('menu-orden/grupo/{grupoId}', [MenuOrdenController::class, 'porGrupo'])->whereNumber('grupoId');
+    Route::put('menu-orden/grupo/{grupoId}', [MenuOrdenController::class, 'guardarGrupo'])->whereNumber('grupoId');
+    Route::get('menu-orden/usuario/{usuarioId}', [MenuOrdenController::class, 'porUsuario'])->whereNumber('usuarioId');
+    Route::put('menu-orden/usuario/{usuarioId}', [MenuOrdenController::class, 'guardarUsuario'])->whereNumber('usuarioId');
+    Route::delete('menu-orden/usuario/{usuarioId}', [MenuOrdenController::class, 'limpiarUsuario'])->whereNumber('usuarioId');
 
     // -----------------------------------------------------------------------
     // Usuarios Externos
