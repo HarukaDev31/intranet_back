@@ -20,10 +20,9 @@ class ChinaBillingAuthorization
             throw new ChinaBillingException('No tienes permiso para gestionar operaciones de China.', 403);
         }
 
-        $organizationIds = array_values(array_filter(
-            $user->organizacionesPermitidas(),
-            fn (int $id) => $id !== Usuario::ID_ORGANIZACION_ADMIN
-        ));
+        // PRY-26-0003 (#1963): Pro Business (organización 1) también es cliente de Almacén China, así que se
+        // puede elegir al registrar operaciones y cobros. Sus consolidados no generan borradores (ChinaDraftService).
+        $organizationIds = array_values(array_unique(array_map('intval', $user->organizacionesPermitidas())));
 
         return $this->actor($user, $organizationIds);
     }
