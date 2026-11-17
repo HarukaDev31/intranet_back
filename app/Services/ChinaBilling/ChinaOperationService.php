@@ -69,12 +69,14 @@ class ChinaOperationService
         return DB::transaction(function () use ($operation, $data, $packing) {
             $fields = $this->fields($data);
             $sameRate = $operation->rate !== null && $fields['rate'] !== null && abs((float) $operation->rate - (float) $fields['rate']) < 0.005;
-            $fields['rate_tier'] = $sameRate && !array_key_exists('rate_tier', $data)
+            $rateTier = $sameRate && !array_key_exists('rate_tier', $data)
                 ? $operation->rate_tier
                 : ($sameRate && (int) ($data['rate_tier'] ?? 0) === (int) $operation->rate_tier
                     ? $operation->rate_tier
                     : $this->rateTier((int) $operation->organization_id, $fields['rate'], $data['rate_tier'] ?? null));
             $operation->update($fields);
+            $operation->rate_tier = $rateTier;
+            $operation->save();
             $this->syncCosts($operation, $data['costs'] ?? []);
             $this->storePacking($operation, $packing);
 
