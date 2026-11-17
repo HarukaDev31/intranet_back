@@ -481,47 +481,94 @@ class PagoProveedorEtapa1Service
     {
         return DB::transaction(function () use ($solicitudId, $actor) {
             $solicitud = $this->solicitud($solicitudId);
-            $lineas = [];
-            $total = 0.0;
-            $primero = null;
-            foreach ($solicitud->proveedores as $proveedor) {
-                if ($proveedor->status === PagoProveedorSolicitudProveedor::STATUS_CANCELLED) {
-                    continue;
-                }
-                $primero ??= $proveedor;
-                $saldo = $this->balance($proveedor);
-                if ($saldo <= 0) {
-                    continue;
-                }
-                $lineas[] = $proveedor->code_supplier . ' | ' . $proveedor->product;
-                $total += $saldo;
-            }
-            if ($lineas === [] || !$primero) {
-                throw new PagoProveedorException('Ya no hay saldo por depositar.');
-            }
-            $texto = implode("\n", [
-                'Hola, ' . $this->mensajes()->firstName($solicitud->client_name) . ' 🙋🏻‍♀️',
-                'Te compartimos nuestras cuentas bancarias para que puedas realizar el depósito de tu pago. 👆🏻',
-                '',
-                '*Concepto:* Pago a proveedor',
-                '',
-                count($lineas) > 1 ? '📦 Detalle de proveedores:' : '📦 Detalle del proveedor:',
-                ...array_map(fn (string $line) => '➡️ ' . $line, $lineas),
-                '',
-                '💰 *Total a depositar: $' . number_format($total, 2, '.', ',') . '*',
-                '',
-                '🧾 Una vez realizado el depósito, envíanos tu comprobante de pago por este medio para registrarlo.',
-                '¡Gracias! 😊',
-            ]);
-            $this->guardarMensaje($primero, 'cuentas', $texto, $actor);
+            $mensaje = $this->armarCuentas($solicitud);
+            $this->guardarMensaje($mensaje['primero'], 'cuentas', $mensaje['texto'], $actor);
 
             return [
                 'tipo' => 'cuentas',
-                'texto' => $texto,
+                'texto' => $mensaje['texto'],
                 'imagen' => '/images/pago-proveedor/cuentas-bancarias.jpg',
+                'puede_enviar' => $solicitud->client_whatsapp !== null && trim((string) $solicitud->client_whatsapp) !== '',
                 'nota' => 'La imagen oficial de las cuentas va antes de este texto. Los números de cuenta no se escriben en el mensaje.',
             ];
         });
+    }
+
+    /**
+     * Envía al cliente, desde el número de ventas, la imagen oficial de las cuentas y el texto con el total a depositar.
+     *
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     * @return array<string, mixed>
+     */
+    public function enviarCuentas(int $solicitudId, array $actor): array
+    {
+        return DB::transaction(function () use ($solicitudId, $actor) {
+            $solicitud = $this->solicitud($solicitudId, true);
+            $destinatario = trim((string) $solicitud->client_whatsapp);
+            if ($destinatario === '') {
+                throw new PagoProveedorException('Falta el WhatsApp del cliente.');
+            }
+            $mensaje = $this->armarCuentas($solicitud);
+            $whatsapp = app(PagoProveedorCotizacionWhatsappService::class);
+            $whatsapp->enviarImagenCliente($destinatario, resource_path('pago-proveedor/cuentas-bancarias.jpg'), 'cuentas solicitud ' . $solicitudId);
+            $whatsapp->enviarTextoCliente($destinatario, $mensaje['texto'], 'cuentas solicitud ' . $solicitudId);
+            $this->guardarMensaje($mensaje['primero'], 'cuentas', $mensaje['texto'], $actor);
+            $this->historial->registrar(
+                PagoProveedorHistorial::ENTITY_REQUEST,
+                $solicitudId,
+                'Cuentas bancarias enviadas por WhatsApp',
+                $actor,
+                'Enviado desde el número de ventas a ' . $destinatario
+            );
+
+            return [
+                'texto' => $mensaje['texto'],
+                'enviado' => true,
+                'nota' => 'Cuentas bancarias enviadas por WhatsApp desde el número de ventas.',
+                'solicitud' => $this->recargar($solicitud),
+            ];
+        });
+    }
+
+    /**
+     * @return array{texto: string, primero: PagoProveedorSolicitudProveedor}
+     */
+    private function armarCuentas(PagoProveedorSolicitud $solicitud): array
+    {
+        $lineas = [];
+        $total = 0.0;
+        $primero = null;
+        foreach ($solicitud->proveedores as $proveedor) {
+            if ($proveedor->status === PagoProveedorSolicitudProveedor::STATUS_CANCELLED) {
+                continue;
+            }
+            $primero ??= $proveedor;
+            $saldo = $this->balance($proveedor);
+            if ($saldo <= 0) {
+                continue;
+            }
+            $lineas[] = $proveedor->code_supplier . ' | ' . $proveedor->product;
+            $total += $saldo;
+        }
+        if ($lineas === [] || !$primero) {
+            throw new PagoProveedorException('Ya no hay saldo por depositar.');
+        }
+        $texto = implode("\n", [
+            'Hola, ' . $this->mensajes()->firstName($solicitud->client_name) . ' 🙋🏻‍♀️',
+            'Te compartimos nuestras cuentas bancarias para que puedas realizar el depósito de tu pago. 👆🏻',
+            '',
+            '*Concepto:* Pago a proveedor',
+            '',
+            count($lineas) > 1 ? '📦 Detalle de proveedores:' : '📦 Detalle del proveedor:',
+            ...array_map(fn (string $line) => '➡️ ' . $line, $lineas),
+            '',
+            '💰 *Total a depositar: $' . number_format($total, 2, '.', ',') . '*',
+            '',
+            '🧾 Una vez realizado el depósito, envíanos tu comprobante de pago por este medio para registrarlo.',
+            '¡Gracias! 😊',
+        ]);
+
+        return ['texto' => $texto, 'primero' => $primero];
     }
 
     /**
