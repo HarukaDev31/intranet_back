@@ -289,28 +289,19 @@ class OrganizacionClienteService
     }
 
     /**
-     * Rol «Socio» o «Importador» de la organización. Si cambió el tipo, el rol del otro tipo se renombra
-     * (así sus usuarios y permisos se conservan y no se duplica).
+     * Rol «Socio» o «Importador» de la organización; si no existe se crea. Los roles nunca se renombran:
+     * al cambiar el tipo solo se mueve al usuario del cliente (asegurarUsuario), los demás usuarios no cambian.
      */
     private function asegurarGrupo(Organizacion $org, string $tipo): int
     {
         $organizacionId = (int) $org->getKey();
         $nombre = self::nombreGrupo($tipo);
-        $otro = $nombre === self::GRUPO_SOCIO ? self::GRUPO_IMPORTADOR : self::GRUPO_SOCIO;
         $descripcion = $nombre === self::GRUPO_SOCIO ? 'Rol del socio (Almacén China)' : 'Rol del importador (Almacén China)';
-        $buscar = fn (string $grupo) => Grupo::query()
+        $grupo = Grupo::query()
             ->where('ID_Organizacion', $organizacionId)
-            ->whereRaw('LOWER(TRIM(No_Grupo)) = ?', [mb_strtolower($grupo)])
+            ->whereRaw('LOWER(TRIM(No_Grupo)) = ?', [mb_strtolower($nombre)])
             ->orderBy('ID_Grupo')
             ->first();
-
-        $grupo = $buscar($nombre);
-        if (!$grupo) {
-            $grupo = $buscar($otro);
-            if ($grupo) {
-                $grupo->fill(['No_Grupo' => $nombre, 'No_Grupo_Descripcion' => $descripcion])->save();
-            }
-        }
         if (!$grupo) {
             $grupo = Grupo::query()->create([
                 'ID_Empresa' => (int) $org->getAttribute('ID_Empresa'),
