@@ -253,19 +253,18 @@ class CalculadoraImportacionExcelGenerationTest extends TestCase
         $this->assertSame('PESO', $calculadora->tipo_cotizacion);
         $this->assertCount(6, $calculadora->proveedores);
 
-        // maxcbm persistido por proveedor (sin depender del orden)
+        // El peso total (9.90) gana al volumen total (8.60): cada maxcbm es peso/1000.
         $maxcbmValues = $calculadora->proveedores
             ->map(fn ($p) => round((float) $p->maxcbm, 2))
             ->sort()
             ->values()
             ->all();
-        $this->assertSame([1.10, 1.20, 1.80, 2.10, 2.50, 3.30], $maxcbmValues);
-
-        // Debe existir al menos un proveedor donde domine PESO y otro donde domine CBM
-        $dominaPeso = $calculadora->proveedores->contains(fn ($p) => (float) $p->maxcbm > (float) $p->cbm);
-        $dominaCbm = $calculadora->proveedores->contains(fn ($p) => (float) $p->cbm >= ((float) $p->peso / 1000) && (float) $p->maxcbm === (float) $p->cbm);
-        $this->assertTrue($dominaPeso, 'Debe existir al menos un proveedor donde domine PESO');
-        $this->assertTrue($dominaCbm, 'Debe existir al menos un proveedor donde domine CBM');
+        $this->assertSame([0.90, 1.20, 1.50, 1.80, 2.00, 2.50], $maxcbmValues);
+        $proveedorConVolumenMayor = $calculadora->proveedores->first(
+            fn ($p) => round((float) $p->cbm, 2) === 2.10
+        );
+        $this->assertNotNull($proveedorConVolumenMayor);
+        $this->assertEqualsWithDelta(1.50, (float) $proveedorConVolumenMayor->maxcbm, 0.01);
 
         $relativeExcelPath = ltrim(str_replace('/storage/', '', parse_url($calculadora->url_cotizacion, PHP_URL_PATH)), '/');
         $excelPath = storage_path('app/public/' . $relativeExcelPath);
@@ -276,7 +275,7 @@ class CalculadoraImportacionExcelGenerationTest extends TestCase
         $sheetResumen = $spreadsheet->getSheet(0);
         $sheetCalculos = $spreadsheet->getSheet(1);
         $volumenResumen = (float) $sheetResumen->getCell('I11')->getCalculatedValue();
-        $this->assertEqualsWithDelta(12.00, $volumenResumen, 0.01, 'El volumen total en hoja 1 debe usar suma de maxcbm');
+        $this->assertEqualsWithDelta(9.90, $volumenResumen, 0.01, 'El volumen total en hoja 1 debe usar el mayor entre volumen y peso totales');
 
         $col = 'C';
         $colTotales = null;
@@ -292,7 +291,7 @@ class CalculadoraImportacionExcelGenerationTest extends TestCase
         $cbmTotalHoja2 = (float) $sheetCalculos->getCell($colTotales . '8')->getCalculatedValue();
         $this->assertEqualsWithDelta(8.60, $cbmTotalHoja2, 0.01, 'La fila 8 debe conservar la suma de CBM original');
         $maxcbmTotalHoja2 = (float) $sheetCalculos->getCell($colTotales . '9')->getCalculatedValue();
-        $this->assertEqualsWithDelta(12.00, $maxcbmTotalHoja2, 0.01, 'La fila maxcbm en hoja 2 debe sumar correctamente');
+        $this->assertEqualsWithDelta(9.90, $maxcbmTotalHoja2, 0.01, 'La fila de CBM facturable debe usar el mayor entre volumen y peso totales');
 
         $relativePdfPath = ltrim(str_replace('/storage/', '', parse_url($calculadora->url_cotizacion_pdf, PHP_URL_PATH)), '/');
         $pdfPath = storage_path('app/public/' . $relativePdfPath);

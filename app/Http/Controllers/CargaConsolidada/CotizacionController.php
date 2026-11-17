@@ -13,6 +13,7 @@ use App\Models\CargaConsolidada\CotizacionProveedor;
 use App\Models\CargaConsolidada\CotizacionProveedorArchivoIa;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\ConsolidadoCotizacionAduanaTramite;
+use App\Services\CalculadoraImportacion\CbmFacturable;
 use App\Services\CargaConsolidada\CotizacionService;
 use App\Services\CargaConsolidada\CustomersHeadersService;
 use App\Services\CargaConsolidada\CotizacionExportService;
@@ -3815,7 +3816,7 @@ class CotizacionController extends Controller
             }
 
             Log::info('Proveedores extraídos: ' . count($proveedores));
-            return $proveedores;
+            return $this->aplicarCbmFacturable($proveedores);
         } catch (\Exception $e) {
             Log::error('Error en getEmbarqueData: ' . $e->getMessage());
             return [];
@@ -4022,7 +4023,7 @@ class CotizacionController extends Controller
             }
             Log::info('Proveedores modificados extraídos: ' . count($proveedores));
             Log::info('Proveedores modificados extraídos: ' . json_encode($proveedores));
-            return $proveedores;
+            return $this->aplicarCbmFacturable($proveedores);
         } catch (\Exception $e) {
             Log::error('Error en getEmbarqueDataModified: ' . $e->getMessage());
             return [];
@@ -4053,6 +4054,33 @@ class CotizacionController extends Controller
         }
 
         return $this->sanitizeCodeSupplier($code . $carga . "-" . $index) ?? ('SUP-' . (int) $index);
+    }
+
+    /**
+     * Reparte el CBM facturable de la cotización: el mayor entre volumen total y peso total.
+     *
+     * @param array<int, array<string, mixed>> $proveedores
+     * @return array<int, array<string, mixed>>
+     */
+    private function aplicarCbmFacturable(array $proveedores): array
+    {
+        $pares = array();
+        foreach ($proveedores as $proveedor) {
+            $pares[] = array(
+                'cbm' => $proveedor['cbm_total'] ?? 0,
+                'peso' => $proveedor['peso'] ?? 0,
+            );
+        }
+        $dominaPeso = CbmFacturable::desdeProveedores($pares)['domina_peso'];
+        foreach ($proveedores as $i => $proveedor) {
+            $proveedores[$i]['maxcbm'] = CbmFacturable::aporte(
+                (float) ($proveedor['cbm_total'] ?? 0),
+                (float) ($proveedor['peso'] ?? 0),
+                $dominaPeso
+            );
+        }
+
+        return $proveedores;
     }
 
     private function sanitizeCodeSupplier(?string $code): ?string
