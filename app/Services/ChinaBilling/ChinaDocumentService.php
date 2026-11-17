@@ -161,6 +161,10 @@ class ChinaDocumentService
         $options->set('isHtml5ParserEnabled', true);
         $options->set('isRemoteEnabled', false);
         $options->set('defaultFont', 'DejaVu Sans');
+        // Noto Sans SC (versionada en storage/fonts) para la dirección en chino de la oficina.
+        $options->set('fontDir', storage_path('fonts'));
+        $options->set('fontCache', storage_path('fonts'));
+        $options->set('chroot', [public_path(), storage_path('fonts')]);
         $dompdf = new Dompdf($options);
         $dompdf->loadHtml(view($view, $snapshot)->render());
         $dompdf->setPaper('A4');
