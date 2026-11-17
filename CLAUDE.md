@@ -28,4 +28,4 @@ Front: `HarukaDev31/probusiness_intranetv3` (Nuxt). Prod = `main` ("Deploy PROD"
 ## Estado PRY-26-0003
 - Rama `soporte/PRY-26-0003-2` (en `qa`), PR #41 abierto sin merge, va junto al front #166.
 - Migraciones nuevas (orden): `2026_11_14_090000_*`, `2026_11_16_100000_*` (campos de cliente en organizacion), `110000` (historial tarifas),
-  `120000` (`rate_tier`), `130000` (mueve y **elimina `china_clients`**; respaldar antes de prod), `2026_11_17_100000_*` (país de origen de Pro Business).
+  `120000` (`rate_tier`), `130000` (mueve y **elimina `china_clients`**; respaldar antes de prod), `2026_11_17_100000_*` (país de origen de Pro Business), `110000` (dirección de la oficina en chino; PDFs usan Noto Sans SC de `storage/fonts`).
