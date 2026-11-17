@@ -17,6 +17,8 @@ class Usuario extends Authenticatable implements JWTSubject
     const ROL_COTIZADOR = 'Cotizador';
     const ROL_COORDINACION = 'Coordinación';
     const ROL_ALMACEN_CHINA = 'ContenedorAlmacen';
+    /** Encargado de China: opera Operaciones, Clientes, Flujo de caja y Pago a Proveedor (China). Conserva lo del almacén en Carga Consolidada. */
+    const ROL_ENCARGADO_CHINA = 'Encargado China';
     const ROL_ADMINISTRACION = 'Administración';
     const ROL_DOCUMENTACION = 'Documentacion';
     const ROL_CATALOGO_CHINA = 'CatalogoChina';
@@ -42,7 +44,14 @@ class Usuario extends Authenticatable implements JWTSubject
      */
     const ROLES_VISIBILIDAD_GLOBAL = [
         self::ROL_ALMACEN_CHINA,
+        self::ROL_ENCARGADO_CHINA,
     ];
+
+    /** Roles con el comportamiento de almacén China en Carga Consolidada. */
+    public static function esRolAlmacenChina(?string $rol): bool
+    {
+        return $rol === self::ROL_ALMACEN_CHINA || $rol === self::ROL_ENCARGADO_CHINA;
+    }
     protected $fillable = [
         'No_Usuario',
         'No_Password',

@@ -1157,7 +1157,7 @@ class ContenedorController extends Controller
             if ($esContenedorSocio) {
                 if (Usuario::rolNoVeConsolidadosSocio($role)) {
                     $query->whereRaw('0 = 1');
-                } elseif ($role === Usuario::ROL_ALMACEN_CHINA) {
+                } elseif (Usuario::esRolAlmacenChina($role)) {
                     $query->where('tipo', 'COTIZADOR')->limit(3);
                 } else {
                     $query->where('tipo', 'COTIZADOR')
