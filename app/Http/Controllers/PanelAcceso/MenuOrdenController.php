@@ -44,7 +44,8 @@ class MenuOrdenController extends Controller
                 return response()->json(['success' => false, 'message' => 'El cargo no pertenece a tu organización'], 403);
             }
 
-            $items = $this->menusArbolOrg($orgId);
+            $permitidos = $this->menuIdsConAccesoGrupo($grupoId);
+            $items = $this->menusArbolOrg($orgId, $permitidos);
             $mapa = $this->ordenService->mapaEfectivo(0, $grupoId);
             $items = $this->aplicarMapaAItems($items, $mapa);
             $tieneOverride = DB::table('menu_orden_grupo')->where('ID_Grupo', $grupoId)->exists();
@@ -85,7 +86,8 @@ class MenuOrdenController extends Controller
             }
 
             $idGrupo = (int) ($usuario->ID_Grupo ?? 0);
-            $items = $this->menusArbolOrg($userOrg);
+            $permitidos = $this->menuIdsConAccesoUsuario($usuarioId);
+            $items = $this->menusArbolOrg($userOrg, $permitidos);
             $mapa = $this->ordenService->mapaEfectivo($usuarioId, $idGrupo);
             $items = $this->aplicarMapaAItems($items, $mapa);
             $tieneOverride = DB::table('menu_orden_usuario')->where('ID_Usuario', $usuarioId)->exists();
@@ -310,11 +312,54 @@ class MenuOrdenController extends Controller
     }
 
     /**
-     * Menús activos de la org en árbol plano anidado (padres con children).
+     * IDs de menú con Nu_Consultar para algún usuario del cargo.
      *
+     * @return array<int, int> mapa id => id
+     */
+    private function menuIdsConAccesoGrupo($grupoId)
+    {
+        $ids = DB::table('menu_acceso AS MA')
+            ->join('grupo_usuario AS GU', 'GU.ID_Grupo_Usuario', '=', 'MA.ID_Grupo_Usuario')
+            ->where('GU.ID_Grupo', (int) $grupoId)
+            ->where('MA.Nu_Consultar', 1)
+            ->distinct()
+            ->pluck('MA.ID_Menu')
+            ->map(function ($id) {
+                return (int) $id;
+            })
+            ->all();
+
+        return array_fill_keys($ids, true);
+    }
+
+    /**
+     * IDs de menú con Nu_Consultar para el grupo_usuario del usuario.
+     *
+     * @return array<int, int> mapa id => id
+     */
+    private function menuIdsConAccesoUsuario($usuarioId)
+    {
+        $ids = DB::table('menu_acceso AS MA')
+            ->join('grupo_usuario AS GU', 'GU.ID_Grupo_Usuario', '=', 'MA.ID_Grupo_Usuario')
+            ->where('GU.ID_Usuario', (int) $usuarioId)
+            ->where('MA.Nu_Consultar', 1)
+            ->distinct()
+            ->pluck('MA.ID_Menu')
+            ->map(function ($id) {
+                return (int) $id;
+            })
+            ->all();
+
+        return array_fill_keys($ids, true);
+    }
+
+    /**
+     * Menús activos de la org en árbol (solo los permitidos + ancestros necesarios).
+     *
+     * @param  array<int, bool>|null  $permitidos  null = todos
      * @return array<int, array<string, mixed>>
      */
-    private function menusArbolOrg($orgId)
+    private function menusArbolOrg($orgId, $permitidos = null)
     {
         $rows = DB::table('menu')
             ->where('ID_Organizacion', (int) $orgId)
@@ -331,6 +376,32 @@ class MenuOrdenController extends Controller
                 'url_intranet_v2',
                 'show_father',
             ]);
+
+        if (is_array($permitidos)) {
+            if ($permitidos === []) {
+                return [];
+            }
+            $byId = [];
+            foreach ($rows as $row) {
+                $byId[(int) $row->ID_Menu] = $row;
+            }
+            // Incluir ancestros para no romper el árbol del sidebar.
+            $incluir = $permitidos;
+            foreach (array_keys($permitidos) as $menuId) {
+                $actual = $byId[$menuId] ?? null;
+                while ($actual) {
+                    $padreId = (int) $actual->ID_Padre;
+                    if ($padreId <= 0 || isset($incluir[$padreId])) {
+                        break;
+                    }
+                    $incluir[$padreId] = true;
+                    $actual = $byId[$padreId] ?? null;
+                }
+            }
+            $rows = $rows->filter(function ($row) use ($incluir) {
+                return isset($incluir[(int) $row->ID_Menu]);
+            })->values();
+        }
 
         $byPadre = [];
         foreach ($rows as $row) {
