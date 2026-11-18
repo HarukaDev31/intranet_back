@@ -1269,13 +1269,19 @@ class ContenedorController extends Controller
 
         return $baseUrl . '/' . ltrim($ruta, '/');
     }
-    public function getValidContainers()
+    public function getValidContainers(Request $request)
     {
-        // Obtener los contenedores existentes
-        $existingContainers = Contenedor::where('empresa', '!=', '1')->
-        //where year f_inicio is current year
-        whereYear('f_inicio', date('Y'))->
-        pluck('carga')->toArray();
+        // La numeración de consolidados reinicia cada año: se bloquean solo los números
+        // ya usados en el año del consolidado (?anio=, el año de su fecha de cierre).
+        // Sin año (o inválido) se usa el año actual, como antes.
+        $anio = (int) $request->query('anio', date('Y'));
+        if ($anio < 2000 || $anio > 2100) {
+            $anio = (int) date('Y');
+        }
+        $existingContainers = Contenedor::where('empresa', '!=', '1')
+            ->whereYear('f_inicio', $anio)
+            ->pluck('carga')
+            ->toArray();
         Log::info('existingContainers', $existingContainers);
         // Crear array con todos los contenedores (1-50) indicando cuáles están deshabilitados
         $data = [];
