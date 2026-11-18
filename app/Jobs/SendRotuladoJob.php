@@ -1060,7 +1060,8 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
                         (string) $supplierCode,
                         $movilidadPersonalPath,
                         $message,
-                        $sleepSendMedia
+                        $sleepSendMedia,
+                        'movilidad_personal.pdf'
                     ),
                     'rotulado_movilidad_pdf_' . $supplierCode,
                     'PDF movilidad personal — ' . $supplierCode
