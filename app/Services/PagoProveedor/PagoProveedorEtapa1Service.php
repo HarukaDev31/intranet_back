@@ -173,6 +173,47 @@ class PagoProveedorEtapa1Service
     }
 
     /**
+     * #2251/#2293: envía por WhatsApp (número de ventas) el mensaje del formulario T-T que se ve en la vista previa:
+     * el de autorización si los datos están por autorizar, si no el del formulario.
+     *
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     * @return array{texto: string, enviado: bool, nota: string, solicitud: PagoProveedorSolicitud}
+     */
+    public function enviarMensajeFormulario(int $solicitudId, int $proveedorId, array $actor): array
+    {
+        return DB::transaction(function () use ($solicitudId, $proveedorId, $actor) {
+            $proveedor = $this->proveedorEtapa1($solicitudId, $proveedorId);
+            $this->exigirTt($proveedor);
+            $solicitud = $this->solicitudDe($proveedor);
+            $destinatario = trim((string) $solicitud->client_whatsapp);
+            if ($destinatario === '') {
+                throw new PagoProveedorException('Falta el WhatsApp del cliente.');
+            }
+            $datos = $this->datosDe($proveedor);
+            $porAutorizar = $datos->status === PagoProveedorDatoProveedor::STATUS_AWAITING_AUTHORIZATION
+                || ($datos->status === PagoProveedorDatoProveedor::STATUS_RECEIVED && $datos->correction_requested);
+            $texto = $this->textoFormulario($proveedor, $this->enlace($datos), $porAutorizar);
+            app(PagoProveedorCotizacionWhatsappService::class)
+                ->enviarTextoCliente($destinatario, $texto, 'formulario tt solicitud ' . $solicitudId);
+            $this->guardarMensaje($proveedor, $porAutorizar ? 'validacion_tt' : 'pedir_datos', $texto, $actor);
+            $this->historial->registrar(
+                PagoProveedorHistorial::ENTITY_REQUEST,
+                $solicitudId,
+                $porAutorizar ? 'Mensaje de autorización enviado por WhatsApp' : 'Formulario T-T enviado por WhatsApp',
+                $actor,
+                $proveedor->code_supplier . ' · a ' . $destinatario
+            );
+
+            return [
+                'texto' => $texto,
+                'enviado' => true,
+                'nota' => 'Mensaje enviado por WhatsApp desde el número de ventas.',
+                'solicitud' => $this->recargar($solicitud),
+            ];
+        });
+    }
+
+    /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
      */
     public function anularProveedor(int $solicitudId, int $proveedorId, string $motivo, array $actor): PagoProveedorSolicitud
@@ -1066,6 +1107,22 @@ class PagoProveedorEtapa1Service
         }
 
         return round(max(0, $this->requiredAmount($proveedor) - $abonado), 2);
+    }
+
+    /**
+     * #2307: lo abonado que Administración todavía no valida (comprobantes en validación).
+     */
+    public function enValidacion(PagoProveedorSolicitudProveedor $proveedor): float
+    {
+        $monto = 0.0;
+        foreach ($proveedor->aplicaciones as $aplicacion) {
+            $abono = $aplicacion->abono;
+            if ($abono && $abono->status === PagoProveedorAbono::STATUS_IN_VALIDATION) {
+                $monto += $this->creditedAmount($aplicacion, $abono);
+            }
+        }
+
+        return round($monto, 2);
     }
 
     public function balance(PagoProveedorSolicitudProveedor $proveedor, ?int $exceptoAbonoId = null): float

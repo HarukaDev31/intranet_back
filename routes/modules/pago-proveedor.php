@@ -48,6 +48,7 @@ Route::group(['prefix' => 'pago-proveedor', 'middleware' => 'jwt.auth'], functio
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/enviar-formulario', [PagoProveedorEtapa1Controller::class, 'enviarFormulario'])->whereNumber(['id', 'proveedorId']);
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/llenar-tt', [PagoProveedorEtapa1Controller::class, 'llenarPorVentas'])->whereNumber(['id', 'proveedorId']);
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/solicitar-validacion', [PagoProveedorEtapa1Controller::class, 'solicitarValidacion'])->whereNumber(['id', 'proveedorId']);
+    Route::post('solicitudes/{id}/proveedores/{proveedorId}/enviar-mensaje-formulario', [PagoProveedorEtapa1Controller::class, 'enviarMensajeFormulario'])->whereNumber(['id', 'proveedorId']);
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/anular', [PagoProveedorEtapa1Controller::class, 'anularProveedor'])->whereNumber(['id', 'proveedorId']);
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/observar', [PagoProveedorEtapa1Controller::class, 'observarProveedor'])->whereNumber(['id', 'proveedorId']);
     Route::post('solicitudes/{id}/proveedores/{proveedorId}/levantar-observacion', [PagoProveedorEtapa1Controller::class, 'levantarObservacion'])->whereNumber(['id', 'proveedorId']);

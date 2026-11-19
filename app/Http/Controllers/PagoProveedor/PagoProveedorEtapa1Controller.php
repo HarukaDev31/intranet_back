@@ -75,6 +75,15 @@ class PagoProveedorEtapa1Controller extends Controller
         });
     }
 
+    public function enviarMensajeFormulario(Request $request, int $solicitudId, int $proveedorId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
+            $actor = $this->autorizacion->exigirVentas($request->user());
+
+            return $this->datos($this->etapa1->enviarMensajeFormulario($solicitudId, $proveedorId, $actor));
+        });
+    }
+
     public function anularProveedor(Request $request, int $solicitudId, int $proveedorId): JsonResponse
     {
         return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
