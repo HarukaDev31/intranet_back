@@ -2,7 +2,9 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    @php($compacto = $varios_pagos && $mostrar_cuentas)
+    {{-- Con cuentas para el depósito el balance se compacta para que entre en una sola hoja (dompdf). --}}
+    @php($compacto = $mostrar_cuentas)
+    @php($muyCompacto = $varios_pagos && $mostrar_cuentas)
     <style>
         @page { margin: 37mm 15mm 24mm 15mm; }
         * { box-sizing: border-box; }
@@ -26,7 +28,7 @@
         .nota-gris { font-size: 7.8pt; color: #737373; }
         .detalle { border: 0.3mm solid #e2e2e2; border-radius: 2.5mm; padding: {{ $compacto ? '1mm' : '2mm' }} 3mm 3mm; }
         .detalle table { width: 100%; table-layout: fixed; }
-        .detalle td, .detalle th { padding: {{ $compacto ? '1.6mm' : '2.3mm' }} 0; border-bottom: 0.2mm solid #e4e4e4; font-size: 9pt; vertical-align: middle; }
+        .detalle td, .detalle th { padding: {{ $muyCompacto ? '1.2mm' : ($compacto ? '1.6mm' : '2.3mm') }} 0; border-bottom: 0.2mm solid #e4e4e4; font-size: 9pt; vertical-align: middle; }
         .detalle tr.ultima td { border-bottom: 0; }
         .detalle td.etiqueta { color: #555555; }
         .detalle td.valor, .detalle th { text-align: right; white-space: nowrap; color: #181818; }
