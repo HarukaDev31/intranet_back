@@ -314,7 +314,7 @@ class MenuOrdenController extends Controller
     /**
      * IDs de menú con Nu_Consultar para algún usuario del cargo.
      *
-     * @return array<int, int> mapa id => id
+     * @return array<int, true> mapa id => true
      */
     private function menuIdsConAccesoGrupo($grupoId)
     {
@@ -335,7 +335,7 @@ class MenuOrdenController extends Controller
     /**
      * IDs de menú con Nu_Consultar para el grupo_usuario del usuario.
      *
-     * @return array<int, int> mapa id => id
+     * @return array<int, true> mapa id => true
      */
     private function menuIdsConAccesoUsuario($usuarioId)
     {
@@ -429,9 +429,9 @@ class MenuOrdenController extends Controller
     }
 
     /**
-     * @param  array<int, array<string, mixed>>  $items
+     * @param  list<array<string, mixed>>  $items
      * @param  array<int, int>  $mapa
-     * @return array<int, array<string, mixed>>
+     * @return list<array<string, mixed>>
      */
     private function aplicarMapaAItems(array $items, array $mapa)
     {
@@ -452,7 +452,7 @@ class MenuOrdenController extends Controller
         }
         unset($item);
 
-        return array_values($items);
+        return $items;
     }
 
     /**
