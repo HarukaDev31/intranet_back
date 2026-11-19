@@ -193,7 +193,7 @@ class ChinaBillingReader
     public function operations(array $organizationIds, ?string $from, ?string $to): Collection
     {
         return ChinaOperation::query()
-            ->with(['costs', 'allocations.payment', 'creditApplications'])
+            ->with(['costs', 'allocations.payment.creditApplications', 'creditApplications'])
             ->whereIn('organization_id', $organizationIds)
             ->when($from, fn ($q) => $q->whereDate('issued_on', '>=', $from))
             ->when($to, fn ($q) => $q->whereDate('issued_on', '<=', $to))
@@ -220,7 +220,7 @@ class ChinaBillingReader
      */
     public function operationDetail(int $id): array
     {
-        $op = ChinaOperation::query()->with(['costs', 'allocations.payment', 'creditApplications'])->findOrFail($id);
+        $op = ChinaOperation::query()->with(['costs', 'allocations.payment.creditApplications', 'creditApplications'])->findOrFail($id);
 
         return $this->presentOperation($op, ChinaBillingCalculator::operationMetrics($op), $this->organizationNames([(int) $op->organization_id]));
     }
