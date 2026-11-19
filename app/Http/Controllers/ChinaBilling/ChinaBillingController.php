@@ -210,6 +210,23 @@ class ChinaBillingController extends Controller
         });
     }
 
+    public function attachCashVoucher(Request $request, int $id): JsonResponse
+    {
+        return $this->responder(function () use ($request, $id) {
+            $actor = $this->authorization->requireWarehouse($request->user());
+            $request->validate([
+                'voucher' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            ]);
+            $voucher = $request->file('voucher');
+            if (!$voucher instanceof \Illuminate\Http\UploadedFile) {
+                throw new ChinaBillingException('Adjunta el boucher.');
+            }
+            $this->payments->attachCashVoucher($id, $voucher, $actor);
+
+            return $this->ok(new ChinaBillingRowResource($this->reader->paymentDetail($id)));
+        });
+    }
+
     public function uncashPayment(Request $request, int $id): JsonResponse
     {
         return $this->responder(function () use ($request, $id) {
