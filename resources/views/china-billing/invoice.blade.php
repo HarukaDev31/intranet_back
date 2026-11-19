@@ -37,6 +37,7 @@
     @include('china-billing.partials.document-style')
     <style>
         @page { margin: 12px 28px; }
+        .data { table-layout: fixed; }
         .data th { border-bottom-width: 1px; }
         .data td { padding: 3px 8px; }
         .data td.subtotal { font-size: 10px; white-space: nowrap; }
@@ -71,33 +72,34 @@
 
     <table class="data" style="margin-top: 6px;">
         <colgroup><col style="width: 46%;"><col style="width: 30%;"><col style="width: 24%;"></colgroup>
-        <thead><tr><th>Concepto</th><th>Detalle</th><th class="right">Monto USD</th></tr></thead>
+        <thead><tr><th style="width:46%;">Concepto</th><th style="width:30%;">Detalle</th><th class="right" style="width:24%;">Monto USD</th></tr></thead>
         <tbody>
             @foreach($mainRows as $row)
-                <tr><td>{{ $row[0] }}</td><td class="muted">{{ $row[1] }}</td><td class="right">{{ $money($row[2]) }}</td></tr>
+                <tr><td style="width:46%;">{{ $row[0] }}</td><td class="muted" style="width:30%;">{{ $row[1] }}</td><td class="right" style="width:24%;">{{ $money($row[2]) }}</td></tr>
             @endforeach
-            <tr><td></td><td class="right muted subtotal">Subtotal</td><td class="right"><b>{{ $money($mainSubtotal) }}</b></td></tr>
+            <tr><td style="width:46%;"></td><td class="right muted subtotal" style="width:30%;">Subtotal</td><td class="right" style="width:24%;"><b>{{ $money($mainSubtotal) }}</b></td></tr>
         </tbody>
     </table>
 
     <div style="font-size: 10px; font-weight: bold; letter-spacing: 1px; margin: 6px 0 2px;">OTROS GASTOS</div>
     <table class="data">
         <colgroup><col style="width: 46%;"><col style="width: 30%;"><col style="width: 24%;"></colgroup>
-        <thead><tr><th>Concepto</th><th>Detalle</th><th class="right">Monto USD</th></tr></thead>
+        <thead><tr><th style="width:46%;">Concepto</th><th style="width:30%;">Detalle</th><th class="right" style="width:24%;">Monto USD</th></tr></thead>
         <tbody>
             @forelse($otherRows as $row)
-                <tr><td>{{ $row[0] }}</td><td class="muted">{{ $row[1] }}</td><td class="right">{{ $money($row[2]) }}</td></tr>
+                <tr><td style="width:46%;">{{ $row[0] }}</td><td class="muted" style="width:30%;">{{ $row[1] }}</td><td class="right" style="width:24%;">{{ $money($row[2]) }}</td></tr>
             @empty
                 <tr><td colspan="3" class="muted">Sin otros gastos.</td></tr>
             @endforelse
-            <tr><td></td><td class="right muted subtotal">Subtotal otros gastos</td><td class="right"><b>{{ $money($otherSubtotal) }}</b></td></tr>
+            <tr><td style="width:46%;"></td><td class="right muted subtotal" style="width:30%;">Subtotal otros gastos</td><td class="right" style="width:24%;"><b>{{ $money($otherSubtotal) }}</b></td></tr>
         </tbody>
     </table>
 
-    <table style="margin-top: 6px; border-top: 1px solid #111;">
+    <table class="data" style="margin-top: 6px; border-top: 1px solid #111;">
         <tr>
-            <td class="right" style="padding-top: 4px; font-size: 11px; font-weight: bold; letter-spacing: 1px;">TOTAL A PAGAR (USD)</td>
-            <td class="right" style="padding-top: 4px; width: 24%; font-size: 16px; font-weight: bold; color: #f26b1d;">{{ $money($mainSubtotal + $otherSubtotal) }}</td>
+            <td style="width:46%; border-bottom: none;"></td>
+            <td class="right" style="width:30%; border-bottom: none; padding-top: 4px; font-size: 11px; font-weight: bold; letter-spacing: 1px;">TOTAL A PAGAR (USD)</td>
+            <td class="right" style="width:24%; border-bottom: none; padding-top: 4px; font-size: 16px; font-weight: bold; color: #f26b1d;">{{ $money($mainSubtotal + $otherSubtotal) }}</td>
         </tr>
     </table>
 

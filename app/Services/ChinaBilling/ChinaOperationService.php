@@ -186,9 +186,16 @@ class ChinaOperationService
         }
 
         DB::transaction(function () use ($operation, $amount, $fromOperationId, $metrics) {
+            $organizationId = (int) $operation->organization_id;
+            if ($fromOperationId) {
+                $source = ChinaOperation::query()->find((int) $fromOperationId);
+                if ($source) {
+                    $organizationId = (int) $source->organization_id;
+                }
+            }
             $payments = ChinaPayment::query()
                 ->with(['allocations', 'creditApplications'])
-                ->where('organization_id', $operation->organization_id)
+                ->where('organization_id', $organizationId)
                 ->whereNotNull('confirmed_at')
                 ->orderBy('paid_on')->orderBy('id')
                 ->lockForUpdate()
