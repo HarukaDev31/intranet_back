@@ -8,10 +8,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * Saldo a favor de un cobro aplicado a una operación.
  *
+ * @property int $id
  * @property int $payment_id
  * @property int $operation_id
  * @property float $amount
+ * @property \Illuminate\Support\Carbon|null $applied_on
  * @property int|null $from_operation_id
+ * @property-read ChinaPayment|null $payment
  */
 class ChinaCreditApplication extends Model
 {
@@ -21,6 +24,7 @@ class ChinaCreditApplication extends Model
 
     protected $casts = ['amount' => 'float', 'applied_on' => 'date'];
 
+    /** @return BelongsTo<ChinaPayment, $this> */
     public function payment(): BelongsTo
     {
         return $this->belongsTo(ChinaPayment::class, 'payment_id');
