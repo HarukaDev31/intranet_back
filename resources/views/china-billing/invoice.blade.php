@@ -38,9 +38,9 @@
         .data td { padding: 3px 8px; }
         .data td.subtotal { font-size: 10px; white-space: nowrap; }
         .phone { white-space: nowrap; margin-top: 1px; }
-        .bank-title { margin-top: 4px; padding-bottom: 2px; border-bottom: 1px solid #111; }
+        .bank-title { margin-top: 8px; padding-bottom: 3px; border-bottom: 1px solid #e6e6e6; }
         .bank { width: 100%; table-layout: fixed; }
-        .bank td, .bank td.k { border-bottom: 1px solid #111; padding: 1.5px 8px; }
+        .bank td, .bank td.k { border-bottom: 1px solid #e6e6e6; padding: 2px 8px; }
     </style>
 </head>
 <body>
@@ -98,7 +98,7 @@
         </tr>
     </table>
 
-    <div style="margin-top: 6px; background: #111; color: #fff; text-align: center; font-size: 10px; font-weight: bold; letter-spacing: 1px; padding: 4px;">NUESTRA CUENTA BANCARIA EN CHINA</div>
+    <div style="margin-top: 18px; background: #111; color: #fff; text-align: center; font-size: 10px; font-weight: bold; letter-spacing: 1px; padding: 4px;">NUESTRA CUENTA BANCARIA EN CHINA</div>
 
     <div class="bank-title">*DATOS DEL BANCO INTERMEDIARIO</div>
     <table class="bank">
