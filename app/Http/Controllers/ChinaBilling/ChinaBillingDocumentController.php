@@ -77,8 +77,12 @@ class ChinaBillingDocumentController extends Controller
      */
     private function actor(Request $request): array
     {
-        return $request->route('scope') === 'partner'
-            ? $this->authorization->requirePartner($request->user())
+        if ($request->route('scope') === 'partner') {
+            return $this->authorization->requirePartner($request->user());
+        }
+
+        return $request->isMethod('get')
+            ? $this->authorization->requireOperationView($request->user())
             : $this->authorization->requireWarehouse($request->user());
     }
 }

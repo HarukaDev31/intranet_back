@@ -33,7 +33,7 @@ class ChinaBillingController extends Controller
     public function operations(Request $request): JsonResponse
     {
         return $this->responder(function () use ($request) {
-            $actor = $this->authorization->requireWarehouse($request->user());
+            $actor = $this->authorization->requireOperationView($request->user());
             $result = $this->reader->warehouseOperations($actor['organization_ids'], $request->all());
 
             return $this->listResponse($result);
@@ -43,7 +43,7 @@ class ChinaBillingController extends Controller
     public function summary(Request $request): JsonResponse
     {
         return $this->responder(function () use ($request) {
-            $actor = $this->authorization->requireWarehouse($request->user());
+            $actor = $this->authorization->requireOperationView($request->user());
 
             return response()->json(['success' => true] + $this->reader->warehouseSummary($actor['organization_ids'], $request->only(['from', 'to'])));
         });
@@ -137,7 +137,7 @@ class ChinaBillingController extends Controller
     public function payments(Request $request): JsonResponse
     {
         return $this->responder(function () use ($request) {
-            $actor = $this->authorization->requireWarehouse($request->user());
+            $actor = $this->authorization->requireOperationView($request->user());
 
             return $this->listResponse($this->reader->warehousePayments($actor['organization_ids'], $request->all()));
         });
@@ -146,7 +146,7 @@ class ChinaBillingController extends Controller
     public function showPayment(Request $request, int $id): JsonResponse
     {
         return $this->responder(function () use ($request, $id) {
-            $actor = $this->authorization->requireWarehouse($request->user());
+            $actor = $this->authorization->requireOperationView($request->user());
             $this->payments->find($id, $actor, false);
 
             return $this->ok(new ChinaBillingRowResource($this->reader->paymentDetail($id)));
@@ -232,7 +232,7 @@ class ChinaBillingController extends Controller
     public function pendingOperations(Request $request, int $organizationId): JsonResponse
     {
         return $this->responder(function () use ($request, $organizationId) {
-            $actor = $this->authorization->requireWarehouse($request->user());
+            $actor = $this->authorization->requireOperationView($request->user());
             if (!in_array($organizationId, $actor['organization_ids'], true)) {
                 throw new ChinaBillingException('No tienes acceso a ese cliente.', 403);
             }
