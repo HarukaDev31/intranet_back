@@ -22,7 +22,7 @@ class ChinaBillingAuthorization
         }
 
         // PRY-26-0003 (#1963): Pro Business (organización 1) también es cliente de Almacén China, así que se
-        // puede elegir al registrar operaciones y cobros. Sus consolidados no generan borradores (ChinaDraftService).
+        // puede elegir al registrar operaciones y cobros. Sus consolidados cerrados también generan «Por aprobar» (ChinaDraftService).
         $organizationIds = array_values(array_unique(array_map('intval', $user->organizacionesPermitidas())));
 
         return $this->actor($user, $organizationIds);

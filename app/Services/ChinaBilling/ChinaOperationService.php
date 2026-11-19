@@ -2,6 +2,7 @@
 
 namespace App\Services\ChinaBilling;
 
+use App\Models\Usuario;
 use App\Exceptions\ChinaBillingException;
 use App\Models\ChinaBilling\ChinaCreditApplication;
 use App\Models\ChinaBilling\ChinaOperation;
@@ -34,7 +35,8 @@ class ChinaOperationService
         $containerId = !empty($data['container_id']) ? (int) $data['container_id'] : null;
         if ($containerId) {
             $draft = $this->drafts->find($containerId, $actor['organization_ids']);
-            if ((int) $draft['organization_id'] !== $organizationId) {
+            // Un consolidado de Pro Business lleva carga de varios clientes: Armando elige a quién se factura.
+            if ((int) $draft['organization_id'] !== Usuario::ID_ORGANIZACION_ADMIN && (int) $draft['organization_id'] !== $organizationId) {
                 throw new ChinaBillingException('El consolidado no pertenece a ese cliente.');
             }
         }
