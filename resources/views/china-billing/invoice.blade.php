@@ -37,6 +37,7 @@
     @include('china-billing.partials.document-style')
     <style>
         @page { margin: 12px 28px; }
+        .data th { border-bottom-width: 1px; }
         .data td { padding: 3px 8px; }
         .data td.subtotal { font-size: 10px; white-space: nowrap; }
         .phone { white-space: nowrap; margin-top: 1px; }
@@ -93,7 +94,7 @@
         </tbody>
     </table>
 
-    <table style="margin-top: 6px; border-top: 2px solid #111;">
+    <table style="margin-top: 6px; border-top: 1px solid #111;">
         <tr>
             <td class="right" style="padding-top: 4px; font-size: 11px; font-weight: bold; letter-spacing: 1px;">TOTAL A PAGAR (USD)</td>
             <td class="right" style="padding-top: 4px; width: 24%; font-size: 16px; font-weight: bold; color: #f26b1d;">{{ $money($mainSubtotal + $otherSubtotal) }}</td>
