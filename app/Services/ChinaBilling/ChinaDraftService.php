@@ -31,7 +31,8 @@ class ChinaDraftService
             // en China aparecen en Operaciones «Por aprobar». Solo desde la fecha de inicio del flujo, para no
             // llenar la lista con los consolidados ya cerrados antes.
             ->where('estado_china', Contenedor::CONTEDOR_CERRADO)
-            ->when(config('china_billing.borradores_desde'), fn ($query, $desde) => $query->whereDate('f_cierre', '>=', $desde))
+            // La fecha es la de subida del PL en China (cierre del consolidado); si no está registrada, la de cierre.
+            ->when(config('china_billing.borradores_desde'), fn ($query, $desde) => $query->whereRaw('DATE(COALESCE(lista_embarque_uploaded_at, f_cierre)) >= ?', [$desde]))
             ->whereNotIn('id', DB::table('china_operations')->whereNotNull('container_id')->select('container_id'))
             ->whereNotIn('id', DB::table('china_draft_dismissals')->select('container_id'))
             ->whereNotIn('organizacion_id', DB::table('organizacion')->where('facturable_china', false)->select('ID_Organizacion'))
@@ -42,7 +43,7 @@ class ChinaDraftService
         return $containers->map(fn (Contenedor $container) => [
             'container_id' => (int) $container->id,
             'organization_id' => (int) $container->organizacion_id,
-            'issued_on' => $container->f_cierre ? $container->f_cierre->toDateString() : now()->toDateString(),
+            'issued_on' => $this->fechaPackingList($container),
             // Concepto «Consolidado #19B - 2026» (#2373).
             'description' => $this->concepto($container),
             'cbm' => round((float) ($cbm[$container->id] ?? 0), 3),
@@ -77,6 +78,21 @@ class ChinaDraftService
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+    }
+
+    /** Fecha en que China subió el PL (cierra el consolidado); si falta, la fecha de cierre o la de hoy. */
+    private function fechaPackingList(Contenedor $container): string
+    {
+        foreach ([$container->lista_embarque_uploaded_at, $container->f_cierre] as $fecha) {
+            if ($fecha instanceof \DateTimeInterface) {
+                return $fecha->format('Y-m-d');
+            }
+            if (is_string($fecha) && $fecha !== '') {
+                return date('Y-m-d', (int) strtotime($fecha));
+            }
+        }
+
+        return now()->toDateString();
     }
 
     private function concepto(Contenedor $container): string
