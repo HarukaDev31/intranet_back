@@ -65,13 +65,6 @@ class ChinaBillingReader
                 $row['code'], $row['organization']['name'], $row['description'], $row['organization']['country'], $row['service_name'],
             ])), $search);
         })->values();
-        // #2423: «N.» es el conteo de operaciones (de mayor a menor); las «Por aprobar» no llevan número ni lo consumen.
-        $pending = $filtered->where('is_draft', false)->count();
-        $filtered = $filtered->map(function (array $row) use (&$pending) {
-            $row['number'] = $row['is_draft'] ? null : $pending--;
-
-            return $row;
-        });
 
         return [
             'page' => $this->paginate($filtered, $filters),
