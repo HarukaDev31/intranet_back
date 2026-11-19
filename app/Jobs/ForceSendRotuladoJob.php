@@ -503,7 +503,8 @@ Por lo tanto, dile a tu proveedor #{$supplierCode} que le ponga la etiqueta.
                     $supplierCode,
                     $movilidadPersonalPath,
                     $message,
-                    (int) $sleepSendMedia
+                    (int) $sleepSendMedia,
+                    'movilidad_personal.pdf'
                 )
             );
             Log::info('ForceSendRotuladoJob: PDF movilidad personal enviado', [

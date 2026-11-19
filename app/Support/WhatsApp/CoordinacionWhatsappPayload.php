@@ -1161,14 +1161,34 @@ class CoordinacionWhatsappPayload
         return self::imageTemplate($phone, 'pb_calc_resumen_img_v1', [], $filePath, $bitrixMessage, $sleep);
     }
 
+    /**
+     * Nombre que ve el cliente en WhatsApp: Rotulado_{código del proveedor}.pdf.
+     * No usar el archivo temporal (temp_document_proveedor…); Meta muestra este filename.
+     */
+    public static function nombrePdfRotulado(string $codigoProveedor): string
+    {
+        $code = trim(str_replace(["\\", "/", "\0", "\r", "\n"], '-', $codigoProveedor));
+        if ($code === '' || $code === '.' || $code === '..') {
+            $code = 'proveedor';
+        }
+
+        return 'Rotulado_' . $code . '.pdf';
+    }
+
     public static function rotuladoPdfProducto(
         string $phone,
         string $nombreProducto,
         string $codigoProveedor,
         string $filePath,
         string $bitrixMessage,
-        int $sleep = 0
+        int $sleep = 0,
+        ?string $filename = null
     ): array {
+        $nombre = trim((string) $filename);
+        if ($nombre === '') {
+            $nombre = self::nombrePdfRotulado($codigoProveedor);
+        }
+
         return self::documentTemplate(
             $phone,
             'pb_rotulado_pdf_producto_v1',
@@ -1178,7 +1198,7 @@ class CoordinacionWhatsappPayload
             ],
             $filePath,
             $bitrixMessage,
-            basename($filePath),
+            $nombre,
             'application/pdf',
             $sleep
         );
