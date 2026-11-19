@@ -42,6 +42,9 @@ class ChinaOperationService
             if ((int) $draft['organization_id'] !== Usuario::ID_ORGANIZACION_ADMIN && (int) $draft['organization_id'] !== $organizationId) {
                 throw new ChinaBillingException('El consolidado no pertenece a ese cliente.');
             }
+            // Mientras está «Por aprobar» lleva la fecha de cierre del consolidado (al subir el PL);
+            // al aprobarse, la operación queda con la fecha del día de la aprobación.
+            $data['issued_on'] = now()->toDateString();
         }
 
         return DB::transaction(function () use ($data, $packing, $actor, $organizationId, $containerId) {
