@@ -416,7 +416,11 @@ class ChinaBillingReader
         $enabled = DB::table('organizacion_paises_habilitados')->whereIn('organizacion_id', $ids)->orderBy('id')->get(['organizacion_id', 'id_pais'])
             ->groupBy('organizacion_id');
 
-        return collect($this->organizationNames($organizationIds))
+        // Los clientes eliminados de China (no facturables) no se ofrecen para operaciones nuevas.
+        $removed = DB::table('organizacion')->whereIn('ID_Organizacion', $ids)->where('facturable_china', false)->pluck('ID_Organizacion')
+            ->map(fn ($id) => (int) $id)->all();
+
+        return collect(array_diff_key($this->organizationNames($organizationIds), array_flip($removed)))
             ->map(function (array $row, int $id) use ($clients, $enabled) {
                 $client = $clients->get($id);
                 $isPartner = ($client->tipo_cliente ?? 'socio') !== 'importador';
