@@ -412,7 +412,9 @@ class ChinaClientService
      */
     private function clients(array $organizationIds): Collection
     {
-        return Organizacion::query()->with('paisOrigen')->whereIn('ID_Organizacion', $this->withAdmin($organizationIds))->where('Nu_Estado', 1)->get()->toBase();
+        return Organizacion::query()->with('paisOrigen')->whereIn('ID_Organizacion', $this->withAdmin($organizationIds))
+            // Pro Business se lista aunque su estado en la tabla no sea 1 (es la organización principal).
+            ->where(fn ($query) => $query->where('Nu_Estado', 1)->orWhere('ID_Organizacion', Usuario::ID_ORGANIZACION_ADMIN))->get()->toBase();
     }
 
     /**
