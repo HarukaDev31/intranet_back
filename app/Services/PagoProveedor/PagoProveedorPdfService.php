@@ -402,7 +402,7 @@ class PagoProveedorPdfService
         $tc = implode(' / ', array_values(array_unique($tasas)));
 
         return [
-            'cliente' => $this->nombrePropio((string) ($request?->client_name ?? '')),
+            'cliente' => $this->nombrePropio((string) ($request->client_name ?? '')),
             'consolidado' => $request?->consolidation,
             'codigo_proveedor' => $provider->code_supplier,
             'nombre_proveedor' => $provider->supplier_name,
