@@ -67,9 +67,9 @@ class MenuOrdenService
     }
 
     /**
-     * @param  object[]  $items
+     * @param  list<object>  $items
      * @param  array<int, int>  $mapa
-     * @return object[]
+     * @return list<object>
      */
     private function ordenarHermanos(array $items, array $mapa)
     {
@@ -95,6 +95,6 @@ class MenuOrdenService
             $item->Nu_Orden = $i++;
         }
 
-        return array_values($items);
+        return $items;
     }
 }
