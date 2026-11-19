@@ -274,6 +274,9 @@ class ChinaBillingReader
                 'code' => $allocation->payment->code,
                 'amount' => (float) $allocation->amount,
                 'status' => ChinaBillingCalculator::paymentStatus($allocation->payment),
+                'paid_on' => $allocation->payment->paid_on?->toDateString(),
+                'receipt_name' => $allocation->payment->receipt_name,
+                'amount_sent' => (float) $allocation->payment->amount_sent,
             ])->values()->all(),
             'credits' => $op->creditApplications->map(fn ($credit) => [
                 'id' => (int) $credit->id,
