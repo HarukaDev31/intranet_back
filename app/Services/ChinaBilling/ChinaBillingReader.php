@@ -193,7 +193,7 @@ class ChinaBillingReader
     public function operations(array $organizationIds, ?string $from, ?string $to): Collection
     {
         return ChinaOperation::query()
-            ->with(['costs', 'allocations.payment.creditApplications', 'creditApplications'])
+            ->with(['costs', 'allocations.payment.creditApplications', 'creditApplications.payment'])
             ->whereIn('organization_id', $organizationIds)
             ->when($from, fn ($q) => $q->whereDate('issued_on', '>=', $from))
             ->when($to, fn ($q) => $q->whereDate('issued_on', '<=', $to))
@@ -220,7 +220,7 @@ class ChinaBillingReader
      */
     public function operationDetail(int $id): array
     {
-        $op = ChinaOperation::query()->with(['costs', 'allocations.payment.creditApplications', 'creditApplications'])->findOrFail($id);
+        $op = ChinaOperation::query()->with(['costs', 'allocations.payment.creditApplications', 'creditApplications.payment'])->findOrFail($id);
 
         return $this->presentOperation($op, ChinaBillingCalculator::operationMetrics($op), $this->organizationNames([(int) $op->organization_id]));
     }
@@ -276,8 +276,13 @@ class ChinaBillingReader
                 'status' => ChinaBillingCalculator::paymentStatus($allocation->payment),
             ])->values()->all(),
             'credits' => $op->creditApplications->map(fn ($credit) => [
-                'id' => (int) $credit->id, 'amount' => (float) $credit->amount, 'from_operation_id' => $credit->from_operation_id,
+                'id' => (int) $credit->id,
+                'amount' => (float) $credit->amount,
+                'from_operation_id' => $credit->from_operation_id,
+                'payment_code' => $credit->payment ? $credit->payment->code : null,
+                'applied_on' => $credit->applied_on ? $credit->applied_on->toDateString() : null,
             ])->values()->all(),
+            'transferred_amount' => $this->transferredAmount($op),
             'balance_due' => $metrics['partner_balance'],
         ], $metrics);
     }
@@ -352,6 +357,20 @@ class ChinaBillingReader
                 ),
             ])->values()->all(),
         ];
+    }
+
+    /** Importe que se pasó a otra orden; queda en gris en la columna Diferencia. */
+    private function transferredAmount(ChinaOperation $op): ?float
+    {
+        if (!$op->transferred_to_operation_id) {
+            return null;
+        }
+        $amount = \App\Models\ChinaBilling\ChinaOperationCost::query()
+            ->where('source_operation_id', $op->id)
+            ->where('operation_id', $op->transferred_to_operation_id)
+            ->value('amount');
+
+        return $amount !== null ? (float) $amount : null;
     }
 
     /** «Consolidado #46» del consolidado de la operación, si viene de uno. */

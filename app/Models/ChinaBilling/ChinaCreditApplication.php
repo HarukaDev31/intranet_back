@@ -3,6 +3,7 @@
 namespace App\Models\ChinaBilling;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Saldo a favor de un cobro aplicado a una operación.
@@ -19,4 +20,9 @@ class ChinaCreditApplication extends Model
     protected $fillable = ['payment_id', 'operation_id', 'amount', 'applied_on', 'from_operation_id'];
 
     protected $casts = ['amount' => 'float', 'applied_on' => 'date'];
+
+    public function payment(): BelongsTo
+    {
+        return $this->belongsTo(ChinaPayment::class, 'payment_id');
+    }
 }
