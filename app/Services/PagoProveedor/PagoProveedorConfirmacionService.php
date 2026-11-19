@@ -888,6 +888,25 @@ class PagoProveedorConfirmacionService
         ];
     }
 
+    /**
+     * #2271: diferencia de cambio que el cliente todavía debe (lo que falta cobrar), para el «Saldo pendiente» de la solicitud.
+     */
+    public function exchangeOutstanding(PagoProveedorSolicitudProveedor $provider): float
+    {
+        $due = $this->exchangeDue($provider);
+        if ($due <= PagoProveedorSolicitudProveedor::MONEY_EPSILON || $this->exchangeCovered($provider)) {
+            return 0.0;
+        }
+        $covered = 0.0;
+        foreach ($provider->exchangeDeposits as $deposit) {
+            if ($deposit->purpose === PagoProveedorAbono::PURPOSE_EXCHANGE && $deposit->status === PagoProveedorAbono::STATUS_VALIDATED) {
+                $covered += (float) ($deposit->bank_amount ?? $deposit->amount);
+            }
+        }
+
+        return round(max(0, $due - $covered), 2);
+    }
+
     private function exchangeDue(PagoProveedorSolicitudProveedor $provider): float
     {
         $due = 0.0;

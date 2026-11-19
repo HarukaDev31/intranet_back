@@ -102,7 +102,7 @@ class PagoProveedorYuanService
      * Conteos por solicitud (fila de la lista China).
      * Completados: todos los proveedores pagados. Abiertos: falta al menos uno.
      *
-     * @return array{open: int, completed: int, all: int, pending: int, observed: int, paid: int}
+     * @return array{open: int, completed: int, all: int, pending: int, pending_only: int, observed: int, paid: int}
      */
     public function counts(): array
     {
@@ -116,6 +116,7 @@ class PagoProveedorYuanService
             'completed' => $completed,
             'all' => $statuses->count(),
             'pending' => $open,
+            'pending_only' => $open - $observed,
             'observed' => $observed,
             'paid' => $completed,
         ];
@@ -424,16 +425,12 @@ class PagoProveedorYuanService
             $quote = $this->quote($provider);
             $manual = $provider->solicitud?->origin === PagoProveedorSolicitud::ORIGIN_MANUAL;
             $realRate = $this->realRate($provider->solicitud);
-            if (!$manual) {
-                if ($realRate === null) {
-                    throw new PagoProveedorException('Primero registra el dinero recibido: el tipo de cambio real sale de ese ingreso.');
-                }
-                if (!$receipt) {
-                    throw new PagoProveedorException('Adjunta la constancia del pago: Ventas la necesita como respaldo.');
-                }
-                if (!app(PagoProveedorMensajeService::class)->rmbNoticeMatches($provider, $yuanPaid)) {
-                    throw new PagoProveedorException('Primero envía el aviso al cliente por WhatsApp. Si cambias los yuanes pagados, vuelve a enviarlo.');
-                }
+            // #2266 (maqueta de Miguel): el pago al proveedor se puede registrar aunque el socio todavía no envíe el dinero.
+            // Sin ingreso, el tipo de cambio real queda pendiente y la diferencia se calcula cuando se registre el ingreso.
+            $ratePending = !$manual && $realRate === null;
+            // #2257: la constancia es opcional. #2262: al confirmar el pago, el aviso al cliente sale solo.
+            if (!$manual && !app(PagoProveedorMensajeService::class)->rmbNoticeMatches($provider, $yuanPaid)) {
+                app(PagoProveedorMensajeService::class)->confirmRmbNotice($provider, $yuanPaid, $actor);
             }
             $realRate = $realRate ?? $quote['quoted_rate'];
             $calculo = PagoProveedorYuanCalculo::calcular($quote['usd'], $realRate, $yuanPaid, $this->tolerance());
@@ -460,7 +457,11 @@ class PagoProveedorYuanService
                 'user_id' => $actor['id'],
             ]);
 
-            if (!$manual) {
+            if ($ratePending) {
+                $execution->rate_pending = true;
+                $execution->save();
+            }
+            if (!$manual && !$ratePending) {
                 $provider->exchange_result = $result;
             }
             $provider->china_observation_reason = null;
@@ -471,7 +472,7 @@ class PagoProveedorYuanService
             $provider->stage = PagoProveedorSolicitudProveedor::STAGE_CONFIRMATION;
             $provider->save();
             $provider->load('ejecuciones');
-            if (!$manual && $result === PagoProveedorEjecucion::RESULT_REFUND) {
+            if (!$manual && !$ratePending && $result === PagoProveedorEjecucion::RESULT_REFUND) {
                 app(PagoProveedorReembolsoService::class)->ensureExchange($provider, $actor);
             }
 
@@ -480,9 +481,9 @@ class PagoProveedorYuanService
                 (int) $provider->request_id,
                 'Pago en yuanes',
                 $actor,
-                $provider->code_supplier.' · '.$this->resultLabel($result)
+                $provider->code_supplier.' · '.($ratePending ? 'tipo de cambio pendiente del ingreso del socio' : $this->resultLabel($result))
             );
-            if (!$manual) {
+            if (!$manual && !$ratePending) {
                 app(PagoProveedorConfirmacionService::class)->open($provider);
             }
             $execution->load(['proveedor.solicitud', 'proveedor.datos']);
@@ -554,6 +555,7 @@ class PagoProveedorYuanService
                 $actor,
                 '$'.number_format($income->usd_amount, 2).' × '.$income->exchange_rate
             );
+            $this->settlePendingRates($request, $actor);
 
             return $income;
         });
@@ -929,6 +931,11 @@ class PagoProveedorYuanService
             if ($requestStatus === 'pagado') {
                 return false;
             }
+        } elseif ($bucket === 'pendiente') {
+            // #2338: panel de estados de Armando: «Pendiente» no incluye los observados.
+            if (in_array($requestStatus, ['pagado', 'observado'], true)) {
+                return false;
+            }
         } elseif ($bucket === 'observed') {
             if ($requestStatus !== 'observado') {
                 return false;
@@ -1045,6 +1052,48 @@ class PagoProveedorYuanService
     /**
      * El promedio de lo recibido: dos ingresos pueden tener distinto tipo de cambio.
      */
+    /**
+     * #2266: los pagos registrados antes del ingreso del socio toman ahora el tipo de cambio real
+     * y recién se abre su confirmación (diferencia de cambio, balance, reembolso).
+     *
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    private function settlePendingRates(PagoProveedorSolicitud $request, array $actor): void
+    {
+        $realRate = $this->realRate($request);
+        if ($realRate === null) {
+            return;
+        }
+        $executions = PagoProveedorEjecucion::query()
+            ->where('rate_pending', true)
+            ->whereIn('request_provider_id', $request->proveedores()->pluck('id'))
+            ->get();
+        foreach ($executions as $execution) {
+            $provider = $this->lock((int) $execution->request_provider_id);
+            $calculo = PagoProveedorYuanCalculo::calcular((float) $execution->cargo_amount, $realRate, (float) $execution->yuan_paid, $this->tolerance());
+            $execution->real_exchange_rate = round($realRate, 4);
+            $execution->yuan_obtained = $calculo['obtained'];
+            $execution->exchange_difference_usd = $calculo['difference_usd'];
+            $execution->exchange_result = $calculo['result'];
+            $execution->rate_pending = false;
+            $execution->save();
+            $provider->exchange_result = $calculo['result'];
+            $provider->save();
+            $provider->load('ejecuciones');
+            if ($calculo['result'] === PagoProveedorEjecucion::RESULT_REFUND) {
+                app(PagoProveedorReembolsoService::class)->ensureExchange($provider, $actor);
+            }
+            app(PagoProveedorConfirmacionService::class)->open($provider);
+            $this->history->registrar(
+                PagoProveedorHistorial::ENTITY_REQUEST,
+                (int) $provider->request_id,
+                'Pago en yuanes con tipo de cambio real',
+                $actor,
+                $provider->code_supplier.' · '.$this->resultLabel($calculo['result'])
+            );
+        }
+    }
+
     private function realRate(?PagoProveedorSolicitud $request): ?float
     {
         $incomes = $request?->ingresos()->get();
