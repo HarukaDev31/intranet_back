@@ -22,7 +22,7 @@ class PagoProveedorSolicitudService
 
     public function listar(array $filtros): LengthAwarePaginator
     {
-        $query = PagoProveedorSolicitud::query()->with(['proveedores.datos', 'proveedores.consolidatedProvider', 'cotizacion'])->orderByDesc('id');
+        $query = PagoProveedorSolicitud::query()->with(['proveedores.datos', 'proveedores.consolidatedProvider', 'proveedores.refunds', 'cotizacion'])->orderByDesc('id');
 
         // China's manual requests belong to other partners and never reach Sales (RN-97).
         $query->where(function ($own) {
@@ -77,7 +77,7 @@ class PagoProveedorSolicitudService
                 }
             };
             $query->whereHas('proveedores', $delProveedor)
-                ->with(['proveedores' => $delProveedor, 'proveedores.datos', 'proveedores.consolidatedProvider']);
+                ->with(['proveedores' => $delProveedor, 'proveedores.datos', 'proveedores.consolidatedProvider', 'proveedores.refunds']);
         }
 
         return $query->paginate((int) ($filtros['per_page'] ?? 15));
@@ -85,7 +85,7 @@ class PagoProveedorSolicitudService
 
     public function ver(int $id): PagoProveedorSolicitud
     {
-        $solicitud = PagoProveedorSolicitud::query()->with(['proveedores.datos', 'proveedores.consolidatedProvider', 'cotizacion'])->find($id);
+        $solicitud = PagoProveedorSolicitud::query()->with(['proveedores.datos', 'proveedores.consolidatedProvider', 'proveedores.refunds', 'cotizacion'])->find($id);
         if (!$solicitud) {
             throw new PagoProveedorException('La solicitud no existe.', 404);
         }
@@ -137,37 +137,7 @@ class PagoProveedorSolicitudService
 
             foreach ($cotizacion->proveedores as $proveedor) {
                 $linea = $porOrden[$proveedor->position] ?? [];
-                $solicitud->proveedores()->create([
-                    'position' => $proveedor->position,
-                    'code_supplier' => $proveedor->code_supplier,
-                    'consolidated_provider_id' => $proveedor->consolidated_provider_id,
-                    'supplier_name' => $proveedor->supplier_name,
-                    'product' => $proveedor->product,
-                    'currency' => $linea['moneda'] ?? $proveedor->currency,
-                    'payment_type' => $proveedor->payment_type,
-                    'cargo_value_usd' => $proveedor->cargo_value_usd,
-                    'client_payment_mode' => $linea['modalidad_abono'] ?? $proveedor->client_payment_mode,
-                    'supplier_payment_mode' => $linea['modalidad_pago'] ?? $proveedor->supplier_payment_mode,
-                    'first_share_percent' => $proveedor->first_share_percent,
-                    'second_share_percent' => $proveedor->second_share_percent,
-                    'second_installment_on' => $proveedor->second_installment_on,
-                    'charges_bank_fee' => $proveedor->charges_bank_fee,
-                    'charges_admin_fee' => $proveedor->charges_admin_fee,
-                    'bank_fee_amount' => $linea['bancaria'] ?? 0,
-                    'admin_fee_amount' => $linea['administrativa'] ?? 0,
-                    'total_amount' => $linea['total'] ?? 0,
-                    'bank_fee_on_position' => $linea['bancaria_incluida_en'] ?? null,
-                    // Valor en yuanes tal como lo digitó Ventas: China lo lee de summary_json['rmb'] (sin reconvertir desde USD).
-                    'summary_json' => $proveedor->cargo_value_rmb !== null && (float) $proveedor->cargo_value_rmb > 0
-                        ? array_merge($linea, ['rmb' => round((float) $proveedor->cargo_value_rmb, 2)])
-                        : $linea,
-                    'proforma_path' => $proveedor->proforma_path,
-                    'proforma_name' => $proveedor->proforma_name,
-                    'stage' => PagoProveedorSolicitudProveedor::STAGE_DATA,
-                    'status' => PagoProveedorSolicitudProveedor::STATUS_IN_PROGRESS,
-                    'current_installment' => PagoProveedorSolicitudProveedor::FIRST_INSTALLMENT,
-                    'current_payment' => PagoProveedorSolicitudProveedor::FIRST_INSTALLMENT,
-                ]);
+                $this->agregarProveedor($solicitud, $this->datosProveedor($proveedor, $linea));
             }
 
             $cotizacion->status = PagoProveedorCotizacion::STATUS_CONFIRMED;
@@ -177,5 +147,102 @@ class PagoProveedorSolicitudService
 
             return $solicitud->load(['proveedores.datos', 'cotizacion']);
         });
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     */
+    private function agregarProveedor(PagoProveedorSolicitud $solicitud, array $datos): void
+    {
+        $fila = new PagoProveedorSolicitudProveedor();
+        $fila->fill($datos);
+        $fila->stage = PagoProveedorSolicitudProveedor::STAGE_DATA;
+        $fila->status = PagoProveedorSolicitudProveedor::STATUS_IN_PROGRESS;
+        $fila->current_installment = PagoProveedorSolicitudProveedor::FIRST_INSTALLMENT;
+        $fila->current_payment = PagoProveedorSolicitudProveedor::FIRST_INSTALLMENT;
+        $solicitud->proveedores()->save($fila);
+    }
+
+    /**
+     * @param  array<string, mixed>  $linea
+     * @return array<string, mixed>
+     */
+    private function datosProveedor(\App\Models\PagoProveedor\PagoProveedorCotizacionProveedor $proveedor, array $linea): array
+    {
+        return [
+            'position' => $proveedor->position,
+            'code_supplier' => $proveedor->code_supplier,
+            'consolidated_provider_id' => $proveedor->consolidated_provider_id,
+            'supplier_name' => $proveedor->supplier_name,
+            'product' => $proveedor->product,
+            'currency' => $linea['moneda'] ?? $proveedor->currency,
+            'payment_type' => $proveedor->payment_type,
+            'cargo_value_usd' => $proveedor->cargo_value_usd,
+            'client_payment_mode' => $linea['modalidad_abono'] ?? $proveedor->client_payment_mode,
+            'supplier_payment_mode' => $linea['modalidad_pago'] ?? $proveedor->supplier_payment_mode,
+            'first_share_percent' => $proveedor->first_share_percent,
+            'second_share_percent' => $proveedor->second_share_percent,
+            'second_installment_on' => $proveedor->second_installment_on,
+            'charges_bank_fee' => $proveedor->charges_bank_fee,
+            'charges_admin_fee' => $proveedor->charges_admin_fee,
+            'bank_fee_amount' => $linea['bancaria'] ?? 0,
+            'admin_fee_amount' => $linea['administrativa'] ?? 0,
+            'total_amount' => $linea['total'] ?? 0,
+            'bank_fee_on_position' => $linea['bancaria_incluida_en'] ?? null,
+            // Valor en yuanes tal como lo digitó Ventas: China lo lee de summary_json['rmb'] (sin reconvertir desde USD).
+            'summary_json' => $proveedor->cargo_value_rmb !== null && (float) $proveedor->cargo_value_rmb > 0
+                ? array_merge($linea, ['rmb' => round((float) $proveedor->cargo_value_rmb, 2)])
+                : $linea,
+            'proforma_path' => $proveedor->proforma_path,
+            'proforma_name' => $proveedor->proforma_name,
+        ];
+    }
+
+    /**
+     * Vuelve a copiar a la solicitud los proveedores de la cotización editada (solo sin abonos).
+     * Los proveedores que ya no están en la cotización quedan anulados.
+     *
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    public function sincronizarConCotizacion(int $cotizacionId, array $actor): void
+    {
+        $cotizacion = $this->cotizaciones->encontrar($cotizacionId, true);
+        $solicitud = $cotizacion->solicitud()->first();
+        if (!$solicitud) {
+            return;
+        }
+        $presentado = $this->presenter->cotizacion($cotizacion, $this->configuracion->tariff());
+        if (!empty($presentado['faltantes'])) {
+            throw new PagoProveedorException(implode(' ', $presentado['faltantes']));
+        }
+
+        $solicitud->exchange_rate = $cotizacion->exchange_rate;
+        $solicitud->save();
+
+        $porOrden = [];
+        foreach ($presentado['resumen']['proveedores'] as $linea) {
+            $porOrden[$linea['orden']] = $linea;
+        }
+        $existentes = $solicitud->proveedores()->get()->keyBy('position');
+        $posiciones = [];
+        foreach ($cotizacion->proveedores as $proveedor) {
+            $posiciones[] = $proveedor->position;
+            $datos = $this->datosProveedor($proveedor, $porOrden[$proveedor->position] ?? []);
+            $fila = $existentes->get($proveedor->position);
+            if ($fila) {
+                $fila->fill($datos);
+                $fila->save();
+            } else {
+                $this->agregarProveedor($solicitud, $datos);
+            }
+        }
+        foreach ($existentes as $posicion => $fila) {
+            if (!in_array($posicion, $posiciones, true) && $fila->status !== PagoProveedorSolicitudProveedor::STATUS_CANCELLED) {
+                $fila->status = PagoProveedorSolicitudProveedor::STATUS_CANCELLED;
+                $fila->cancellation_reason = 'Proveedor quitado al editar la cotización';
+                $fila->save();
+            }
+        }
+        $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, (int) $solicitud->id, 'Cotización editada', $actor, 'Se actualizaron los proveedores y el total a pagar');
     }
 }

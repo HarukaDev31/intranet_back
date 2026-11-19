@@ -16,6 +16,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property float $charged_admin_fee
  * @property float $bank_difference
  * @property float $profit
+ * @property float|null $real_exchange_rate
+ * @property float|null $yuan_obtained
+ * @property float|null $yuan_paid
+ * @property float|null $exchange_difference_usd
+ * @property string|null $exchange_result
+ * @property bool $rate_pending
  * @property string $receipt_path
  * @property string $receipt_name
  * @property \Illuminate\Support\Carbon|null $executed_on
@@ -49,6 +55,7 @@ class PagoProveedorEjecucion extends Model
         'yuan_paid',
         'exchange_difference_usd',
         'exchange_result',
+        'rate_pending',
         'receipt_path',
         'receipt_name',
         'executed_on',
@@ -66,6 +73,7 @@ class PagoProveedorEjecucion extends Model
         'yuan_obtained' => 'float',
         'yuan_paid' => 'float',
         'exchange_difference_usd' => 'float',
+        'rate_pending' => 'boolean',
         'executed_on' => 'date:Y-m-d',
     ];
 

@@ -125,6 +125,8 @@ class CotizacionResource extends JsonResource
             'total_ahora' => $calculation['total_ahora'],
             'comisiones' => $calculation['comisiones'],
             'puede_editar' => $pending,
+            // Cotización confirmada: se edita desde la solicitud mientras no haya abonos.
+            'puede_editar_desde_solicitud' => \App\Services\PagoProveedor\PagoProveedorCotizacionService::editableDesdeSolicitud($cotizacion),
             'puede_eliminar' => $pending && !$cotizacion->solicitud,
             'puede_enviar' => $pending && !$expired && $complete['pdf'] && trim((string) $cotizacion->client_whatsapp) !== '',
             'puede_descargar_pdf' => $complete['pdf'] && (!$expired || !$pending),

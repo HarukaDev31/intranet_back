@@ -40,6 +40,7 @@ class ChinaDocumentService
             'issued_on' => now()->toDateString(),
             'bank' => $this->bankAccount->active(),
             'operation' => $this->reader->operationDetail($operationId),
+            'contact' => $this->contact((int) $operation->organization_id),
         ];
 
         return $this->store(
@@ -66,6 +67,7 @@ class ChinaDocumentService
             'issued_on' => now()->toDateString(),
             'bank' => $this->bankAccount->active(),
             'balance' => $this->reader->balance($organizationId),
+            'contact' => $this->contact($organizationId),
         ];
 
         return $this->store(
@@ -77,6 +79,16 @@ class ChinaDocumentService
             'china-billing.balance',
             $actor
         );
+    }
+
+    /**
+     * Contacto del cliente para el documento (contacto y WhatsApp de la organización).
+     */
+    private function contact(int $organizationId): string
+    {
+        $org = \Illuminate\Support\Facades\DB::table('organizacion')->where('ID_Organizacion', $organizationId)->first(['contacto', 'whatsapp']);
+
+        return trim(implode(' · ', array_filter([trim((string) ($org->contacto ?? '')), trim((string) ($org->whatsapp ?? ''))])));
     }
 
     /**
@@ -149,6 +161,10 @@ class ChinaDocumentService
         $options->set('isHtml5ParserEnabled', true);
         $options->set('isRemoteEnabled', false);
         $options->set('defaultFont', 'DejaVu Sans');
+        // Noto Sans SC (versionada en storage/fonts) para la dirección en chino de la oficina.
+        $options->set('fontDir', storage_path('fonts'));
+        $options->set('fontCache', storage_path('fonts'));
+        $options->set('chroot', [public_path(), storage_path('fonts')]);
         $dompdf = new Dompdf($options);
         $dompdf->loadHtml(view($view, $snapshot)->render());
         $dompdf->setPaper('A4');

@@ -3,6 +3,7 @@
 namespace App\Services\PagoProveedor;
 
 use App\Exceptions\PagoProveedorException;
+use App\Http\Resources\PagoProveedor\SolicitudProveedorResource;
 use App\Models\PagoProveedor\PagoProveedorAbono;
 use App\Models\PagoProveedor\PagoProveedorAbonoAplicacion;
 use App\Models\PagoProveedor\PagoProveedorCotizacionProveedor;
@@ -204,14 +205,15 @@ class PagoProveedorAprobacionService
             $provider->approval_status = PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT;
             $provider->status = PagoProveedorSolicitudProveedor::STATUS_OBSERVED;
             $provider->collect_amount = $amount;
-            $provider->collect_until = now()->addDays($this->remedyDays());
+            // Cobrar la diferencia al cliente es tarea de Ventas: vence con el plazo de pendientes (48 h por defecto).
+            $provider->collect_until = now()->addHours(SolicitudProveedorResource::salesTaskHours());
             $provider->save();
             $this->history->registrar(
                 PagoProveedorHistorial::ENTITY_REQUEST,
                 (int) $provider->request_id,
-                'Pago por cobrar',
+                'Por cobrar',
                 $actor,
-                'Faltan '.$amount.'. Ventas debe cobrarlos al cliente.'
+                trim(($provider->code_supplier ?: 'Proveedor '.$provider->position)).': faltan $'.number_format($amount, 2).'; Ventas debe cobrarlos al cliente'
             );
 
             return $this->refreshed($provider);

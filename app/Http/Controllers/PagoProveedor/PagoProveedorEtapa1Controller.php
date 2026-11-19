@@ -39,6 +39,15 @@ class PagoProveedorEtapa1Controller extends Controller
         });
     }
 
+    public function eliminarRmb(Request $request, int $solicitudId, int $proveedorId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
+            $actor = $this->autorizacion->exigirVentas($request->user());
+
+            return $this->datos($this->etapa1->eliminarRmb($solicitudId, $proveedorId, $actor));
+        });
+    }
+
     public function enviarFormulario(Request $request, int $solicitudId, int $proveedorId): JsonResponse
     {
         return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
@@ -63,6 +72,15 @@ class PagoProveedorEtapa1Controller extends Controller
             $actor = $this->autorizacion->exigirVentas($request->user());
 
             return $this->datos($this->etapa1->solicitarValidacion($solicitudId, $proveedorId, $actor));
+        });
+    }
+
+    public function enviarMensajeFormulario(Request $request, int $solicitudId, int $proveedorId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $solicitudId, $proveedorId) {
+            $actor = $this->autorizacion->exigirVentas($request->user());
+
+            return $this->datos($this->etapa1->enviarMensajeFormulario($solicitudId, $proveedorId, $actor));
         });
     }
 
@@ -150,6 +168,15 @@ class PagoProveedorEtapa1Controller extends Controller
             $actor = $this->autorizacion->exigirVentas($request->user());
 
             return $this->datos($this->etapa1->vistaPreviaCuentas($solicitudId, $actor));
+        });
+    }
+
+    public function enviarCuentas(Request $request, int $solicitudId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $solicitudId) {
+            $actor = $this->autorizacion->exigirVentas($request->user());
+
+            return $this->datos($this->etapa1->enviarCuentas($solicitudId, $actor));
         });
     }
 

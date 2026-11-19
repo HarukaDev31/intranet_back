@@ -7,6 +7,7 @@ use App\Models\PagoProveedor\PagoProveedorHistorial;
 use App\Models\PagoProveedor\PagoProveedorSolicitud;
 use App\Models\PagoProveedor\PagoProveedorSolicitudProveedor;
 use App\Services\PagoProveedor\PagoProveedorAprobacionService;
+use App\Services\PagoProveedor\PagoProveedorConfirmacionService;
 use App\Services\PagoProveedor\PagoProveedorEtapa1Service;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -29,6 +30,8 @@ class SolicitudDetalleResource extends JsonResource
         $paid = 0.0;
         $pending = 0.0;
         $excess = 0.0;
+        $validating = 0.0;
+        $exchangeDue = 0.0;
 
         foreach ($solicitud->proveedores as $provider) {
             if ($provider->status === PagoProveedorSolicitudProveedor::STATUS_CANCELLED) {
@@ -41,11 +44,17 @@ class SolicitudDetalleResource extends JsonResource
             $quoted += (float) $provider->total_amount;
             $paid += round($required - $balance, 2);
             $pending += $balance;
+            $validating += $etapa1->enValidacion($provider);
+            $exchangeDue += app(PagoProveedorConfirmacionService::class)->exchangeOutstanding($provider);
         }
         foreach ($solicitud->abonos as $abono) {
-            if ($abono->status !== PagoProveedorAbono::STATUS_CANCELLED) {
-                $excess += (float) $abono->surplus;
+            if ($abono->status === PagoProveedorAbono::STATUS_CANCELLED) {
+                continue;
             }
+            if ($abono->purpose === PagoProveedorAbono::PURPOSE_EXCHANGE) {
+                continue;
+            }
+            $excess += (float) $abono->surplus;
         }
 
         return [
@@ -63,7 +72,12 @@ class SolicitudDetalleResource extends JsonResource
             'creado_en' => optional($solicitud->created_at)->toIso8601String(),
             'total_cotizado' => round($quoted, 2),
             'total_abonado' => round($paid, 2),
-            'saldo_pendiente' => round($pending, 2),
+            // #2307: «Total abonado (validado)» y «+ $X por validar».
+            'total_validado' => round(max(0, $paid - $validating), 2),
+            'por_validar' => round($validating, 2),
+            // #2271: el saldo pendiente incluye la diferencia de cambio que falta cobrar.
+            'diferencia_por_cobrar' => round($exchangeDue, 2),
+            'saldo_pendiente' => round($pending + $exchangeDue, 2),
             'excedente' => round($excess, 2),
             'proveedores' => SolicitudProveedorDetalleResource::collection($solicitud->proveedores)->resolve(),
             'documentos' => $this->documentos($solicitud),

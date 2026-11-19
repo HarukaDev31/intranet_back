@@ -66,6 +66,30 @@ class PagoProveedorEtapa1Service
     }
 
     /**
+     * Borra el vendedor y el WeChat registrados (RMB, etapa 1): el proveedor vuelve a datos pendientes.
+     *
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     */
+    public function eliminarRmb(int $solicitudId, int $proveedorId, array $actor): PagoProveedorSolicitud
+    {
+        return DB::transaction(function () use ($solicitudId, $proveedorId, $actor) {
+            $proveedor = $this->proveedorEtapa1($solicitudId, $proveedorId);
+            if ($proveedor->currency !== PagoProveedorCotizacionProveedor::CURRENCY_RMB) {
+                throw new PagoProveedorException('El vendedor y el WeChat son solo para pagos en yuanes.');
+            }
+            $datos = $this->datosDe($proveedor);
+            $datos->seller_name = null;
+            $datos->wechat = null;
+            $datos->status = PagoProveedorDatoProveedor::STATUS_PENDING;
+            $datos->source = null;
+            $datos->save();
+            $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, 'Datos del proveedor eliminados', $actor, $proveedor->code_supplier);
+
+            return $this->recargar($this->solicitudDe($proveedor));
+        });
+    }
+
+    /**
      * @param  array{id: int|null, nombre: string, area: string}  $actor
      * @return array<string, mixed>
      */
@@ -136,7 +160,7 @@ class PagoProveedorEtapa1Service
             $datos->correction_requested = $datos->status === PagoProveedorDatoProveedor::STATUS_RECEIVED;
             $datos->save();
             $enlace = $this->enlace($datos);
-            $texto = "Hola, " . ($this->solicitudDe($proveedor)->client_name ?: 'cliente') . " 🙋🏻‍♀️\n|\nNecesitamos que revises los datos bancarios de " . $proveedor->code_supplier . ".\n" . $enlace;
+            $texto = $this->textoFormulario($proveedor, $enlace, true);
             $this->guardarMensaje($proveedor, 'validacion_tt', $texto, $actor);
             $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, 'Validación de datos T-T', $actor, $proveedor->code_supplier);
 
@@ -144,6 +168,47 @@ class PagoProveedorEtapa1Service
                 'enlace' => $enlace,
                 'texto' => $texto,
                 'solicitud' => $this->recargar($this->solicitudDe($proveedor)),
+            ];
+        });
+    }
+
+    /**
+     * #2251/#2293: envía por WhatsApp (número de ventas) el mensaje del formulario T-T que se ve en la vista previa:
+     * el de autorización si los datos están por autorizar, si no el del formulario.
+     *
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     * @return array{texto: string, enviado: bool, nota: string, solicitud: PagoProveedorSolicitud}
+     */
+    public function enviarMensajeFormulario(int $solicitudId, int $proveedorId, array $actor): array
+    {
+        return DB::transaction(function () use ($solicitudId, $proveedorId, $actor) {
+            $proveedor = $this->proveedorEtapa1($solicitudId, $proveedorId);
+            $this->exigirTt($proveedor);
+            $solicitud = $this->solicitudDe($proveedor);
+            $destinatario = trim((string) $solicitud->client_whatsapp);
+            if ($destinatario === '') {
+                throw new PagoProveedorException('Falta el WhatsApp del cliente.');
+            }
+            $datos = $this->datosDe($proveedor);
+            $porAutorizar = $datos->status === PagoProveedorDatoProveedor::STATUS_AWAITING_AUTHORIZATION
+                || ($datos->status === PagoProveedorDatoProveedor::STATUS_RECEIVED && $datos->correction_requested);
+            $texto = $this->textoFormulario($proveedor, $this->enlace($datos), $porAutorizar);
+            app(PagoProveedorCotizacionWhatsappService::class)
+                ->enviarTextoCliente($destinatario, $texto, 'formulario tt solicitud ' . $solicitudId);
+            $this->guardarMensaje($proveedor, $porAutorizar ? 'validacion_tt' : 'pedir_datos', $texto, $actor);
+            $this->historial->registrar(
+                PagoProveedorHistorial::ENTITY_REQUEST,
+                $solicitudId,
+                $porAutorizar ? 'Mensaje de autorización enviado por WhatsApp' : 'Formulario T-T enviado por WhatsApp',
+                $actor,
+                $proveedor->code_supplier . ' · a ' . $destinatario
+            );
+
+            return [
+                'texto' => $texto,
+                'enviado' => true,
+                'nota' => 'Mensaje enviado por WhatsApp desde el número de ventas.',
+                'solicitud' => $this->recargar($solicitud),
             ];
         });
     }
@@ -208,8 +273,19 @@ class PagoProveedorEtapa1Service
                 throw new PagoProveedorException('El proveedor no pertenece a esta solicitud.', 404);
             }
             $registrationError = $proveedor->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR;
-            if (!$proveedor->sales_observation && !$registrationError) {
+            $observados = $this->abonosObservados($proveedor);
+            if (!$proveedor->sales_observation && !$registrationError && $observados->isEmpty()) {
                 throw new PagoProveedorException('Este proveedor no tiene una observación que puedas levantar.');
+            }
+            // Depósito observado por Administración (p. ej. «No ingresó»): al levantarla, el abono vuelve a validación
+            // y Ventas ya puede anular el voucher que no ingresó.
+            foreach ($observados as $observado) {
+                $observado->status = PagoProveedorAbono::STATUS_IN_VALIDATION;
+                $observado->observation_reason = null;
+                $observado->observation_detail = null;
+                $observado->observe_until = null;
+                $observado->observation_escalated_at = null;
+                $observado->save();
             }
             $proveedor->status = PagoProveedorSolicitudProveedor::STATUS_IN_PROGRESS;
             $proveedor->sales_observation = null;
@@ -376,6 +452,39 @@ class PagoProveedorEtapa1Service
      *
      * @param  array<int|string, float|int>  $aplicaciones
      */
+    /**
+     * Cambios de un abono editado, «campo antes → después», para el historial.
+     *
+     * @param  array<string, mixed>  $nuevo
+     * @return array<int, string>
+     */
+    private function cambiosAbono(PagoProveedorAbono $abono, array $nuevo): array
+    {
+        $banco = fn ($valor): string => strtolower((string) $valor) === 'interbank' ? 'Interbank' : strtoupper((string) $valor);
+        $fecha = fn ($valor): string => \Illuminate\Support\Carbon::parse((string) $valor)->format('d/m/Y');
+        $cambios = [];
+        if (trim((string) $abono->operation_number) !== trim((string) $nuevo['operation_number'])) {
+            $cambios[] = 'N.° de operación ' . $abono->operation_number . ' → ' . $nuevo['operation_number'];
+        }
+        if (abs((float) $abono->amount - (float) $nuevo['amount']) > 0.004) {
+            $cambios[] = 'importe $' . number_format((float) $abono->amount, 2, '.', ',') . ' → $' . number_format((float) $nuevo['amount'], 2, '.', ',');
+        }
+        if ($fecha($abono->paid_on) !== $fecha($nuevo['paid_on'])) {
+            $cambios[] = 'fecha ' . $fecha($abono->paid_on) . ' → ' . $fecha($nuevo['paid_on']);
+        }
+        if ((string) $abono->bank !== (string) $nuevo['bank']) {
+            $cambios[] = 'banco ' . $banco($abono->bank) . ' → ' . $banco($nuevo['bank']);
+        }
+        if ((bool) $abono->interbank !== (bool) $nuevo['interbank']) {
+            $cambios[] = 'interbancaria ' . ($abono->interbank ? 'sí' : 'no') . ' → ' . ($nuevo['interbank'] ? 'sí' : 'no');
+        }
+        if ((string) $abono->voucher_path !== (string) $nuevo['voucher_path']) {
+            $cambios[] = 'voucher reemplazado';
+        }
+
+        return $cambios;
+    }
+
     private function detalleHistorialAbono(PagoProveedorSolicitud $solicitud, PagoProveedorAbono $abono, array $aplicaciones): string
     {
         $partes = [];
@@ -457,47 +566,94 @@ class PagoProveedorEtapa1Service
     {
         return DB::transaction(function () use ($solicitudId, $actor) {
             $solicitud = $this->solicitud($solicitudId);
-            $lineas = [];
-            $total = 0.0;
-            $primero = null;
-            foreach ($solicitud->proveedores as $proveedor) {
-                if ($proveedor->status === PagoProveedorSolicitudProveedor::STATUS_CANCELLED) {
-                    continue;
-                }
-                $primero ??= $proveedor;
-                $saldo = $this->balance($proveedor);
-                if ($saldo <= 0) {
-                    continue;
-                }
-                $lineas[] = $proveedor->code_supplier . ' | ' . $proveedor->product;
-                $total += $saldo;
-            }
-            if ($lineas === [] || !$primero) {
-                throw new PagoProveedorException('Ya no hay saldo por depositar.');
-            }
-            $texto = implode("\n", [
-                'Hola, ' . $this->mensajes()->firstName($solicitud->client_name) . ' 🙋🏻‍♀️',
-                'Te compartimos nuestras cuentas bancarias para que puedas realizar el depósito de tu pago. 👆🏻',
-                '',
-                '*Concepto:* Pago a proveedor',
-                '',
-                count($lineas) > 1 ? '📦 Detalle de proveedores:' : '📦 Detalle del proveedor:',
-                ...array_map(fn (string $line) => '➡️ ' . $line, $lineas),
-                '',
-                '💰 *Total a depositar: $' . number_format($total, 2, '.', ',') . '*',
-                '',
-                '🧾 Una vez realizado el depósito, envíanos tu comprobante de pago por este medio para registrarlo.',
-                '¡Gracias! 😊',
-            ]);
-            $this->guardarMensaje($primero, 'cuentas', $texto, $actor);
+            $mensaje = $this->armarCuentas($solicitud);
+            $this->guardarMensaje($mensaje['primero'], 'cuentas', $mensaje['texto'], $actor);
 
             return [
                 'tipo' => 'cuentas',
-                'texto' => $texto,
+                'texto' => $mensaje['texto'],
                 'imagen' => '/images/pago-proveedor/cuentas-bancarias.jpg',
+                'puede_enviar' => $solicitud->client_whatsapp !== null && trim((string) $solicitud->client_whatsapp) !== '',
                 'nota' => 'La imagen oficial de las cuentas va antes de este texto. Los números de cuenta no se escriben en el mensaje.',
             ];
         });
+    }
+
+    /**
+     * Envía al cliente, desde el número de ventas, la imagen oficial de las cuentas y el texto con el total a depositar.
+     *
+     * @param  array{id: int|null, nombre: string, area: string}  $actor
+     * @return array<string, mixed>
+     */
+    public function enviarCuentas(int $solicitudId, array $actor): array
+    {
+        return DB::transaction(function () use ($solicitudId, $actor) {
+            $solicitud = $this->solicitud($solicitudId, true);
+            $destinatario = trim((string) $solicitud->client_whatsapp);
+            if ($destinatario === '') {
+                throw new PagoProveedorException('Falta el WhatsApp del cliente.');
+            }
+            $mensaje = $this->armarCuentas($solicitud);
+            $whatsapp = app(PagoProveedorCotizacionWhatsappService::class);
+            $whatsapp->enviarImagenCliente($destinatario, resource_path('pago-proveedor/cuentas-bancarias.jpg'), 'cuentas solicitud ' . $solicitudId);
+            $whatsapp->enviarTextoCliente($destinatario, $mensaje['texto'], 'cuentas solicitud ' . $solicitudId);
+            $this->guardarMensaje($mensaje['primero'], 'cuentas', $mensaje['texto'], $actor);
+            $this->historial->registrar(
+                PagoProveedorHistorial::ENTITY_REQUEST,
+                $solicitudId,
+                'Cuentas bancarias enviadas por WhatsApp',
+                $actor,
+                'Enviado desde el número de ventas a ' . $destinatario
+            );
+
+            return [
+                'texto' => $mensaje['texto'],
+                'enviado' => true,
+                'nota' => 'Cuentas bancarias enviadas por WhatsApp desde el número de ventas.',
+                'solicitud' => $this->recargar($solicitud),
+            ];
+        });
+    }
+
+    /**
+     * @return array{texto: string, primero: PagoProveedorSolicitudProveedor}
+     */
+    private function armarCuentas(PagoProveedorSolicitud $solicitud): array
+    {
+        $lineas = [];
+        $total = 0.0;
+        $primero = null;
+        foreach ($solicitud->proveedores as $proveedor) {
+            if ($proveedor->status === PagoProveedorSolicitudProveedor::STATUS_CANCELLED) {
+                continue;
+            }
+            $primero ??= $proveedor;
+            $saldo = $this->balance($proveedor);
+            if ($saldo <= 0) {
+                continue;
+            }
+            $lineas[] = $proveedor->code_supplier . ' | ' . $proveedor->product;
+            $total += $saldo;
+        }
+        if ($lineas === [] || !$primero) {
+            throw new PagoProveedorException('Ya no hay saldo por depositar.');
+        }
+        $texto = implode("\n", [
+            'Hola, ' . $this->mensajes()->firstName($solicitud->client_name) . ' 🙋🏻‍♀️',
+            'Te compartimos nuestras cuentas bancarias para que puedas realizar el depósito de tu pago. 👆🏻',
+            '',
+            '*Concepto:* Pago a proveedor',
+            '',
+            count($lineas) > 1 ? '📦 Detalle de proveedores:' : '📦 Detalle del proveedor:',
+            ...array_map(fn (string $line) => '➡️ ' . $line, $lineas),
+            '',
+            '💰 *Total a depositar: $' . number_format($total, 2, '.', ',') . '*',
+            '',
+            '🧾 Una vez realizado el depósito, envíanos tu comprobante de pago por este medio para registrarlo.',
+            '¡Gracias! 😊',
+        ]);
+
+        return ['texto' => $texto, 'primero' => $primero];
     }
 
     /**
@@ -528,12 +684,13 @@ class PagoProveedorEtapa1Service
                 }
                 $porCobrar = $proveedor->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT;
                 $correcting = in_array((int) $proveedor->id, $correctedProviderIds, true);
-                if ((int) $proveedor->stage !== PagoProveedorSolicitudProveedor::STAGE_DATA && !$porCobrar && !$correcting) {
+                $conObservado = !$abono && $this->abonosObservados($proveedor)->isNotEmpty();
+                if ((int) $proveedor->stage !== PagoProveedorSolicitudProveedor::STAGE_DATA && !$porCobrar && !$correcting && !$conObservado) {
                     continue;
                 }
                 $saldos[$proveedor->id] = $porCobrar
                     ? $aprobacion->outstanding($proveedor)
-                    : $this->balance($proveedor, $abono?->id);
+                    : ($conObservado ? $this->balanceSinObservados($proveedor) : $this->balance($proveedor, $abono?->id));
             }
 
             $aplicaciones = $this->mapaAplicaciones($payload['aplicaciones'] ?? []);
@@ -593,6 +750,7 @@ class PagoProveedorEtapa1Service
                 'admin_corrections' => null,
             ];
 
+            $cambiosAbono = $abono ? $this->cambiosAbono($abono, $datosAbono) : [];
             if ($abono) {
                 $wasObserved = $abono->status === PagoProveedorAbono::STATUS_OBSERVED;
                 $abono->fill($datosAbono);
@@ -612,7 +770,19 @@ class PagoProveedorEtapa1Service
                 ]);
             }
 
-            $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, $abonoId ? 'Abono editado' : 'Abono registrado', $actor, $this->detalleHistorialAbono($solicitud, $abono, $evaluacion['aplicaciones']));
+            if ($abonoId) {
+                // «Abono #1 editado antes de validar: N.° de operación 0241585 → 024158111»
+                $numero = $solicitud->abonos()->where('id', '<=', $abono->id)->count();
+                $cuando = $editandoEnValidacion ? 'antes de validar' : 'tras la observación';
+                $this->historial->registrar(
+                    PagoProveedorHistorial::ENTITY_REQUEST,
+                    $solicitudId,
+                    "Abono #{$numero} editado {$cuando}: " . ($cambiosAbono !== [] ? implode(' · ', $cambiosAbono) : 'se reasignó el importe entre proveedores'),
+                    $actor
+                );
+            } else {
+                $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, 'Abono registrado', $actor, $this->detalleHistorialAbono($solicitud, $abono, $evaluacion['aplicaciones']));
+            }
             if ($editandoEnValidacion) {
                 $this->regresarSinCobertura($this->recargar($solicitud, ['proveedores.datos', 'proveedores.aplicaciones.abono']), $correctedProviderIds, $actor);
             }
@@ -639,6 +809,9 @@ class PagoProveedorEtapa1Service
         return DB::transaction(function () use ($solicitudId, $abonoId, $actor) {
             $solicitud = $this->solicitud($solicitudId, true);
             $abono = $this->abonoEditable($solicitud, $abonoId);
+            if ($abono->status === PagoProveedorAbono::STATUS_OBSERVED) {
+                throw new PagoProveedorException('Levanta la observación del depósito antes de anular este abono.');
+            }
             $abono->status = PagoProveedorAbono::STATUS_CANCELLED;
             $abono->save();
             $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitudId, 'Abono anulado', $actor, $abono->operation_number);
@@ -820,8 +993,18 @@ class PagoProveedorEtapa1Service
 
         return $proveedor->datos()->create([
             'status' => PagoProveedorDatoProveedor::STATUS_PENDING,
-            'token' => Str::random(48),
+            'token' => $this->tokenCorto(),
         ]);
+    }
+
+    /** Token del link al cliente: 12 caracteres (los links ya enviados con 48 siguen funcionando). */
+    private function tokenCorto(): string
+    {
+        do {
+            $token = Str::random(12);
+        } while (PagoProveedorDatoProveedor::query()->where('token', $token)->exists());
+
+        return $token;
     }
 
     private function datosPorToken(string $token): PagoProveedorDatoProveedor
@@ -898,6 +1081,50 @@ class PagoProveedorEtapa1Service
         return $mapa;
     }
 
+    /**
+     * Abonos del proveedor que Administración observó (el dinero no ingresó, etc.) y siguen sin levantarse.
+     *
+     * @return \Illuminate\Support\Collection<int, PagoProveedorAbono>
+     */
+    private function abonosObservados(PagoProveedorSolicitudProveedor $proveedor): \Illuminate\Support\Collection
+    {
+        return PagoProveedorAbono::query()
+            ->where('status', PagoProveedorAbono::STATUS_OBSERVED)
+            ->whereHas('aplicaciones', fn ($query) => $query->where('request_provider_id', $proveedor->id))
+            ->get();
+    }
+
+    /** Lo que falta abonar sin contar los abonos observados (el dinero que no ingresó no cuenta). */
+    public function balanceSinObservados(PagoProveedorSolicitudProveedor $proveedor): float
+    {
+        $abonado = 0.0;
+        foreach ($proveedor->aplicaciones as $aplicacion) {
+            $abono = $aplicacion->abono;
+            if (!$abono || in_array($abono->status, [PagoProveedorAbono::STATUS_CANCELLED, PagoProveedorAbono::STATUS_OBSERVED], true)) {
+                continue;
+            }
+            $abonado += $this->creditedAmount($aplicacion, $abono);
+        }
+
+        return round(max(0, $this->requiredAmount($proveedor) - $abonado), 2);
+    }
+
+    /**
+     * #2307: lo abonado que Administración todavía no valida (comprobantes en validación).
+     */
+    public function enValidacion(PagoProveedorSolicitudProveedor $proveedor): float
+    {
+        $monto = 0.0;
+        foreach ($proveedor->aplicaciones as $aplicacion) {
+            $abono = $aplicacion->abono;
+            if ($abono && $abono->status === PagoProveedorAbono::STATUS_IN_VALIDATION) {
+                $monto += $this->creditedAmount($aplicacion, $abono);
+            }
+        }
+
+        return round($monto, 2);
+    }
+
     public function balance(PagoProveedorSolicitudProveedor $proveedor, ?int $exceptoAbonoId = null): float
     {
         $abonado = 0.0;
@@ -962,7 +1189,12 @@ class PagoProveedorEtapa1Service
             }
             $proveedor->stage = PagoProveedorSolicitudProveedor::STAGE_VALIDATION;
             $proveedor->save();
-            $this->historial->registrar(PagoProveedorHistorial::ENTITY_REQUEST, $solicitud->id, 'Pasó a validación', $actor, $proveedor->code_supplier);
+            $this->historial->registrar(
+                PagoProveedorHistorial::ENTITY_REQUEST,
+                $solicitud->id,
+                $proveedor->code_supplier . ' avanzó a Validación de pago — código ' . $proveedor->request_code . ' (automático: importe completo)',
+                $actor
+            );
             app(PagoProveedorAprobacionService::class)->evaluate($proveedor, $actor);
         }
     }
@@ -1069,12 +1301,16 @@ class PagoProveedorEtapa1Service
     private function textoFormulario(PagoProveedorSolicitudProveedor $proveedor, string $enlace, bool $porAutorizar): string
     {
         $nombre = $this->mensajes()->firstName($this->solicitudDe($proveedor)->client_name);
-        $pedido = $porAutorizar
-            ? 'Revisa y autoriza los datos bancarios que registramos para el pago.'
-            : 'Para pagar a tu proveedor por transferencia internacional (T-T) necesitamos sus datos bancarios.';
+        if ($porAutorizar) {
+            // Ventas completó los datos: se le pide al cliente revisarlos y autorizarlos (#2178).
+            return "Hola, {$nombre} 🙋🏻‍♀️\n"
+                . "Completamos los datos bancarios de tu proveedor con la información que nos enviaste. Necesitamos que los revises y los autorices.\n\n"
+                . "✅ Proveedor: *{$proveedor->code_supplier} | {$proveedor->product}*\n📝 Datos:\n▪️ *Formulario bancario:*\n{$enlace}\n\n"
+                . '👉 Sin tu autorización no podremos realizar el pago.';
+        }
         $bloque = "✅ Proveedor: *{$proveedor->code_supplier} | {$proveedor->product}*\n📝 Datos:\n▪️ *Formulario bancario:* {$enlace}";
 
-        return "Hola, {$nombre} 🙋🏻‍♀️\n{$pedido}\n\n{$bloque}\n\n👉 Apenas lo envíes, lo recibimos y continuamos con el proceso.";
+        return "Hola, {$nombre} 🙋🏻‍♀️\nPara pagar a tu proveedor por transferencia internacional (T-T) necesitamos sus datos bancarios.\n\n{$bloque}\n\n👉 Apenas lo envíes, lo recibimos y continuamos con el proceso.";
     }
 
     private function mensajes(): PagoProveedorMensajeService

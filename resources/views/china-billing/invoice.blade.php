@@ -45,7 +45,7 @@
         <tr>
             <td style="width: 25%; padding-bottom: 10px;"><div class="label">EMPRESA</div><b>{{ $op['organization']['name'] }}</b></td>
             <td style="width: 25%; padding-bottom: 10px;"><div class="label">CONSOLIDADO</div><b>{{ $consolidated }}</b></td>
-            <td style="width: 25%; padding-bottom: 10px;"><div class="label">CONTACTO</div><b>—</b></td>
+            <td style="width: 25%; padding-bottom: 10px;"><div class="label">CONTACTO</div><b>{{ ($contact ?? '') ?: '—' }}</b></td>
             <td style="width: 25%; padding-bottom: 10px;"><div class="label">PAÍS</div><b>{{ $op['organization']['country'] ?: '—' }}</b></td>
         </tr>
     </table>
@@ -108,6 +108,9 @@
         <tr><td class="k">País:</td><td>{{ $bank['beneficiary_country'] ?: '—' }}</td></tr>
         <tr><td class="k">Estado:</td><td>{{ $bank['beneficiary_state'] ?: '—' }}</td></tr>
         <tr><td class="k">Ciudad:</td><td>{{ $bank['beneficiary_city'] ?: '—' }}</td></tr>
+        @if(!empty($bank['beneficiary_tax_id']))<tr><td class="k">Tax ID:</td><td>{{ $bank['beneficiary_tax_id'] }} (si el banco lo solicita)</td></tr>@endif
+        @if(!empty($bank['beneficiary_uscc']))<tr><td class="k">USCC:</td><td>{{ $bank['beneficiary_uscc'] }} (si el banco lo solicita)</td></tr>@endif
+        @if(!empty($bank['beneficiary_email']))<tr><td class="k">Correo:</td><td>{{ $bank['beneficiary_email'] }}</td></tr>@endif
     </table>
 
     <div style="margin-top: 12px; padding-top: 6px; border-top: 1px solid #eee; font-size: 9px; color: #777;">

@@ -427,6 +427,9 @@ class PagoProveedorConfirmacionService
         if ($this->awaitsInstallmentChoice($provider) || $this->awaitsPaymentChoice($provider)) {
             return false;
         }
+        if ($this->hasOpenSurplus($provider)) {
+            return false;
+        }
         $blocking = array_filter($this->items($provider), function (array $item) {
             return $item['blocks'] && !$item['done'];
         });
@@ -440,6 +443,9 @@ class PagoProveedorConfirmacionService
             return;
         }
         if ((int) $provider->stage !== PagoProveedorSolicitudProveedor::STAGE_CONFIRMATION) {
+            return;
+        }
+        if ($this->hasOpenSurplus($provider)) {
             return;
         }
         $blocking = array_filter($this->items($provider), fn (array $item) => $item['blocks'] && !$item['done']);
@@ -665,6 +671,13 @@ class PagoProveedorConfirmacionService
             return ['state' => 'approved'] + $summary;
         }
         if ($provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_TO_COLLECT) {
+            // Ventas ya registró el voucher de la diferencia: se evalúa cuando Administración lo valide.
+            $aprobacion = app(PagoProveedorAprobacionService::class);
+            if ($aprobacion->compare($provider)['unverified'] > 0
+                && $aprobacion->outstanding($provider) <= PagoProveedorSolicitudProveedor::MONEY_EPSILON) {
+                return ['state' => 'waiting_verification'] + $summary;
+            }
+
             return ['state' => 'to_collect'] + $summary;
         }
         if ($provider->approval_status === PagoProveedorSolicitudProveedor::APPROVAL_REGISTRATION_ERROR) {
@@ -739,6 +752,28 @@ class PagoProveedorConfirmacionService
         $provider->loadMissing('refunds');
 
         return $provider->refunds->first(fn (PagoProveedorReembolso $refund) => $this->refundOpen($refund));
+    }
+
+    /**
+     * Hay dinero de más de la cotización todavía sin resolver. La diferencia de cambio no cuenta.
+     */
+    private function hasOpenSurplus(PagoProveedorSolicitudProveedor $provider): bool
+    {
+        $provider->loadMissing('aplicaciones.abono');
+        foreach ($provider->aplicaciones as $application) {
+            $deposit = $application->abono;
+            if (!$deposit || $deposit->status === PagoProveedorAbono::STATUS_CANCELLED) {
+                continue;
+            }
+            if ($deposit->purpose === PagoProveedorAbono::PURPOSE_EXCHANGE) {
+                continue;
+            }
+            if ((float) $deposit->surplus > 0.009 && $this->carriesSurplus($provider, $deposit)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -851,6 +886,25 @@ class PagoProveedorConfirmacionService
                 ? PagoProveedorSolicitudProveedor::OWNER_SALES
                 : PagoProveedorSolicitudProveedor::OWNER_OTHER,
         ];
+    }
+
+    /**
+     * #2271: diferencia de cambio que el cliente todavía debe (lo que falta cobrar), para el «Saldo pendiente» de la solicitud.
+     */
+    public function exchangeOutstanding(PagoProveedorSolicitudProveedor $provider): float
+    {
+        $due = $this->exchangeDue($provider);
+        if ($due <= PagoProveedorSolicitudProveedor::MONEY_EPSILON || $this->exchangeCovered($provider)) {
+            return 0.0;
+        }
+        $covered = 0.0;
+        foreach ($provider->exchangeDeposits as $deposit) {
+            if ($deposit->purpose === PagoProveedorAbono::PURPOSE_EXCHANGE && $deposit->status === PagoProveedorAbono::STATUS_VALIDATED) {
+                $covered += (float) ($deposit->bank_amount ?? $deposit->amount);
+            }
+        }
+
+        return round(max(0, $due - $covered), 2);
     }
 
     private function exchangeDue(PagoProveedorSolicitudProveedor $provider): float

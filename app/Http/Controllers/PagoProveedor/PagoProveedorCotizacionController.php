@@ -5,6 +5,8 @@ namespace App\Http\Controllers\PagoProveedor;
 use App\Exceptions\PagoProveedorException;
 use App\Http\Controllers\Controller;
 use App\Models\CalculadoraImportacion;
+use App\Models\PagoProveedor\PagoProveedorSolicitudProveedor;
+use App\Http\Resources\PagoProveedor\SolicitudProveedorResource;
 use App\Http\Resources\PagoProveedor\CotizacionResource;
 use App\Http\Requests\PagoProveedor\ResumenPagoProveedorCotizacionRequest;
 use App\Http\Requests\PagoProveedor\StorePagoProveedorCotizacionRequest;
@@ -229,7 +231,11 @@ class PagoProveedorCotizacionController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $this->configuracion->all(),
+                'data' => [
+                    ...$this->configuracion->all(),
+                    // #1743: el plazo de las tareas de Ventas se muestra aunque aún no se haya guardado (48 h).
+                    PagoProveedorSolicitudProveedor::SETTING_SALES_TASK_HOURS => SolicitudProveedorResource::salesTaskHours(),
+                ],
             ]);
         });
     }
@@ -252,6 +258,27 @@ class PagoProveedorCotizacionController extends Controller
                 'data' => [
                     'vigencia_cotizacion_horas' => (int) $datos['horas'],
                     'vigencia_cotizacion_tipo' => $this->configuracion->validityType(),
+                ],
+            ]);
+        });
+    }
+
+    /**
+     * #1742/#1743: plazo por defecto (en horas) de las tareas de Ventas sin plazo propio.
+     */
+    public function actualizarPlazoTareas(Request $request): JsonResponse
+    {
+        return $this->responder(function () use ($request) {
+            $this->autorizacion->exigirVentas($request->user());
+            $datos = $request->validate([
+                'horas' => ['required', 'integer', 'min:1', 'max:240'],
+            ]);
+            $this->configuracion->save(PagoProveedorSolicitudProveedor::SETTING_SALES_TASK_HOURS, (int) $datos['horas']);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    PagoProveedorSolicitudProveedor::SETTING_SALES_TASK_HOURS => (int) $datos['horas'],
                 ],
             ]);
         });

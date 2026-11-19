@@ -52,9 +52,8 @@ class PagoProveedorCotizacionService
         if (!empty($filtros['estado']) && $filtros['estado'] !== 'todos') {
             if ($filtros['estado'] === PagoProveedorCotizacion::FILTER_EXPIRED) {
                 $query->where('status', PagoProveedorCotizacion::STATUS_PENDING)->where('valid_until', '<=', now());
-            } elseif ($filtros['estado'] === PagoProveedorCotizacion::STATUS_PENDING) {
-                $query->where('status', PagoProveedorCotizacion::STATUS_PENDING)->where('valid_until', '>', now());
             } else {
+                // «Pendiente» incluye las vencidas: el vencimiento solo se ve en la columna Vigencia.
                 $query->where('status', $filtros['estado']);
             }
         }
@@ -209,7 +208,13 @@ class PagoProveedorCotizacionService
     {
         return DB::transaction(function () use ($id, $datos, $actor) {
             $cotizacion = $this->encontrar($id, true);
-            $this->exigirPendiente($cotizacion);
+            // Una cotización ya confirmada se edita solo mientras su solicitud no tenga abonos (se re-sincroniza la solicitud).
+            $desdeSolicitud = $cotizacion->status === PagoProveedorCotizacion::STATUS_CONFIRMED;
+            if ($desdeSolicitud) {
+                $this->exigirEditableDesdeSolicitud($cotizacion);
+            } else {
+                $this->exigirPendiente($cotizacion);
+            }
 
             $codigos = $this->lookup->findByCode($cotizacion->consolidated_quote_code)['proveedores'];
             $permitidos = collect($codigos)->keyBy('code_supplier');
@@ -245,11 +250,15 @@ class PagoProveedorCotizacionService
             }
 
             $cotizacion->proveedores()->whereNotIn('id', $conservar)->delete();
-            $this->historial->registrar(PagoProveedorHistorial::ENTITY_QUOTE, $cotizacion->id, 'Editada', $actor);
+            $this->historial->registrar(PagoProveedorHistorial::ENTITY_QUOTE, $cotizacion->id, $desdeSolicitud ? 'Editada desde la solicitud' : 'Editada', $actor);
 
             // Se suben al final para no dejar archivos huérfanos si alguna fila no es válida.
             foreach ($proformas as [$proveedor, $archivo]) {
                 $this->guardarProforma($cotizacion, $proveedor, $archivo, $actor);
+            }
+
+            if ($desdeSolicitud) {
+                app(PagoProveedorSolicitudService::class)->sincronizarConCotizacion($cotizacion->id, $actor);
             }
 
             return $this->ver($cotizacion->id);
@@ -362,6 +371,35 @@ class PagoProveedorCotizacionService
         return $cotizacion;
     }
 
+    /**
+     * Una cotización confirmada solo se edita mientras su solicitud no tenga abonos y todos sus proveedores
+     * sigan en «Solicitud y datos de pago».
+     */
+    public static function editableDesdeSolicitud(PagoProveedorCotizacion $cotizacion): bool
+    {
+        if ($cotizacion->status !== PagoProveedorCotizacion::STATUS_CONFIRMED) {
+            return false;
+        }
+        $solicitud = $cotizacion->solicitud;
+        if (!$solicitud) {
+            return false;
+        }
+        $conAbonos = $solicitud->abonos()->where('status', '!=', \App\Models\PagoProveedor\PagoProveedorAbono::STATUS_CANCELLED)->exists();
+        $avanzados = $solicitud->proveedores()
+            ->where('status', '!=', \App\Models\PagoProveedor\PagoProveedorSolicitudProveedor::STATUS_CANCELLED)
+            ->where('stage', '!=', \App\Models\PagoProveedor\PagoProveedorSolicitudProveedor::STAGE_DATA)
+            ->exists();
+
+        return !$conAbonos && !$avanzados;
+    }
+
+    public function exigirEditableDesdeSolicitud(PagoProveedorCotizacion $cotizacion): void
+    {
+        if (!self::editableDesdeSolicitud($cotizacion)) {
+            throw new PagoProveedorException('La cotización solo se edita mientras la solicitud no tenga abonos.');
+        }
+    }
+
     public function exigirPendiente(PagoProveedorCotizacion $cotizacion): void
     {
         if ($cotizacion->status !== PagoProveedorCotizacion::STATUS_PENDING) {
@@ -431,7 +469,7 @@ class PagoProveedorCotizacionService
             'code_supplier' => $codigo !== '' ? $codigo : null,
             'consolidated_provider_id' => $idProveedor,
             'supplier_name' => $this->vacio($fila['nombre_proveedor'] ?? null),
-            'product' => $this->vacio($fila['producto'] ?? null),
+            'product' => $this->nombreProducto($fila['producto'] ?? null),
             'currency' => $moneda,
             'payment_type' => $tipo,
             'cargo_value_usd' => round((float) ($fila['valor_carga_usd'] ?? 0), 2),
@@ -479,5 +517,19 @@ class PagoProveedorCotizacionService
         $texto = trim((string) $valor);
 
         return $texto === '' ? null : $texto;
+    }
+
+    /**
+     * Nombre del producto con solo la primera letra en mayúscula («FAROS AUXILIARES LED» → «Faros auxiliares led»).
+     */
+    private function nombreProducto(mixed $valor): ?string
+    {
+        $texto = $this->vacio($valor);
+        if ($texto === null) {
+            return null;
+        }
+        $texto = mb_strtolower(preg_replace('/\s+/u', ' ', $texto) ?? $texto, 'UTF-8');
+
+        return mb_strtoupper(mb_substr($texto, 0, 1, 'UTF-8'), 'UTF-8').mb_substr($texto, 1, null, 'UTF-8');
     }
 }

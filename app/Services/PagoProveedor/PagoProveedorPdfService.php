@@ -5,9 +5,9 @@ namespace App\Services\PagoProveedor;
 use App\Exceptions\PagoProveedorException;
 use App\Models\PagoProveedor\PagoProveedorCotizacion;
 use App\Models\PagoProveedor\PagoProveedorDocumento;
-use App\Models\PagoProveedor\PagoProveedorEjecucion;
 use App\Models\PagoProveedor\PagoProveedorSolicitudProveedor;
 use Dompdf\Dompdf;
+use Dompdf\FontMetrics;
 use Dompdf\Options;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
@@ -345,6 +345,8 @@ class PagoProveedorPdfService
     }
 
     /**
+     * Datos del balance de cambio (yuanes obtenidos − yuanes pagados). También se emite sin diferencia.
+     *
      * @return array<string, mixed>
      */
     private function datosBalance(PagoProveedorSolicitudProveedor $provider): array
@@ -355,6 +357,7 @@ class PagoProveedorPdfService
         $obtenido = 0.0;
         $pagado = 0.0;
         $diffUsd = 0.0;
+        $tasas = [];
         foreach ($provider->ejecuciones->sortBy('supplier_payment') as $execution) {
             $usd = (float) $execution->cargo_amount;
             $got = (float) $execution->yuan_obtained;
@@ -365,41 +368,66 @@ class PagoProveedorPdfService
             $obtenido += $got;
             $pagado += $paid;
             $diffUsd += $rowDiff;
+            $tasas[] = $this->tasa($rate);
             $pagos[] = [
                 'n' => (int) $execution->supplier_payment,
+                'fecha' => $execution->executed_on ? $execution->executed_on->format('d/m/Y') : '—',
                 'tc' => $rate,
+                'tc_texto' => $this->tasa($rate),
                 'usd' => $usd,
                 'obtenido' => $got,
                 'pagado' => $paid,
+                'diff_rmb' => round($got - $paid, 2),
                 'diff_usd' => $rowDiff,
             ];
         }
         if ($pagos === []) {
             throw new PagoProveedorException('Todavía no hay un pago registrado para armar el balance.');
         }
+
         $diffUsd = round($diffUsd, 2);
-        $label = 'Diferencia';
-        if ($provider->exchange_result === PagoProveedorEjecucion::RESULT_COLLECT) {
-            $label = 'Diferencia a pagar';
-        } elseif ($provider->exchange_result === PagoProveedorEjecucion::RESULT_REFUND) {
-            $label = 'Diferencia a devolver';
-        } elseif (abs($diffUsd) <= 0.009) {
-            $label = 'Sin diferencia';
+        $diffRmb = round($obtenido - $pagado, 2);
+        // Negativo: faltaron yuanes y el cliente paga. Positivo: sobraron y se le devuelve.
+        $tipo = 'cero';
+        // Dentro de la tolerancia la diferencia la asume Pro Business: al cliente se le informa «Todo correcto».
+        $enTolerancia = $provider->exchange_result === \App\Models\PagoProveedor\PagoProveedorEjecucion::RESULT_WITHIN;
+        if ($enTolerancia) {
+            $tipo = 'cero';
+        } elseif ($diffUsd < -0.005) {
+            $tipo = 'pagar';
+        } elseif ($diffUsd > 0.005) {
+            $tipo = 'devolver';
         }
+        $montoDiferencia = '$' . number_format(abs($diffUsd), 2, '.', ',');
+        $tc = implode(' / ', array_values(array_unique($tasas)));
 
         return [
-            'cliente' => $request?->client_name,
+            'cliente' => $this->nombrePropio((string) ($request->client_name ?? '')),
             'consolidado' => $request?->consolidation,
             'codigo_proveedor' => $provider->code_supplier,
             'nombre_proveedor' => $provider->supplier_name,
             'producto' => $provider->product,
-            'diferencia_label' => $label,
-            'diferencia_usd' => abs($diffUsd),
+            'tipo' => $tipo,
+            'diferencia_titulo' => $tipo === 'devolver' ? 'DIFERENCIA A DEVOLVER' : 'DIFERENCIA A PAGAR',
+            'diferencia_nota' => ['pagar' => 'Por depositar', 'devolver' => 'A tu favor', 'cero' => 'Todo correcto'][$tipo],
+            'diferencia_usd' => $enTolerancia ? 0.0 : abs($diffUsd),
+            'diferencia_texto' => $enTolerancia ? '$0.00' : $montoDiferencia,
+            'diferencia_real_texto' => $montoDiferencia,
+            'diferencia_rmb' => $diffRmb,
+            'conclusion' => [
+                'pagar' => 'Diferencia a pagar: ' . $montoDiferencia . '.',
+                'devolver' => 'Diferencia a devolver: ' . $montoDiferencia . '.',
+                'cero' => $enTolerancia && abs($diffUsd) > 0.005
+                    ? 'Todo correcto: la diferencia de ' . $montoDiferencia . ' está dentro de la tolerancia y la asume Pro Business.'
+                    : 'Todo correcto: no hay diferencia por pagar ni por devolver.',
+            ][$tipo],
+            'pagos_texto' => count($pagos) > 1 ? 'Balance general · ' . count($pagos) . ' pagos' : 'Pago único',
+            'tc_texto' => $tc,
             'cobrado_usd' => round($cobrado, 2),
             'obtenido_rmb' => round($obtenido, 2),
             'pagado_rmb' => round($pagado, 2),
             'pagos' => $pagos,
-            'mostrar_cuentas' => $provider->exchange_result === PagoProveedorEjecucion::RESULT_COLLECT,
+            'mostrar_cuentas' => $tipo === 'pagar',
         ];
     }
 
@@ -408,18 +436,145 @@ class PagoProveedorPdfService
      */
     private function renderBalance(array $datos, string $fecha): string
     {
-        $html = view('pago-proveedor.balance', ['fecha' => $fecha] + $datos)->render();
-
         $options = new Options();
         $options->set('isHtml5ParserEnabled', true);
         $options->set('isRemoteEnabled', false);
-        $options->set('defaultFont', 'DejaVu Sans');
+        $options->set('defaultFont', 'Helvetica');
         $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html);
+        $metricas = $dompdf->getFontMetrics();
+        $dompdf->loadHtml(view('pago-proveedor.balance', $this->vistaBalance($datos, $fecha, $metricas))->render());
         $dompdf->setPaper('A4');
         $dompdf->render();
 
+        $canvas = $dompdf->getCanvas();
+        $fuente = $metricas->getFont('Helvetica');
+        $puntosPorMm = 72 / 25.4;
+        $canvas->page_text(
+            (210 - 15) * $puntosPorMm - $metricas->getTextWidth('Página 1 de 1', $fuente, 7.5),
+            283 * $puntosPorMm,
+            'Página {PAGE_NUM} de {PAGE_COUNT}',
+            $fuente,
+            7.5,
+            [115 / 255, 115 / 255, 115 / 255]
+        );
+
         return (string) $dompdf->output();
+    }
+
+    /**
+     * Textos, imágenes y tamaños de letra de la plantilla del balance (no entran en la huella del PDF).
+     *
+     * @param  array<string, mixed>  $datos
+     * @return array<string, mixed>
+     */
+    private function vistaBalance(array $datos, string $fecha, FontMetrics $metricas): array
+    {
+        $imagen = fn (string $nombre) => 'data:image/png;base64,' . base64_encode((string) file_get_contents(public_path('pago-proveedor/pdf/' . $nombre . '.png')));
+        $negrita = $metricas->getFont('Helvetica', 'bold');
+        $ajustar = function (string $texto, float $anchoMm, array $tamanos) use ($metricas, $negrita): float {
+            foreach ($tamanos as $tamano) {
+                if ($metricas->getTextWidth($texto, $negrita, $tamano) * 25.4 / 72 <= $anchoMm) {
+                    return (float) $tamano;
+                }
+            }
+
+            return (float) end($tamanos);
+        };
+        $partes = array_map('intval', explode('/', $fecha));
+        $fechaTexto = count($partes) === 3 ? sprintf('%02d/%02d/%04d', $partes[0], $partes[1], $partes[2]) : $fecha;
+
+        $usd = fn (float $valor) => '$' . number_format($valor, 2, '.', ',');
+        $rmb = fn (float $valor) => '¥' . number_format($valor, 2, '.', ',');
+        $rmbConSigno = fn (float $valor) => ($valor < -0.004 ? '-' : ($valor > 0.004 ? '+' : '')) . $rmb(abs($valor));
+
+        $tc = (string) $datos['tc_texto'];
+        $tarjetas = [
+            ['tipo' => 'total', 'ancho' => 70.5, 'icono' => 'billetera', 'etiqueta' => $datos['diferencia_titulo'], 'valor' => $datos['diferencia_texto'], 'nota' => $datos['diferencia_nota']],
+            ['tipo' => 'gris', 'ancho' => 53, 'icono' => 'banco', 'etiqueta' => 'MONTO COBRADO', 'valor' => $usd((float) $datos['cobrado_usd']), 'nota' => 'Valor de la carga'],
+            ['tipo' => 'gris', 'ancho' => 50.5, 'icono' => 'ruta', 'etiqueta' => 'PAGADO AL PROVEEDOR', 'valor' => $rmb((float) $datos['pagado_rmb']), 'nota' => 'Tipo de cambio real ' . $tc],
+        ];
+        foreach ($tarjetas as &$tarjeta) {
+            $tarjeta['valor_pt'] = $ajustar($tarjeta['valor'], $tarjeta['ancho'] - 8, [22, 20, 18, 16, 14]);
+        }
+        unset($tarjeta);
+
+        $diferenciaTotal = $rmbConSigno((float) $datos['diferencia_rmb']) . ' (aprox. ' . ($datos['diferencia_real_texto'] ?? $datos['diferencia_texto']) . ')';
+        $pagos = $datos['pagos'];
+        $filas = count($pagos) === 1
+            ? [
+                ['Monto cobrado (valor de la carga)', $usd((float) $pagos[0]['usd'])],
+                ['Tipo de cambio aplicado', $pagos[0]['tc_texto']],
+                ['Yuanes obtenidos', $rmb((float) $pagos[0]['obtenido'])],
+                ['Yuanes pagados al proveedor', $rmb((float) $pagos[0]['pagado'])],
+                ['Diferencia', $diferenciaTotal],
+            ]
+            : [
+                ['Fecha del pago', ...array_column($pagos, 'fecha'), '—'],
+                ['Monto cobrado', ...array_map(fn ($p) => $usd((float) $p['usd']), $pagos), $usd((float) $datos['cobrado_usd'])],
+                ['Tipo de cambio aplicado', ...array_column($pagos, 'tc_texto'), '—'],
+                ['Yuanes obtenidos', ...array_map(fn ($p) => $rmb((float) $p['obtenido']), $pagos), $rmb((float) $datos['obtenido_rmb'])],
+                ['Yuanes pagados al proveedor', ...array_map(fn ($p) => $rmb((float) $p['pagado']), $pagos), $rmb((float) $datos['pagado_rmb'])],
+                ['Diferencia', ...array_map(fn ($p) => $rmbConSigno((float) $p['diff_rmb']), $pagos), $diferenciaTotal],
+            ];
+
+        $pagosTexto = (string) $datos['pagos_texto'];
+        $tcCliente = '1 USD = ' . $tc . ' RMB';
+
+        return [
+            'logo' => $imagen('logo'),
+            'iconos' => array_map($imagen, [
+                'persona' => 'persona_n',
+                'billetera' => 'billetera_o',
+                'documento' => 'doc_n',
+                'caja' => 'caja_n',
+                'banco' => 'banco_n',
+                'ruta' => 'ruta_n',
+            ]),
+            'fecha' => $fechaTexto,
+            'datos_cliente' => [
+                ['etiqueta' => 'Cliente', 'valor' => $datos['cliente'] ?: '—', 'ancho' => 54.7, 'pt' => $ajustar($datos['cliente'] ?: '—', 50, [10.5, 9.5, 8.5, 7.5])],
+                ['etiqueta' => 'N.° de consolidado', 'valor' => (string) ($datos['consolidado'] ?: '—'), 'ancho' => 33.6, 'pt' => $ajustar((string) ($datos['consolidado'] ?: '—'), 28.5, [10.5, 9.5, 8.5, 7.5])],
+                ['etiqueta' => 'Pagos al proveedor', 'valor' => $pagosTexto, 'ancho' => 43.7, 'pt' => $ajustar($pagosTexto, 39, [10.5, 9.5, 8.5, 7.5])],
+                ['etiqueta' => 'Tipo de cambio aplicado', 'valor' => $tcCliente, 'ancho' => 48, 'pt' => $ajustar($tcCliente, 43.5, [10.5, 9.5, 8.5, 7.5])],
+            ],
+            'datos_proveedor' => [
+                ['etiqueta' => 'Código de proveedor', 'valor' => (string) ($datos['codigo_proveedor'] ?: '—'), 'ancho' => 47.4],
+                ['etiqueta' => 'Proveedor', 'valor' => (string) ($datos['nombre_proveedor'] ?: '—'), 'ancho' => 79],
+                ['etiqueta' => 'Producto', 'valor' => (string) ($datos['producto'] ?: '—'), 'ancho' => 53.6],
+            ],
+            'tarjetas' => $tarjetas,
+            'varios_pagos' => count($pagos) > 1,
+            'columnas' => array_map(fn ($p) => 'Pago ' . $p['n'], $pagos),
+            'filas' => $filas,
+            'conclusion' => $datos['conclusion'],
+            'mostrar_cuentas' => (bool) $datos['mostrar_cuentas'],
+            'cuentas' => [
+                ['banco' => 'BCP', 'color' => '#004a99', 'cuenta' => '191-4216222-1-10', 'cci' => '002-191-00421622211-0-57'],
+                ['banco' => 'Interbank', 'color' => '#009650', 'cuenta' => '200-3006218820', 'cci' => '003-200-003006218820-33'],
+            ],
+        ];
+    }
+
+    private function tasa(float $valor): string
+    {
+        return rtrim(rtrim(number_format($valor, 4, '.', ''), '0'), '.');
+    }
+
+    /**
+     * «CAMILA RÍOS SOTO» → «Camila Ríos Soto»; las partículas van en minúscula salvo al inicio.
+     */
+    private function nombrePropio(string $nombre): string
+    {
+        $palabras = preg_split('/\s+/u', trim($nombre), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $resultado = [];
+        foreach ($palabras as $indice => $palabra) {
+            $minuscula = mb_strtolower($palabra, 'UTF-8');
+            $resultado[] = $indice > 0 && in_array($minuscula, ['de', 'del', 'la', 'las', 'los', 'y', 'e'], true)
+                ? $minuscula
+                : mb_convert_case($minuscula, MB_CASE_TITLE, 'UTF-8');
+        }
+
+        return implode(' ', $resultado);
     }
 
     /**

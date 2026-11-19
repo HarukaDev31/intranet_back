@@ -82,6 +82,12 @@ class EjecucionPagoResource extends JsonResource
             'can_register' => $execution === null,
             'deposit_bank' => app(PagoProveedorEjecucionService::class)->clientBank($provider),
             'bank' => $this->bank($data),
+            // #2283: «✓ Recibido 12/10 · enviado por el cliente» y botón «Ver formulario».
+            'bank_received_at' => $data ? ($data->authorized_at ?? $data->updated_at)?->toIso8601String() : null,
+            'bank_source_label' => $data ? ($data->source === 'ventas' ? 'llenado por Ventas y autorizado por el cliente' : 'enviado por el cliente') : null,
+            'bank_form_url' => $data && $data->token
+                ? rtrim((string) config('pago_proveedor.clientes_url'), '/') . '/pago-proveedor/formulario-tt/' . $data->token
+                : null,
             'bank_copy_text' => $this->copyText($data),
         ];
     }

@@ -437,10 +437,14 @@ class CodeIgniterEncryption
     }
 
     /**
-     * Verificar contraseña encriptada
+     * Verificar contraseña encriptada.
+     * Los usuarios creados desde Clientes China / Organizaciones (PRY-26-0003) guardan la contraseña con bcrypt.
      */
     public function verifyPassword($plainPassword, $encryptedPassword)
     {
+        if (self::isBcryptHash($encryptedPassword)) {
+            return password_verify((string) $plainPassword, (string) $encryptedPassword);
+        }
         $decrypted = $this->decrypt($encryptedPassword);
         return $decrypted === $plainPassword;
     }
@@ -452,4 +456,12 @@ class CodeIgniterEncryption
     {
         return $this->encrypt($password);
     }
-} 
+
+    /**
+     * true si el valor guardado es un hash bcrypt ($2y$…, $2a$…, $2b$…).
+     */
+    public static function isBcryptHash($value): bool
+    {
+        return is_string($value) && preg_match('/^\$2[aby]\$\d{2}\$[.\/A-Za-z0-9]{53}$/', $value) === 1;
+    }
+}

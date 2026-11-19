@@ -258,7 +258,7 @@ class DocumentacionController extends Controller
             return false;
         }
 
-        return trim((string) $user->getNombreGrupo()) === Usuario::ROL_ALMACEN_CHINA;
+        return Usuario::esRolAlmacenChina(trim((string) $user->getNombreGrupo()));
     }
 
     private function denySocioDocumentacionMutation($user, $contenedor)

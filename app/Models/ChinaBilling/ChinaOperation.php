@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $container_id
  * @property float|null $cbm
  * @property float|null $rate
+ * @property int|null $rate_tier Tarifa del socio usada (1, 2) o null si fue manual
  * @property float $amount
  * @property float $fob
  * @property float $freight
@@ -30,8 +31,8 @@ class ChinaOperation extends Model
     protected $table = 'china_operations';
 
     protected $fillable = [
-        'code', 'organization_id', 'client_id', 'service_name', 'billing_type', 'variant_name',
-        'container_id', 'issued_on', 'description', 'cbm', 'rate', 'amount', 'fob',
+        'code', 'organization_id', 'service_name', 'billing_type', 'variant_name',
+        'container_id', 'issued_on', 'description', 'cbm', 'rate', 'rate_tier', 'amount', 'fob',
         'freight', 'packing_list_path', 'packing_list_name', 'transferred_to_operation_id', 'created_by',
     ];
 
@@ -39,6 +40,7 @@ class ChinaOperation extends Model
         'issued_on' => 'date',
         'cbm' => 'float',
         'rate' => 'float',
+        'rate_tier' => 'integer',
         'amount' => 'float',
         'fob' => 'float',
         'freight' => 'float',

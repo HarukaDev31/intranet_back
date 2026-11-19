@@ -108,6 +108,9 @@ class PagoProveedorSolicitudProveedor extends Model
     public const SETTING_UNDO_HOURS = 'deshacer_con_aviso_horas';
     public const SETTING_DECISION_HOURS = 'plazo_decision_horas';
     public const SETTING_CHINA_HOURS = 'plazo_observado_china_horas';
+    /** Plazo por defecto de las tareas de Ventas que no tienen uno propio (#1742). */
+    public const SETTING_SALES_TASK_HOURS = 'plazo_tarea_ventas_horas';
+    public const DEFAULT_SALES_TASK_HOURS = 48;
     public const SETTING_CHINA_REASONS = 'china_observation_reasons';
     public const PAYMENT_CANCEL = 'anulado';
     public const PAYMENT_REFUND = 'reembolso_solicitado';

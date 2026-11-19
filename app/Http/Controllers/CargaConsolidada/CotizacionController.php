@@ -508,6 +508,7 @@ class CotizacionController extends Controller
                 case Usuario::ROL_COORDINACION:
                 case Usuario::ROL_CONTABILIDAD:
                 case Usuario::ROL_ALMACEN_CHINA:
+                case Usuario::ROL_ENCARGADO_CHINA:
                 case Usuario::JEFE_MARKETING:
                     $query->where('estado_cotizador', 'CONFIRMADO');
                     break;
@@ -1047,7 +1048,7 @@ class CotizacionController extends Controller
             ];
         }
 
-        if ($usergroup === Usuario::ROL_ALMACEN_CHINA) {
+        if (Usuario::esRolAlmacenChina($usergroup)) {
             $headersData = app(CustomersHeadersService::class)->buildForContenedor($idContenedor);
             if (isset($headersData['cbm_pais'])) {
                 $headersData['cbm_pais']['label'] = 'CBM';
@@ -1071,6 +1072,7 @@ class CotizacionController extends Controller
             Usuario::ROL_COTIZADOR => ['cbm_vendido', 'cbm_pendiente', 'cbm_embarcado', 'qty_items', 'cbm_total_peru', 'cbm_total_china','cbm_total_imo'],
             Usuario::ROL_SOCIO => ['cbm_total_china', 'cbm_total_peru', 'cbm_pendiente', 'cbm_total_imo', 'total_fob', 'total_isd', 'total_logistica', 'total_impuestos'],
             Usuario::ROL_ALMACEN_CHINA => ['cbm_total_china', 'cbm_total_peru'],
+            Usuario::ROL_ENCARGADO_CHINA => ['cbm_total_china', 'cbm_total_peru'],
             Usuario::ROL_ADMINISTRACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado', 'saldos'],
             Usuario::ROL_COORDINACION => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado'],
             Usuario::ROL_CONTABILIDAD => ['cbm_total_china', 'cbm_total_peru', 'qty_items', 'total_logistica', 'total_logistica_pagado', 'saldos'],

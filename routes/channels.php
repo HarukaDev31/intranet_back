@@ -28,6 +28,7 @@ Broadcast::channel('App.Models.Usuario.{id}', function ($user, $id) {
 Broadcast::channel('ContenedorConsolidado-notifications', function ($user) {
     $allowedRoles = [
         Usuario::ROL_ALMACEN_CHINA,
+        Usuario::ROL_ENCARGADO_CHINA,
         Usuario::ROL_COORDINACION,
         Usuario::ROL_ADMINISTRACION,
         Usuario::ROL_COTIZADOR,
