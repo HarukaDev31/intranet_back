@@ -371,14 +371,26 @@ class ChinaBillingReader
      */
     private function allocationLabel(ChinaOperation $op): string
     {
-        $parts = [$op->service_name];
-        $parts[] = $this->consolidadoLabel($op->container_id);
+        $service = trim((string) $op->service_name);
+        $consolidado = trim((string) $this->consolidadoLabel($op->container_id));
         $description = trim((string) $op->description);
-        if ($description !== '' && !in_array($description, $parts, true)) {
-            $parts[] = $description;
+        foreach (array($service, $consolidado) as $known) {
+            if ($known === '') {
+                continue;
+            }
+            $description = trim((string) preg_replace('/'.preg_quote($known, '/').'/iu', '', $description));
+        }
+        $description = trim((string) preg_replace('/(?:\s*[·\-]\s*)+/u', ' · ', $description), " ·\t");
+
+        $parts = array();
+        foreach (array($service, $consolidado, $description) as $part) {
+            $part = trim((string) $part, " ·\t");
+            if ($part !== '' && !in_array($part, $parts, true)) {
+                $parts[] = $part;
+            }
         }
 
-        return implode(' · ', array_filter($parts, fn ($part) => trim((string) $part) !== ''));
+        return implode(' · ', $parts);
     }
 
     /**

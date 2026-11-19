@@ -237,9 +237,17 @@ class ChinaBillingController extends Controller
                 throw new ChinaBillingException('No tienes acceso a ese cliente.', 403);
             }
             $names = $this->reader->organizationNames([$organizationId]);
+            $include = collect(explode(',', (string) $request->query('include', '')))
+                ->map(function ($id) {
+                    return (int) $id;
+                })
+                ->filter()
+                ->all();
             $rows = $this->reader->operations([$organizationId], null, null)
                 ->map(fn (ChinaOperation $op) => $this->reader->presentOperation($op, ChinaBillingCalculator::operationMetrics($op), $names))
-                ->filter(fn (array $row) => $row['pending'] > 0)
+                ->filter(function (array $row) use ($include) {
+                    return $row['pending'] > 0 || in_array((int) $row['id'], $include, true);
+                })
                 ->sortBy('issued_on')->values();
 
             return ChinaBillingRowResource::collection($rows)->additional(['success' => true])->response();
