@@ -184,7 +184,7 @@ class PagoProveedorMensajeService
     private function enviarAlCliente(PagoProveedorSolicitudProveedor $provider, string $texto, string $contexto, bool $exigir): void
     {
         $provider->loadMissing('solicitud');
-        $destino = trim((string) ($provider->solicitud?->client_whatsapp ?? ''));
+        $destino = trim((string) ($provider->solicitud->client_whatsapp ?? ''));
         if ($destino === '') {
             if ($exigir) {
                 throw new PagoProveedorException('Falta el WhatsApp del cliente.');
