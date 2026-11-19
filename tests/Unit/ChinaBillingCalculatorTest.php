@@ -132,6 +132,15 @@ class ChinaBillingCalculatorTest extends TestCase
         $this->assertSame(4380.0, Calc::paymentCredit($payment));
     }
 
+    public function test_unused_credit_shows_as_favor_on_the_operation(): void
+    {
+        $op = $this->op(1, ['billing_type' => 'fixed', 'amount' => 16462, 'fob' => 0, 'freight' => 0]);
+        $payment = $this->pay(1, 16500, 16500);
+        $this->allocate($op, $payment, 16462);
+
+        $this->assertSame(-38.0, Calc::operationMetrics($op)['difference']);
+    }
+
     public function test_excess_received_becomes_credit(): void
     {
         $op = $this->op(1);
