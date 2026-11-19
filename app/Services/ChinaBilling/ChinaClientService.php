@@ -121,7 +121,12 @@ class ChinaClientService
     public function update(int $id, array $data, array $organizationIds, ?int $userId = null): array
     {
         $org = $this->find($id, $organizationIds);
-        $this->save($data, (int) $org->getKey(), $userId);
+        if ((int) $org->getKey() === Usuario::ID_ORGANIZACION_ADMIN) {
+            // Pro Business (org 1) es la organización principal: desde Clientes solo se cambian sus tarifas.
+            $this->updateHouseRates($org, $data, $userId);
+        } else {
+            $this->save($data, (int) $org->getKey(), $userId);
+        }
 
         return $this->detail($id, $organizationIds);
     }
@@ -134,6 +139,9 @@ class ChinaClientService
     public function delete(int $id, array $organizationIds): void
     {
         $org = $this->find($id, $organizationIds);
+        if ((int) $org->getKey() === Usuario::ID_ORGANIZACION_ADMIN) {
+            throw new ChinaBillingException('Pro Business no se puede eliminar.');
+        }
         if (OrganizacionClienteService::normalizarTipo($org->getAttribute('tipo_cliente')) !== Organizacion::TIPO_IMPORTADOR) {
             throw new ChinaBillingException('Los socios se administran desde su organización.');
         }
@@ -142,6 +150,43 @@ class ChinaClientService
         }
         $org->setAttribute('Nu_Estado', 0);
         $org->save();
+    }
+
+    /**
+     * Tarifas 1 y 2 de Pro Business (con historial), sin tocar su tipo, rol, menú ni usuarios.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function updateHouseRates(Organizacion $org, array $data, ?int $userId): void
+    {
+        try {
+            $rate1 = OrganizacionClienteService::normalizarTarifa($data['rate_1'] ?? null, 'Tarifa 1');
+            $rate2 = OrganizacionClienteService::normalizarTarifa($data['rate_2'] ?? null, 'Tarifa 2');
+        } catch (OrganizacionClienteException $exception) {
+            throw new ChinaBillingException($exception->getMessage(), $exception->status);
+        }
+        if ($rate1 === null || $rate2 === null) {
+            throw new ChinaBillingException('Ingresa la tarifa 1 y la tarifa 2.');
+        }
+        $before1 = $org->getAttribute('tarifa_1');
+        $before2 = $org->getAttribute('tarifa_2');
+        if (!OrganizacionClienteService::tarifasCambiaron($before1, $before2, $rate1, $rate2)) {
+            return;
+        }
+        DB::transaction(function () use ($org, $rate1, $rate2, $userId) {
+            $org->setAttribute('tarifa_1', $rate1);
+            $org->setAttribute('tarifa_2', $rate2);
+            $org->save();
+            DB::table('organizacion_tarifas_historial')->insert([
+                'organizacion_id' => (int) $org->getKey(),
+                'tarifa_1' => $rate1,
+                'tarifa_2' => $rate2,
+                'vigente_desde' => now(),
+                'created_by' => $userId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        });
     }
 
     /**
@@ -360,16 +405,14 @@ class ChinaClientService
     }
 
     /**
-     * Organizaciones clientes (todas las que ve Almacén China, menos la organización 1).
+     * Organizaciones clientes: las que ve Almacén China y Pro Business (org 1), que también paga sus consolidados.
      *
      * @param  array<int, int>  $organizationIds
      * @return Collection<int, Organizacion>
      */
     private function clients(array $organizationIds): Collection
     {
-        $ids = array_values(array_filter($organizationIds, fn (int $id) => $id !== Usuario::ID_ORGANIZACION_ADMIN));
-
-        return Organizacion::query()->with('paisOrigen')->whereIn('ID_Organizacion', $ids ?: [0])->where('Nu_Estado', 1)->get()->toBase();
+        return Organizacion::query()->with('paisOrigen')->whereIn('ID_Organizacion', $this->withAdmin($organizationIds))->where('Nu_Estado', 1)->get()->toBase();
     }
 
     /**
@@ -377,7 +420,7 @@ class ChinaClientService
      */
     private function find(int $id, array $organizationIds): Organizacion
     {
-        $org = $id !== Usuario::ID_ORGANIZACION_ADMIN && in_array($id, $organizationIds, true)
+        $org = ($id === Usuario::ID_ORGANIZACION_ADMIN || in_array($id, $organizationIds, true))
             ? Organizacion::query()->with('paisOrigen')->find($id)
             : null;
         if (!$org) {
@@ -423,7 +466,9 @@ class ChinaClientService
     private function present(Organizacion $org, ?array $metrics): array
     {
         $data = OrganizacionClienteService::serializar($org);
-        $isPartner = $data['tipo_cliente'] === Organizacion::TIPO_SOCIO;
+        $isHouse = (int) $org->getKey() === Usuario::ID_ORGANIZACION_ADMIN;
+        // Pro Business se muestra como socio: tiene tarifas 1 y 2 para sus consolidados.
+        $isPartner = $isHouse || $data['tipo_cliente'] === Organizacion::TIPO_SOCIO;
         $metrics ??= ['operations_count' => 0, 'service_amount' => 0.0, 'total_billed' => 0.0, 'paid' => 0.0, 'receivable' => 0.0, 'open_count' => 0, 'closed_count' => 0];
         $registered = $org->getAttribute('fecha_registro');
         $origin = $org->getRelationValue('paisOrigen');
@@ -451,7 +496,8 @@ class ChinaClientService
             'receivable' => $metrics['receivable'],
             'open_count' => (int) $metrics['open_count'],
             'closed_count' => (int) $metrics['closed_count'],
-            'can_delete' => !$isPartner && (int) $metrics['operations_count'] === 0,
+            'can_delete' => !$isHouse && !$isPartner && (int) $metrics['operations_count'] === 0,
+            'is_house' => $isHouse,
             'can_download_balance' => true,
         ];
     }
