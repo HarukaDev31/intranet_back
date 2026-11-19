@@ -146,16 +146,35 @@ class ChinaPaymentService
             'cashed_by' => $actor['id'],
         ]);
         if ($voucher) {
-            $extension = strtolower($voucher->getClientOriginalExtension() ?: 'pdf');
-            $payment->update([
-                'cash_voucher_path' => $this->storageFinalizeCdnPath(
-                    $this->storageStoreUpload($voucher, 'china-billing/cambios', 'cambio-'.$payment->id.'-'.now()->format('YmdHis').'.'.$extension)
-                ),
-                'cash_voucher_name' => $voucher->getClientOriginalName(),
-            ]);
+            $this->storeCashVoucher($payment, $voucher);
         }
 
         return $payment;
+    }
+
+    /**
+     * Adjunta o reemplaza el boucher cuando el pago ya está en caja.
+     *
+     * @param  array{id: int|null, organization_ids: array<int, int>}  $actor
+     */
+    public function attachCashVoucher(int $id, UploadedFile $voucher, array $actor): ChinaPayment
+    {
+        $payment = $this->find($id, $actor, true);
+        $this->requireStatus($payment, ChinaBillingCalculator::STATUS_IN_CASH, 'Adjunta el boucher cuando el pago ya está en caja.');
+        $this->storeCashVoucher($payment, $voucher);
+
+        return $payment;
+    }
+
+    private function storeCashVoucher(ChinaPayment $payment, UploadedFile $voucher): void
+    {
+        $extension = strtolower($voucher->getClientOriginalExtension() ?: 'pdf');
+        $payment->update([
+            'cash_voucher_path' => $this->storageFinalizeCdnPath(
+                $this->storageStoreUpload($voucher, 'china-billing/cambios', 'cambio-'.$payment->id.'-'.now()->format('YmdHis').'.'.$extension)
+            ),
+            'cash_voucher_name' => $voucher->getClientOriginalName(),
+        ]);
     }
 
     /**

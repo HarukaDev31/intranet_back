@@ -2,6 +2,7 @@
 
 namespace App\Services\ChinaBilling;
 
+use App\Models\Usuario;
 use App\Exceptions\ChinaBillingException;
 use App\Models\ChinaBilling\ChinaCreditApplication;
 use App\Models\ChinaBilling\ChinaOperation;
@@ -30,13 +31,20 @@ class ChinaOperationService
         $organizationId = (int) $data['organization_id'];
         $this->requireOrganization($organizationId, $actor);
         $this->validateAmounts($data);
+        if (DB::table('organizacion')->where('ID_Organizacion', $organizationId)->where('facturable_china', false)->exists()) {
+            throw new ChinaBillingException('Ese cliente fue eliminado de China: ya no se le pueden crear operaciones.');
+        }
 
         $containerId = !empty($data['container_id']) ? (int) $data['container_id'] : null;
         if ($containerId) {
             $draft = $this->drafts->find($containerId, $actor['organization_ids']);
-            if ((int) $draft['organization_id'] !== $organizationId) {
+            // Un consolidado de Pro Business lleva carga de varios clientes: Armando elige a quién se factura.
+            if ((int) $draft['organization_id'] !== Usuario::ID_ORGANIZACION_ADMIN && (int) $draft['organization_id'] !== $organizationId) {
                 throw new ChinaBillingException('El consolidado no pertenece a ese cliente.');
             }
+            // Mientras está «Por aprobar» lleva la fecha de cierre del consolidado (al subir el PL);
+            // al aprobarse, la operación queda con la fecha del día de la aprobación.
+            $data['issued_on'] = now()->toDateString();
         }
 
         return DB::transaction(function () use ($data, $packing, $actor, $organizationId, $containerId) {
@@ -178,9 +186,16 @@ class ChinaOperationService
         }
 
         DB::transaction(function () use ($operation, $amount, $fromOperationId, $metrics) {
+            $organizationId = (int) $operation->organization_id;
+            if ($fromOperationId) {
+                $source = ChinaOperation::query()->find((int) $fromOperationId);
+                if ($source) {
+                    $organizationId = (int) $source->organization_id;
+                }
+            }
             $payments = ChinaPayment::query()
                 ->with(['allocations', 'creditApplications'])
-                ->where('organization_id', $operation->organization_id)
+                ->where('organization_id', $organizationId)
                 ->whereNotNull('confirmed_at')
                 ->orderBy('paid_on')->orderBy('id')
                 ->lockForUpdate()

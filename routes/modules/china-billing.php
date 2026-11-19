@@ -31,6 +31,7 @@ Route::group(['prefix' => 'china-billing', 'middleware' => 'jwt.auth'], function
     Route::post('payments/{id}/confirm', [ChinaBillingController::class, 'confirmPayment'])->whereNumber('id');
     Route::post('payments/{id}/unconfirm', [ChinaBillingController::class, 'unconfirmPayment'])->whereNumber('id');
     Route::post('payments/{id}/cash', [ChinaBillingController::class, 'cashPayment'])->whereNumber('id');
+    Route::post('payments/{id}/cash-voucher', [ChinaBillingController::class, 'attachCashVoucher'])->whereNumber('id');
     Route::post('payments/{id}/uncash', [ChinaBillingController::class, 'uncashPayment'])->whereNumber('id');
     Route::delete('payments/{id}', [ChinaBillingController::class, 'destroyPayment'])->whereNumber('id');
 

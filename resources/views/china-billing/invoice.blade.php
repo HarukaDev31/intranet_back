@@ -20,17 +20,37 @@
     $mainSubtotal = collect($mainRows)->sum(fn ($row) => (float) $row[2]);
     $otherRows = collect($op['costs'])->map(fn ($cost) => [$cost['name'] ?: 'Costo adicional', '—', $cost['amount']])->all();
     $otherSubtotal = collect($otherRows)->sum(fn ($row) => (float) $row[2]);
+    $contactText = trim((string) ($contact ?? ''));
+    $contactBits = $contactText === '' ? array() : preg_split('/\s*·\s*/u', $contactText);
+    $contactName = isset($contactBits[0]) ? trim((string) $contactBits[0]) : '';
+    $contactPhone = '';
+    if (is_array($contactBits) && count($contactBits) > 1) {
+        $contactPhone = trim(implode(' · ', array_slice($contactBits, 1)));
+    }
+    $companyRaw = trim((string) (($bank['company'] ?? '') ?: 'Global Shop International Company Limited'));
+    $companyFooter = mb_convert_case(mb_strtolower($companyRaw, 'UTF-8'), MB_CASE_TITLE, 'UTF-8');
 @endphp
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="utf-8">
     @include('china-billing.partials.document-style')
+    <style>
+        @page { margin: 12px 28px; }
+        .data { table-layout: fixed; }
+        .data th { border-bottom-width: 1px; }
+        .data td { padding: 3px 8px; }
+        .data td.subtotal { font-size: 10px; white-space: nowrap; }
+        .phone { white-space: nowrap; margin-top: 1px; }
+        .bank-title { margin-top: 8px; padding-bottom: 3px; border-bottom: 1px solid #e6e6e6; }
+        .bank { width: 100%; table-layout: fixed; }
+        .bank td, .bank td.k { border-bottom: 1px solid #e6e6e6; padding: 2px 8px; }
+    </style>
 </head>
 <body>
     @include('china-billing.partials.document-header')
 
-    <table style="margin: 12px 0 10px;">
+    <table style="margin: 6px 0 6px;">
         <tr>
             <td>
                 <div class="brand">PRO BUSINESS</div>
@@ -41,46 +61,49 @@
     </table>
 
     <table style="border-top: 1px solid #ddd; border-bottom: 1px solid #ddd;">
-        <tr><td colspan="4" class="label" style="padding: 10px 0 6px;">IMPORTADOR</td></tr>
+        <tr><td colspan="4" class="label" style="padding: 4px 0 2px;">IMPORTADOR</td></tr>
         <tr>
-            <td style="width: 25%; padding-bottom: 10px;"><div class="label">EMPRESA</div><b>{{ $op['organization']['name'] }}</b></td>
-            <td style="width: 25%; padding-bottom: 10px;"><div class="label">CONSOLIDADO</div><b>{{ $consolidated }}</b></td>
-            <td style="width: 25%; padding-bottom: 10px;"><div class="label">CONTACTO</div><b>{{ ($contact ?? '') ?: '—' }}</b></td>
-            <td style="width: 25%; padding-bottom: 10px;"><div class="label">PAÍS</div><b>{{ $op['organization']['country'] ?: '—' }}</b></td>
+            <td style="width: 22%; padding-bottom: 4px;"><div class="label">EMPRESA</div><b>{{ $op['organization']['name'] }}</b></td>
+            <td style="width: 23%; padding-bottom: 4px;"><div class="label">CONSOLIDADO</div><b>{{ $consolidated }}</b></td>
+            <td style="width: 32%; padding-bottom: 4px;"><div class="label">CONTACTO</div><b>{{ $contactName !== '' ? $contactName : '—' }}</b>@if($contactPhone !== '')<div class="phone">{{ $contactPhone }}</div>@endif</td>
+            <td style="width: 23%; padding-bottom: 4px;"><div class="label">PAÍS</div><b>{{ $op['organization']['country'] ?: '—' }}</b></td>
         </tr>
     </table>
 
-    <table class="data" style="margin-top: 10px;">
-        <thead><tr><th>Concepto</th><th>Detalle</th><th class="right">Monto USD</th></tr></thead>
+    <table class="data" style="margin-top: 6px;">
+        <colgroup><col style="width: 46%;"><col style="width: 30%;"><col style="width: 24%;"></colgroup>
+        <thead><tr><th style="width:46%;">Concepto</th><th style="width:30%;">Detalle</th><th class="right" style="width:24%;">Monto USD</th></tr></thead>
         <tbody>
             @foreach($mainRows as $row)
-                <tr><td>{{ $row[0] }}</td><td class="muted">{{ $row[1] }}</td><td class="right">{{ $money($row[2]) }}</td></tr>
+                <tr><td style="width:46%;">{{ $row[0] }}</td><td class="muted" style="width:30%;">{{ $row[1] }}</td><td class="right" style="width:24%;">{{ $money($row[2]) }}</td></tr>
             @endforeach
-            <tr><td colspan="2" class="right muted" style="font-size: 10px;">Subtotal</td><td class="right"><b>{{ $money($mainSubtotal) }}</b></td></tr>
+            <tr><td style="width:46%;"></td><td class="right muted subtotal" style="width:30%;">Subtotal</td><td class="right" style="width:24%;"><b>{{ $money($mainSubtotal) }}</b></td></tr>
         </tbody>
     </table>
 
-    <div style="font-size: 10px; font-weight: bold; letter-spacing: 1px; margin: 10px 0 3px;">OTROS GASTOS</div>
+    <div style="font-size: 10px; font-weight: bold; letter-spacing: 1px; margin: 6px 0 2px;">OTROS GASTOS</div>
     <table class="data">
-        <thead><tr><th>Concepto</th><th>Detalle</th><th class="right">Monto USD</th></tr></thead>
+        <colgroup><col style="width: 46%;"><col style="width: 30%;"><col style="width: 24%;"></colgroup>
+        <thead><tr><th style="width:46%;">Concepto</th><th style="width:30%;">Detalle</th><th class="right" style="width:24%;">Monto USD</th></tr></thead>
         <tbody>
             @forelse($otherRows as $row)
-                <tr><td>{{ $row[0] }}</td><td class="muted">{{ $row[1] }}</td><td class="right">{{ $money($row[2]) }}</td></tr>
+                <tr><td style="width:46%;">{{ $row[0] }}</td><td class="muted" style="width:30%;">{{ $row[1] }}</td><td class="right" style="width:24%;">{{ $money($row[2]) }}</td></tr>
             @empty
                 <tr><td colspan="3" class="muted">Sin otros gastos.</td></tr>
             @endforelse
-            <tr><td colspan="2" class="right muted" style="font-size: 10px;">Subtotal otros gastos</td><td class="right"><b>{{ $money($otherSubtotal) }}</b></td></tr>
+            <tr><td style="width:46%;"></td><td class="right muted subtotal" style="width:30%;">Subtotal otros gastos</td><td class="right" style="width:24%;"><b>{{ $money($otherSubtotal) }}</b></td></tr>
         </tbody>
     </table>
 
-    <table style="margin-top: 14px; border-top: 2px solid #111;">
+    <table class="data" style="margin-top: 6px; border-top: 1px solid #111;">
         <tr>
-            <td class="right" style="padding-top: 10px; font-size: 11px; font-weight: bold; letter-spacing: 1px;">TOTAL A PAGAR (USD)</td>
-            <td class="right" style="padding-top: 8px; width: 120px; font-size: 18px; font-weight: bold; color: #f26b1d;">{{ $money($mainSubtotal + $otherSubtotal) }}</td>
+            <td style="width:46%; border-bottom: none;"></td>
+            <td class="right" style="width:30%; border-bottom: none; padding-top: 4px; font-size: 11px; font-weight: bold; letter-spacing: 1px;">TOTAL A PAGAR (USD)</td>
+            <td class="right" style="width:24%; border-bottom: none; padding-top: 4px; font-size: 16px; font-weight: bold; color: #f26b1d;">{{ $money($mainSubtotal + $otherSubtotal) }}</td>
         </tr>
     </table>
 
-    <div style="margin-top: 14px; background: #111; color: #fff; text-align: center; font-size: 10px; font-weight: bold; letter-spacing: 1px; padding: 7px;">NUESTRA CUENTA BANCARIA EN CHINA</div>
+    <div style="margin-top: 18px; background: #111; color: #fff; text-align: center; font-size: 10px; font-weight: bold; letter-spacing: 1px; padding: 4px;">NUESTRA CUENTA BANCARIA EN CHINA</div>
 
     <div class="bank-title">*DATOS DEL BANCO INTERMEDIARIO</div>
     <table class="bank">
@@ -113,8 +136,8 @@
         @if(!empty($bank['beneficiary_email']))<tr><td class="k">Correo:</td><td>{{ $bank['beneficiary_email'] }}</td></tr>@endif
     </table>
 
-    <div style="margin-top: 12px; padding-top: 6px; border-top: 1px solid #eee; font-size: 9px; color: #777;">
-        Documento generado por Pro Business · {{ $bank['company'] ?: 'Global Shop International Company Limited' }}.
+    <div style="margin-top: 22px; padding-top: 8px; border-top: 1px solid #eee; font-size: 9px; color: #777;">
+        Documento generado por Pro Business · {{ $companyFooter }}.
     </div>
 </body>
 </html>

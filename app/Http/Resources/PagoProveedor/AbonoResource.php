@@ -75,6 +75,8 @@ class AbonoResource extends JsonResource
             'excedente_decide_overdue' => $decideOverdue,
             'excedente_decide_text' => $decideText,
             'operacion_repetida' => $abono->repeated_operation,
+            // #2369: dónde más se usó ese N.° de operación, para que se entienda el aviso.
+            'operacion_repetida_detalle' => $abono->repeated_operation ? $this->operacionRepetidaDetalle($abono) : null,
             // Sales corrects an observed deposit in any stage; voiding stays limited to stage 1 (RN-45, RN-56).
             'puede_editar' => $abono->status === PagoProveedorAbono::STATUS_OBSERVED
                 || ($abono->status === PagoProveedorAbono::STATUS_IN_VALIDATION && !$advanced)
@@ -134,5 +136,30 @@ class AbonoResource extends JsonResource
             PagoProveedorAbono::STATUS_OBSERVED => 'Observado',
             PagoProveedorAbono::STATUS_CANCELLED => 'Anulado',
         ][$status] ?? $status;
+    }
+
+    private function operacionRepetidaDetalle(PagoProveedorAbono $abono): ?string
+    {
+        $otro = PagoProveedorAbono::query()
+            ->with('aplicaciones.proveedor')
+            ->where('operation_number', $abono->operation_number)
+            ->where('id', '!=', $abono->id)
+            ->where('status', '!=', PagoProveedorAbono::STATUS_CANCELLED)
+            ->orderBy('id')
+            ->first();
+        if (!$otro) {
+            return null;
+        }
+        $codigos = $otro->aplicaciones
+            ->map(fn ($aplicacion) => $aplicacion->proveedor?->request_code ?: $aplicacion->proveedor?->code_supplier)
+            ->filter()
+            ->unique()
+            ->implode(', ');
+        $donde = (int) $otro->request_id === (int) $abono->request_id ? 'otro abono de esta solicitud' : 'otra solicitud';
+        $fecha = $otro->paid_on ? $otro->paid_on->format('d/m/Y') : null;
+
+        return 'El N.° de operación ' . $abono->operation_number . ' ya se registró en ' . $donde
+            . ($codigos !== '' ? ' (' . $codigos . ')' : '')
+            . ($fecha ? ' el ' . $fecha : '') . '. Revisa que no sea el mismo voucher.';
     }
 }

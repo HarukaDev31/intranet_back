@@ -4,7 +4,6 @@ namespace App\Services\ChinaBilling;
 
 use App\Exceptions\ChinaBillingException;
 use App\Models\CargaConsolidada\Contenedor;
-use App\Models\Usuario;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -28,10 +27,15 @@ class ChinaDraftService
         $containers = Contenedor::query()
             ->withoutGlobalScopes()
             ->whereIn('organizacion_id', $organizationIds)
-            ->where('organizacion_id', '!=', Usuario::ID_ORGANIZACION_ADMIN)
+            // PRY-26-0003 (#2373/#2374): los consolidados de Pro Business (org 1) también: al cerrarlos con el PL
+            // en China aparecen en Operaciones «Por aprobar». Solo desde la fecha de inicio del flujo, para no
+            // llenar la lista con los consolidados ya cerrados antes.
             ->where('estado_china', Contenedor::CONTEDOR_CERRADO)
+            // La fecha es la de subida del PL en China (cierre del consolidado); si no está registrada, la de cierre.
+            ->when(config('china_billing.borradores_desde'), fn ($query, $desde) => $query->whereRaw('DATE(COALESCE(lista_embarque_uploaded_at, f_cierre)) >= ?', [$desde]))
             ->whereNotIn('id', DB::table('china_operations')->whereNotNull('container_id')->select('container_id'))
             ->whereNotIn('id', DB::table('china_draft_dismissals')->select('container_id'))
+            ->whereNotIn('organizacion_id', DB::table('organizacion')->where('facturable_china', false)->select('ID_Organizacion'))
             ->get();
 
         $cbm = $this->cbmByContainer($containers->pluck('id')->all());
@@ -39,8 +43,9 @@ class ChinaDraftService
         return $containers->map(fn (Contenedor $container) => [
             'container_id' => (int) $container->id,
             'organization_id' => (int) $container->organizacion_id,
-            'issued_on' => $container->f_cierre ? $container->f_cierre->toDateString() : now()->toDateString(),
-            'description' => (string) $container->formatCargaLabel(),
+            'issued_on' => $this->fechaPackingList($container),
+            // Concepto «Consolidado #19B - 2026» (#2373).
+            'description' => $this->concepto($container),
             'cbm' => round((float) ($cbm[$container->id] ?? 0), 3),
         ])->values();
     }
@@ -73,6 +78,28 @@ class ChinaDraftService
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+    }
+
+    /** Fecha en que China subió el PL (cierra el consolidado); si falta, la fecha de cierre o la de hoy. */
+    private function fechaPackingList(Contenedor $container): string
+    {
+        foreach ([$container->lista_embarque_uploaded_at, $container->f_cierre] as $fecha) {
+            if ($fecha instanceof \DateTimeInterface) {
+                return $fecha->format('Y-m-d');
+            }
+            if (is_string($fecha) && $fecha !== '') {
+                return date('Y-m-d', (int) strtotime($fecha));
+            }
+        }
+
+        return now()->toDateString();
+    }
+
+    private function concepto(Contenedor $container): string
+    {
+        $anio = $container->f_inicio ? (int) date('Y', strtotime((string) $container->f_inicio)) : (int) date('Y');
+
+        return 'Consolidado #' . $container->cargaConParte() . ' - ' . $anio;
     }
 
     /**

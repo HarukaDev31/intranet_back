@@ -156,7 +156,8 @@ class ChinaBillingCalculator
 
         $difference = null;
         if (!$transferred && $covered && $allConfirmed) {
-            $difference = self::round($total - $received);
+            // El sobrante del cobro (saldo a favor) se ve en esta columna, en negativo.
+            $difference = self::round($total - $received - self::favorShownOnOperation($op));
         }
 
         return [
@@ -177,6 +178,48 @@ class ChinaBillingCalculator
             'status' => $status,
             'partner_status' => self::partnerStatus($status, $transferred, $confirmed, $inConfirmation, $difference),
         ];
+    }
+
+    /**
+     * Saldo a favor del cobro que todavía no se aplicó. Se muestra en la operación
+     * que cubre ese cobro (si hay varias, en la que no carga el faltante).
+     */
+    private static function favorShownOnOperation(ChinaOperation $op): float
+    {
+        $favor = 0.0;
+        foreach ($op->allocations as $allocation) {
+            $payment = $allocation->payment;
+            if (!$payment || !$payment->confirmed_at) {
+                continue;
+            }
+            $unused = self::round(self::paymentCredit($payment) - (float) $payment->creditApplications->sum('amount'));
+            if ($unused <= 0) {
+                continue;
+            }
+            if (self::operationThatShowsCredit($payment) === (int) $op->id) {
+                $favor += $unused;
+            }
+        }
+
+        return self::round($favor);
+    }
+
+    private static function operationThatShowsCredit(ChinaPayment $payment): int
+    {
+        $ids = $payment->allocations->pluck('operation_id')->map(function ($id) {
+            return (int) $id;
+        })->unique()->values();
+        $shortfall = (int) $payment->shortfall_operation_id;
+        if ($ids->count() > 1 && $shortfall && $ids->contains($shortfall)) {
+            $other = $ids->first(function ($id) use ($shortfall) {
+                return (int) $id !== $shortfall;
+            });
+            if ($other) {
+                return (int) $other;
+            }
+        }
+
+        return (int) $ids->last();
     }
 
     /** Estado visible para el socio: pending, partial, to_confirm, paid. */

@@ -33,7 +33,7 @@ class ChinaBillingController extends Controller
     public function operations(Request $request): JsonResponse
     {
         return $this->responder(function () use ($request) {
-            $actor = $this->authorization->requireWarehouse($request->user());
+            $actor = $this->authorization->requireOperationView($request->user());
             $result = $this->reader->warehouseOperations($actor['organization_ids'], $request->all());
 
             return $this->listResponse($result);
@@ -43,7 +43,7 @@ class ChinaBillingController extends Controller
     public function summary(Request $request): JsonResponse
     {
         return $this->responder(function () use ($request) {
-            $actor = $this->authorization->requireWarehouse($request->user());
+            $actor = $this->authorization->requireOperationView($request->user());
 
             return response()->json(['success' => true] + $this->reader->warehouseSummary($actor['organization_ids'], $request->only(['from', 'to'])));
         });
@@ -137,7 +137,7 @@ class ChinaBillingController extends Controller
     public function payments(Request $request): JsonResponse
     {
         return $this->responder(function () use ($request) {
-            $actor = $this->authorization->requireWarehouse($request->user());
+            $actor = $this->authorization->requireOperationView($request->user());
 
             return $this->listResponse($this->reader->warehousePayments($actor['organization_ids'], $request->all()));
         });
@@ -146,7 +146,7 @@ class ChinaBillingController extends Controller
     public function showPayment(Request $request, int $id): JsonResponse
     {
         return $this->responder(function () use ($request, $id) {
-            $actor = $this->authorization->requireWarehouse($request->user());
+            $actor = $this->authorization->requireOperationView($request->user());
             $this->payments->find($id, $actor, false);
 
             return $this->ok(new ChinaBillingRowResource($this->reader->paymentDetail($id)));
@@ -210,6 +210,23 @@ class ChinaBillingController extends Controller
         });
     }
 
+    public function attachCashVoucher(Request $request, int $id): JsonResponse
+    {
+        return $this->responder(function () use ($request, $id) {
+            $actor = $this->authorization->requireWarehouse($request->user());
+            $request->validate([
+                'voucher' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            ]);
+            $voucher = $request->file('voucher');
+            if (!$voucher instanceof \Illuminate\Http\UploadedFile) {
+                throw new ChinaBillingException('Adjunta el boucher.');
+            }
+            $this->payments->attachCashVoucher($id, $voucher, $actor);
+
+            return $this->ok(new ChinaBillingRowResource($this->reader->paymentDetail($id)));
+        });
+    }
+
     public function uncashPayment(Request $request, int $id): JsonResponse
     {
         return $this->responder(function () use ($request, $id) {
@@ -232,14 +249,22 @@ class ChinaBillingController extends Controller
     public function pendingOperations(Request $request, int $organizationId): JsonResponse
     {
         return $this->responder(function () use ($request, $organizationId) {
-            $actor = $this->authorization->requireWarehouse($request->user());
+            $actor = $this->authorization->requireOperationView($request->user());
             if (!in_array($organizationId, $actor['organization_ids'], true)) {
                 throw new ChinaBillingException('No tienes acceso a ese cliente.', 403);
             }
             $names = $this->reader->organizationNames([$organizationId]);
+            $include = collect(explode(',', (string) $request->query('include', '')))
+                ->map(function ($id) {
+                    return (int) $id;
+                })
+                ->filter()
+                ->all();
             $rows = $this->reader->operations([$organizationId], null, null)
                 ->map(fn (ChinaOperation $op) => $this->reader->presentOperation($op, ChinaBillingCalculator::operationMetrics($op), $names))
-                ->filter(fn (array $row) => $row['pending'] > 0)
+                ->filter(function (array $row) use ($include) {
+                    return $row['pending'] > 0 || in_array((int) $row['id'], $include, true);
+                })
                 ->sortBy('issued_on')->values();
 
             return ChinaBillingRowResource::collection($rows)->additional(['success' => true])->response();

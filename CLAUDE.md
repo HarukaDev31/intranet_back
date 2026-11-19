@@ -30,6 +30,8 @@ Front: `HarukaDev31/probusiness_intranetv3` (Nuxt). Prod = `main` ("Deploy PROD"
 - Migraciones nuevas (todas viajan a prod con el PR): `2026_11_14_090000`, `2026_11_16_100000/110000/120000`, `130000` (**elimina `china_clients`**; respaldar), `2026_11_17_100000` (país Pro Business),
   `2026_11_17_110000` (dirección oficina en chino), `120000` (reordena menú Pagos: **+1 a los menús principales posteriores**), `130000` (historial `action` a 255),
   `140000` (cuenta bancaria China + tax id/uscc/email), `150000` (rol **Encargado China**, mueve a armando@probusiness.pe y quita módulos de China a ContenedorAlmacen), `160000` (menú Pago a Proveedor a todos los Cotizador), `170000` (menú de Encargado China).
+  `2026_11_19_100000` (`rate_pending` yuanes), `110000` (menús placeholder de Encargado China), `120000` (`organizacion.facturable_china`: eliminar cliente de China = baja lógica).
+- Clientes China: Pro Business (org 1) se lista (`is_house`), solo se editan sus tarifas (`updateHouseRates`), no se elimina.
 - Roles: `Usuario::ROL_ENCARGADO_CHINA`; `Usuario::esRolAlmacenChina()` lo trata como almacén en Carga Consolidada; ChinaBilling y Pago a Proveedor (China) exigen Encargado China.
 - Links al cliente (T-T): `config/pago_proveedor.php` → `clientes_url` (QA: beta de clientes en Netlify; prod: clientes.probusiness.pe). Token de 12 caracteres.
 - Comando `qa:limpiar-pruebas [--keep=2|--operaciones=|--solicitudes=] [--dry-run]`: solo QA.

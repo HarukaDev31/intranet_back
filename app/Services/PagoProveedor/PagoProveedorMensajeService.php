@@ -2,6 +2,8 @@
 
 namespace App\Services\PagoProveedor;
 
+use App\Exceptions\PagoProveedorException;
+use Illuminate\Support\Facades\Log;
 use App\Models\PagoProveedor\PagoProveedorEjecucion;
 use App\Models\PagoProveedor\PagoProveedorMensaje;
 use App\Models\PagoProveedor\PagoProveedorSolicitudProveedor;
@@ -135,7 +137,10 @@ class PagoProveedorMensajeService
         if ($this->alreadyStored($provider, 'aviso_usd')) {
             return;
         }
-        $this->store($provider, 'aviso_usd', $this->usdNoticeText($provider, $amount), $actor);
+        $texto = $this->usdNoticeText($provider, $amount);
+        // #2366/#2367: la confirmación de pago de Administración se envía al cliente desde el número de ventas.
+        $this->enviarAlCliente($provider, $texto, 'aviso usd proveedor ' . $provider->id, true);
+        $this->store($provider, 'aviso_usd', $texto, $actor);
     }
 
     public function rmbNoticeText(PagoProveedorSolicitudProveedor $provider): string
@@ -169,7 +174,32 @@ class PagoProveedorMensajeService
         if ($this->alreadyStored($provider, $type)) {
             return;
         }
-        $this->store($provider, $type, $this->rmbNoticeText($provider), $actor);
+        $texto = $this->rmbNoticeText($provider);
+        // #2366/#2367: la confirmación de China sale sola al confirmar el pago, desde el número de ventas.
+        // Si WhatsApp falla no se frena el registro del pago: queda en el log.
+        $this->enviarAlCliente($provider, $texto, 'aviso rmb proveedor ' . $provider->id, false);
+        $this->store($provider, $type, $texto, $actor);
+    }
+
+    private function enviarAlCliente(PagoProveedorSolicitudProveedor $provider, string $texto, string $contexto, bool $exigir): void
+    {
+        $provider->loadMissing('solicitud');
+        $destino = trim((string) ($provider->solicitud->client_whatsapp ?? ''));
+        if ($destino === '') {
+            if ($exigir) {
+                throw new PagoProveedorException('Falta el WhatsApp del cliente.');
+            }
+
+            return;
+        }
+        try {
+            app(PagoProveedorCotizacionWhatsappService::class)->enviarTextoCliente($destino, $texto, $contexto);
+        } catch (PagoProveedorException $e) {
+            if ($exigir) {
+                throw $e;
+            }
+            Log::warning('Aviso de pago al cliente no enviado', ['context' => $contexto, 'error' => $e->getMessage()]);
+        }
     }
 
     public function rmbNoticeMatches(PagoProveedorSolicitudProveedor $provider, float $yuanPaid): bool

@@ -193,7 +193,7 @@ class ChinaBillingReader
     public function operations(array $organizationIds, ?string $from, ?string $to): Collection
     {
         return ChinaOperation::query()
-            ->with(['costs', 'allocations.payment', 'creditApplications'])
+            ->with(['costs', 'allocations.payment.creditApplications', 'creditApplications.payment'])
             ->whereIn('organization_id', $organizationIds)
             ->when($from, fn ($q) => $q->whereDate('issued_on', '>=', $from))
             ->when($to, fn ($q) => $q->whereDate('issued_on', '<=', $to))
@@ -220,7 +220,7 @@ class ChinaBillingReader
      */
     public function operationDetail(int $id): array
     {
-        $op = ChinaOperation::query()->with(['costs', 'allocations.payment', 'creditApplications'])->findOrFail($id);
+        $op = ChinaOperation::query()->with(['costs', 'allocations.payment.creditApplications', 'creditApplications.payment'])->findOrFail($id);
 
         return $this->presentOperation($op, ChinaBillingCalculator::operationMetrics($op), $this->organizationNames([(int) $op->organization_id]));
     }
@@ -274,10 +274,18 @@ class ChinaBillingReader
                 'code' => $allocation->payment->code,
                 'amount' => (float) $allocation->amount,
                 'status' => ChinaBillingCalculator::paymentStatus($allocation->payment),
+                'paid_on' => $allocation->payment->paid_on?->toDateString(),
+                'receipt_name' => $allocation->payment->receipt_name,
+                'amount_sent' => (float) $allocation->payment->amount_sent,
             ])->values()->all(),
             'credits' => $op->creditApplications->map(fn ($credit) => [
-                'id' => (int) $credit->id, 'amount' => (float) $credit->amount, 'from_operation_id' => $credit->from_operation_id,
+                'id' => (int) $credit->id,
+                'amount' => (float) $credit->amount,
+                'from_operation_id' => $credit->from_operation_id,
+                'payment_code' => $credit->payment ? $credit->payment->code : null,
+                'applied_on' => $credit->applied_on ? $credit->applied_on->toDateString() : null,
             ])->values()->all(),
+            'transferred_amount' => $this->transferredAmount($op),
             'balance_due' => $metrics['partner_balance'],
         ], $metrics);
     }
@@ -354,6 +362,20 @@ class ChinaBillingReader
         ];
     }
 
+    /** Importe que se pasó a otra orden; queda en gris en la columna Diferencia. */
+    private function transferredAmount(ChinaOperation $op): ?float
+    {
+        if (!$op->transferred_to_operation_id) {
+            return null;
+        }
+        $amount = \App\Models\ChinaBilling\ChinaOperationCost::query()
+            ->where('source_operation_id', $op->id)
+            ->where('operation_id', $op->transferred_to_operation_id)
+            ->value('amount');
+
+        return $amount !== null ? (float) $amount : null;
+    }
+
     /** «Consolidado #46» del consolidado de la operación, si viene de uno. */
     private function consolidadoLabel(?int $containerId): ?string
     {
@@ -371,14 +393,26 @@ class ChinaBillingReader
      */
     private function allocationLabel(ChinaOperation $op): string
     {
-        $parts = [$op->service_name];
-        $parts[] = $this->consolidadoLabel($op->container_id);
+        $service = trim((string) $op->service_name);
+        $consolidado = trim((string) $this->consolidadoLabel($op->container_id));
         $description = trim((string) $op->description);
-        if ($description !== '' && !in_array($description, $parts, true)) {
-            $parts[] = $description;
+        foreach (array($service, $consolidado) as $known) {
+            if ($known === '') {
+                continue;
+            }
+            $description = trim((string) preg_replace('/'.preg_quote($known, '/').'/iu', '', $description));
+        }
+        $description = trim((string) preg_replace('/(?:\s*[·\-]\s*)+/u', ' · ', $description), " ·\t");
+
+        $parts = array();
+        foreach (array($service, $consolidado, $description) as $part) {
+            $part = trim((string) $part, " ·\t");
+            if ($part !== '' && !in_array($part, $parts, true)) {
+                $parts[] = $part;
+            }
         }
 
-        return implode(' · ', array_filter($parts, fn ($part) => trim((string) $part) !== ''));
+        return implode(' · ', $parts);
     }
 
     /**
@@ -416,7 +450,11 @@ class ChinaBillingReader
         $enabled = DB::table('organizacion_paises_habilitados')->whereIn('organizacion_id', $ids)->orderBy('id')->get(['organizacion_id', 'id_pais'])
             ->groupBy('organizacion_id');
 
-        return collect($this->organizationNames($organizationIds))
+        // Los clientes eliminados de China (no facturables) no se ofrecen para operaciones nuevas.
+        $removed = DB::table('organizacion')->whereIn('ID_Organizacion', $ids)->where('facturable_china', false)->pluck('ID_Organizacion')
+            ->map(fn ($id) => (int) $id)->all();
+
+        return collect(array_diff_key($this->organizationNames($organizationIds), array_flip($removed)))
             ->map(function (array $row, int $id) use ($clients, $enabled) {
                 $client = $clients->get($id);
                 $isPartner = ($client->tipo_cliente ?? 'socio') !== 'importador';

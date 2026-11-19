@@ -4,6 +4,7 @@ namespace App\Http\Controllers\ChinaBilling;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ChinaBilling\ChinaBillingRowResource;
+use App\Models\Usuario;
 use App\Services\ChinaBilling\ChinaBillingAuthorization;
 use App\Services\ChinaBilling\ChinaClientService;
 use Illuminate\Http\JsonResponse;
@@ -54,7 +55,10 @@ class ChinaClientController extends Controller
     {
         return $this->responder(function () use ($request, $id) {
             $actor = $this->authorization->requireWarehouse($request->user());
-            $data = $request->validate($this->rules());
+            // Pro Business (org 1): solo se editan sus tarifas, sin el resto de datos del cliente.
+            $data = $id === Usuario::ID_ORGANIZACION_ADMIN
+                ? $request->validate(['rate_1' => ['required', 'numeric', 'min:0'], 'rate_2' => ['required', 'numeric', 'min:0']])
+                : $request->validate($this->rules());
 
             return $this->ok(new ChinaBillingRowResource($this->clients->update($id, $data, $actor['organization_ids'], $actor['id'])));
         });
