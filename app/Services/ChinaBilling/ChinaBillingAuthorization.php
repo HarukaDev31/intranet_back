@@ -3,6 +3,7 @@
 namespace App\Services\ChinaBilling;
 
 use App\Exceptions\ChinaBillingException;
+use App\Models\Organizacion;
 use App\Models\Usuario;
 use App\Services\Organizacion\OrganizacionClienteService;
 use Illuminate\Support\Facades\DB;
@@ -10,22 +11,50 @@ use Illuminate\Support\Facades\DB;
 class ChinaBillingAuthorization
 {
     /**
-     * Operaciones y cobros los gestiona Almacén China (ContenedorAlmacen).
+     * Crear y modificar operaciones y cobros: solo Encargado China, sobre todas las organizaciones.
      *
      * @return array{id: int|null, name: string, organization_ids: array<int, int>}
      */
     public function requireWarehouse(Usuario $user): array
     {
-        // Las operaciones de China son del Encargado China (ya no del almacén de Carga Consolidada).
-        if ($this->groupName($user) !== Usuario::ROL_ENCARGADO_CHINA) {
+        // Gestionar (crear, editar, confirmar) sigue siendo solo del Encargado China.
+        if (!$this->isEncargadoChina($user)) {
             throw new ChinaBillingException('No tienes permiso para gestionar operaciones de China.', 403);
         }
 
-        // PRY-26-0003 (#1963): Pro Business (organización 1) también es cliente de Almacén China, así que se
-        // puede elegir al registrar operaciones y cobros. Sus consolidados cerrados también generan «Por aprobar» (ChinaDraftService).
-        $organizationIds = array_values(array_unique(array_map('intval', $user->organizacionesPermitidas())));
+        // El encargado ve y opera las operaciones de todas las organizaciones, no las de organizacionesPermitidas().
+        return $this->actor($user, $this->organizationIdsForOperations($user, $this->activeOrganizationIds()));
+    }
 
-        return $this->actor($user, $organizationIds);
+    /**
+     * Ver operaciones y cobros. El Encargado China ve las de cualquier organización.
+     * El resto solo ve la organización del usuario, aunque su rol vea contenedores de otras.
+     *
+     * @return array{id: int|null, name: string, organization_ids: array<int, int>}
+     */
+    public function requireOperationView(Usuario $user): array
+    {
+        $all = $this->isEncargadoChina($user) ? $this->activeOrganizationIds() : [];
+
+        return $this->actor($user, $this->organizationIdsForOperations($user, $all));
+    }
+
+    /**
+     * @param  array<int, int>  $allActiveIds
+     * @return array<int, int>
+     */
+    public function organizationIdsForOperations(Usuario $user, array $allActiveIds): array
+    {
+        if ($this->isEncargadoChina($user)) {
+            return array_values(array_unique(array_map('intval', $allActiveIds)));
+        }
+
+        $own = (int) $user->getAttribute('ID_Organizacion');
+        if ($own <= 0) {
+            throw new ChinaBillingException('No tienes permiso para ver operaciones.', 403);
+        }
+
+        return [$own];
     }
 
     /**
@@ -61,6 +90,26 @@ class ChinaBillingAuthorization
             ->where('gu.ID_Usuario', (int) $userId)
             ->where('m.url_intranet_v2', OrganizacionClienteService::MENU_PAGOS_URL)
             ->exists();
+    }
+
+    private function isEncargadoChina(Usuario $user): bool
+    {
+        return Usuario::normalizarRol($this->groupName($user)) === Usuario::normalizarRol(Usuario::ROL_ENCARGADO_CHINA);
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function activeOrganizationIds(): array
+    {
+        return Organizacion::query()
+            ->where('Nu_Estado', 1)
+            ->pluck('ID_Organizacion')
+            ->map(function ($id) {
+                return (int) $id;
+            })
+            ->values()
+            ->all();
     }
 
     private function groupName(Usuario $user): string
