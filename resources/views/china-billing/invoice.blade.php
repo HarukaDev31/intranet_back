@@ -27,6 +27,8 @@
     if (is_array($contactBits) && count($contactBits) > 1) {
         $contactPhone = trim(implode(' · ', array_slice($contactBits, 1)));
     }
+    $companyRaw = trim((string) (($bank['company'] ?? '') ?: 'Global Shop International Company Limited'));
+    $companyFooter = mb_convert_case(mb_strtolower($companyRaw, 'UTF-8'), MB_CASE_TITLE, 'UTF-8');
 @endphp
 <!DOCTYPE html>
 <html lang="es">
@@ -131,8 +133,8 @@
         @if(!empty($bank['beneficiary_email']))<tr><td class="k">Correo:</td><td>{{ $bank['beneficiary_email'] }}</td></tr>@endif
     </table>
 
-    <div style="margin-top: 4px; padding-top: 3px; border-top: 1px solid #eee; font-size: 9px; color: #777;">
-        Documento generado por Pro Business · {{ $bank['company'] ?: 'Global Shop International Company Limited' }}.
+    <div style="margin-top: 22px; padding-top: 8px; border-top: 1px solid #eee; font-size: 9px; color: #777;">
+        Documento generado por Pro Business · {{ $companyFooter }}.
     </div>
 </body>
 </html>
