@@ -132,7 +132,7 @@ class ChinaClientService
     }
 
     /**
-     * Solo se pueden quitar importadores sin operaciones: la organización queda inactiva (no se borra).
+     * Quita al cliente de China: deja de ser facturable (no se borra la organización).
      *
      * @param  array<int, int>  $organizationIds
      */
@@ -142,13 +142,8 @@ class ChinaClientService
         if ((int) $org->getKey() === Usuario::ID_ORGANIZACION_ADMIN) {
             throw new ChinaBillingException('Pro Business no se puede eliminar.');
         }
-        if (OrganizacionClienteService::normalizarTipo($org->getAttribute('tipo_cliente')) !== Organizacion::TIPO_IMPORTADOR) {
-            throw new ChinaBillingException('Los socios se administran desde su organización.');
-        }
-        if (ChinaOperation::query()->where('organization_id', $org->getKey())->exists()) {
-            throw new ChinaBillingException('El importador tiene operaciones: no se puede eliminar.');
-        }
-        $org->setAttribute('Nu_Estado', 0);
+        // Baja lógica: la organización, sus usuarios, operaciones y pagos se mantienen; solo deja de ser facturable.
+        $org->setAttribute('facturable_china', false);
         $org->save();
     }
 
@@ -414,7 +409,8 @@ class ChinaClientService
     {
         return Organizacion::query()->with('paisOrigen')->whereIn('ID_Organizacion', $this->withAdmin($organizationIds))
             // Pro Business se lista aunque su estado en la tabla no sea 1 (es la organización principal).
-            ->where(fn ($query) => $query->where('Nu_Estado', 1)->orWhere('ID_Organizacion', Usuario::ID_ORGANIZACION_ADMIN))->get()->toBase();
+            ->where(fn ($query) => $query->where('Nu_Estado', 1)->orWhere('ID_Organizacion', Usuario::ID_ORGANIZACION_ADMIN))
+            ->where('facturable_china', true)->get()->toBase();
     }
 
     /**
@@ -498,7 +494,7 @@ class ChinaClientService
             'receivable' => $metrics['receivable'],
             'open_count' => (int) $metrics['open_count'],
             'closed_count' => (int) $metrics['closed_count'],
-            'can_delete' => !$isHouse && !$isPartner && (int) $metrics['operations_count'] === 0,
+            'can_delete' => !$isHouse,
             'is_house' => $isHouse,
             'can_download_balance' => true,
         ];

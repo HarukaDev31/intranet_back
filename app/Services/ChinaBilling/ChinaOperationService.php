@@ -31,6 +31,9 @@ class ChinaOperationService
         $organizationId = (int) $data['organization_id'];
         $this->requireOrganization($organizationId, $actor);
         $this->validateAmounts($data);
+        if (DB::table('organizacion')->where('ID_Organizacion', $organizationId)->where('facturable_china', false)->exists()) {
+            throw new ChinaBillingException('Ese cliente fue eliminado de China: ya no se le pueden crear operaciones.');
+        }
 
         $containerId = !empty($data['container_id']) ? (int) $data['container_id'] : null;
         if ($containerId) {

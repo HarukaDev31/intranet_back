@@ -34,6 +34,7 @@ class ChinaDraftService
             ->when(config('china_billing.borradores_desde'), fn ($query, $desde) => $query->whereDate('f_cierre', '>=', $desde))
             ->whereNotIn('id', DB::table('china_operations')->whereNotNull('container_id')->select('container_id'))
             ->whereNotIn('id', DB::table('china_draft_dismissals')->select('container_id'))
+            ->whereNotIn('organizacion_id', DB::table('organizacion')->where('facturable_china', false)->select('ID_Organizacion'))
             ->get();
 
         $cbm = $this->cbmByContainer($containers->pluck('id')->all());
