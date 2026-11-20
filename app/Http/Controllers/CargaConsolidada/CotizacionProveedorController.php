@@ -188,8 +188,7 @@ class CotizacionProveedorController extends Controller
                 ->whereRaw('NOT EXISTS (SELECT 1 FROM calculadora_importacion ci WHERE ci.id_cotizacion = main.id AND ci.estado = ?)', ['PENDIENTE']);
 
             if (!empty($search)) {
-                Log::info('search: ' . $search);
-                $query->where('main.nombre', 'LIKE', '%' . $search . '%');
+                $this->filtrarBusquedaEmbarque($query, $search);
             }
             if (!empty($idCotizacion)) {
                 $query->where('main.id', $idCotizacion);
@@ -1169,6 +1168,25 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             Log::error('Error en procesarEstadoRotulado: ' . $e->getMessage());
             throw $e;
         }
+    }
+
+    /**
+     * El buscador del embarque encuentra al cliente por nombre o por el código de un proveedor.
+     *
+     * @param \Illuminate\Database\Query\Builder $query
+     */
+    private function filtrarBusquedaEmbarque($query, $search)
+    {
+        $like = '%' . $search . '%';
+        $query->where(function ($q) use ($like) {
+            $q->where('main.nombre', 'LIKE', $like)
+                ->orWhereExists(function ($sub) use ($like) {
+                    $sub->select(DB::raw(1))
+                        ->from('contenedor_consolidado_cotizacion_proveedores as proveedores')
+                        ->whereRaw('proveedores.id_cotizacion = main.id')
+                        ->where('proveedores.code_supplier', 'LIKE', $like);
+                });
+        });
     }
 
     /**
@@ -4057,8 +4075,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                 ->whereNull('main.deleted_at');
 
             if (!empty($search)) {
-                Log::info('search: ' . $search);
-                $query->where('main.nombre', 'LIKE', '%' . $search . '%');
+                $this->filtrarBusquedaEmbarque($query, $search);
             }
             if (!empty($idCotizacion)) {
                 $query->where('main.id', $idCotizacion);
