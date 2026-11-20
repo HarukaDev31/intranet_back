@@ -243,7 +243,7 @@ class DocumentacionController extends Controller
             'Packing China',
             'Packing Real',
             'BL draft',
-            'Resumen de pago',
+            'BL final',
         ];
     }
 
@@ -327,10 +327,13 @@ class DocumentacionController extends Controller
 
     private function ensureSocioDocumentacionFolders($contenedor)
     {
-        // Renombrar legado "Packing list china" → "Packing China"
+        // Renombrar legado "Packing list china" → "Packing China" y "Resumen de pago" → "BL final".
         DocumentacionFolder::where('id_contenedor', $contenedor->id)
             ->whereRaw("LOWER(TRIM(folder_name)) = 'packing list china'")
             ->update(['folder_name' => 'Packing China']);
+        DocumentacionFolder::where('id_contenedor', $contenedor->id)
+            ->whereRaw("LOWER(TRIM(folder_name)) = 'resumen de pago'")
+            ->update(['folder_name' => 'BL final']);
 
         foreach ($this->socioDocumentacionFolderNames() as $folderName) {
             $exists = DocumentacionFolder::where('id_contenedor', $contenedor->id)
@@ -355,7 +358,7 @@ class DocumentacionController extends Controller
             'packing list china' => 0,
             'packing real' => 1,
             'bl draft' => 2,
-            'resumen de pago' => 3,
+            'bl final' => 3,
         ];
 
         return $folders->sortBy(function ($folder) use ($order) {
