@@ -26,10 +26,14 @@ class ChinaBankAccountController extends Controller
     public function show(Request $request): JsonResponse
     {
         return $this->responder(function () use ($request) {
-            try {
-                $this->authorization->requireWarehouse($request->user());
-            } catch (ChinaBillingException) {
-                $this->authorization->requirePartner($request->user());
+            $user = $request->user();
+            $esChina = \App\Models\Usuario::esRolAlmacenChina(trim((string) $user->getNombreGrupo()));
+            if (!$esChina) {
+                try {
+                    $this->authorization->requirePartner($user);
+                } catch (ChinaBillingException) {
+                    throw new ChinaBillingException('No tienes permiso para ver la cuenta de China.', 403);
+                }
             }
 
             return response()->json(['success' => true, 'data' => $this->accounts->active()]);
