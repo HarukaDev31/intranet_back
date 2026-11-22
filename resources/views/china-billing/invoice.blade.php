@@ -131,8 +131,8 @@
         <tr><td class="k">País:</td><td>{{ $bank['beneficiary_country'] ?: '—' }}</td></tr>
         <tr><td class="k">Estado:</td><td>{{ $bank['beneficiary_state'] ?: '—' }}</td></tr>
         <tr><td class="k">Ciudad:</td><td>{{ $bank['beneficiary_city'] ?: '—' }}</td></tr>
-        @if(!empty($bank['beneficiary_tax_id']))<tr><td class="k">Tax ID:</td><td>{{ $bank['beneficiary_tax_id'] }} (si el banco lo solicita)</td></tr>@endif
-        @if(!empty($bank['beneficiary_uscc']))<tr><td class="k">USCC:</td><td>{{ $bank['beneficiary_uscc'] }} (si el banco lo solicita)</td></tr>@endif
+        @if(!empty($bank['beneficiary_tax_id']))<tr><td class="k">Tax ID:</td><td>{{ $bank['beneficiary_tax_id'] }} (si el banco te solicita)</td></tr>@endif
+        @if(!empty($bank['beneficiary_uscc']))<tr><td class="k">USCC:</td><td>{{ $bank['beneficiary_uscc'] }} (si el banco te solicita)</td></tr>@endif
         @if(!empty($bank['beneficiary_email']))<tr><td class="k">Correo:</td><td>{{ $bank['beneficiary_email'] }}</td></tr>@endif
     </table>
 
