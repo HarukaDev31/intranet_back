@@ -102,6 +102,18 @@ class VerComoClienteTest extends TestCase
         $this->assertSame(200, $this->pasar('POST', $tokenNormal), 'el cliente real sí escribe');
     }
 
+    public function test_el_canje_no_pide_sesion_y_rechaza_un_codigo_falso(): void
+    {
+        $this->postJson('/api/auth/clientes/ver-como', ['codigo' => 'falso'])
+            ->assertStatus(422)
+            ->assertJson(['success' => false]);
+    }
+
+    public function test_abrir_el_link_exige_sesion_interna(): void
+    {
+        $this->postJson('/api/carga-consolidada/contenedor/entrega/clientes/1/ver-como-cliente')->assertStatus(401);
+    }
+
     private function pasar(string $metodo, string $token): int
     {
         $request = Request::create('/api/auth/clientes/profile', $metodo);
