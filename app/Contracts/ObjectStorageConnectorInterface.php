@@ -14,14 +14,20 @@ interface ObjectStorageConnectorInterface
     /**
      * Guarda contenido binario (PDF, etc.) en ruta relativa. Retorna la misma ruta normalizada.
      */
-    public function putContents(string $relativePath, string $contents): string;
+    /**
+     * @param array<string, mixed> $options Opciones del driver (p. ej. ContentType / ContentDisposition en S3).
+     */
+    public function putContents(string $relativePath, string $contents, array $options = []): string;
 
     /**
      * Solo ruta relativa para BD (sin URL, sin storage/app/public).
      */
     public function normalizeRelativePath(?string $path): ?string;
 
-    public function put(string $relativePath, $contents): bool;
+    /**
+     * @param array<string, mixed> $options Opciones del driver (p. ej. ContentType / ContentDisposition en S3).
+     */
+    public function put(string $relativePath, $contents, array $options = []): bool;
 
     public function exists(string $relativePath): bool;
 
