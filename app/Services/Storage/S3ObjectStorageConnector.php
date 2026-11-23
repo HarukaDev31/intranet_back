@@ -51,7 +51,7 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
         return $this->normalizeRelativePath($stored);
     }
 
-    public function putContents(string $relativePath, string $contents): string
+    public function putContents(string $relativePath, string $contents, array $options = []): string
     {
         $relativePath = $this->normalizeRelativePath($relativePath);
         if ($relativePath === null || $relativePath === '') {
@@ -63,7 +63,7 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
             throw new RuntimeException('Ruta relativa inválida para guardar archivo.');
         }
 
-        if (!$this->put($relativePath, $contents)) {
+        if (!$this->put($relativePath, $contents, $options)) {
             throw new RuntimeException('No se pudo guardar el archivo en almacenamiento.');
         }
 
@@ -108,7 +108,7 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
         return $path === '' ? null : $path;
     }
 
-    public function put(string $relativePath, $contents): bool
+    public function put(string $relativePath, $contents, array $options = []): bool
     {
         $relativePath = StoragePathSanitizer::relativePath(ltrim($relativePath, '/'));
         if ($relativePath === '') {
@@ -118,7 +118,7 @@ class S3ObjectStorageConnector implements ObjectStorageConnectorInterface
         $disk = $this->uploadDisk();
 
         try {
-            $ok = Storage::disk($disk)->put($relativePath, $contents);
+            $ok = Storage::disk($disk)->put($relativePath, $contents, $options);
         } catch (\Throwable $e) {
             Log::error('S3ObjectStorageConnector: put falló', [
                 'disk' => $disk,

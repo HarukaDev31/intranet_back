@@ -24,6 +24,7 @@ use App\Models\SoporteTi\SoporteTiSolicitudEstado;
 use App\Models\SoporteTi\SoporteTiSolicitudEvidencia;
 use App\Models\Usuario;
 use App\Support\SoporteTi\SoporteTiHtmlEvidenceSanitizer;
+use App\Support\Storage\StoragePathSanitizer;
 use App\Support\SoporteTi\SoporteTiWhatsappGrupoMensajeBuilder;
 use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -3481,15 +3482,16 @@ class SoporteTiService
             }
 
             if (SoporteTiHtmlEvidenceSanitizer::esHtml($file)) {
-                $saneado = SoporteTiHtmlEvidenceSanitizer::sanear($file);
+                $html = SoporteTiHtmlEvidenceSanitizer::prepararHtmlInerte($file);
                 $dir = 'soporte-ti/pending-chat/' . $batch;
-                $rel = $dir . '/' . Str::uuid() . '_' . $saneado['nombre'];
-                Storage::disk('local')->put($rel, $saneado['contenido']);
+                $rel = $dir . '/' . Str::uuid() . '_' . StoragePathSanitizer::fileName($html['nombre_almacenamiento']);
+                Storage::disk('local')->put($rel, $html['contenido']);
                 $archivosPendientes[] = array(
                     'local_path' => $rel,
-                    'nombre_original' => $saneado['nombre'],
-                    'tamano_bytes' => strlen($saneado['contenido']),
-                    'mime' => 'text/plain',
+                    'nombre_original' => $html['nombre'],
+                    'tamano_bytes' => strlen($html['contenido']),
+                    'mime' => 'text/html',
+                    'html_inerte' => true,
                 );
                 continue;
             }

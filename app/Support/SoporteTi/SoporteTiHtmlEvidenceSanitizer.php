@@ -49,6 +49,42 @@ class SoporteTiHtmlEvidenceSanitizer
         );
     }
 
+    /**
+     * HTML enviado por el chat: se conserva el archivo tal cual (nombre visible .html), pero se guarda
+     * inerte: la clave en almacenamiento termina en .txt y en S3 se sube como text/plain + attachment,
+     * así nunca se abre como página en el dominio del bucket/CDN ni del back. La vista previa del front
+     * lo muestra en un iframe sandbox (origen aislado).
+     *
+     * @return array{contenido: string, nombre: string, nombre_almacenamiento: string}
+     */
+    public static function prepararHtmlInerte(UploadedFile $file): array
+    {
+        $nombreOriginal = (string) $file->getClientOriginalName();
+        $base = pathinfo($nombreOriginal, PATHINFO_FILENAME) ?: 'archivo';
+        $ext = strtolower((string) pathinfo($nombreOriginal, PATHINFO_EXTENSION));
+        $ext = in_array($ext, array('html', 'htm'), true) ? $ext : 'html';
+        $nombre = $base . '.' . $ext;
+
+        return array(
+            'contenido' => (string) file_get_contents($file->getRealPath()),
+            'nombre' => $nombre,
+            'nombre_almacenamiento' => $nombre . '.txt',
+        );
+    }
+
+    /**
+     * Opciones de subida a S3 para un HTML inerte.
+     *
+     * @return array<string, string>
+     */
+    public static function opcionesAlmacenamientoInerte(): array
+    {
+        return array(
+            'ContentType' => 'text/plain; charset=utf-8',
+            'ContentDisposition' => 'attachment',
+        );
+    }
+
     private static function purifier(): HTMLPurifier
     {
         if (self::$purifier === null) {
