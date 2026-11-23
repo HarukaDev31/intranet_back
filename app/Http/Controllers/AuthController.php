@@ -42,7 +42,7 @@ class AuthController extends Controller
      */
     public function __construct()
     {
-        $this->middleware('auth:api', ['except' => ['login', 'register', 'loginCliente', 'meExternal', 'logoutExternal', 'refreshExternal', 'forgotPassword', 'resetPassword']]);
+        $this->middleware('auth:api', ['except' => ['login', 'register', 'loginCliente', 'loginVerComoCliente', 'meExternal', 'logoutExternal', 'refreshExternal', 'forgotPassword', 'resetPassword']]);
     }
 
     /**
