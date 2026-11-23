@@ -10,6 +10,7 @@ use App\Models\SoporteTi\SoporteTiSolicitudEvidencia;
 use App\Services\SoporteTi\SoporteTiCacheService;
 use App\Services\SoporteTi\SoporteTiService;
 use App\Support\SoporteTi\SoporteTiQueue;
+use App\Support\SoporteTi\SoporteTiHtmlEvidenceSanitizer;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -96,7 +97,10 @@ class ProcessSoporteTiChatAdjuntosJob implements ShouldQueue
             if ($contents === null || $contents === '') {
                 continue;
             }
-            app(ObjectStorageConnectorInterface::class)->putContents($publicRel, $contents);
+            $opciones = !empty($meta['html_inerte'])
+                ? SoporteTiHtmlEvidenceSanitizer::opcionesAlmacenamientoInerte()
+                : array();
+            app(ObjectStorageConnectorInterface::class)->putContents($publicRel, $contents, $opciones);
             Storage::disk('local')->delete($localPath);
             $bytes = isset($meta['tamano_bytes']) ? (int) $meta['tamano_bytes'] : 0;
             $tamano = $bytes > 1048576
