@@ -1157,6 +1157,9 @@ class ContenedorController extends Controller
             if ($esContenedorSocio) {
                 if (Usuario::rolNoVeConsolidadosSocio($role)) {
                     $query->whereRaw('0 = 1');
+                } elseif ($role === Usuario::ROL_ENCARGADO_CHINA) {
+                    $query->where('tipo', 'COTIZADOR')
+                        ->whereRaw("UPPER(TRIM(name)) IN ('COTIZACION', 'DOCUMENTACION')");
                 } elseif (Usuario::esRolAlmacenChina($role)) {
                     $query->where('tipo', 'COTIZADOR')->limit(3);
                 } else {
@@ -1193,6 +1196,10 @@ class ContenedorController extends Controller
                     break;
                 case Usuario::ROL_FINANZAS:
                     $query->where('tipo', 'FINANZAS');
+                    break;
+                case Usuario::ROL_ENCARGADO_CHINA:
+                    $query->where('tipo', 'COTIZADOR')
+                        ->whereRaw("UPPER(TRIM(name)) IN ('COTIZACION', 'DOCUMENTACION')");
                     break;
                 case Usuario::ROL_SOCIO:
                     // Socio ve COTIZACION+CLIENTES en "abiertos" y suma DOCUMENTACION en "completados".

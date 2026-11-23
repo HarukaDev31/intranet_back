@@ -19,6 +19,7 @@ use App\Http\Controllers\CargaConsolidada\CotizacionPagosController;
 use App\Http\Controllers\CargaConsolidada\AduanaController;
 use App\Http\Controllers\CargaConsolidada\Clientes\PagosController as ClientesPagosController;
 use App\Http\Controllers\CargaConsolidada\EntregaController;
+use App\Http\Controllers\CargaConsolidada\VerComoClienteController;
 use App\Http\Controllers\CargaConsolidada\ExcelConfirmacionCoordinacionController;
 use App\Http\Controllers\CargaConsolidada\InspeccionadosController;
 use App\Http\Controllers\CargaConsolidada\CustomersController;
@@ -308,6 +309,8 @@ Route::group(['prefix' => 'carga-consolidada', 'middleware' => ['jwt.auth', 'car
             Route::get('/{idContenedor}/headers', [EntregaController::class, 'getHeaders']);
             Route::get('/clientes/{idContenedor}/export-excel', [EntregaController::class, 'exportClientesEntregaExcel']);
             Route::get('/clientes/{idContenedor}', [EntregaController::class, 'getClientesEntrega']);
+            Route::post('/clientes/{idCotizacion}/ver-como-cliente', [VerComoClienteController::class, 'store'])
+                ->middleware(['role.coordinacion', 'throttle:30,1'])->whereNumber('idCotizacion');
             // Export ROTULADO PARED
             Route::get('/{idContenedor}/rotulado-pared', [EntregaController::class, 'downloadPlantillas']);
             Route::post('/clientes/{idContenedor}/sendForm', [EntregaController::class, 'sendForm']);
