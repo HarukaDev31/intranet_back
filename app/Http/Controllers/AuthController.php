@@ -1283,7 +1283,7 @@ class AuthController extends Controller
 
             $arrMenuPadre = $this->hidratarArbolMenu($arrMenuPadre, $sqlHijosMenu);
 
-            // Pedidos de Curso en rol Cotizador: solo jefe de ventas.
+            // Pedidos de Curso en rol Cotizador: solo jefe de ventas y cotizadores autorizados.
             $arrMenuPadre = PedidosCursoMenuFilter::apply(
                 $arrMenuPadre,
                 (int) $idUsuario,
