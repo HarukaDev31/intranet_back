@@ -4,6 +4,7 @@ namespace App\Http\Controllers\ChinaCaja;
 
 use App\Http\Controllers\ChinaBilling\RespondsChinaBilling;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ChinaCaja\ChinaCajaResource;
 use App\Services\ChinaBilling\ChinaBillingAuthorization;
 use App\Services\ChinaCaja\ChinaCashService;
 use Illuminate\Http\JsonResponse;
@@ -63,24 +64,24 @@ class ChinaCashController extends Controller
 
     public function storeFixed(Request $request): JsonResponse
     {
-        return $this->run($request, fn () => $this->cash->saveFixedCost(null, $request->validate([
+        return $this->run($request, fn () => $this->cash->createFixedCost($request->validate([
             'name' => ['required', 'string', 'max:150'], 'amount' => ['required', 'numeric', 'gt:0'],
         ])));
     }
 
     public function updateFixed(Request $request, int $id): JsonResponse
     {
-        return $this->run($request, fn () => $this->cash->saveFixedCost($id, $request->validate(['active' => ['required', 'boolean']])));
+        return $this->run($request, fn () => $this->cash->toggleFixedCost($id, (bool) $request->validate(['active' => ['required', 'boolean']])['active']));
     }
 
     public function destroyFixed(Request $request, int $id): JsonResponse
     {
-        return $this->run($request, fn () => $this->cash->saveFixedCost($id, ['deleted_at' => now()]));
+        return $this->run($request, fn () => $this->cash->deleteFixedCost($id));
     }
 
     public function storeInvestment(Request $request): JsonResponse
     {
-        return $this->run($request, fn () => $this->cash->saveInvestment($request->validate([
+        return $this->run($request, fn () => $this->cash->createInvestment($request->validate([
             'name' => ['required', 'string', 'max:150'], 'amount' => ['required', 'numeric', 'gt:0'], 'due_on' => ['required', 'date_format:Y-m-d'],
         ])));
     }
@@ -107,7 +108,14 @@ class ChinaCashController extends Controller
         return $this->responder(function () use ($request, $action) {
             $actor = $this->authorization->requireWarehouse($request->user());
 
-            return response()->json(['success' => true, 'data' => $action($actor)]);
+            $data = $action($actor);
+            if ($data === null) {
+                return response()->json(['success' => true, 'message' => 'Guardado.']);
+            }
+
+            return is_array($data) && array_is_list($data)
+                ? ChinaCajaResource::collection($data)->additional(['success' => true])->response()
+                : $this->ok(new ChinaCajaResource($data));
         });
     }
 }

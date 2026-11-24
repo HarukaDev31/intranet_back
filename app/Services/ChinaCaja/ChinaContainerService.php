@@ -4,6 +4,10 @@ namespace App\Services\ChinaCaja;
 
 use App\Exceptions\ChinaBillingException;
 use App\Models\CargaConsolidada\Contenedor;
+use App\Models\ChinaCaja\ChinaContainerStage;
+use App\Models\ChinaCaja\ChinaFreightPayment;
+use App\Models\ChinaCaja\ChinaFreightPaymentItem;
+use App\Models\ChinaCaja\ChinaShippingOption;
 use App\Services\ChinaBilling\ChinaBillingCalculator;
 use App\Services\ChinaBilling\ChinaBillingReader;
 use App\Services\ChinaBilling\ChinaDraftService;
@@ -117,12 +121,10 @@ class ChinaContainerService
         }
 
         DB::transaction(function () use ($containerId, $values, $actor) {
-            DB::table('china_container_stages')->insertOrIgnore(['container_id' => $containerId, 'created_at' => now(), 'updated_at' => now()]);
-            DB::table('china_container_stages')->where('container_id', $containerId)
-                ->update($values + ['updated_by' => $actor['id'], 'updated_at' => now()]);
-            foreach (['line' => 'shipping_line', 'shipper' => 'shipper'] as $kind => $field) {
+            ChinaContainerStage::query()->updateOrCreate(['container_id' => $containerId], $values + ['updated_by' => $actor['id']]);
+            foreach ([ChinaShippingOption::KIND_LINE => 'shipping_line', ChinaShippingOption::KIND_SHIPPER => 'shipper'] as $kind => $field) {
                 if (!empty($values[$field])) {
-                    DB::table('china_shipping_options')->insertOrIgnore(['kind' => $kind, 'name' => $values[$field], 'created_at' => now(), 'updated_at' => now()]);
+                    ChinaShippingOption::query()->firstOrCreate(['kind' => $kind, 'name' => $values[$field]]);
                 }
             }
         });
@@ -134,10 +136,10 @@ class ChinaContainerService
     /** @return array{lines: array<int, string>, shippers: array<int, string>, container_types: array<int, string>} */
     public function options(): array
     {
-        $names = fn (string $kind) => DB::table('china_shipping_options')->where('kind', $kind)->orderBy('name')->pluck('name')->map(fn ($name) => (string) $name);
-        $lines = $names('line')->concat(['MAERSK', 'MSC', 'COSCO', 'HAPAG-LLOYD', 'CMA CGM', 'ONE'])->unique()->sort()->values()->all();
+        $names = fn (string $kind) => ChinaShippingOption::query()->where('kind', $kind)->orderBy('name')->pluck('name')->map(fn ($name) => (string) $name);
+        $lines = $names(ChinaShippingOption::KIND_LINE)->concat(['MAERSK', 'MSC', 'COSCO', 'HAPAG-LLOYD', 'CMA CGM', 'ONE'])->unique()->sort()->values()->all();
 
-        return ['lines' => $lines, 'shippers' => $names('shipper')->all(), 'container_types' => ChinaContainerRules::CONTAINER_TYPES];
+        return ['lines' => $lines, 'shippers' => $names(ChinaShippingOption::KIND_SHIPPER)->all(), 'container_types' => ChinaContainerRules::CONTAINER_TYPES];
     }
 
     /**
@@ -146,7 +148,7 @@ class ChinaContainerService
      * @param  array<int, int>  $containerIds
      * @param  array{id: int|null, organization_ids: array<int, int>}  $actor
      */
-    public function payFreight(array $containerIds, string $paidOn, ?UploadedFile $voucher, bool $manual, float $rate, array $actor): int
+    public function payFreight(array $containerIds, string $paidOn, ?UploadedFile $voucher, bool $manual, float $rate, array $actor): ChinaFreightPayment
     {
         $containerIds = array_values(array_unique(array_map('intval', $containerIds)));
         if ($containerIds === []) {
@@ -168,31 +170,31 @@ class ChinaContainerService
         }
         $path = $voucher ? $this->storeFile($voucher, 'china-contenedores', 'flete-'.$containerIds[0]) : null;
 
-        $paymentId = DB::transaction(function () use ($amounts, $paidOn, $voucher, $path, $rate, $actor) {
-            $taken = DB::table('china_freight_payment_items')->whereIn('container_id', array_keys($amounts))->lockForUpdate()->exists();
+        $payment = DB::transaction(function () use ($amounts, $paidOn, $voucher, $path, $rate, $actor) {
+            $taken = ChinaFreightPaymentItem::query()->whereIn('container_id', array_keys($amounts))->lockForUpdate()->exists();
             if ($taken) {
                 throw new ChinaBillingException('Uno de los fletes ya está pagado.', 409);
             }
             $usd = array_sum($amounts);
-            $id = DB::table('china_freight_payments')->insertGetId([
+            $payment = ChinaFreightPayment::query()->create([
                 'paid_on' => $paidOn, 'manual' => $voucher === null, 'exchange_rate' => $rate, 'usd_amount' => round($usd, 2),
                 'yuan_amount' => round($usd * $rate, 2), 'voucher_path' => $path, 'voucher_name' => $voucher?->getClientOriginalName(),
-                'created_by' => $actor['id'], 'created_at' => now(), 'updated_at' => now(),
+                'created_by' => $actor['id'],
             ]);
             foreach ($amounts as $containerId => $amount) {
-                DB::table('china_freight_payment_items')->insert(['payment_id' => $id, 'container_id' => $containerId, 'usd_amount' => $amount]);
+                $payment->items()->create(['container_id' => $containerId, 'usd_amount' => $amount]);
             }
 
-            return (int) $id;
+            return $payment;
         });
         $this->memo = [];
 
-        return $paymentId;
+        return $payment;
     }
 
-    public function freightPayment(int $paymentId): object
+    public function freightPayment(int $paymentId): ChinaFreightPayment
     {
-        $payment = DB::table('china_freight_payments')->where('id', $paymentId)->first();
+        $payment = ChinaFreightPayment::query()->with('items')->find($paymentId);
         if (!$payment) {
             throw new ChinaBillingException('Pago de flete no encontrado.', 404);
         }
@@ -203,10 +205,14 @@ class ChinaContainerService
     /** @param  array{organization_ids: array<int, int>}  $actor */
     public function cancelFreight(int $paymentId, array $actor): void
     {
-        foreach (DB::table('china_freight_payment_items')->where('payment_id', $paymentId)->pluck('container_id') as $containerId) {
-            $this->find((int) $containerId, $actor['organization_ids']);
+        $payment = $this->freightPayment($paymentId);
+        foreach ($payment->items as $item) {
+            $this->find((int) $item->container_id, $actor['organization_ids']);
         }
-        DB::table('china_freight_payments')->where('id', $paymentId)->delete();
+        DB::transaction(function () use ($payment) {
+            $payment->items()->delete();
+            $payment->delete();
+        });
         $this->memo = [];
     }
 
@@ -244,15 +250,14 @@ class ChinaContainerService
                 ->when(!$since, fn ($inner) => $inner->orWhere('estado_china', Contenedor::CONTEDOR_CERRADO)))
             ->get();
         $ids = $containers->pluck('id')->map(fn ($id) => (int) $id)->all();
-        $stages = DB::table('china_container_stages')->whereIn('container_id', $ids)->get()->keyBy('container_id');
+        $stages = ChinaContainerStage::query()->whereIn('container_id', $ids)->get()->keyBy('container_id');
         $cbm = DB::table('contenedor_consolidado_cotizacion_proveedores as p')
             ->join('contenedor_consolidado_cotizacion as c', 'c.id', '=', 'p.id_cotizacion')
             ->whereIn('p.id_contenedor', $ids)->whereNull('c.deleted_at')->where('c.estado_cotizador', 'CONFIRMADO')
             ->groupBy('p.id_contenedor')->selectRaw('p.id_contenedor, COALESCE(SUM(p.cbm_total_china), 0) as cbm')->pluck('cbm', 'id_contenedor');
         $operations = $this->billing->operations($organizationIds, null, null)->whereNotNull('container_id')->keyBy('container_id');
         $drafts = $this->drafts->list($organizationIds)->keyBy('container_id');
-        $freights = DB::table('china_freight_payment_items as i')->join('china_freight_payments as p', 'p.id', '=', 'i.payment_id')
-            ->whereIn('i.container_id', $ids)->get(['i.container_id', 'p.id', 'p.paid_on', 'p.manual', 'p.voucher_path', 'p.voucher_name'])->keyBy('container_id');
+        $freights = ChinaFreightPaymentItem::query()->with('payment')->whereIn('container_id', $ids)->get()->keyBy('container_id');
         $names = $this->billing->organizationNames($organizationIds);
 
         /** @var Collection<int, array<string, mixed>> $rows */
@@ -262,7 +267,7 @@ class ChinaContainerService
             $closed = $container->estado_china === Contenedor::CONTEDOR_CERRADO;
             $operation = $operations->get($id);
             $metrics = $operation ? ChinaBillingCalculator::operationMetrics($operation) : null;
-            $freight = $freights->get($id);
+            $freight = $freights->get($id)?->payment;
             $collection = match (true) {
                 !$metrics => 'none',
                 in_array($metrics['status'], [ChinaBillingCalculator::STATUS_CONFIRMED, ChinaBillingCalculator::STATUS_IN_CASH], true) && $metrics['partner_status'] === 'paid' => 'paid',
@@ -301,7 +306,7 @@ class ChinaContainerService
     }
 
     /** @return array<string, mixed> */
-    private function stageData(?object $stage, Contenedor $container): array
+    private function stageData(?ChinaContainerStage $stage, Contenedor $container): array
     {
         $data = [];
         foreach (self::TEXT_FIELDS as $field) {

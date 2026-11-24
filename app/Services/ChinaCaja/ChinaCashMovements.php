@@ -3,6 +3,10 @@
 namespace App\Services\ChinaCaja;
 
 use App\Models\ChinaBilling\ChinaPayment;
+use App\Models\ChinaCaja\ChinaFixedCost;
+use App\Models\ChinaCaja\ChinaFixedCostCharge;
+use App\Models\ChinaCaja\ChinaFreightPaymentItem;
+use App\Models\ChinaCaja\ChinaInvestment;
 use App\Models\PagoProveedor\PagoProveedorEjecucion;
 use App\Models\PagoProveedor\PagoProveedorIngreso;
 use App\Models\PagoProveedor\PagoProveedorSolicitudProveedor;
@@ -10,7 +14,6 @@ use App\Services\ChinaBilling\ChinaBillingCalculator;
 use App\Services\ChinaBilling\ChinaBillingReader;
 use App\Services\PagoProveedor\PagoProveedorYuanService;
 use Carbon\CarbonImmutable;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Junta en RMB lo que entra y sale: cobros en caja, pagos a proveedor, fletes, costos fijos e inversiones.
@@ -62,17 +65,17 @@ class ChinaCashMovements
             $out[] = $this->row($execution->executed_on->toDateString(), 'out', self::SUPPLIER, 'Pago a proveedor · '.($provider->request_code ?? ''),
                 (string) ($provider->supplier_name ?? $provider->code_supplier ?? ''), (float) $execution->yuan_paid, true, 'request', (int) ($provider->request_id ?? 0));
         }
-        $items = DB::table('china_freight_payment_items as i')->join('china_freight_payments as p', 'p.id', '=', 'i.payment_id')
-            ->whereBetween('p.paid_on', [$from, $to])->get(['i.container_id', 'i.usd_amount', 'p.paid_on', 'p.exchange_rate']);
+        $items = ChinaFreightPaymentItem::query()->with('payment')
+            ->whereHas('payment', fn ($query) => $query->whereBetween('paid_on', [$from, $to]))->get();
         $labels = $this->containers->rows($organizationIds)->pluck('label', 'id');
         foreach ($items as $item) {
-            $out[] = $this->row((string) $item->paid_on, 'out', self::FREIGHT, 'Flete '.($labels[(int) $item->container_id] ?? '#'.$item->container_id),
-                'USD '.number_format((float) $item->usd_amount, 2).' × TC '.(float) $item->exchange_rate, (float) $item->usd_amount * (float) $item->exchange_rate, true, 'container', (int) $item->container_id);
+            $out[] = $this->row($item->payment->paid_on, 'out', self::FREIGHT, 'Flete '.($labels[(int) $item->container_id] ?? '#'.$item->container_id),
+                'USD '.number_format((float) $item->usd_amount, 2).' × TC '.$item->payment->exchange_rate, $item->usd_amount * $item->payment->exchange_rate, true, 'container', (int) $item->container_id);
         }
-        foreach (DB::table('china_fixed_cost_charges')->whereBetween('charged_on', [$from, $to])->get() as $charge) {
+        foreach (ChinaFixedCostCharge::query()->whereBetween('charged_on', [$from, $to])->get() as $charge) {
             $out[] = $this->row((string) $charge->charged_on, 'out', self::FIXED, (string) $charge->name, 'Descuento automático de fin de mes', (float) $charge->amount, true);
         }
-        foreach (DB::table('china_investments')->whereNotNull('paid_on')->whereBetween('paid_on', [$from, $to])->get() as $investment) {
+        foreach (ChinaInvestment::query()->whereNotNull('paid_on')->whereBetween('paid_on', [$from, $to])->get() as $investment) {
             $out[] = $this->row((string) $investment->paid_on, 'out', self::INVESTMENT, (string) $investment->name, 'Inversión anual', (float) $investment->amount, true);
         }
 
@@ -119,12 +122,12 @@ class ChinaCashMovements
             }
         }
         $month = $today->format('Y-m');
-        $charged = DB::table('china_fixed_cost_charges')->where('month', $month)->pluck('fixed_cost_id')->all();
+        $charged = ChinaFixedCostCharge::query()->where('month', $month)->pluck('fixed_cost_id')->all();
         $monthEnd = $today->endOfMonth()->startOfDay();
-        foreach (DB::table('china_fixed_costs')->whereNull('deleted_at')->where('active', true)->whereNotIn('id', $charged)->get() as $cost) {
+        foreach (ChinaFixedCost::query()->where('active', true)->whereNotIn('id', $charged)->get() as $cost) {
             $out[] = $this->pending($monthEnd, $today, 'out', self::FIXED, (string) $cost->name, 'Se descuenta el último día del mes', (float) $cost->amount);
         }
-        foreach (DB::table('china_investments')->whereNull('paid_on')->get() as $investment) {
+        foreach (ChinaInvestment::query()->whereNull('paid_on')->get() as $investment) {
             $out[] = $this->pending(CarbonImmutable::parse((string) $investment->due_on), $today, 'out', self::INVESTMENT, (string) $investment->name, 'Inversión anual', (float) $investment->amount, 'investment', (int) $investment->id);
         }
 

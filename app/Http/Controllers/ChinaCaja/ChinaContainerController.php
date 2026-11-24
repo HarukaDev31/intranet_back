@@ -4,6 +4,7 @@ namespace App\Http\Controllers\ChinaCaja;
 
 use App\Http\Controllers\ChinaBilling\RespondsChinaBilling;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ChinaCaja\ChinaCajaResource;
 use App\Services\ChinaBilling\ChinaBillingAuthorization;
 use App\Services\ChinaCaja\ChinaCashService;
 use App\Services\ChinaCaja\ChinaContainerRules;
@@ -36,7 +37,7 @@ class ChinaContainerController extends Controller
                 ? $this->containers->rows($actor['organization_ids'])
                 : $this->containers->shipping($actor['organization_ids']);
 
-            return response()->json(['success' => true, 'data' => $rows->values(), 'options' => $this->containers->options()]);
+            return ChinaCajaResource::collection($rows->values())->additional(['success' => true, 'options' => $this->containers->options()])->response();
         });
     }
 
@@ -58,7 +59,7 @@ class ChinaContainerController extends Controller
             unset($data['bl_draft'], $data['bl_official']);
             $files = ['bl_draft' => $request->file('bl_draft'), 'bl_official' => $request->file('bl_official')];
 
-            return response()->json(['success' => true, 'data' => $this->containers->update($id, $data, $files, $actor)]);
+            return $this->ok(new ChinaCajaResource($this->containers->update($id, $data, $files, $actor)));
         });
     }
 
@@ -71,10 +72,10 @@ class ChinaContainerController extends Controller
                 'paid_on' => ['required', 'date_format:Y-m-d'], 'manual' => ['sometimes', 'boolean'], 'voucher' => self::FILE_RULE,
             ]);
             $this->cash->guardOpen(substr($data['paid_on'], 0, 7));
-            $id = $this->containers->payFreight($data['container_ids'], $data['paid_on'], $request->file('voucher'),
+            $payment = $this->containers->payFreight($data['container_ids'], $data['paid_on'], $request->file('voucher'),
                 (bool) ($data['manual'] ?? false), $this->cash->rateFor($data['paid_on']), $actor);
 
-            return response()->json(['success' => true, 'data' => ['id' => $id]], 201);
+            return $this->ok(new ChinaCajaResource(['id' => $payment->id]), 201);
         });
     }
 
@@ -94,7 +95,7 @@ class ChinaContainerController extends Controller
         return $this->responder(function () use ($request) {
             $actor = $this->authorization->requireWarehouse($request->user());
 
-            return response()->json(['success' => true, 'data' => $this->pending->list($actor['organization_ids'])]);
+            return ChinaCajaResource::collection($this->pending->list($actor['organization_ids']))->additional(['success' => true])->response();
         });
     }
 }

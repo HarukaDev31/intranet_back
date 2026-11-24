@@ -80,7 +80,7 @@ class ChinaCajaTest extends TestCase
         $this->assertSame(7100.0, $month['totals']['expense']);
         $this->assertNotContains('Flete', $this->kinds());
 
-        $this->containers()->cancelFreight($payment, self::ACTOR);
+        $this->containers()->cancelFreight($payment->id, self::ACTOR);
         $this->assertContains('Flete', $this->kinds());
     }
 
@@ -129,9 +129,9 @@ class ChinaCajaTest extends TestCase
         $this->assertNotContains('Semana sin cerrar', $this->kinds());
         $this->assertFails(fn () => $this->cash()->closeMonth('2026-11', 1, self::ACTOR), 'último día');
 
-        $this->cash()->saveFixedCost(null, ['name' => 'Alquiler', 'amount' => 300]);
-        $this->cash()->saveFixedCost(null, ['name' => 'Pausado', 'amount' => 50]);
-        $this->cash()->saveFixedCost(2, ['active' => false]);
+        $this->cash()->createFixedCost(['name' => 'Alquiler', 'amount' => 300]);
+        $this->cash()->createFixedCost(['name' => 'Pausado', 'amount' => 50]);
+        $this->cash()->toggleFixedCost(2, false);
         Carbon::setTestNow('2026-11-30 04:00:00');
         CarbonImmutable::setTestNow('2026-11-30 04:00:00');
         $this->assertFails(fn () => $this->cash()->closeMonth('2026-11', 1, self::ACTOR), 'todas las semanas');
@@ -143,7 +143,7 @@ class ChinaCajaTest extends TestCase
         $history = $this->cash()->history([1], 2026);
         $this->assertSame([300.0, 700.0, 690.0, -10.0], [$history[0]['expense'], $history[0]['calculated'], $history[0]['bank'], $history[0]['difference']]);
         // Eliminar el costo no cambia lo ya descontado.
-        $this->cash()->saveFixedCost(1, ['deleted_at' => now()]);
+        $this->cash()->deleteFixedCost(1);
         $this->assertSame(300.0, $this->cash()->month([1], '2026-11')['totals']['expense']);
         Carbon::setTestNow('2026-12-01 04:00:00');
         CarbonImmutable::setTestNow('2026-12-01 04:00:00');
@@ -153,7 +153,7 @@ class ChinaCajaTest extends TestCase
 
     public function test_inversion_pagada_puede_repetirse(): void
     {
-        $this->cash()->saveInvestment(['name' => 'Licencias', 'amount' => 100, 'due_on' => '2026-11-18']);
+        $this->cash()->createInvestment(['name' => 'Licencias', 'amount' => 100, 'due_on' => '2026-11-18']);
         $this->cash()->payInvestment(1, '2026-11-16', ['due_on' => '2027-11-18', 'amount' => 120]);
         $this->assertSame([100.0, '2027-11-18'], [$this->cash()->month([1], '2026-11')['totals']['expense'], DB::table('china_investments')->where('id', 2)->value('due_on')]);
         $this->assertFails(fn () => $this->cash()->payInvestment(1, '2026-11-16', null), 'ya está pagada');

@@ -3,6 +3,11 @@
 namespace App\Services\ChinaCaja;
 
 use App\Exceptions\ChinaBillingException;
+use App\Models\ChinaCaja\ChinaCashMonth;
+use App\Models\ChinaCaja\ChinaCashWeek;
+use App\Models\ChinaCaja\ChinaFixedCost;
+use App\Models\ChinaCaja\ChinaFixedCostCharge;
+use App\Models\ChinaCaja\ChinaInvestment;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -40,7 +45,7 @@ class ChinaCashService
             fn (array $row) => str_starts_with($row['date'], $month)
         ));
         $all = array_merge($real, $projected);
-        $closings = DB::table('china_cash_weeks')->where('month', $month)->get()->keyBy('starts_on');
+        $closings = ChinaCashWeek::query()->where('month', $month)->get()->keyBy('starts_on');
         $weeks = [];
         $lastBalance = null;
         foreach (ChinaCashRules::weeks($month) as $week) {
@@ -69,7 +74,7 @@ class ChinaCashService
             'real' => $real,
             'pending' => array_values(array_filter($projected, fn (array $row) => !$row['late'])),
             'late' => array_values(array_filter($projected, fn (array $row) => $row['late'])),
-            'fixed_costs' => DB::table('china_fixed_costs')->whereNull('deleted_at')->orderBy('id')->get(['id', 'name', 'amount', 'active'])
+            'fixed_costs' => ChinaFixedCost::query()->orderBy('id')->get(['id', 'name', 'amount', 'active'])
                 ->map(fn ($c) => ['id' => (int) $c->id, 'name' => $c->name, 'amount' => (float) $c->amount, 'active' => (bool) $c->active])->all(),
             'investments' => $this->investments((int) $first->year),
             'can_close_month' => $this->closeMonthBlocker($month, $today) === null,
@@ -160,14 +165,14 @@ class ChinaCashService
         if (ChinaCashRules::today()->toDateString() < $week['due_on']) {
             throw new ChinaBillingException('Esta semana se cierra desde el '.CarbonImmutable::parse($week['due_on'])->format('d/m').'.', 409);
         }
-        if (DB::table('china_cash_weeks')->where('month', $month)->where('starts_on', $startsOn)->exists()) {
+        if (ChinaCashWeek::query()->where('month', $month)->where('starts_on', $startsOn)->exists()) {
             throw new ChinaBillingException('La semana ya está cerrada.', 409);
         }
-        DB::table('china_cash_weeks')->insert([
+        ChinaCashWeek::query()->create([
             'month' => $month, 'starts_on' => $week['starts_on'], 'ends_on' => $week['ends_on'], 'balance' => round($balance, 2),
             'usd_pending' => array_sum(array_column($this->movements->usdToExchange($actor['organization_ids'], $week['ends_on']), 'usd')),
             'screenshot_path' => $this->files->storeFile($screenshot, 'china-caja', 'cierre-'.$week['starts_on']),
-            'screenshot_name' => $screenshot->getClientOriginalName(), 'closed_by' => $actor['id'], 'created_at' => now(), 'updated_at' => now(),
+            'screenshot_name' => $screenshot->getClientOriginalName(), 'closed_by' => $actor['id'],
         ]);
     }
 
@@ -188,23 +193,40 @@ class ChinaCashService
         ]);
     }
 
-    public function saveFixedCost(?int $id, array $data): void
+    /** @param  array{name: string, amount: float|string}  $data */
+    public function createFixedCost(array $data): ChinaFixedCost
     {
-        $this->chargeFixedCosts(ChinaCashRules::today());
-        if ($id === null) {
-            DB::table('china_fixed_costs')->insert($data + ['active' => true, 'created_at' => now(), 'updated_at' => now()]);
-
-            return;
-        }
-        $updated = DB::table('china_fixed_costs')->where('id', $id)->whereNull('deleted_at')->update($data + ['updated_at' => now()]);
-        if (!$updated) {
-            throw new ChinaBillingException('Costo fijo no encontrado.', 404);
-        }
+        return ChinaFixedCost::query()->create($data + ['active' => true]);
     }
 
-    public function saveInvestment(array $data): void
+    public function toggleFixedCost(int $id, bool $active): void
     {
-        DB::table('china_investments')->insert($data + ['created_at' => now(), 'updated_at' => now()]);
+        $cost = $this->fixedCost($id);
+        $cost->active = $active;
+        $cost->save();
+    }
+
+    public function deleteFixedCost(int $id): void
+    {
+        $this->fixedCost($id)->delete();
+    }
+
+    /** Antes de cambiar un costo se descuenta lo que ya correspondía. */
+    private function fixedCost(int $id): ChinaFixedCost
+    {
+        $this->chargeFixedCosts(ChinaCashRules::today());
+        $cost = ChinaFixedCost::query()->find($id);
+        if (!$cost) {
+            throw new ChinaBillingException('Costo fijo no encontrado.', 404);
+        }
+
+        return $cost;
+    }
+
+    /** @param  array<string, mixed>  $data */
+    public function createInvestment(array $data): ChinaInvestment
+    {
+        return ChinaInvestment::query()->create($data);
     }
 
     /**
@@ -216,20 +238,21 @@ class ChinaCashService
     {
         $this->guardOpen(substr($paidOn, 0, 7));
         DB::transaction(function () use ($id, $paidOn, $again) {
-            $row = DB::table('china_investments')->where('id', $id)->lockForUpdate()->first();
+            $row = ChinaInvestment::query()->lockForUpdate()->find($id);
             if (!$row || $row->paid_on !== null) {
                 throw new ChinaBillingException('La inversión no existe o ya está pagada.', 409);
             }
-            DB::table('china_investments')->where('id', $id)->update(['paid_on' => $paidOn, 'updated_at' => now()]);
+            $row->paid_on = $paidOn;
+            $row->save();
             if ($again) {
-                $this->saveInvestment(['name' => $row->name, 'previous_id' => $id] + $again);
+                $this->createInvestment(['name' => $row->name, 'previous_id' => $id] + $again);
             }
         });
     }
 
     public function deleteInvestment(int $id): void
     {
-        if (!DB::table('china_investments')->where('id', $id)->whereNull('paid_on')->delete()) {
+        if (!ChinaInvestment::query()->where('id', $id)->whereNull('paid_on')->delete()) {
             throw new ChinaBillingException('Solo se eliminan inversiones sin pagar.', 409);
         }
     }
@@ -242,7 +265,7 @@ class ChinaCashService
     public function weeksToClose(CarbonImmutable $today): array
     {
         // El flujo empieza en el primer mes con TC o saldo: antes no hay semanas que reclamar.
-        $start = DB::table('china_cash_months')->min('month');
+        $start = ChinaCashMonth::query()->min('month');
         if (!$start) {
             return [];
         }
@@ -252,7 +275,7 @@ class ChinaCashService
             if ($month < $start || ($record && $record->closed_at !== null)) {
                 continue;
             }
-            $closed = DB::table('china_cash_weeks')->where('month', $month)->pluck('starts_on')->all();
+            $closed = ChinaCashWeek::query()->where('month', $month)->pluck('starts_on')->all();
             foreach (ChinaCashRules::weeks($month) as $week) {
                 if ($week['due_on'] <= $today->toDateString() && !in_array($week['starts_on'], $closed, true)) {
                     $out[] = ['month' => $month, 'starts_on' => $week['starts_on'], 'ends_on' => $week['ends_on'], 'due_on' => $week['due_on'],
@@ -278,8 +301,8 @@ class ChinaCashService
     /** Descuenta los costos fijos activos de los meses que ya terminaron (o terminan hoy), una sola vez. */
     private function chargeFixedCosts(CarbonImmutable $today): void
     {
-        foreach (DB::table('china_fixed_costs')->whereNull('deleted_at')->where('active', true)->get() as $cost) {
-            $last = DB::table('china_fixed_cost_charges')->where('fixed_cost_id', $cost->id)->max('month');
+        foreach (ChinaFixedCost::query()->where('active', true)->get() as $cost) {
+            $last = ChinaFixedCostCharge::query()->where('fixed_cost_id', $cost->id)->max('month');
             // Un costo pausado no se cobra hacia atrás al reactivarlo: se parte de la última edición.
             $from = max(CarbonImmutable::parse((string) $cost->updated_at)->format('Y-m'), $last ? CarbonImmutable::parse($last.'-01')->addMonth()->format('Y-m') : '');
             for ($month = CarbonImmutable::parse($from.'-01'); $month->endOfMonth()->toDateString() <= $today->toDateString(); $month = $month->addMonth()) {
@@ -287,10 +310,10 @@ class ChinaCashService
                 if ($record && $record->closed_at !== null) {
                     continue;
                 }
-                DB::table('china_fixed_cost_charges')->insertOrIgnore([
-                    'month' => $month->format('Y-m'), 'fixed_cost_id' => $cost->id, 'name' => $cost->name, 'amount' => $cost->amount,
-                    'charged_on' => $month->endOfMonth()->toDateString(), 'created_at' => now(), 'updated_at' => now(),
-                ]);
+                ChinaFixedCostCharge::query()->firstOrCreate(
+                    ['month' => $month->format('Y-m'), 'fixed_cost_id' => $cost->id],
+                    ['name' => $cost->name, 'amount' => $cost->amount, 'charged_on' => $month->endOfMonth()->toDateString()]
+                );
             }
         }
     }
@@ -304,18 +327,18 @@ class ChinaCashService
         if ($today->toDateString() < CarbonImmutable::parse($month.'-01')->endOfMonth()->toDateString()) {
             return 'El mes se cierra desde su último día.';
         }
-        $previousOpen = DB::table('china_cash_months')->where('month', '<', $month)->whereNull('closed_at')->exists();
+        $previousOpen = ChinaCashMonth::query()->where('month', '<', $month)->whereNull('closed_at')->exists();
         if ($previousOpen) {
             return 'Cierra primero el mes anterior.';
         }
-        $closed = DB::table('china_cash_weeks')->where('month', $month)->count();
+        $closed = ChinaCashWeek::query()->where('month', $month)->count();
 
         return $closed < count(ChinaCashRules::weeks($month)) ? 'Cierra todas las semanas del mes.' : null;
     }
 
     private function opening(string $month): ?float
     {
-        $previous = DB::table('china_cash_months')->where('month', '<', $month)->whereNotNull('closed_at')->max('month');
+        $previous = ChinaCashMonth::query()->where('month', '<', $month)->whereNotNull('closed_at')->max('month');
         if ($previous === CarbonImmutable::parse($month.'-01')->subMonth()->format('Y-m')) {
             return (float) $this->record($previous)->closing_balance;
         }
@@ -326,7 +349,7 @@ class ChinaCashService
 
     private function openingEditable(string $month): bool
     {
-        return !DB::table('china_cash_months')->where('month', '<', $month)->exists();
+        return !ChinaCashMonth::query()->where('month', '<', $month)->exists();
     }
 
     /**
@@ -343,20 +366,19 @@ class ChinaCashService
     /** @return list<array<string, mixed>> */
     private function investments(int $year): array
     {
-        return DB::table('china_investments')->whereYear('due_on', $year)->orderBy('due_on')->get()
+        return ChinaInvestment::query()->whereYear('due_on', $year)->orderBy('due_on')->get()
             ->map(fn ($row) => ['id' => (int) $row->id, 'name' => $row->name, 'amount' => (float) $row->amount, 'due_on' => $row->due_on, 'paid_on' => $row->paid_on])
             ->values()->all();
     }
 
-    private function record(string $month): ?object
+    private function record(string $month): ?ChinaCashMonth
     {
-        return DB::table('china_cash_months')->where('month', $month)->first();
+        return ChinaCashMonth::query()->where('month', $month)->first();
     }
 
     /** @param  array<string, mixed>  $values */
     private function save(string $month, array $values): void
     {
-        DB::table('china_cash_months')->insertOrIgnore(['month' => $month, 'created_at' => now(), 'updated_at' => now()]);
-        DB::table('china_cash_months')->where('month', $month)->update($values + ['updated_at' => now()]);
+        ChinaCashMonth::query()->updateOrCreate(['month' => $month], $values);
     }
 }
