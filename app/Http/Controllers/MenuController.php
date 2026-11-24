@@ -117,7 +117,7 @@ class MenuController extends Controller
                 }
             }
 
-            // Pedidos de Curso en rol Cotizador: solo jefe de ventas.
+            // Pedidos de Curso en rol Cotizador: solo jefe de ventas y cotizadores autorizados.
             $arrMenuPadre = PedidosCursoMenuFilter::apply(
                 $arrMenuPadre,
                 (int) ($user->ID_Usuario ?? 0),

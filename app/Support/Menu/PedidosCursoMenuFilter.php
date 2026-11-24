@@ -6,7 +6,7 @@ use App\Models\Usuario;
 use Illuminate\Support\Facades\DB;
 
 /**
- * En rol Cotizador, Curso / Pedidos de Curso solo debe verse el jefe de ventas.
+ * En rol Cotizador, Curso / Pedidos de Curso solo lo ven el jefe de ventas y los cotizadores autorizados.
  */
 class PedidosCursoMenuFilter
 {
@@ -14,12 +14,26 @@ class PedidosCursoMenuFilter
     private const MENU_IDS = [182, 183];
 
     /**
+     * Cotizadores que gestionan la venta de curso (además del jefe de ventas).
+     * 29409 = Kimberly (cotizaciones6), ticket CFG-26-0057.
+     *
+     * @var array<int, int>
+     */
+    private const COTIZADORES_CON_CURSO = [29409];
+
+    public static function usuarioPuedeVerCurso(int $idUsuario): bool
+    {
+        return $idUsuario === (int) Usuario::ID_JEFE_VENTAS
+            || in_array($idUsuario, self::COTIZADORES_CON_CURSO, true);
+    }
+
+    /**
      * @param  array<int, object>  $menus
      * @return array<int, object>
      */
     public static function apply(array $menus, int $idUsuario, int $idGrupo): array
     {
-        if ($idUsuario === (int) Usuario::ID_JEFE_VENTAS) {
+        if (self::usuarioPuedeVerCurso($idUsuario)) {
             return $menus;
         }
 
