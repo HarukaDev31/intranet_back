@@ -128,7 +128,8 @@ class SeguimientoConsolidadoDriveCellSyncService
                     $seguimientoSheet,
                     $idContenedor,
                     $snapshotId,
-                    $trigger
+                    $trigger,
+                    $fileId
                 );
                 $cellsUpserted += $upserted;
                 $cellsHistory += $history;
@@ -137,7 +138,8 @@ class SeguimientoConsolidadoDriveCellSyncService
                     $seguimientoSheet,
                     $idContenedor,
                     $snapshotId,
-                    $trigger
+                    $trigger,
+                    $fileId
                 );
                 $cellsUpserted += $upserted;
                 $cellsHistory += $history;
@@ -146,7 +148,8 @@ class SeguimientoConsolidadoDriveCellSyncService
                     $seguimientoSheet,
                     $idContenedor,
                     $snapshotId,
-                    $trigger
+                    $trigger,
+                    $fileId
                 );
                 $cellsUpserted += $upserted;
                 $cellsHistory += $history;
@@ -505,7 +508,8 @@ class SeguimientoConsolidadoDriveCellSyncService
         Worksheet $sheet,
         int $idContenedor,
         int $snapshotId,
-        string $trigger
+        string $trigger,
+        string $fileId = ''
     ): array {
         $config = (array) config('seguimiento_drive_cells.sheets.Seguimiento.yiwu', []);
         $startCol = (int) ($config['start_col'] ?? 2);
@@ -536,19 +540,21 @@ class SeguimientoConsolidadoDriveCellSyncService
                 continue;
             }
 
-            $idProveedor = $this->resolveProveedorByCodeAndCliente($idContenedor, $codeSupplier, $cliente);
-            if ($idProveedor === null) {
+            $owner = $this->resolveNoteOwner($idContenedor, $fileId, function ($containerId) use ($codeSupplier, $cliente) {
+                return $this->resolveProveedorByCodeAndCliente((int) $containerId, $codeSupplier, $cliente);
+            });
+            if ($owner === null) {
                 continue;
             }
 
             $cellRef = Coordinate::stringFromColumnIndex($noteColIndex) . $row;
             $result = $this->repository->upsertCell([
-                'id_contenedor' => $idContenedor,
+                'id_contenedor' => $owner['id_contenedor'],
                 'sheet_name' => 'Seguimiento',
-                'row_key' => SeguimientoDriveCellRowKey::yiwuProveedor($idProveedor),
+                'row_key' => SeguimientoDriveCellRowKey::yiwuProveedor($owner['id_proveedor']),
                 'column_key' => 'yiwu_notas',
                 'id_cotizacion' => null,
-                'id_proveedor' => $idProveedor,
+                'id_proveedor' => $owner['id_proveedor'],
                 'cell_ref' => $cellRef,
                 'row_number' => $row,
                 'column_letter' => Coordinate::stringFromColumnIndex($noteColIndex),
@@ -574,7 +580,8 @@ class SeguimientoConsolidadoDriveCellSyncService
         Worksheet $sheet,
         int $idContenedor,
         int $snapshotId,
-        string $trigger
+        string $trigger,
+        string $fileId = ''
     ): array {
         $config = (array) config('seguimiento_drive_cells.sheets.Seguimiento.contactar', []);
         $startCol = (int) ($config['start_col'] ?? 22);
@@ -595,19 +602,21 @@ class SeguimientoConsolidadoDriveCellSyncService
                 continue;
             }
 
-            $idProveedor = $this->resolveProveedorByCodeAndCliente($idContenedor, $codeSupplier, $cliente);
-            if ($idProveedor === null) {
+            $owner = $this->resolveNoteOwner($idContenedor, $fileId, function ($containerId) use ($codeSupplier, $cliente) {
+                return $this->resolveProveedorByCodeAndCliente((int) $containerId, $codeSupplier, $cliente);
+            });
+            if ($owner === null) {
                 continue;
             }
 
             $cellRef = Coordinate::stringFromColumnIndex($noteColIndex) . $row;
             $result = $this->repository->upsertCell([
-                'id_contenedor' => $idContenedor,
+                'id_contenedor' => $owner['id_contenedor'],
                 'sheet_name' => 'Seguimiento',
-                'row_key' => SeguimientoDriveCellRowKey::contactarProveedor($idProveedor),
+                'row_key' => SeguimientoDriveCellRowKey::contactarProveedor($owner['id_proveedor']),
                 'column_key' => 'note',
                 'id_cotizacion' => null,
-                'id_proveedor' => $idProveedor,
+                'id_proveedor' => $owner['id_proveedor'],
                 'cell_ref' => $cellRef,
                 'row_number' => $row,
                 'column_letter' => Coordinate::stringFromColumnIndex($noteColIndex),
@@ -633,7 +642,8 @@ class SeguimientoConsolidadoDriveCellSyncService
         Worksheet $sheet,
         int $idContenedor,
         int $snapshotId,
-        string $trigger
+        string $trigger,
+        string $fileId = ''
     ): array {
         $config = (array) config('seguimiento_drive_cells.sheets.Seguimiento.urgencia', []);
         $startCol = (int) ($config['start_col'] ?? 30);
@@ -663,19 +673,8 @@ class SeguimientoConsolidadoDriveCellSyncService
                 continue;
             }
 
-            $idProveedor = null;
-            if (isset($expectedItems[$index])) {
-                $expected = $expectedItems[$index];
-                $expectedCliente = trim((string) ($expected['cliente'] ?? ''));
-                $rowCliente = trim((string) ($rowData['cliente'] ?? ''));
-                if ($expectedCliente !== '' && strcasecmp($expectedCliente, $rowCliente) === 0) {
-                    $candidate = (int) ($expected['id_proveedor'] ?? 0);
-                    if ($candidate > 0) {
-                        $idProveedor = $candidate;
-                    }
-                }
-            }
-
+            $ownerId = $idContenedor;
+            $idProveedor = $this->matchUrgenciaProveedorEnItems($expectedItems, $index, $rowData);
             if ($idProveedor === null) {
                 $idProveedor = $this->resolveUrgenciaProveedor(
                     $idContenedor,
@@ -684,6 +683,26 @@ class SeguimientoConsolidadoDriveCellSyncService
                     (string) ($rowData['celular'] ?? ''),
                     (string) ($rowData['motivo'] ?? '')
                 );
+            }
+
+            if ($idProveedor === null) {
+                $shared = $this->resolveProveedorOnSharedFile(
+                    $idContenedor,
+                    $fileId,
+                    function ($containerId) use ($rowData) {
+                        return $this->resolveUrgenciaProveedor(
+                            (int) $containerId,
+                            (string) ($rowData['cliente'] ?? ''),
+                            (string) ($rowData['cbm'] ?? ''),
+                            (string) ($rowData['celular'] ?? ''),
+                            (string) ($rowData['motivo'] ?? '')
+                        );
+                    }
+                );
+                if ($shared !== null) {
+                    $ownerId = $shared['id_contenedor'];
+                    $idProveedor = $shared['id_proveedor'];
+                }
             }
 
             if ($idProveedor === null) {
@@ -697,16 +716,16 @@ class SeguimientoConsolidadoDriveCellSyncService
                 continue;
             }
 
+            $idCotizacion = $this->cotizacionIdDeProveedor($expectedItems, $idProveedor);
+
             $row = (int) ($rowData['row'] ?? 0);
             $cellRef = Coordinate::stringFromColumnIndex($noteColIndex) . $row;
             $result = $this->repository->upsertCell([
-                'id_contenedor' => $idContenedor,
+                'id_contenedor' => $ownerId,
                 'sheet_name' => 'Seguimiento',
                 'row_key' => SeguimientoDriveCellRowKey::urgenciaProveedor($idProveedor),
                 'column_key' => 'urgencia_notas',
-                'id_cotizacion' => isset($expectedItems[$index]['id_cotizacion'])
-                    ? (int) $expectedItems[$index]['id_cotizacion']
-                    : null,
+                'id_cotizacion' => $idCotizacion,
                 'id_proveedor' => $idProveedor,
                 'cell_ref' => $cellRef,
                 'row_number' => $row,
@@ -798,9 +817,141 @@ class SeguimientoConsolidadoDriveCellSyncService
     }
 
     /**
+     * Empareja la fila del Excel con un proveedor de este consolidado.
+     * Si el cliente se repite, no basta el orden: hace falta el CBM.
+     *
+     * @param array<int, array<string, mixed>> $expectedItems
+     * @param array<string, mixed> $rowData
+     */
+    private function matchUrgenciaProveedorEnItems(array $expectedItems, int $index, array $rowData): ?int
+    {
+        if (!isset($expectedItems[$index])) {
+            return null;
+        }
+
+        $rowCliente = trim((string) ($rowData['cliente'] ?? ''));
+        $expectedCliente = trim((string) ($expectedItems[$index]['cliente'] ?? ''));
+        if ($rowCliente === '' || $expectedCliente === '' || strcasecmp($expectedCliente, $rowCliente) !== 0) {
+            return null;
+        }
+
+        $sameName = 0;
+        foreach ($expectedItems as $item) {
+            $nombre = trim((string) ($item['cliente'] ?? ''));
+            if ($nombre !== '' && strcasecmp($nombre, $rowCliente) === 0) {
+                $sameName++;
+            }
+        }
+
+        if ($sameName !== 1) {
+            return null;
+        }
+
+        $candidate = (int) ($expectedItems[$index]['id_proveedor'] ?? 0);
+
+        return $candidate > 0 ? $candidate : null;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $expectedItems
+     */
+    private function cotizacionIdDeProveedor(array $expectedItems, int $idProveedor): ?int
+    {
+        foreach ($expectedItems as $item) {
+            if ((int) ($item['id_proveedor'] ?? 0) === $idProveedor) {
+                $idCotizacion = (int) ($item['id_cotizacion'] ?? 0);
+
+                return $idCotizacion > 0 ? $idCotizacion : null;
+            }
+        }
+
+        $fromDb = DB::table('contenedor_consolidado_cotizacion_proveedores')
+            ->where('id', $idProveedor)
+            ->value('id_cotizacion');
+
+        return $fromDb ? (int) $fromDb : null;
+    }
+
+    /**
+     * Proveedor de este consolidado, o de otro que comparte el mismo Excel de Drive.
+     *
+     * @param callable(int):(?int) $resolve
+     * @return array{id_contenedor:int,id_proveedor:int}|null
+     */
+    private function resolveNoteOwner(int $idContenedor, string $fileId, callable $resolve): ?array
+    {
+        $own = $resolve($idContenedor);
+        if ($own !== null && (int) $own > 0) {
+            return [
+                'id_contenedor' => $idContenedor,
+                'id_proveedor' => (int) $own,
+            ];
+        }
+
+        return $this->resolveProveedorOnSharedFile($idContenedor, $fileId, $resolve);
+    }
+
+    /**
+     * @param callable(int):(?int) $resolve
+     * @return array{id_contenedor:int,id_proveedor:int}|null
+     */
+    private function resolveProveedorOnSharedFile(int $idContenedor, string $fileId, callable $resolve): ?array
+    {
+        $fileId = trim($fileId);
+        if ($fileId === '') {
+            return null;
+        }
+
+        $ids = DB::table('carga_consolidada_contenedor')
+            ->where('excel_seguimiento_drive_file_id', $fileId)
+            ->where('id', '!=', $idContenedor)
+            ->orderBy('id')
+            ->pluck('id');
+
+        foreach ($ids as $otherId) {
+            $idProveedor = $resolve((int) $otherId);
+            if ($idProveedor === null || (int) $idProveedor <= 0) {
+                continue;
+            }
+
+            Log::info(self::LOG_PREFIX . ' Nota manual atribuida al consolidado dueño del proveedor', [
+                'id_contenedor_excel' => $idContenedor,
+                'id_contenedor_dueno' => (int) $otherId,
+                'id_proveedor' => (int) $idProveedor,
+            ]);
+
+            return [
+                'id_contenedor' => (int) $otherId,
+                'id_proveedor' => (int) $idProveedor,
+            ];
+        }
+
+        return null;
+    }
+
+    /**
      * @return int|null
      */
     private function resolveUrgenciaProveedor(
+        int $idContenedor,
+        string $cliente,
+        string $cbm,
+        string $celular = '',
+        string $motivo = ''
+    ): ?int {
+        $id = $this->matchUrgenciaProveedor($idContenedor, $cliente, $cbm, $celular, $motivo);
+        if ($id !== null || strtoupper(trim($motivo)) === '') {
+            return $id;
+        }
+
+        // MOTIVO va en una celda fusionada: las filas siguientes muestran el estado de la primera.
+        return $this->matchUrgenciaProveedor($idContenedor, $cliente, $cbm, $celular, '');
+    }
+
+    /**
+     * @return int|null
+     */
+    private function matchUrgenciaProveedor(
         int $idContenedor,
         string $cliente,
         string $cbm,
