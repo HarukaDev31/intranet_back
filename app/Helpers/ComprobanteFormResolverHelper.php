@@ -129,9 +129,7 @@ class ComprobanteFormResolverHelper
         return [
             'id' => null,
             'id_cotizacion' => (int) $cotizacion->id,
-            'id_contenedor' => isset($cotizacion->id_contenedor) && $cotizacion->id_contenedor !== null
-                ? (int) $cotizacion->id_contenedor
-                : null,
+            'id_contenedor' => !empty($cotizacion->id_contenedor) ? (int) $cotizacion->id_contenedor : null,
             'id_user' => !empty($business->user_id) ? (int) $business->user_id : null,
             'tipo_comprobante' => 'FACTURA',
             'destino_entrega' => null,
