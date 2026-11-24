@@ -89,6 +89,19 @@ class RotuladoOrg1CaracteresTest extends TestCase
         $this->assertStringContainsString('BOLIVIA', $bolivia);
         $this->assertStringContainsString('玻利维亚', $bolivia);
 
+        $chile = $service->buildHtml('CONTACTO', 'CHL2-SEME1-1', '01', array(
+            'organizacion_id' => 3,
+            'company' => 'GENUINO SAC',
+            'pais_destino' => 'CHILE',
+            'iso2' => 'cl',
+            'iso3' => 'CHL',
+        ));
+        $this->assertStringContainsString('>CHL2-GE<', $chile);
+        $this->assertStringContainsString('GENUINO', $chile);
+        $this->assertStringContainsString('#00887A', $chile);
+        $this->assertStringContainsString('智利', $chile);
+        $this->assertStringNotContainsString('BOLIVIA', $chile);
+
         $otra = $service->buildHtml('CONTACTO', 'COD-1', '11', array(
             'organizacion_id' => 4,
         ));
