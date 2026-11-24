@@ -1839,8 +1839,14 @@ class CotizacionResumenController extends Controller
             : null;
         $carga = $contenedor ? $contenedor->getAttribute('carga') : '';
         $nombreCliente = (string) $cotizacion->getAttribute('nombre');
-        list($nombrePais, $iso2) = $this->paisCodeSupplierDesdeContenedor($contenedor);
-        $base = CodeSupplierHelper::basePrefixWithPais($nombrePais, $orgId, $nombreCliente, $carga, $iso2);
+        list($nombrePais, $iso2, $iso3) = $this->paisCodeSupplierDesdeContenedor($contenedor);
+        // La org 1 no usa el código internacional.
+        if ($orgId === 1) {
+            $iso3 = '';
+        }
+        $base = CodeSupplierHelper::basePrefixWithPais($nombrePais, $orgId, $nombreCliente, $carga, $iso2, $iso3);
+        // Prefijo con el formato anterior (iniciales del nombre): sus correlativos también cuentan.
+        $baseAnterior = CodeSupplierHelper::basePrefixWithPais($nombrePais, $orgId, $nombreCliente, $carga, $iso2);
 
         $proveedores = CotizacionProveedor::query()
             ->where('id_cotizacion', $cotizacion->getAttribute('id'))
@@ -1853,11 +1859,15 @@ class CotizacionResumenController extends Controller
         // Antes solo miraba la propia cotización y cada cotización nueva volvía a empezar en -1.
         $existentes = DB::table('contenedor_consolidado_cotizacion_proveedores')
             ->where('organizacion_id', $orgId)
-            ->where('code_supplier', 'like', $base . '-%')
+            ->where(fn ($q) => $q->where('code_supplier', 'like', $base . '-%')
+                ->orWhere('code_supplier', 'like', $baseAnterior . '-%'))
             ->lockForUpdate()
             ->pluck('code_supplier')
             ->all();
-        $next = CodeSupplierHelper::maxSuffixForBase($base, $existentes) + 1;
+        $next = max(
+            CodeSupplierHelper::maxSuffixForBase($base, $existentes),
+            CodeSupplierHelper::maxSuffixForBase($baseAnterior, $existentes)
+        ) + 1;
 
         foreach ($proveedores as $proveedor) {
             $actual = trim((string) $proveedor->getAttribute('code_supplier'));
@@ -1870,7 +1880,8 @@ class CotizacionResumenController extends Controller
                 $nombreCliente,
                 $carga,
                 $next,
-                $iso2
+                $iso2,
+                $iso3
             );
             $proveedor->save();
             $next++;
@@ -1878,33 +1889,33 @@ class CotizacionResumenController extends Controller
     }
 
     /**
-     * Nombre e ISO-2 del país del consolidado (id_pais → pais_flags / pais).
+     * Nombre, ISO-2 y código internacional del país del consolidado (id_pais → pais_flags / pais).
      *
      * @param Contenedor|null $contenedor
-     * @return array{0: string, 1: string}
+     * @return array{0: string, 1: string, 2: string}
      */
     private function paisCodeSupplierDesdeContenedor($contenedor)
     {
         if (!$contenedor) {
-            return ['', ''];
+            return ['', '', ''];
         }
         $idPais = (int) $contenedor->getAttribute('id_pais');
         if ($idPais <= 0) {
-            return ['', ''];
+            return ['', '', ''];
         }
 
         $nombre = '';
         $iso2 = '';
+        $pais = Pais::find($idPais);
         $flag = PaisFlag::query()->where('id_pais', $idPais)->first();
         if ($flag) {
             $nombre = (string) $flag->getAttribute('nombre');
             $iso2 = (string) $flag->getAttribute('iso2');
         }
         if ($nombre === '') {
-            $pais = Pais::find($idPais);
             $nombre = $pais ? (string) $pais->getAttribute('No_Pais') : '';
         }
 
-        return [$nombre, $iso2];
+        return [$nombre, $iso2, $pais ? (string) $pais->getAttribute('iso3') : ''];
     }
 }
