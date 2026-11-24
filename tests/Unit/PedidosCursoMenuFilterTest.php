@@ -16,6 +16,7 @@ class PedidosCursoMenuFilterTest extends TestCase
     public function test_cotizador_autorizado_ve_curso(): void
     {
         $this->assertTrue(PedidosCursoMenuFilter::usuarioPuedeVerCurso(29409));
+        $this->assertTrue(PedidosCursoMenuFilter::usuarioPuedeVerCurso(29170));
     }
 
     public function test_otro_cotizador_no_ve_curso(): void
