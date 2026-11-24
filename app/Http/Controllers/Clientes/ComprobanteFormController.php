@@ -355,7 +355,6 @@ class ComprobanteFormController extends Controller
 
             $form = ComprobanteForm::where('id_cotizacion', $idCotizacion)->first();
             $udf = $this->findUsuarioDatosFacturacionForCotizacion($cotizacion);
-            Log::info('udf', ['udf' => $udf]);
             // Prioridad 1: último registro en usuario_datos_facturacion.
             if ($udf) {
                 $synthetic = $this->buildSyntheticComprobanteFormFromUsuarioDatosFacturacion($udf, $cotizacion);
@@ -393,6 +392,19 @@ class ComprobanteFormController extends Controller
                 return response()->json([
                     'success' => true,
                     'data'    => $form,
+                ]);
+            }
+
+            // Prioridad 3: empresa del perfil del cliente (Mi cuenta › Empresa / RUC).
+            $perfil = ComprobanteFormResolverHelper::syntheticFromPerfilEmpresa($cotizacion);
+            if ($perfil) {
+                $perfil['registered_by'] = null;
+                $perfil['distrito_nombre'] = null;
+
+                return response()->json([
+                    'success' => true,
+                    'data'    => $perfil,
+                    'message' => 'Datos mostrados desde la empresa del perfil del cliente (sin formulario ni historial).',
                 ]);
             }
 
