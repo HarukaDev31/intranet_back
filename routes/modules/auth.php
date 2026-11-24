@@ -6,6 +6,7 @@ use App\Http\Controllers\Broadcasting\BroadcastController;
 use App\Http\Controllers\DeviceTokenController;
 use App\Http\Controllers\UserBusinessController;
 use App\Http\Controllers\UserProfileController;
+use App\Http\Controllers\Perfil\MetodoPagoPreferidoController;
 use App\Http\Controllers\OrganizacionPortalController;
 
 /*
@@ -27,6 +28,10 @@ Route::group(['prefix' => 'auth'], function () {
         Route::post('refresh', [AuthController::class, 'refresh']);
         Route::get('me', [AuthController::class, 'me']);
         Route::post('profile', [AuthController::class, 'profile']);
+
+        // Método de pago preferido para reintegros (CFG-26-0056)
+        Route::get('metodo-pago', [MetodoPagoPreferidoController::class, 'show']);
+        Route::put('metodo-pago', [MetodoPagoPreferidoController::class, 'update']);
 
         // Registro de dispositivo móvil para notificaciones push (FCM)
         Route::post('device/token', [DeviceTokenController::class, 'store']);
