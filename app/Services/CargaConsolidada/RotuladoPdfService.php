@@ -68,7 +68,7 @@ class RotuladoPdfService
     public function buildHtml($cliente, $supplierCode, $carga, array $opts = array())
     {
         $orgId = isset($opts['organizacion_id']) ? (int) $opts['organizacion_id'] : 0;
-        $tema = $this->temaTarjeta($orgId);
+        $tema = $this->temaTarjeta($orgId, $opts['iso2'] ?? '');
         $htmlFilePath = public_path($tema !== null
             ? 'assets/templates/Rotulado_Template_Org1.html'
             : 'assets/templates/Rotulado_Template.html');
@@ -186,7 +186,7 @@ class RotuladoPdfService
             if ($pais['iso2'] !== '') {
                 $opts['iso2'] = $pais['iso2'];
             }
-            $opts['iso3'] = $this->iso3Tarjeta($opts['organizacion_id']);
+            $opts['iso3'] = $this->iso3Tarjeta($opts['organizacion_id'], $opts['iso2']);
         }
 
         return $opts;
@@ -224,7 +224,7 @@ class RotuladoPdfService
             if ($pais['iso2'] !== '') {
                 $opts['iso2'] = $pais['iso2'];
             }
-            $opts['iso3'] = $this->iso3Tarjeta($orgId);
+            $opts['iso3'] = $this->iso3Tarjeta($orgId, $opts['iso2']);
         }
 
         $html = $this->buildHtml('Cliente de prueba', 'PRUEBA-1', '11', $opts);
@@ -560,21 +560,23 @@ class RotuladoPdfService
     /**
      * Código internacional del país de la tarjeta del socio. La org 1 lleva su marca fija (PE-PRO).
      */
-    private function iso3Tarjeta(int $orgId): string
+    private function iso3Tarjeta(int $orgId, string $iso2): string
     {
-        $tema = $this->temaTarjeta($orgId);
+        $tema = $this->temaTarjeta($orgId, $iso2);
 
         return $tema !== null && $tema['iso2'] !== '' ? Pais::iso3PorIso2($tema['iso2']) : '';
     }
 
     /**
      * Tarjeta del paso 3. Org 1 roja, org 2 azul (Ecuador / David), org 3 verde (Bolivia / Genuino).
+     * La org 3 con consolidado a Chile lleva su tarjeta con bandera, código y color de Chile.
      * null = plantilla anterior, para el resto de socios.
      *
      * @param int $orgId
+     * @param string $iso2 País del consolidado
      * @return array{color:string,marca:string,marca_size:string,socio:string,iso2:string,banner:string}|null
      */
-    private function temaTarjeta($orgId)
+    private function temaTarjeta($orgId, $iso2 = '')
     {
         if ($orgId <= 0 || $orgId === OrganizacionMensajeriaService::ID_ORGANIZACION_ADMIN) {
             return array(
@@ -597,13 +599,15 @@ class RotuladoPdfService
             );
         }
         if ($orgId === 3) {
+            $esChile = strtolower(trim((string) $iso2)) === 'cl';
+
             return array(
-                'color' => '#00AA4E',
+                'color' => $esChile ? '#00887A' : '#00AA4E',
                 'marca' => 'GE',
                 'marca_size' => '40pt',
                 'socio' => 'GENUINO',
-                'iso2' => 'bo',
-                'banner' => 'BOLIVIA',
+                'iso2' => $esChile ? 'cl' : 'bo',
+                'banner' => $esChile ? 'CHILE' : 'BOLIVIA',
             );
         }
 
@@ -628,6 +632,7 @@ class RotuladoPdfService
         $locales = array(
             'ec' => 'ecuador_flag.png',
             'bo' => 'bolivia_flag.png',
+            'cl' => 'chile_flag.png',
         );
         if (isset($locales[$iso2])) {
             $local = $this->pngDataUri($locales[$iso2]);
