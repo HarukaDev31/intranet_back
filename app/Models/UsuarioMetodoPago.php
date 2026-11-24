@@ -49,7 +49,7 @@ class UsuarioMetodoPago extends Model
         return [
             'metodo' => self::METODO_POR_DEFECTO,
             'metodo_label' => self::METODOS[self::METODO_POR_DEFECTO],
-            'numero' => self::numeroLocal($usuario ? $usuario->Nu_Celular : null),
+            'numero' => self::numeroLocal($usuario ? $usuario->getAttribute('Nu_Celular') : null),
             'configurado' => false,
         ];
     }
