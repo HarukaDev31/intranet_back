@@ -8,6 +8,7 @@ use App\Services\ViaticoService;
 use App\Models\Viatico;
 use App\Models\Notificacion;
 use App\Models\Usuario;
+use App\Models\UsuarioMetodoPago;
 use App\Events\ViaticoCreado;
 use App\Events\ViaticoActualizado;
 use App\Jobs\SendViaticoWhatsappNotificationJob;
@@ -348,6 +349,8 @@ class ViaticoController extends Controller
                     : null;
             }
             $viatico->nombre_usuario = optional($viatico->usuario)->No_Nombres_Apellidos ?? 'N/A';
+            // CFG-26-0056: a dónde reintegrarle al solicitante (su método preferido o Yape con su celular)
+            $viatico->metodo_pago_solicitante = UsuarioMetodoPago::preferidoDe($viatico->usuario);
             foreach ($viatico->pagos as $pago) {
                 $pago->file_path = $this->cdnStorageUrl($pago->file_path);
             }
