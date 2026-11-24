@@ -52,6 +52,7 @@ use App\Events\CotizacionChinaContacted;
 use App\Events\CotizacionChinaReceived;
 use App\Events\CotizacionChinaInspected;
 use App\Models\Notificacion;
+use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveCellRepository;
 use App\Services\CargaConsolidada\SeguimientoConsolidadoDriveService;
 use App\Services\CargaConsolidada\Clientes\ExcelConfirmacionFormService;
 use App\Support\CargaConsolidada\DocumentStatusSync;
@@ -3943,6 +3944,12 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
                     'id_contenedor' => $idContenedorCobro,
                 ]);
             }
+            app(SeguimientoConsolidadoDriveCellRepository::class)->reassignManualCells(
+                $proveedorIds->all(),
+                (int) $idContainer,
+                (int) $idContainerDestino
+            );
+
             Log::info("Iniciando proceso de envío de movimiento", [
                 'id_container' => $idContainer,
                 'id_container_destino' => $idContainerDestino,

@@ -238,6 +238,62 @@ class SeguimientoConsolidadoDriveCellRepository
         ];
     }
 
+    /**
+     * Al mover proveedores a otro consolidado, las notas manuales siguen a ese Excel.
+     *
+     * @param array<int, int> $proveedorIds
+     */
+    public function reassignManualCells(array $proveedorIds, int $idContenedorOrigen, int $idContenedorDestino): void
+    {
+        if (
+            $proveedorIds === []
+            || $idContenedorOrigen <= 0
+            || $idContenedorDestino <= 0
+            || $idContenedorOrigen === $idContenedorDestino
+            || !Schema::hasTable('contenedor_seguimiento_drive_cells')
+        ) {
+            return;
+        }
+
+        $rows = DB::table('contenedor_seguimiento_drive_cells')
+            ->where('id_contenedor', $idContenedorOrigen)
+            ->whereIn('id_proveedor', $proveedorIds)
+            ->where('is_manual', true)
+            ->get();
+
+        foreach ($rows as $row) {
+            $existing = DB::table('contenedor_seguimiento_drive_cells')
+                ->where('id_contenedor', $idContenedorDestino)
+                ->where('sheet_name', $row->sheet_name)
+                ->where('row_key', $row->row_key)
+                ->where('column_key', $row->column_key)
+                ->first();
+
+            if ($existing) {
+                $destinoVacio = $this->normalizeValue($existing->cell_value) === null;
+                $origenValor = $this->normalizeValue($row->cell_value);
+                if ($destinoVacio && $origenValor !== null) {
+                    DB::table('contenedor_seguimiento_drive_cells')
+                        ->where('id', $existing->id)
+                        ->update([
+                            'cell_value' => $origenValor,
+                            'is_manual' => true,
+                            'updated_at' => Carbon::now(),
+                        ]);
+                }
+                DB::table('contenedor_seguimiento_drive_cells')->where('id', $row->id)->delete();
+                continue;
+            }
+
+            DB::table('contenedor_seguimiento_drive_cells')
+                ->where('id', $row->id)
+                ->update([
+                    'id_contenedor' => $idContenedorDestino,
+                    'updated_at' => Carbon::now(),
+                ]);
+        }
+    }
+
     private function normalizeValue($value): ?string
     {
         if ($value === null) {

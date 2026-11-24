@@ -916,6 +916,7 @@ class SeguimientoConsolidadoDriveService
 
             // Releer Drive justo antes de subir: lo escrito mientras se generaba el Excel (notas de URGENCIA, etc.)
             // se guarda en BD y se reaplica al archivo, en vez de sobrescribirse.
+            // Si esa lectura falla, no se reemplaza el archivo: si no, las notas de este consolidado se borran.
             if (!empty($contenedor->excel_seguimiento_drive_file_id)) {
                 $prePull = app(SeguimientoConsolidadoDriveCellSyncService::class)
                     ->pullFromDrive($idContenedor, 'pre_upload', $flow);
@@ -925,6 +926,12 @@ class SeguimientoConsolidadoDriveService
                     empty($prePull['success']) ? 'warning' : 'info',
                     ['message' => $prePull['message'] ?? null]
                 );
+                if (empty($prePull['success'])) {
+                    return [
+                        'success' => false,
+                        'message' => 'No se pudo leer el Excel en Drive antes de actualizarlo. No se reemplazó el archivo para no borrar las notas.',
+                    ];
+                }
             }
 
             $manualStarted = microtime(true);
