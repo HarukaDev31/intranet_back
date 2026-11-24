@@ -29,6 +29,19 @@ class CodeSupplierPaisPrefixTest extends TestCase
         );
     }
 
+    public function test_el_codigo_internacional_reemplaza_las_iniciales_del_pais()
+    {
+        $this->assertSame('CHL', CodeSupplierHelper::paisPrefix('Chile', 'cl', 'CHL'));
+        $this->assertSame('ECU', CodeSupplierHelper::paisPrefix('Ecuador', 'ec', ' ecu '));
+        $this->assertSame('CHI', CodeSupplierHelper::paisPrefix('Chile', 'cl', ''));
+        $this->assertSame(
+            'PRY3-JUPE5-2',
+            CodeSupplierHelper::generateWithPaisPrefix('Paraguay', 4, 'Juan Perez', 5, 2, 'py', 'PRY')
+        );
+        $this->assertSame('GBR', \App\Models\Pais::iso3DesdeIso2('GB'));
+        $this->assertNull(\App\Models\Pais::iso3DesdeIso2(''));
+    }
+
     public function test_org1_lleva_prefijo_pe()
     {
         $this->assertSame('PE-FRUR16-1', CodeSupplierHelper::generateOrg1('Fruta Urbana', 16, 1));

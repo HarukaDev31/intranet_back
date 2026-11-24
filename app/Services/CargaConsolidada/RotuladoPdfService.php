@@ -5,6 +5,8 @@ namespace App\Services\CargaConsolidada;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\CargaConsolidada\Cotizacion;
 use App\Models\Organizacion;
+use App\Models\Pais;
+use App\Services\CalculadoraImportacion\CodeSupplierHelper;
 use App\Services\Organizacion\OrganizacionMensajeriaService;
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -60,7 +62,7 @@ class RotuladoPdfService
      * @param string $cliente
      * @param string $supplierCode
      * @param string|int $carga
-     * @param array<string, mixed> $opts company, pais_destino, iso2, organizacion_id
+     * @param array<string, mixed> $opts company, pais_destino, iso2, iso3, organizacion_id
      * @return string
      */
     public function buildHtml($cliente, $supplierCode, $carga, array $opts = array())
@@ -106,11 +108,14 @@ class RotuladoPdfService
         $sheetColor = '#E10613';
         if ($tema !== null) {
             $sheetColor = $tema['color'];
-            $marca = $tema['marca'] !== '' ? $tema['marca'] : $marca;
+            $marca = $tema['marca'];
             $marcaSize = $tema['marca_size'];
             $socio = $tema['socio'];
             if ($tema['iso2'] !== '') {
                 $iso2 = $tema['iso2'];
+                // Socios: código internacional del país + número de empresa + socio (ECU1-DAV).
+                $marca = CodeSupplierHelper::paisPrefix($tema['banner'], $iso2, $opts['iso3'] ?? null)
+                    . CodeSupplierHelper::socioEmpresaNumero($orgId) . '-' . $tema['marca'];
                 $paisBanner = $tema['banner'];
                 $paisDestino = $tema['banner'];
             }
@@ -181,6 +186,7 @@ class RotuladoPdfService
             if ($pais['iso2'] !== '') {
                 $opts['iso2'] = $pais['iso2'];
             }
+            $opts['iso3'] = $this->iso3Tarjeta($opts['organizacion_id']);
         }
 
         return $opts;
@@ -218,6 +224,7 @@ class RotuladoPdfService
             if ($pais['iso2'] !== '') {
                 $opts['iso2'] = $pais['iso2'];
             }
+            $opts['iso3'] = $this->iso3Tarjeta($orgId);
         }
 
         $html = $this->buildHtml('Cliente de prueba', 'PRUEBA-1', '11', $opts);
@@ -551,6 +558,16 @@ class RotuladoPdfService
     }
 
     /**
+     * Código internacional del país de la tarjeta del socio. La org 1 lleva su marca fija (PE-PRO).
+     */
+    private function iso3Tarjeta(int $orgId): string
+    {
+        $tema = $this->temaTarjeta($orgId);
+
+        return $tema !== null && $tema['iso2'] !== '' ? Pais::iso3PorIso2($tema['iso2']) : '';
+    }
+
+    /**
      * Tarjeta del paso 3. Org 1 roja, org 2 azul (Ecuador / David), org 3 verde (Bolivia / Genuino).
      * null = plantilla anterior, para el resto de socios.
      *
@@ -572,7 +589,7 @@ class RotuladoPdfService
         if ($orgId === 2) {
             return array(
                 'color' => '#0455C3',
-                'marca' => 'ECU1-DAV',
+                'marca' => 'DAV',
                 'marca_size' => '32pt',
                 'socio' => 'DAVID',
                 'iso2' => 'ec',
@@ -582,7 +599,7 @@ class RotuladoPdfService
         if ($orgId === 3) {
             return array(
                 'color' => '#00AA4E',
-                'marca' => 'BOL2-GE',
+                'marca' => 'GE',
                 'marca_size' => '40pt',
                 'socio' => 'GENUINO',
                 'iso2' => 'bo',
