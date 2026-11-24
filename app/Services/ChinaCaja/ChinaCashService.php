@@ -48,7 +48,10 @@ class ChinaCashService
         $closings = ChinaCashWeek::query()->where('month', $month)->get()->keyBy('starts_on');
         $weeks = [];
         $lastBalance = null;
-        foreach (ChinaCashRules::weeks($month) as $week) {
+        $opening = $this->opening($month);
+        $calendar = ChinaCashRules::weeks($month);
+        $usd = array_map(fn (array $row) => $row + ['from_week' => $this->weekOf($calendar, $row['confirmed_on'])], $this->movements->usdToExchange($organizationIds));
+        foreach ($calendar as $week) {
             $closing = $closings->get($week['starts_on']);
             $lastBalance = $closing ? (float) $closing->balance : $lastBalance;
             $weeks[] = $week + [
@@ -57,10 +60,10 @@ class ChinaCashService
                     'screenshot_name' => $closing->screenshot_name, 'screenshot_url' => $this->files->url($closing->screenshot_path)] : null,
                 'can_close' => !$closing && !$closed && $today->toDateString() >= $week['due_on'],
                 'overdue' => !$closing && !$closed && $today->toDateString() > $week['due_on'],
-                'usd_to_exchange' => $closing ? [] : $this->movements->usdToExchange($organizationIds, $week['ends_on']),
+                'usd_to_exchange' => $closing ? [] : array_values(array_filter($usd, fn (array $row) => $row['confirmed_on'] <= $week['ends_on'])),
+                'system_balance' => $opening === null ? null : round($opening + ChinaCashRules::totals($real, null, min($week['ends_on'], $today->toDateString()))['profit'], 2),
             ];
         }
-        $opening = $this->opening($month);
         $balance = $closed ? (float) $record->closing_balance : ($lastBalance ?? $opening);
         $totals = ChinaCashRules::totals($all);
         $pendingNet = $totals['income_projected'] - $totals['expense_projected'];
@@ -70,6 +73,7 @@ class ChinaCashService
             'exchange_rate' => $rate, 'opening_balance' => $opening, 'opening_editable' => $this->openingEditable($month) && !$closed,
             'balance' => $balance, 'projected_closing' => $opening === null ? null : round($opening + $totals['profit'] + $pendingNet, 2),
             'totals' => $totals, 'previous_totals' => $this->previousTotals($organizationIds, $first),
+            'previous_weeks' => $this->previousWeeks($organizationIds, $first),
             'weeks' => $weeks,
             'real' => $real,
             'pending' => array_values(array_filter($projected, fn (array $row) => !$row['late'])),
@@ -86,38 +90,63 @@ class ChinaCashService
      * Cierres del año. El front los agrupa por mes, trimestre o semestre.
      *
      * @param  array<int, int>  $organizationIds
-     * @return list<array<string, mixed>>
+     * @return array<string, mixed>
      */
     public function history(array $organizationIds, int $year): array
     {
         $today = ChinaCashRules::today();
         $this->chargeFixedCosts($today);
+        $current = $today->format('Y-m');
         $rows = [];
+        $clients = ['in' => [], 'out' => []];
+        $count = ['in' => 0, 'out' => 0];
         for ($m = 1; $m <= 12; $m++) {
             $month = sprintf('%04d-%02d', $year, $m);
-            if ($month > $today->format('Y-m')) {
+            if ($month > $current) {
                 break;
             }
             $record = $this->record($month);
             $closed = $record && $record->closed_at !== null;
             $first = CarbonImmutable::parse($month.'-01');
-            $totals = $closed
-                ? ['income' => (float) $record->income_total, 'expense' => (float) $record->expense_total]
-                : ChinaCashRules::totals($this->movements->real($organizationIds, $first->toDateString(), $first->endOfMonth()->toDateString()));
+            $movements = $this->movements->real($organizationIds, $first->toDateString(), $first->endOfMonth()->toDateString());
+            if ($month === $current && !$closed) {
+                $movements = array_merge($movements, array_values(array_filter(
+                    $this->movements->projected($organizationIds, (float) ($record->exchange_rate ?? 0), $today),
+                    fn (array $row) => str_starts_with($row['date'], $month)
+                )));
+            }
             $opening = $this->opening($month);
-            if (!$closed && $totals['income'] == 0.0 && $totals['expense'] == 0.0 && $opening === null) {
+            if (!$closed && $movements === [] && $opening === null) {
                 continue;
             }
-            $calculated = $opening === null ? null : round($opening + $totals['income'] - $totals['expense'], 2);
-            $bank = $closed ? (float) $record->closing_balance : null;
+            $totals = ChinaCashRules::totals($movements);
+            if ($closed) {
+                $totals = ['income' => (float) $record->income_total, 'expense' => (float) $record->expense_total, 'income_projected' => 0.0, 'expense_projected' => 0.0];
+            }
+            foreach ($movements as $row) {
+                $key = $row['client'] ?? '';
+                $clients[$row['type']][$key] ??= ['client' => $row['client'], 'amount' => 0.0, 'movements' => 0];
+                $clients[$row['type']][$key]['amount'] = round($clients[$row['type']][$key]['amount'] + $row['amount'], 2);
+                $clients[$row['type']][$key]['movements']++;
+                if ($month === $current) {
+                    $count[$row['type']]++;
+                }
+            }
+            $profit = round($totals['income'] + $totals['income_projected'] - $totals['expense'] - $totals['expense_projected'], 2);
             $rows[] = [
-                'month' => $month, 'closed' => $closed, 'opening' => $opening, 'income' => $totals['income'], 'expense' => $totals['expense'],
-                'profit' => round($totals['income'] - $totals['expense'], 2), 'calculated' => $calculated, 'bank' => $bank,
-                'difference' => $bank === null || $calculated === null ? null : round($bank - $calculated, 2),
+                'month' => $month, 'closed' => $closed, 'opening' => $opening ?? 0.0,
+                'income' => $totals['income'], 'income_projected' => $totals['income_projected'],
+                'expense' => $totals['expense'], 'expense_projected' => $totals['expense_projected'],
+                'profit' => $profit, 'final' => round(($opening ?? 0.0) + $profit, 2),
+                'bank' => $closed ? (float) $record->closing_balance : null,
             ];
         }
 
-        return $rows;
+        return [
+            'rows' => $rows,
+            'clients' => array_map(fn (array $list) => array_values($list), $clients),
+            'movements' => $count,
+        ];
     }
 
     public function setRate(string $month, float $rate): void
@@ -230,31 +259,31 @@ class ChinaCashService
     }
 
     /**
-     * Marcar pagada; si se vuelve a invertir, crea la siguiente.
-     *
-     * @param  array{due_on: string, amount: float}|null  $again
+     * Marcar pagada: el egreso va en su fecha programada (o hoy, si ese mes ya está cerrado).
      */
-    public function payInvestment(int $id, string $paidOn, ?array $again): void
+    public function payInvestment(int $id): void
     {
-        $this->guardOpen(substr($paidOn, 0, 7));
-        DB::transaction(function () use ($id, $paidOn, $again) {
+        DB::transaction(function () use ($id) {
             $row = ChinaInvestment::query()->lockForUpdate()->find($id);
             if (!$row || $row->paid_on !== null) {
                 throw new ChinaBillingException('La inversión no existe o ya está pagada.', 409);
             }
-            $row->paid_on = $paidOn;
+            $record = $this->record(substr($row->due_on, 0, 7));
+            $row->paid_on = $record && $record->closed_at !== null ? ChinaCashRules::today()->toDateString() : $row->due_on;
             $row->save();
-            if ($again) {
-                $this->createInvestment(['name' => $row->name, 'previous_id' => $id] + $again);
-            }
         });
     }
 
     public function deleteInvestment(int $id): void
     {
-        if (!ChinaInvestment::query()->where('id', $id)->whereNull('paid_on')->delete()) {
-            throw new ChinaBillingException('Solo se eliminan inversiones sin pagar.', 409);
+        $row = ChinaInvestment::query()->find($id);
+        if (!$row) {
+            throw new ChinaBillingException('Inversión no encontrada.', 404);
         }
+        if ($row->paid_on !== null) {
+            $this->guardOpen(substr($row->paid_on, 0, 7));
+        }
+        $row->delete();
     }
 
     /**
@@ -324,16 +353,22 @@ class ChinaCashService
         if ($record && $record->closed_at !== null) {
             return 'El mes ya está cerrado.';
         }
-        if ($today->toDateString() < CarbonImmutable::parse($month.'-01')->endOfMonth()->toDateString()) {
-            return 'El mes se cierra desde su último día.';
-        }
         $previousOpen = ChinaCashMonth::query()->where('month', '<', $month)->whereNull('closed_at')->exists();
         if ($previousOpen) {
             return 'Cierra primero el mes anterior.';
         }
-        $closed = ChinaCashWeek::query()->where('month', $month)->count();
+        $closed = ChinaCashWeek::query()->where('month', $month)->pluck('starts_on')->all();
+        $open = array_filter(ChinaCashRules::weeks($month), fn (array $week) => !in_array($week['starts_on'], $closed, true));
+        if ($open === []) {
+            return null;
+        }
+        $past = count(array_filter($open, fn (array $week) => $week['ends_on'] < $today->toDateString()));
+        $running = count($open) - $past;
 
-        return $closed < count(ChinaCashRules::weeks($month)) ? 'Cierra todas las semanas del mes.' : null;
+        return 'Primero cierra '.implode(' y ', array_filter([
+            $past ? $past.($past === 1 ? ' semana sin cerrar' : ' semanas sin cerrar') : '',
+            $running ? $running.($running === 1 ? ' semana aún en curso' : ' semanas aún en curso') : '',
+        ]));
     }
 
     private function opening(string $month): ?float
@@ -369,6 +404,34 @@ class ChinaCashService
         return ChinaInvestment::query()->whereYear('due_on', $year)->orderBy('due_on')->get()
             ->map(fn ($row) => ['id' => (int) $row->id, 'name' => $row->name, 'amount' => (float) $row->amount, 'due_on' => $row->due_on, 'paid_on' => $row->paid_on])
             ->values()->all();
+    }
+
+    /**
+     * Semana 1..n del mes en que se confirmó; null si viene de un mes anterior.
+     *
+     * @param  list<array{index: int, starts_on: string, ends_on: string, due_on: string}>  $weeks
+     */
+    private function weekOf(array $weeks, string $date): ?int
+    {
+        foreach ($weeks as $week) {
+            if ($date >= $week['starts_on'] && $date <= $week['ends_on']) {
+                return $week['index'] + 1;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<int, int>  $organizationIds
+     * @return list<array<string, float>>
+     */
+    private function previousWeeks(array $organizationIds, CarbonImmutable $first): array
+    {
+        $previous = $first->subMonth();
+        $real = $this->movements->real($organizationIds, $previous->toDateString(), $previous->endOfMonth()->toDateString());
+
+        return array_map(fn (array $week) => ChinaCashRules::totals($real, $week['starts_on'], $week['ends_on']), ChinaCashRules::weeks($previous->format('Y-m')));
     }
 
     private function record(string $month): ?ChinaCashMonth

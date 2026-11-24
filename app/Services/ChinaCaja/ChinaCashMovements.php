@@ -9,6 +9,7 @@ use App\Models\ChinaCaja\ChinaFreightPaymentItem;
 use App\Models\ChinaCaja\ChinaInvestment;
 use App\Models\PagoProveedor\PagoProveedorEjecucion;
 use App\Models\PagoProveedor\PagoProveedorIngreso;
+use App\Models\PagoProveedor\PagoProveedorSolicitud;
 use App\Models\PagoProveedor\PagoProveedorSolicitudProveedor;
 use App\Services\ChinaBilling\ChinaBillingCalculator;
 use App\Services\ChinaBilling\ChinaBillingReader;
@@ -52,18 +53,22 @@ class ChinaCashMovements
         foreach ($payments as $payment) {
             $out[] = $this->row($this->chinaDate($payment->cashed_at), 'in', self::OPERATION,
                 'Cobro '.$payment->code.' · '.$payment->allocations->map(fn ($a) => $a->operation->code ?? '')->filter()->implode(', '),
-                $names[(int) $payment->organization_id]['name'] ?? '', (float) $payment->yuan_amount, true, 'payment', (int) $payment->id);
+                $names[(int) $payment->organization_id]['name'] ?? '', (float) $payment->yuan_amount, true, 'payment', (int) $payment->id, $names[(int) $payment->organization_id]['name'] ?? null);
         }
         // Pago a proveedor es de todo el negocio (el Encargado China ve todas las solicitudes).
-        foreach (PagoProveedorIngreso::query()->with('solicitud')->whereBetween('received_on', [$from, $to])->get() as $income) {
-            $out[] = $this->row($income->received_on->toDateString(), 'in', self::SUPPLIER, 'Ingreso socio · solicitud '.$income->request_id,
-                'USD '.number_format($income->usd_amount, 2).' × TC '.$income->exchange_rate, $income->yuan_amount, true, 'request', (int) $income->request_id);
+        $incomes = PagoProveedorIngreso::query()->with('solicitud.proveedores', 'solicitud.organizacion')->whereBetween('received_on', [$from, $to])->get();
+        foreach ($incomes as $income) {
+            $out[] = $this->row($income->received_on->toDateString(), 'in', self::SUPPLIER, 'Ingreso socio · '.$this->requestCode($income->solicitud),
+                'USD '.number_format($income->usd_amount, 2).' × TC '.number_format($income->exchange_rate, 4), $income->yuan_amount, true, 'request', (int) $income->request_id, $this->requestClient($income->solicitud));
         }
-        $executions = PagoProveedorEjecucion::query()->with('proveedor')->whereNotNull('yuan_paid')->whereBetween('executed_on', [$from, $to])->get();
-        foreach ($executions as $execution) {
-            $provider = $execution->proveedor;
-            $out[] = $this->row($execution->executed_on->toDateString(), 'out', self::SUPPLIER, 'Pago a proveedor · '.($provider->request_code ?? ''),
-                (string) ($provider->supplier_name ?? $provider->code_supplier ?? ''), (float) $execution->yuan_paid, true, 'request', (int) ($provider->request_id ?? 0));
+        // Una fila por solicitud y día, con cuántos proveedores se pagaron.
+        $executions = PagoProveedorEjecucion::query()->with('proveedor.solicitud.proveedores', 'proveedor.solicitud.organizacion')
+            ->whereNotNull('yuan_paid')->whereBetween('executed_on', [$from, $to])->get()->filter(fn (PagoProveedorEjecucion $e) => $e->proveedor !== null);
+        foreach ($executions->groupBy(fn (PagoProveedorEjecucion $e) => $e->proveedor->request_id.'|'.$e->executed_on->toDateString()) as $group) {
+            $request = $group->first()->proveedor->solicitud;
+            $count = $group->pluck('request_provider_id')->unique()->count();
+            $out[] = $this->row($group->first()->executed_on->toDateString(), 'out', self::SUPPLIER, 'Pago a proveedores · '.$this->requestCode($request),
+                $count.($count === 1 ? ' proveedor' : ' proveedores'), (float) $group->sum('yuan_paid'), true, 'request', (int) $group->first()->proveedor->request_id, $this->requestClient($request));
         }
         $items = ChinaFreightPaymentItem::query()->with('payment')
             ->whereHas('payment', fn ($query) => $query->whereBetween('paid_on', [$from, $to]))->get();
@@ -101,24 +106,25 @@ class ChinaCashMovements
                 continue;
             }
             $out[] = $this->pending(ChinaCashRules::dueBeforeArrival($arrival), $today, 'in', self::OPERATION, 'Cobro '.$operation->code.' · '.$container['label'],
-                $names[(int) $operation->organization_id]['name'] ?? '', $metrics['pending'] * $rate, 'operation', (int) $operation->id);
+                $names[(int) $operation->organization_id]['name'] ?? '', $metrics['pending'] * $rate, 'operation', (int) $operation->id, $names[(int) $operation->organization_id]['name'] ?? null, $arrival);
         }
         foreach ($containers as $container) {
             $arrival = $container['data']['arrival_on'];
             if ($arrival && !$container['freight']['paid'] && (float) $container['data']['freight_usd'] > 0) {
                 $out[] = $this->pending(ChinaCashRules::dueBeforeArrival($arrival), $today, 'out', self::FREIGHT, 'Flete '.$container['label'],
-                    $container['country'], (float) $container['data']['freight_usd'] * $rate, 'container', $container['id']);
+                    $container['country'], (float) $container['data']['freight_usd'] * $rate, 'container', $container['id'], null, $arrival);
             }
         }
         foreach ($this->yuan->list(['bucket' => 'all', 'per_page' => 100000])->items() as $group) {
             $summary = $this->yuan->summary($group);
             $code = $group['providers']->map(fn (PagoProveedorSolicitudProveedor $p) => $p->request_code)->filter()->unique()->implode(' / ');
             $client = (string) ($group['request']->client_name ?: $group['request']->partner);
+            $partner = $this->requestClient($group['request']);
             if ($summary['yuan_pending'] > 0) {
-                $out[] = $this->pending(null, $today, 'out', self::SUPPLIER, 'Pago a proveedores · '.$code, $client, $summary['yuan_pending'], 'request', (int) $group['request']->id);
+                $out[] = $this->pending(null, $today, 'out', self::SUPPLIER, 'Pago a proveedores · '.$code, $client, $summary['yuan_pending'], 'request', (int) $group['request']->id, $partner);
             }
             if ($summary['difference'] < -0.005) {
-                $out[] = $this->pending(null, $today, 'in', self::SUPPLIER, 'Ingreso esperado socio · '.$code, $client, abs($summary['difference']), 'request', (int) $group['request']->id);
+                $out[] = $this->pending(null, $today, 'in', self::SUPPLIER, 'Ingreso esperado socio · '.$code, $client, abs($summary['difference']), 'request', (int) $group['request']->id, $partner);
             }
         }
         $month = $today->format('Y-m');
@@ -156,21 +162,33 @@ class ChinaCashMovements
     }
 
     /** @return array<string, mixed> */
-    private function pending(?CarbonImmutable $due, CarbonImmutable $today, string $type, string $origin, string $title, string $detail, float $amount, ?string $link = null, ?int $linkId = null): array
+    private function pending(?CarbonImmutable $due, CarbonImmutable $today, string $type, string $origin, string $title, string $detail, float $amount, ?string $link = null, ?int $linkId = null, ?string $client = null, ?string $arrival = null): array
     {
         // Lo que ya venció sigue pendiente: se proyecta para hoy.
         $date = $due === null || $due->lt($today) ? $today : $due;
         $days = $due === null ? null : (int) $today->diffInDays($due, false);
 
-        return $this->row($date->toDateString(), $type, $origin, $title, $detail, $amount, false, $link, $linkId)
-            + ['due_on' => $due?->toDateString(), 'days' => $days, 'late' => $days !== null && $days < 0];
+        return $this->row($date->toDateString(), $type, $origin, $title, $detail, $amount, false, $link, $linkId, $client)
+            // Atrasados: solo cobros y fletes (vencen 7 días antes del arribo).
+            + ['due_on' => $due?->toDateString(), 'arrival_on' => $arrival, 'days' => $days, 'late' => $arrival !== null && $days !== null && $days < 0];
     }
 
     /** @return array<string, mixed> */
-    private function row(string $date, string $type, string $origin, string $title, string $detail, float $amount, bool $real, ?string $link = null, ?int $linkId = null): array
+    private function row(string $date, string $type, string $origin, string $title, string $detail, float $amount, bool $real, ?string $link = null, ?int $linkId = null, ?string $client = null): array
     {
         return ['date' => $date, 'type' => $type, 'origin' => $origin, 'title' => $title, 'detail' => $detail,
-            'amount' => round($amount, 2), 'real' => $real, 'link' => $link, 'link_id' => $linkId];
+            'amount' => round($amount, 2), 'real' => $real, 'link' => $link, 'link_id' => $linkId, 'client' => $client ?: null];
+    }
+
+    private function requestCode(?PagoProveedorSolicitud $request): string
+    {
+        return $request ? $request->proveedores->pluck('request_code')->filter()->unique()->implode(' / ') : '';
+    }
+
+    /** Socio que envía los dólares. */
+    private function requestClient(?PagoProveedorSolicitud $request): ?string
+    {
+        return $request ? ($request->organizacion->No_Organizacion ?? $request->partner) : null;
     }
 
     private function chinaDate(mixed $timestamp): string

@@ -70,9 +70,8 @@ class ChinaCajaTest extends TestCase
         $this->assertContains('Flete', $this->kinds());
         $this->assertContains('BL oficial', $this->kinds());
 
-        $this->assertFails(fn () => $this->containers()->payFreight([$id], '2026-11-16', null, false, 7.1, self::ACTOR), 'voucher');
-        $payment = $this->containers()->payFreight([$id], '2026-11-16', null, true, 7.1, self::ACTOR);
-        $this->assertFails(fn () => $this->containers()->payFreight([$id], '2026-11-16', null, true, 7.1, self::ACTOR), 'ya está pagado');
+        $payment = $this->containers()->payFreight([$id], '2026-11-16', null, 7.1, self::ACTOR);
+        $this->assertFails(fn () => $this->containers()->payFreight([$id], '2026-11-16', null, 7.1, self::ACTOR), 'ya está pagado');
         $this->assertFails(fn () => $this->containers()->update($id, ['freight_usd' => 900], [], self::ACTOR), 'anula el pago');
 
         $month = $this->cash()->month([1], '2026-11');
@@ -127,21 +126,23 @@ class ChinaCajaTest extends TestCase
         $this->assertFails(fn () => $this->cash()->closeWeek('2026-11', '2026-11-01', 1, $this->file(), self::ACTOR), 'ya está cerrada');
         $this->cash()->closeWeek('2026-11', '2026-11-09', 950, $this->file(), self::ACTOR);
         $this->assertNotContains('Semana sin cerrar', $this->kinds());
-        $this->assertFails(fn () => $this->cash()->closeMonth('2026-11', 1, self::ACTOR), 'último día');
+        $this->assertFails(fn () => $this->cash()->closeMonth('2026-11', 1, self::ACTOR), 'Primero cierra 2 semanas aún en curso');
 
         $this->cash()->createFixedCost(['name' => 'Alquiler', 'amount' => 300]);
         $this->cash()->createFixedCost(['name' => 'Pausado', 'amount' => 50]);
         $this->cash()->toggleFixedCost(2, false);
         Carbon::setTestNow('2026-11-30 04:00:00');
         CarbonImmutable::setTestNow('2026-11-30 04:00:00');
-        $this->assertFails(fn () => $this->cash()->closeMonth('2026-11', 1, self::ACTOR), 'todas las semanas');
+        $this->assertFails(fn () => $this->cash()->closeMonth('2026-11', 1, self::ACTOR), 'Primero cierra 1 semana sin cerrar y 1 semana aún en curso');
         $this->cash()->closeWeek('2026-11', '2026-11-16', 800, $this->file(), self::ACTOR);
         $this->cash()->closeWeek('2026-11', '2026-11-23', 700, $this->file(), self::ACTOR);
         $this->cash()->closeMonth('2026-11', 690, self::ACTOR);
 
         $this->assertFails(fn () => $this->cash()->setRate('2026-11', 8), 'cerrado');
         $history = $this->cash()->history([1], 2026);
-        $this->assertSame([300.0, 700.0, 690.0, -10.0], [$history[0]['expense'], $history[0]['calculated'], $history[0]['bank'], $history[0]['difference']]);
+        $row = $history['rows'][0];
+        $this->assertSame([300.0, 700.0, 690.0], [$row['expense'], $row['final'], $row['bank']]);
+        $this->assertSame([['client' => null, 'amount' => 300.0, 'movements' => 1]], $history['clients']['out']);
         // Eliminar el costo no cambia lo ya descontado.
         $this->cash()->deleteFixedCost(1);
         $this->assertSame(300.0, $this->cash()->month([1], '2026-11')['totals']['expense']);
@@ -151,12 +152,33 @@ class ChinaCajaTest extends TestCase
         $this->assertSame([690.0, false], [$december['opening_balance'], $december['opening_editable']]);
     }
 
-    public function test_inversion_pagada_puede_repetirse(): void
+    public function test_inversion_sale_en_su_fecha_y_nunca_es_atrasada(): void
     {
-        $this->cash()->createInvestment(['name' => 'Licencias', 'amount' => 100, 'due_on' => '2026-11-18']);
-        $this->cash()->payInvestment(1, '2026-11-16', ['due_on' => '2027-11-18', 'amount' => 120]);
-        $this->assertSame([100.0, '2027-11-18'], [$this->cash()->month([1], '2026-11')['totals']['expense'], DB::table('china_investments')->where('id', 2)->value('due_on')]);
-        $this->assertFails(fn () => $this->cash()->payInvestment(1, '2026-11-16', null), 'ya está pagada');
+        $investment = $this->cash()->createInvestment(['name' => 'Licencias', 'amount' => 100, 'due_on' => '2026-11-05']);
+        $month = $this->cash()->month([1], '2026-11');
+        $this->assertSame([[], -11], [$month['late'], $month['pending'][0]['days']]);
+        $this->cash()->payInvestment($investment->id);
+        $real = $this->cash()->month([1], '2026-11')['real'];
+        $this->assertSame(['2026-11-05', 100.0], [$real[0]['date'], $real[0]['amount']]);
+        $this->assertFails(fn () => $this->cash()->payInvestment($investment->id), 'ya está pagada');
+    }
+
+    public function test_fechas_de_documentacion_no_desbloquean_la_etapa_1(): void
+    {
+        $id = $this->container('RECIBIENDO');
+        DB::table('carga_consolidada_contenedor')->where('id', $id)->update(['fecha_arribo' => '2026-12-01', 'naviera' => 'COSCO']);
+        $row = $this->containers()->find($id, [1]);
+        $this->assertSame([true, 0, '2026-12-01'], [$row['progress']['stages'][0]['locked'], $row['progress']['stages'][0]['done'], $row['data']['arrival_on']]);
+    }
+
+    public function test_usd_sin_cambiar_pasa_a_la_semana_siguiente(): void
+    {
+        DB::table('china_payments')->insert(['code' => 'PG-0001', 'organization_id' => 1, 'paid_on' => '2026-11-03', 'amount_sent' => 500, 'amount_received' => 490, 'confirmed_at' => '2026-11-04 02:00:00']);
+        $this->fakeUpload();
+        $this->cash()->closeWeek('2026-11', '2026-11-01', 10, $this->file(), self::ACTOR);
+        $weeks = $this->cash()->month([1], '2026-11')['weeks'];
+        $this->assertSame([490.0, []], [$weeks[0]['closing']['usd_pending'], $weeks[0]['usd_to_exchange']]);
+        $this->assertSame([490.0, 1], [$weeks[1]['usd_to_exchange'][0]['usd'], $weeks[1]['usd_to_exchange'][0]['from_week']]);
     }
 
     public function test_proveedores_nc_llevan_a_seguimiento(): void
@@ -164,6 +186,26 @@ class ChinaCajaTest extends TestCase
         $this->supplier($this->container('RECIBIENDO'), 0, 'NC');
         $row = collect(app(ChinaPendingService::class)->list([1]))->firstWhere('section', 'Seguimiento');
         $this->assertSame(['1 en NC', '/seguimiento-china?estado=NC'], [$row['tag'], $row['to']]);
+    }
+
+    public function test_pago_a_proveedor_entra_y_sale_agrupado_por_solicitud(): void
+    {
+        $request = DB::table('pago_proveedor_solicitudes')->insertGetId(['organizacion_id' => 1, 'partner' => 'PE', 'client_name' => 'Andina', 'exchange_rate' => 7.1]);
+        foreach ([1, 2] as $position) {
+            $provider = DB::table('pago_proveedor_solicitud_proveedores')->insertGetId(['request_id' => $request, 'currency' => 'RMB', 'position' => $position, 'request_code' => 'PE02NOV26',
+                'stage' => 3, 'status' => 'en_proceso', 'approval_status' => 'aprobado', 'cargo_value_usd' => 100, 'current_installment' => 1, 'current_payment' => 1]);
+            DB::table('pago_proveedor_ejecuciones')->insert(['request_provider_id' => $provider, 'installment' => 1, 'supplier_payment' => 1, 'cargo_amount' => 100, 'yuan_paid' => 710, 'executed_on' => '2026-11-10']);
+        }
+        DB::table('pago_proveedor_ingresos')->insert(['request_id' => $request, 'usd_amount' => 150, 'exchange_rate' => 7.1, 'yuan_amount' => 1065, 'received_on' => '2026-11-09 00:00:00']);
+
+        // El código visible lo arma el modelo de Pago a proveedor.
+        $code = \App\Models\PagoProveedor\PagoProveedorSolicitudProveedor::query()->first()->request_code;
+        $month = $this->cash()->month([1], '2026-11');
+        $this->assertSame([1065.0, 1420.0], [$month['totals']['income'], $month['totals']['expense']]);
+        $this->assertSame(['Pago a proveedores · '.$code, '2 proveedores', 'Pro Business'], [$month['real'][0]['title'], $month['real'][0]['detail'], $month['real'][0]['client']]);
+        $this->assertSame('Ingreso socio · '.$code, $month['real'][1]['title']);
+        // Lo recibido al TC es menor a lo pagado: la diferencia se espera del socio.
+        $this->assertSame(['Ingreso esperado socio · '.$code, 355.0], [$month['pending'][0]['title'], $month['pending'][0]['amount']]);
     }
 
     private function cash(): ChinaCashService
@@ -250,9 +292,15 @@ class ChinaCajaTest extends TestCase
                 $table->string($column)->nullable();
             }
         });
-        $make('pago_proveedor_solicitud_proveedores', ['request_id', 'currency']);
+        $make('pago_proveedor_solicitudes', ['organizacion_id', 'partner', 'client_name', 'origin', 'exchange_rate', 'created_at', 'updated_at']);
+        $make('pago_proveedor_solicitud_proveedores', ['request_id', 'currency', 'position', 'request_code', 'code_supplier', 'supplier_name', 'stage', 'status', 'approval_status',
+            'cargo_value_usd', 'current_installment', 'current_payment', 'china_observation_reason', 'proforma_path', 'summary_json', 'total_amount', 'first_share_percent']);
+        $make('pago_proveedor_datos_proveedor', ['request_provider_id', 'wechat', 'seller_name']);
+        $make('organizacion_paises_habilitados', ['organizacion_id', 'id_pais']);
+        $make('pago_proveedor_abonos', ['request_id', 'request_provider_id', 'exchange_provider_id', 'status']);
+        $make('pago_proveedor_reembolsos', ['request_id', 'request_provider_id', 'status']);
         $make('pago_proveedor_ingresos', ['request_id', 'usd_amount', 'exchange_rate', 'yuan_amount', 'received_on']);
-        $make('pago_proveedor_ejecuciones', ['request_provider_id', 'yuan_paid', 'executed_on']);
+        $make('pago_proveedor_ejecuciones', ['request_provider_id', 'installment', 'supplier_payment', 'cargo_amount', 'yuan_paid', 'executed_on']);
         (require database_path('migrations/2026_11_10_100000_create_china_billing_tables.php'))->up();
         (require database_path('migrations/2026_11_24_100000_create_china_cash_and_container_tables.php'))->up();
     }

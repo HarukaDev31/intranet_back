@@ -20,34 +20,35 @@ class ChinaContainerRules
 
     /** @var array<string, string> */
     public const RESERVATION = [
-        'freight_usd' => 'Precio flete', 'filling_on' => 'Fecha de llenado', 'sailing_on' => 'Fecha de zarpe',
-        'arrival_on' => 'Fecha de llegada', 'shipping_line' => 'Línea naviera', 'destination_port' => 'Puerto destino',
-        'free_days' => 'Sobrestadía', 'container_type' => 'Tipo de contenedor', 'shipper' => 'Shipping',
+        'container_type' => 'Tipo de contenedor', 'shipper' => 'Shipping', 'freight_usd' => 'Precio flete',
+        'filling_on' => 'Fecha de llenado', 'sailing_on' => 'Fecha de zarpe', 'arrival_on' => 'Fecha de llegada',
+        'shipping_line' => 'Línea', 'destination_port' => 'Puerto destino', 'free_days' => 'Sobrestadía',
     ];
 
     /**
-     * @param  array<string, mixed>  $data  datos de la reserva
+     * @param  array<string, mixed>  $data  datos de la reserva; `own_reservation` = China ya escribió alguno (los heredados de Documentación no desbloquean)
      * @return array<string, mixed>
      */
     public static function progress(array $data, float $cbm, bool $closed, bool $hasOperation, CarbonImmutable $today): array
     {
         $has = fn (string $key): bool => trim((string) ($data[$key] ?? '')) !== '' && ($key !== 'freight_usd' || (float) $data[$key] > 0);
         $missing = array_values(array_filter(self::RESERVATION, fn (string $key) => !$has($key), ARRAY_FILTER_USE_KEY));
-        $first = count(self::RESERVATION) - count($missing);
+        $firstLocked = $cbm < self::CBM_TO_UNLOCK && empty($data['own_reservation']);
+        $first = $firstLocked ? 0 : count(self::RESERVATION) - count($missing);
         $second = count(array_filter([!empty($data['list_updated']), $has('bl_consignee'), $has('bl_description')]));
         $third = count(array_filter([$hasOperation, $has('bl_draft_path'), $has('bl_number')]));
 
         $activates = $has('filling_on') ? CarbonImmutable::parse((string) $data['filling_on'])->subDays(2) : null;
         $stages = [
             ['number' => 1, 'title' => 'Reserva de contenedor', 'done' => $first, 'total' => count(self::RESERVATION),
-                'locked' => $first === 0 && $cbm < self::CBM_TO_UNLOCK, 'lock_message' => 'Bloqueada hasta 60 CBM'],
+                'locked' => $firstLocked, 'lock_message' => 'Bloqueada hasta 60 CBM'],
             ['number' => 2, 'title' => 'Días antes del llenado', 'done' => $second, 'total' => 3,
                 'locked' => $second === 0 && ($activates === null || $today->lt($activates)),
                 'lock_message' => $activates
                     ? 'Se activa el '.$activates->format('d/m').' (2 días antes del llenado)'
                     : 'Se activa 2 días antes de la fecha de llenado'],
             ['number' => 3, 'title' => 'Después del llenado', 'done' => $third, 'total' => 3,
-                'locked' => !$closed, 'lock_message' => 'Se activa cuando China cierre el consolidado'],
+                'locked' => $third === 0 && !$closed, 'lock_message' => 'Se activa cuando China cierre el consolidado'],
         ];
         $done = $first + $second + $third;
         $total = array_sum(array_column($stages, 'total'));
@@ -61,7 +62,7 @@ class ChinaContainerRules
 
         return [
             'stages' => $stages, 'percent' => (int) round($done / $total * 100), 'current' => $current,
-            'complete' => $done === $total, 'missing_reservation' => $missing,
+            'complete' => $done === $total, 'missing_reservation' => $firstLocked ? array_values(self::RESERVATION) : $missing,
         ];
     }
 

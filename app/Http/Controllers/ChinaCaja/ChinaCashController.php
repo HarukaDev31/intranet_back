@@ -83,19 +83,13 @@ class ChinaCashController extends Controller
     {
         return $this->run($request, fn () => $this->cash->createInvestment($request->validate([
             'name' => ['required', 'string', 'max:150'], 'amount' => ['required', 'numeric', 'gt:0'], 'due_on' => ['required', 'date_format:Y-m-d'],
+            'previous_id' => ['nullable', 'integer', 'exists:china_investments,id'],
         ])));
     }
 
     public function payInvestment(Request $request, int $id): JsonResponse
     {
-        return $this->run($request, function () use ($request, $id) {
-            $data = $request->validate([
-                'paid_on' => ['required', 'date_format:Y-m-d'],
-                'again_on' => ['nullable', 'date_format:Y-m-d', 'required_with:again_amount'], 'again_amount' => ['nullable', 'numeric', 'gt:0', 'required_with:again_on'],
-            ]);
-            $again = !empty($data['again_on']) ? ['due_on' => $data['again_on'], 'amount' => (float) $data['again_amount']] : null;
-            $this->cash->payInvestment($id, $data['paid_on'], $again);
-        });
+        return $this->run($request, fn () => $this->cash->payInvestment($id));
     }
 
     public function destroyInvestment(Request $request, int $id): JsonResponse

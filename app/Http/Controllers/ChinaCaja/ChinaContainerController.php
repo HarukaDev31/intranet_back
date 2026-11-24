@@ -69,11 +69,11 @@ class ChinaContainerController extends Controller
             $actor = $this->authorization->requireWarehouse($request->user());
             $data = $request->validate([
                 'container_ids' => ['required', 'array', 'min:1'], 'container_ids.*' => ['integer'],
-                'paid_on' => ['required', 'date_format:Y-m-d'], 'manual' => ['sometimes', 'boolean'], 'voucher' => self::FILE_RULE,
+                'paid_on' => ['required', 'date_format:Y-m-d'], 'voucher' => self::FILE_RULE,
             ]);
             $this->cash->guardOpen(substr($data['paid_on'], 0, 7));
             $payment = $this->containers->payFreight($data['container_ids'], $data['paid_on'], $request->file('voucher'),
-                (bool) ($data['manual'] ?? false), $this->cash->rateFor($data['paid_on']), $actor);
+                $this->cash->rateFor($data['paid_on']), $actor);
 
             return $this->ok(new ChinaCajaResource(['id' => $payment->id]), 201);
         });

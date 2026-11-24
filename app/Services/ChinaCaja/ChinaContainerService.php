@@ -143,19 +143,16 @@ class ChinaContainerService
     }
 
     /**
-     * Un voucher puede pagar varios contenedores. Sin voucher solo si se confirma manualmente.
+     * Un voucher puede pagar varios contenedores; sin voucher el pago queda como confirmado manualmente.
      *
      * @param  array<int, int>  $containerIds
      * @param  array{id: int|null, organization_ids: array<int, int>}  $actor
      */
-    public function payFreight(array $containerIds, string $paidOn, ?UploadedFile $voucher, bool $manual, float $rate, array $actor): ChinaFreightPayment
+    public function payFreight(array $containerIds, string $paidOn, ?UploadedFile $voucher, float $rate, array $actor): ChinaFreightPayment
     {
         $containerIds = array_values(array_unique(array_map('intval', $containerIds)));
         if ($containerIds === []) {
             throw new ChinaBillingException('Selecciona al menos un contenedor.');
-        }
-        if (!$voucher && !$manual) {
-            throw new ChinaBillingException('Adjunta el voucher o confirma el pago manualmente.');
         }
         $amounts = [];
         foreach ($containerIds as $id) {
@@ -283,6 +280,8 @@ class ChinaContainerService
                 'client' => $names[(int) $container->organizacion_id]['name'] ?? (string) $container->empresa,
                 'closed' => $closed,
                 'closed_on' => $this->date($container->lista_embarque_uploaded_at ?: $container->f_cierre),
+                // Flujo 3: la fecha mostrada es la de cierre del consolidado.
+                'closing_on' => $this->date($container->f_cierre),
                 'cbm' => round((float) ($cbm[$id] ?? 0), 3),
                 'data' => $data,
                 'bl_draft_url' => $this->url($data['bl_draft_path']),
@@ -291,7 +290,8 @@ class ChinaContainerService
                 'operation_to_approve' => $drafts->has($id),
                 'collection' => $collection,
                 'freight' => [
-                    'paid' => $freight !== null, 'payment_id' => $freight ? (int) $freight->id : null, 'paid_on' => $freight?->paid_on,
+                    'paid' => $freight !== null, 'payment_id' => $freight ? (int) $freight->id : null, 'code' => $freight ? sprintf('PF-%04d', $freight->id) : null,
+                    'usd_amount' => $freight?->usd_amount, 'paid_on' => $freight?->paid_on,
                     'manual' => (bool) ($freight->manual ?? false), 'voucher_name' => $freight?->voucher_name, 'voucher_url' => $this->url($freight?->voucher_path),
                 ],
                 'progress' => ChinaContainerRules::progress($data, (float) ($cbm[$id] ?? 0), $closed, $operation !== null, $today),
@@ -319,6 +319,7 @@ class ChinaContainerService
         $data['freight_usd'] = isset($stage->freight_usd) ? (float) $stage->freight_usd : null;
         $data['list_updated'] = (bool) ($stage->list_updated ?? false);
         $data['telex'] = (bool) ($stage->telex ?? false);
+        $data['own_reservation'] = array_filter(array_keys(ChinaContainerRules::RESERVATION), fn (string $key) => !empty($data[$key])) !== [];
         // Mientras China no los escriba se muestran los que ya puso Documentación.
         $data['sailing_on'] ??= $this->date($container->fecha_zarpe);
         $data['arrival_on'] ??= $this->date($container->fecha_arribo);

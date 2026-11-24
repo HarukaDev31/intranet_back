@@ -50,7 +50,11 @@ class ChinaPendingService
             foreach ($row['progress']['stages'] as $stage) {
                 if (!$stage['locked'] && $stage['done'] < $stage['total']) {
                     $add('Carga consolidada', 'Etapa '.$stage['number'], false, 'Etapa '.$stage['number'], $stage['title'].' pendiente',
-                        $label.' · '.$stage['done'].' de '.$stage['total'],
+                        $label.' · '.$stage['done'].' de '.$stage['total'].match ($stage['number']) {
+                            1 => ' datos',
+                            2 => ' · llenado '.($row['data']['filling_on'] ? date('d/m/Y', strtotime($row['data']['filling_on'])) : '—'),
+                            default => '',
+                        },
                         '/cargaconsolidada/'.($row['closed'] ? 'completados' : 'abiertos').'?etapas='.$row['id'].'&etapa='.$stage['number']);
                 }
             }
@@ -59,8 +63,8 @@ class ChinaPendingService
         foreach ($this->cash->weeksToClose($today) as $week) {
             $overdue = $week['days'] > 0;
             $add('Flujo de caja', 'Semana sin cerrar', $overdue, $overdue ? 'Vencido '.$week['days'].'d' : 'Hoy',
-                'Cerrar semana '.date('d/m', strtotime($week['starts_on'])).' – '.date('d/m', strtotime($week['ends_on'])),
-                'Tocaba cerrar el '.date('d/m', strtotime($week['due_on'])).' · pantallazo + saldo', '/flujo-caja?mes='.$week['month'].'&semana='.$week['starts_on']);
+                'Cerrar semana '.date('d', strtotime($week['starts_on'])).'–'.date('d/m', strtotime($week['ends_on'])),
+                'Tocaba cerrar el '.(date('N', strtotime($week['due_on'])) === '1' ? 'lunes ' : '').date('d/m', strtotime($week['due_on'])).' · pantallazo + saldo', '/flujo-caja?mes='.$week['month'].'&semana='.$week['starts_on']);
         }
         foreach ($this->cash->late($organizationIds, $today) as $late) {
             $to = match ($late['link']) {
@@ -69,7 +73,7 @@ class ChinaPendingService
                 default => '/flujo-caja',
             };
             $add('Flujo de caja', 'Atrasados', true, abs($late['days']).'d atrasado', ($late['type'] === 'out' ? 'Por pagar · ' : '').$late['title'],
-                trim($late['detail'].' · venció '.date('d/m', strtotime($late['due_on'])), ' ·'), $to);
+                trim($late['detail'].' · '.($late['type'] === 'in' ? '+' : '−').'¥'.number_format($late['amount'], 0).' · venció '.date('d/m', strtotime($late['due_on'])), ' ·'), $to);
         }
 
         foreach ($this->drafts->list($organizationIds) as $draft) {
@@ -81,10 +85,10 @@ class ChinaPendingService
             $client = $names[(int) $payment->organization_id]['name'] ?? '';
             if ($status === ChinaBillingCalculator::STATUS_TO_CONFIRM) {
                 $add('Operaciones', 'Por confirmar', false, 'Por confirmar', 'Confirmar ingreso '.$payment->code.' · '.$client,
-                    '$'.number_format((float) $payment->amount_sent, 2), '/operaciones-china?cobro='.$payment->id);
+                    $payment->allocations->map(fn ($a) => $a->operation->code ?? '')->filter()->implode(', ').' · $'.number_format((float) $payment->amount_sent, 0), '/operaciones-china?cobro='.$payment->id);
             } elseif ($status === ChinaBillingCalculator::STATUS_CONFIRMED) {
                 $add('Operaciones', 'Cambiar a RMB', false, 'Cambiar a RMB', 'Cambio a RMB '.$payment->code.' · '.$client,
-                    'Confirmado $'.number_format((float) $payment->amount_received, 2).' · falta el cambio', '/operaciones-china?cobro='.$payment->id);
+                    'Confirmado $'.number_format((float) $payment->amount_received, 0).' · falta el cambio', '/operaciones-china?cobro='.$payment->id);
             }
         }
 
@@ -97,7 +101,7 @@ class ChinaPendingService
             }
             $add('Pago proveedores', $observed ? 'Observado' : 'Pendiente', $observed > 0, $observed ? 'Observado' : 'Pendiente',
                 $group['providers']->pluck('request_code')->filter()->unique()->implode(' / ').' · '.($group['request']->client_name ?: $group['request']->partner),
-                implode(' · ', array_filter([$pending ? $pending.' pendientes' : '', $observed ? $observed.' observados' : ''])),
+                implode(' · ', array_filter([$pending ? $pending.($pending === 1 ? ' pendiente' : ' pendientes') : '', $observed ? $observed.($observed === 1 ? ' observado' : ' observados') : ''])),
                 '/pago-proveedor/pagos-yuanes?solicitud='.$group['request']->id);
         }
 
