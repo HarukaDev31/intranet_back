@@ -3,7 +3,9 @@
 namespace App\Helpers;
 
 use App\Models\CargaConsolidada\ComprobanteForm;
+use App\Models\UserBusiness;
 use App\Models\UsuarioDatosFacturacion;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -16,6 +18,7 @@ use Illuminate\Support\Facades\Log;
  *   - resolveForListing: dada una cotización (y opcionalmente un ComprobanteForm pre-cargado),
  *     devuelve los campos que necesita un listado priorizando el ComprobanteForm persistente
  *     y cayendo al último usuario_datos_facturacion solo si el form no existe.
+ *   - syntheticFromPerfilEmpresa: último respaldo con la empresa del perfil (user_business: razón social + RUC).
  */
 class ComprobanteFormResolverHelper
 {
@@ -28,6 +31,27 @@ class ComprobanteFormResolverHelper
      * @return UsuarioDatosFacturacion|null
      */
     public static function findLatestUsuarioDatosFacturacion($cotizacion)
+    {
+        $idUser = self::resolveIdUser($cotizacion);
+        if ($idUser === null) {
+            return null;
+        }
+
+        return UsuarioDatosFacturacion::query()
+            ->where('id_user', $idUser)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * id del usuario (users) vinculado a la cotización: UserLookupHelper (correo, teléfono, documento)
+     * o, en fallback, DNI/RUC en usuario_datos_facturacion.
+     *
+     * @param object $cotizacion
+     * @return int|null
+     */
+    public static function resolveIdUser($cotizacion)
     {
         $idUser = null;
 
@@ -58,11 +82,89 @@ class ComprobanteFormResolverHelper
             return null;
         }
 
-        return UsuarioDatosFacturacion::query()
-            ->where('id_user', $idUser)
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->first();
+        return $idUser;
+    }
+
+    /**
+     * Datos de la empresa del perfil del cliente («Mi cuenta» › Empresa / RUC, tabla user_business).
+     * Se usa como último respaldo cuando el cliente no llenó el formulario de comprobante ni tiene
+     * historial en usuario_datos_facturacion.
+     *
+     * @param object $cotizacion
+     * @return UserBusiness|null
+     */
+    public static function findUserBusiness($cotizacion)
+    {
+        $idUser = self::resolveIdUser($cotizacion);
+        if ($idUser === null) {
+            return null;
+        }
+
+        $business = UserBusiness::query()->where('user_id', $idUser)->orderByDesc('id')->first();
+        if ($business) {
+            return $business;
+        }
+
+        $idBusiness = DB::table('users')->where('id', $idUser)->value('id_user_business');
+
+        return $idBusiness ? UserBusiness::find((int) $idBusiness) : null;
+    }
+
+    /**
+     * Payload con la forma de ComprobanteForm (FACTURA) a partir de la empresa del perfil.
+     * Devuelve null si no hay razón social o el RUC no tiene 11 dígitos.
+     *
+     * @param UserBusiness $business
+     * @param object $cotizacion Objeto con id y, opcionalmente, id_contenedor.
+     * @return array|null
+     */
+    public static function buildSyntheticFromUserBusiness(UserBusiness $business, $cotizacion)
+    {
+        $ruc = preg_replace('/\D+/', '', (string) ($business->ruc ?? '')) ?? '';
+        $nombre = trim((string) ($business->name ?? ''));
+        if (strlen($ruc) !== 11 || $nombre === '') {
+            return null;
+        }
+
+        return [
+            'id' => null,
+            'id_cotizacion' => (int) $cotizacion->id,
+            'id_contenedor' => !empty($cotizacion->id_contenedor) ? (int) $cotizacion->id_contenedor : null,
+            'id_user' => !empty($business->user_id) ? (int) $business->user_id : null,
+            'tipo_comprobante' => 'FACTURA',
+            'destino_entrega' => null,
+            'domicilio_fiscal' => null,
+            'razon_social' => $nombre,
+            'ruc' => $ruc,
+            'nombre_completo' => null,
+            'dni_carnet' => null,
+            'distrito_id' => null,
+            'created_at' => null,
+            'updated_at' => null,
+            'prefill_from_usuario_datos_facturacion' => true,
+            'prefill_source' => 'perfil_empresa',
+        ];
+    }
+
+    /**
+     * Respaldo final: empresa del perfil del cliente (sin formulario ni historial).
+     *
+     * @param object $cotizacion
+     * @return array|null
+     */
+    public static function syntheticFromPerfilEmpresa($cotizacion)
+    {
+        try {
+            $business = self::findUserBusiness($cotizacion);
+        } catch (\Exception $e) {
+            Log::warning('ComprobanteFormResolverHelper::syntheticFromPerfilEmpresa falló', [
+                'id_cotizacion' => $cotizacion->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+
+        return $business ? self::buildSyntheticFromUserBusiness($business, $cotizacion) : null;
     }
 
     /**
@@ -101,6 +203,7 @@ class ComprobanteFormResolverHelper
             'created_at' => $udf->created_at ? $udf->created_at->toIso8601String() : null,
             'updated_at' => null,
             'prefill_from_usuario_datos_facturacion' => true,
+            'prefill_source' => 'usuario_datos_facturacion',
         ];
 
         if ($tipo === 'FACTURA') {
@@ -189,6 +292,16 @@ class ComprobanteFormResolverHelper
                     'prefill_from_usuario_datos_facturacion' => true,
                 ];
             }
+        }
+
+        $perfil = self::syntheticFromPerfilEmpresa($cotizacion);
+        if ($perfil) {
+            return [
+                'comprobante_form' => $perfil,
+                'tipo_entrega' => null,
+                'form_tipo_comprobante' => 'FACTURA',
+                'prefill_from_usuario_datos_facturacion' => true,
+            ];
         }
 
         return [
