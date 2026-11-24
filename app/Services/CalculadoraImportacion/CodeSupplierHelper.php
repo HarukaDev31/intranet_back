@@ -2,6 +2,8 @@
 
 namespace App\Services\CalculadoraImportacion;
 
+use App\Models\Pais;
+
 /**
  * Helper para generar y manipular code_supplier de calculadora_importacion_proveedores.
  *
@@ -161,13 +163,16 @@ class CodeSupplierHelper
     }
 
     /**
-     * Primeras 3 letras del país (ASCII). Ecuador → ECU, Argentina → ARG, Perú → PER.
-     *
-     * @param mixed $nombrePais
-     * @param mixed $iso2
+     * Código internacional del país (pais.iso3). Ecuador → ECU, Chile → CHL.
+     * Sin iso3 queda el formato anterior: primeras 3 letras del nombre.
      */
-    public static function paisPrefix($nombrePais = null, $iso2 = null): string
+    public static function paisPrefix(?string $nombrePais = null, ?string $iso2 = null, ?string $iso3 = null): string
     {
+        $codigo = strtoupper(trim((string) $iso3));
+        if (preg_match('/^[A-Z]{3}$/', $codigo)) {
+            return $codigo;
+        }
+
         $sanitized = self::sanitize((string) $nombrePais);
         if ($sanitized !== null) {
             $letters = preg_replace('/[^A-Z]/', '', $sanitized);
@@ -176,17 +181,9 @@ class CodeSupplierHelper
             }
         }
 
-        $iso = strtoupper((string) preg_replace('/[^A-Z]/', '', (string) $iso2));
-        $map = [
-            'EC' => 'ECU', 'AR' => 'ARG', 'PE' => 'PER', 'CL' => 'CHL', 'MX' => 'MEX',
-            'CO' => 'COL', 'CN' => 'CHN', 'BO' => 'BOL', 'PY' => 'PRY', 'UY' => 'URY',
-            'VE' => 'VEN', 'PA' => 'PAN', 'BR' => 'BRA', 'US' => 'USA', 'ES' => 'ESP',
-        ];
-        if ($iso !== '' && isset($map[$iso])) {
-            return $map[$iso];
-        }
+        $iso = strtoupper((string) preg_replace('/[^A-Z]/i', '', (string) $iso2));
 
-        return $iso !== '' ? str_pad(substr($iso, 0, 3), 3, 'X') : 'PAI';
+        return Pais::iso3DesdeIso2($iso) ?? ($iso !== '' ? str_pad(substr($iso, 0, 3), 3, 'X') : 'PAI');
     }
 
     /**
@@ -202,34 +199,36 @@ class CodeSupplierHelper
     }
 
     /**
-     * Prefijo resumen socios: {PAIS3}{orgId-1}-{INICIALES}{CARGA}
+     * Prefijo resumen socios: {ISO3}{orgId-1}-{INICIALES}{CARGA}
      * Org 2 Ecuador + Juan Perez + B5 → ECU1-JUPE5
      *
      * @param mixed $nombrePais
      * @param mixed $organizacionId
      * @param mixed $carga
      * @param mixed $iso2
+     * @param mixed $iso3 Código internacional (pais.iso3)
      */
-    public static function basePrefixWithPais($nombrePais, $organizacionId, string $nombreCliente, $carga, $iso2 = null): string
+    public static function basePrefixWithPais($nombrePais, $organizacionId, string $nombreCliente, $carga, $iso2 = null, $iso3 = null): string
     {
-        $head = self::paisPrefix($nombrePais, $iso2) . self::socioEmpresaNumero($organizacionId);
+        $head = self::paisPrefix($nombrePais, $iso2, $iso3) . self::socioEmpresaNumero($organizacionId);
         $rest = self::basePrefix($nombreCliente, $carga);
 
         return $rest !== '' ? ($head . '-' . $rest) : $head;
     }
 
     /**
-     * code_supplier resumen: {PAIS3}{orgId-1}-{INICIALES}{CARGA}-{N}
+     * code_supplier resumen: {ISO3}{orgId-1}-{INICIALES}{CARGA}-{N}
      * Org 2 Ecuador, Juan Perez, B5 → ECU1-JUPE5-1
      *
      * @param mixed $nombrePais
      * @param mixed $organizacionId
      * @param mixed $carga
      * @param mixed $iso2
+     * @param mixed $iso3 Código internacional (pais.iso3)
      */
-    public static function generateWithPaisPrefix($nombrePais, $organizacionId, string $nombreCliente, $carga, int $index, $iso2 = null): string
+    public static function generateWithPaisPrefix($nombrePais, $organizacionId, string $nombreCliente, $carga, int $index, $iso2 = null, $iso3 = null): string
     {
-        $base = self::basePrefixWithPais($nombrePais, $organizacionId, $nombreCliente, $carga, $iso2);
+        $base = self::basePrefixWithPais($nombrePais, $organizacionId, $nombreCliente, $carga, $iso2, $iso3);
         $code = self::sanitize($base . '-' . $index);
 
         return $code ?? ('SUP-' . $index);
