@@ -130,6 +130,8 @@ class ChinaCajaTest extends TestCase
         $this->assertFails(fn () => $this->cash()->closeWeek('2026-11', '2026-11-16', 1, $this->file(), self::ACTOR), 'se cierra desde');
         $this->cash()->closeWeek('2026-11', '2026-11-01', 900, $this->file(), self::ACTOR);
         $this->assertSame(900.0, $this->cash()->month([1], '2026-11')['balance']);
+        $this->assertFalse($this->cash()->month([1], '2026-11')['opening_editable']);
+        $this->assertFails(fn () => $this->cash()->setOpening('2026-11', 5), 'ya no se edita');
         $this->assertFails(fn () => $this->cash()->closeWeek('2026-11', '2026-11-01', 1, $this->file(), self::ACTOR), 'ya está cerrada');
         $this->cash()->closeWeek('2026-11', '2026-11-09', 950, $this->file(), self::ACTOR);
         $this->assertNotContains('Semana sin cerrar', $this->kinds());
