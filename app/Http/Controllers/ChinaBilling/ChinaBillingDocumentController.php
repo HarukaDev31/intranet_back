@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\ChinaBilling;
 
+use App\Exceptions\ChinaBillingException;
 use App\Http\Controllers\Controller;
 use App\Models\ChinaBilling\ChinaDocument;
 use App\Services\ChinaBilling\ChinaBillingAuthorization;
 use App\Services\ChinaBilling\ChinaDocumentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Facturas y balances de pago en PDF (siempre generados por el backend) con su historial de emisiones.
@@ -51,6 +53,15 @@ class ChinaBillingDocumentController extends Controller
 
             return response()->json(['success' => true, 'data' => $this->documents->present($document)], 201);
         });
+    }
+
+    public function download(Request $request, int $documentId): Response
+    {
+        try {
+            return $this->documents->download($documentId, $this->actor($request));
+        } catch (ChinaBillingException $exception) {
+            return response()->json(['success' => false, 'message' => $exception->getMessage()], $exception->status);
+        }
     }
 
     private function history(Request $request, string $type, ?int $operationId, ?int $organizationId): JsonResponse

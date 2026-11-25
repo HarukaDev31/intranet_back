@@ -41,6 +41,7 @@ Route::group(['prefix' => 'china-billing', 'middleware' => 'jwt.auth'], function
     Route::post('operations/{operationId}/documents', [ChinaBillingDocumentController::class, 'issueInvoice'])->whereNumber('operationId');
     Route::get('organizations/{organizationId}/balance-documents', [ChinaBillingDocumentController::class, 'balanceHistory'])->whereNumber('organizationId');
     Route::post('organizations/{organizationId}/balance-documents', [ChinaBillingDocumentController::class, 'issueBalance'])->whereNumber('organizationId');
+    Route::get('documents/{documentId}/download', [ChinaBillingDocumentController::class, 'download'])->whereNumber('documentId');
 
     // Clientes de Almacén China (socios e importadores)
     Route::get('clients', [ChinaClientController::class, 'index']);
@@ -65,5 +66,6 @@ Route::group(['prefix' => 'china-billing', 'middleware' => 'jwt.auth'], function
         Route::post('operations/{operationId}/documents', [ChinaBillingDocumentController::class, 'issueInvoice'])->whereNumber('operationId')->defaults('scope', 'partner');
         Route::get('balance-documents', [ChinaBillingDocumentController::class, 'balanceHistory'])->defaults('scope', 'partner');
         Route::post('balance-documents', [ChinaBillingDocumentController::class, 'issueBalance'])->defaults('scope', 'partner');
+        Route::get('documents/{documentId}/download', [ChinaBillingDocumentController::class, 'download'])->whereNumber('documentId')->defaults('scope', 'partner');
     });
 });

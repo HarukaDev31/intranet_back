@@ -368,6 +368,47 @@ class ContenedorController extends Controller
             $query->whereRaw('LOWER(TRIM(empresa)) = ?', [mb_strtolower(trim((string) $empresaFiltro))]);
         }
 
+        $paisesQuery = clone $query;
+        $paisesQuery->getQuery()->orders = null;
+        $paisIds = $paisesQuery
+            ->without(['pais', 'tcYuan', 'paisFlag', 'organizacion'])
+            ->whereNotNull('id_pais')
+            ->where('id_pais', '>', 0)
+            ->distinct()
+            ->pluck('id_pais')
+            ->map(function ($id) {
+                return (int) $id;
+            })
+            ->filter(function ($id) {
+                return $id > 0;
+            })
+            ->values()
+            ->all();
+
+        $paisesDisponibles = [];
+        if ($paisIds !== []) {
+            $paisesDisponibles = DB::table('pais')
+                ->whereIn('ID_Pais', $paisIds)
+                ->orderBy('No_Pais')
+                ->get(['ID_Pais', 'No_Pais'])
+                ->map(function ($pais) {
+                    return [
+                        'label' => trim((string) $pais->No_Pais),
+                        'value' => (string) $pais->ID_Pais,
+                    ];
+                })
+                ->values()
+                ->all();
+        }
+
+        $paisFiltro = $request->input('id_pais', $request->input('pais'));
+        if ($paisFiltro !== null && $paisFiltro !== '' && strtolower((string) $paisFiltro) !== 'todos') {
+            $paisInt = (int) $paisFiltro;
+            if ($paisInt > 0) {
+                $query->where('id_pais', $paisInt);
+            }
+        }
+
         // Completados: primero por fecha de cierre (más reciente primero).
         if ($completado) {
             $query->orderByRaw('CASE WHEN f_cierre IS NULL THEN 1 ELSE 0 END ASC');
@@ -525,6 +566,7 @@ class ContenedorController extends Controller
                 'anios' => $aniosDisponibles,
                 'organizaciones' => $organizacionesFiltro,
                 'empresas' => $empresasDisponibles,
+                'paises' => $paisesDisponibles,
             ],
         ];
     }
