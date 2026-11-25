@@ -79,6 +79,7 @@ require __DIR__.'/modules/pago-proveedor.php';
 
 // Módulo de Operaciones y Pagos de China (Almacén China / Socio)
 require __DIR__.'/modules/china-billing.php';
+require __DIR__.'/modules/china-caja.php';
 
 // Módulo de Dashboard por Usuario
 require __DIR__.'/modules/dashboard-usuario.php';
