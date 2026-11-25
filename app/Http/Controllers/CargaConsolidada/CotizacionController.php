@@ -40,6 +40,7 @@ use Exception;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use App\Support\BrandLogoPaths;
+use App\Support\Organizacion\SocioOplogistics;
 
 
 class CotizacionController extends Controller
@@ -856,6 +857,10 @@ class CotizacionController extends Controller
         if ($contenedor) {
             $data['cbm_total_china']['sublines'] = app(CustomersHeadersService::class)
                 ->sublineasProyeccionCbm((int) $contenedor->getAttribute('id'));
+        }
+
+        if ($contenedor && SocioOplogistics::es($contenedor->getAttribute('organizacion_id'))) {
+            unset($data['total_isd']);
         }
 
         // Bolivia: sin ISD; Fob, Comisión, Logística (USD) e Impuestos, Despacho, Genuino (Bs).

@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Services\CargaConsolidada\RotuladoPdfService;
+use App\Support\Organizacion\SocioOplogistics;
 use Tests\TestCase;
 
 class RotuladoOrg1CaracteresTest extends TestCase
@@ -101,6 +102,19 @@ class RotuladoOrg1CaracteresTest extends TestCase
         $this->assertStringContainsString('#00887A', $chile);
         $this->assertStringContainsString('智利', $chile);
         $this->assertStringNotContainsString('BOLIVIA', $chile);
+
+        SocioOplogistics::fijarCache(array(4 => false, 9 => true));
+        $opl = $service->buildHtml('CONTACTO', 'ECU4-JUPE1-1', '01', array(
+            'organizacion_id' => 9,
+            'company' => 'OPLOGISTICS',
+            'pais_destino' => 'ECUADOR',
+            'iso2' => 'ec',
+            'iso3' => 'ECU',
+        ));
+        $this->assertStringContainsString('>ECU4-OPL<', $opl);
+        $this->assertStringContainsString('#D81B60', $opl);
+        $this->assertStringContainsString('厄瓜多尔', $opl);
+        $this->assertStringNotContainsString('DAVID', $opl);
 
         $otra = $service->buildHtml('CONTACTO', 'COD-1', '11', array(
             'organizacion_id' => 4,

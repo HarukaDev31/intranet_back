@@ -3,6 +3,7 @@
 namespace App\Services\CalculadoraImportacion;
 
 use App\Models\Pais;
+use App\Support\Organizacion\SocioOplogistics;
 
 /**
  * Helper para generar y manipular code_supplier de calculadora_importacion_proveedores.
@@ -187,12 +188,15 @@ class CodeSupplierHelper
     }
 
     /**
-     * Número de empresa en rotulado: org 2 → 1, org 3 → 2.
+     * Número de empresa en rotulado: org 2 → 1, org 3 → 2. OPLOGISTICS siempre 4.
      *
      * @param mixed $organizacionId
      */
     public static function socioEmpresaNumero($organizacionId): int
     {
+        if (SocioOplogistics::es($organizacionId)) {
+            return SocioOplogistics::NUMERO;
+        }
         $n = (int) $organizacionId - 1;
 
         return $n > 0 ? $n : 0;
