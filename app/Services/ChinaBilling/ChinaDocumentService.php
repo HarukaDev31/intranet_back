@@ -130,6 +130,40 @@ class ChinaDocumentService
     }
 
     /**
+     * @param  array{id: int|null, name: string, organization_ids: array<int, int>}  $actor
+     */
+    public function download(int $documentId, array $actor): \Symfony\Component\HttpFoundation\Response
+    {
+        $document = ChinaDocument::query()
+            ->whereIn('organization_id', $actor['organization_ids'])
+            ->find($documentId);
+        if (!$document) {
+            throw new ChinaBillingException('El documento no existe o no tienes acceso.', 404);
+        }
+
+        $relativePath = $this->storageUploadPathFromDb($document->path);
+        if (!$relativePath) {
+            throw new ChinaBillingException('No se encontró el archivo del documento.', 404);
+        }
+
+        $stream = $this->objectStorage()->readStream($relativePath);
+        if (!$stream) {
+            throw new ChinaBillingException('No se pudo leer el archivo del documento.', 404);
+        }
+
+        $fileName = $document->file_name ?: ('documento-'.$document->id.'.pdf');
+
+        return response()->streamDownload(function () use ($stream) {
+            fpassthru($stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }, $fileName, [
+            'Content-Type' => 'application/pdf',
+        ]);
+    }
+
+    /**
      * @param  array<string, mixed>  $snapshot
      * @param  array{id: int|null, name: string, organization_ids: array<int, int>}  $actor
      */
