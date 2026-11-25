@@ -27,6 +27,7 @@ use App\Models\PaisFlag;
 use App\Jobs\SolicitarDocumentosWhatsAppJob;
 use App\Support\CargaConsolidada\DocumentStatusSync;
 use App\Support\CargaConsolidada\ClientesVisibility;
+use App\Support\Organizacion\SocioOplogistics;
 
 class GeneralController extends Controller
 {
@@ -182,6 +183,10 @@ class GeneralController extends Controller
                 'icon' => 'cryptocurrency-color:soc',
             ],
         ];
+
+        if ($contenedor && SocioOplogistics::es($contenedor->getAttribute('organizacion_id'))) {
+            unset($headersData['total_isd']);
+        }
 
         return response()->json([
             'success' => true,

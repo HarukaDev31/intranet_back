@@ -11,6 +11,7 @@ use App\Services\Organizacion\OrganizacionMensajeriaService;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Support\Facades\Log;
+use App\Support\Organizacion\SocioOplogistics;
 
 /**
      * Generación del PDF de rotulado consolidado.
@@ -568,7 +569,8 @@ class RotuladoPdfService
     }
 
     /**
-     * Tarjeta del paso 3. Org 1 roja, org 2 azul (Ecuador / David), org 3 verde (Bolivia / Genuino).
+     * Tarjeta del paso 3. Org 1 roja, org 2 azul (Ecuador / David), org 3 verde (Bolivia / Genuino),
+     * OPLOGISTICS fucsia (Ecuador).
      * La org 3 con consolidado a Chile lleva su tarjeta con bandera, código y color de Chile.
      * null = plantilla anterior, para el resto de socios.
      *
@@ -608,6 +610,16 @@ class RotuladoPdfService
                 'socio' => 'GENUINO',
                 'iso2' => $esChile ? 'cl' : 'bo',
                 'banner' => $esChile ? 'CHILE' : 'BOLIVIA',
+            );
+        }
+        if (SocioOplogistics::es($orgId)) {
+            return array(
+                'color' => '#D81B60',
+                'marca' => 'OPL',
+                'marca_size' => '32pt',
+                'socio' => 'OPLOGISTICS',
+                'iso2' => 'ec',
+                'banner' => 'ECUADOR',
             );
         }
 

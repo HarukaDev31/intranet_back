@@ -27,6 +27,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use App\Support\Organizacion\SocioOplogistics;
 
 /**
  * Flujo "resumen": organizaciones sin items (calculadora), que suben un
@@ -104,7 +105,7 @@ class CotizacionResumenController extends Controller
             }
 
             if (!empty($result['success'])) {
-                $data = $result['data'];
+                $data = SocioOplogistics::es($orgId) ? SocioOplogistics::ajustarExtraccion($result['data']) : $result['data'];
                 $extractedByAi = true;
             } else {
                 $error = isset($result['error']) ? $result['error'] : 'No se pudo leer el documento';
@@ -402,6 +403,7 @@ class CotizacionResumenController extends Controller
                     : ($data->isNotEmpty() && $data->every(function ($fila) {
                         return !empty($fila['bolivia']);
                     }) ? ResumenFormato::BOLIVIA : ResumenFormato::DEFAULT)),
+                'sin_isd' => SocioOplogistics::es($orgEfectiva),
                 'data' => $data->values(),
                 'headers' => $headers,
                 'pagination' => [

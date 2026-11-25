@@ -3,10 +3,23 @@
 namespace Tests\Unit;
 
 use App\Services\CalculadoraImportacion\CodeSupplierHelper;
+use App\Support\Organizacion\SocioOplogistics;
 use Tests\TestCase;
 
 class CodeSupplierPaisPrefixTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SocioOplogistics::fijarCache([4 => false]);
+    }
+
+    protected function tearDown(): void
+    {
+        SocioOplogistics::fijarCache([]);
+        parent::tearDown();
+    }
+
     public function test_prefijo_pais_tres_letras()
     {
         $this->assertSame('ECU', CodeSupplierHelper::paisPrefix('Ecuador'));
