@@ -178,7 +178,7 @@ class ChinaCashService
     {
         $this->guardOpen($month);
         if (!$this->openingEditable($month)) {
-            throw new ChinaBillingException('El saldo inicial viene del cierre del mes anterior.', 409);
+            throw new ChinaBillingException('El saldo inicial ya no se edita: hay cierres registrados.', 409);
         }
         $this->save($month, ['opening_balance' => $balance]);
     }
@@ -379,9 +379,11 @@ class ChinaCashService
         return $own === null ? null : (float) $own;
     }
 
+    /** Solo el primer mes y antes de cerrar una semana: después el saldo sale de los cierres. */
     private function openingEditable(string $month): bool
     {
-        return !ChinaCashMonth::query()->where('month', '<', $month)->exists();
+        return !ChinaCashMonth::query()->where('month', '<', $month)->exists()
+            && !ChinaCashWeek::query()->where('month', $month)->exists();
     }
 
     /**
