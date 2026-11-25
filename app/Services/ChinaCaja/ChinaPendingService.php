@@ -42,7 +42,7 @@ class ChinaPendingService
             ->whereNull('c.deleted_at')->where('c.estado_cotizador', 'CONFIRMADO')->where('p.estados_proveedor', 'NC')->pluck('c.nombre');
         if ($nc->isNotEmpty()) {
             $add('Seguimiento', 'en NC', false, $nc->count().' en NC', $nc->count().($nc->count() === 1 ? ' proveedor en estado NC' : ' proveedores en estado NC'),
-                $nc->unique()->take(3)->implode(' · '), '/seguimiento-china?estado=NC', $nc->count());
+                $nc->unique()->take(3)->implode(' · ').($nc->unique()->count() > 3 ? ' …' : ''), '/seguimiento-china?estado=NC', $nc->count());
         }
 
         foreach ($rows as $row) {
@@ -109,7 +109,11 @@ class ChinaPendingService
             $status = $row['status'];
             $days = $status['days_to_arrival'];
             $arrived = $days !== null && $days < 0;
-            $when = $arrived ? 'ya arribó' : 'arriba en '.$days.' días';
+            $when = match (true) {
+                $arrived => 'ya arribó',
+                $days === 0 => 'arriba hoy',
+                default => 'arriba en '.$days.($days === 1 ? ' día' : ' días'),
+            };
             $label = $row['label'].' · '.$row['country'];
             $to = '/estado-contenedores-china?contenedor='.$row['id'];
             if ($row['data']['bl_official_path'] === null && $status['bl_due']) {
