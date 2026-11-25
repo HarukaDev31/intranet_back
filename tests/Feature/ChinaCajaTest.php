@@ -113,6 +113,13 @@ class ChinaCajaTest extends TestCase
         $this->assertNotContains('Cambiar a RMB', $this->kinds());
     }
 
+    public function test_sin_tc_ni_saldo_inicio_reclama_las_semanas_del_mes_actual(): void
+    {
+        $weeks = app(ChinaCashService::class)->weeksToClose(CarbonImmutable::parse('2026-11-24'));
+
+        $this->assertSame(['2026-11-01', '2026-11-09', '2026-11-16'], array_column($weeks, 'starts_on'));
+    }
+
     public function test_cierres_de_semana_y_mes_y_saldo_que_pasa_al_mes_siguiente(): void
     {
         Storage::fake('public');

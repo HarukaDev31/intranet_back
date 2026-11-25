@@ -293,11 +293,8 @@ class ChinaCashService
      */
     public function weeksToClose(CarbonImmutable $today): array
     {
-        // El flujo empieza en el primer mes con TC o saldo: antes no hay semanas que reclamar.
-        $start = ChinaCashMonth::query()->min('month');
-        if (!$start) {
-            return [];
-        }
+        // El flujo empieza en el primer mes con TC o saldo; si aún no hay, en el mes actual (lo mismo que muestra Flujo).
+        $start = ChinaCashMonth::query()->min('month') ?? $today->format('Y-m');
         $out = [];
         foreach ([$today->startOfMonth()->subMonth()->format('Y-m'), $today->format('Y-m')] as $month) {
             $record = $this->record($month);
