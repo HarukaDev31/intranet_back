@@ -100,7 +100,8 @@ class RotuladoOrg1CaracteresTest extends TestCase
         $this->assertStringContainsString('>CHL2-GE<', $chile);
         $this->assertStringContainsString('GENUINO', $chile);
         $this->assertStringContainsString('#00887A', $chile);
-        $this->assertStringContainsString('智利', $chile);
+        $this->assertStringNotContainsString('智利', $chile);
+        $this->assertStringNotContainsString('<td class="flag-cell">', $chile);
         $this->assertStringNotContainsString('BOLIVIA', $chile);
 
         SocioOplogistics::fijarCache(array(4 => false, 9 => true));
