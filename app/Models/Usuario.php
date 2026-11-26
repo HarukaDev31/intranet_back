@@ -362,6 +362,18 @@ class Usuario extends Authenticatable implements JWTSubject
     }
 
     /**
+     * Ve prospectos, confirmados y Por embarcar de todos los vendedores en un consolidado.
+     * 28791 jefe de ventas, 28911 Milagros Paico, 29151 Jazmín Ocampo (INC-26-0064).
+     *
+     * @param mixed $idUsuario
+     * @return bool
+     */
+    public static function cotizadorVeProspectosDeTodos($idUsuario)
+    {
+        return in_array((int) $idUsuario, [self::ID_JEFE_VENTAS, 28911, 29151], true);
+    }
+
+    /**
      * El inbox se abre por menú en la intranet. API y canal WS solo exigen sesión.
      *
      * @return bool
