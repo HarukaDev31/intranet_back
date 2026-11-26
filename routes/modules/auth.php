@@ -43,6 +43,7 @@ Route::group(['prefix' => 'auth'], function () {
 Route::group(['prefix' => 'auth/clientes', 'middleware' => 'org.key'], function () {
     Route::post('register', [AuthController::class, 'register'])->middleware('throttle:5,1');
     Route::post('login', [AuthController::class, 'loginCliente'])->middleware('throttle:5,1');
+    Route::post('ver-como', [AuthController::class, 'loginVerComoCliente'])->middleware('throttle:10,1');
     Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:10,1');
     Route::post('reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:10,1');
     

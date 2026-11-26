@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\Auth\ImpersonacionClienteService;
 use Closure;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Tymon\JWTAuth\Exceptions\TokenExpiredException;
@@ -32,7 +33,17 @@ class JWTExternalMiddleware
                     'message' => 'Usuario no encontrado'
                 ], 401);
             }
-            
+
+            // «Ver como cliente»: el personal interno mira la cuenta, no actúa por el cliente.
+            if (app('tymon.jwt.auth')->getPayload()->get(ImpersonacionClienteService::CLAIM) !== null && !$request->isMethodSafe()) {
+                return response()->json([
+                    'success' => false,
+                    'status' => 'error',
+                    'code' => 'SOLO_LECTURA',
+                    'message' => 'Estás viendo la cuenta de un cliente: solo lectura.'
+                ], 403);
+            }
+
         } catch (TokenExpiredException $e) {
             Log::info('Token expirado (usuario externo)');
             return response()->json([

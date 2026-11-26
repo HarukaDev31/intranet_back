@@ -42,7 +42,7 @@ class AuthController extends Controller
      */
     public function __construct()
     {
-        $this->middleware('auth:api', ['except' => ['login', 'register', 'loginCliente', 'meExternal', 'logoutExternal', 'refreshExternal', 'forgotPassword', 'resetPassword']]);
+        $this->middleware('auth:api', ['except' => ['login', 'register', 'loginCliente', 'loginVerComoCliente', 'meExternal', 'logoutExternal', 'refreshExternal', 'forgotPassword', 'resetPassword']]);
     }
 
     /**
@@ -1708,66 +1708,7 @@ class AuthController extends Controller
                 config(['auth.defaults.guard' => 'api-external']);
                 $token = JWTAuth::fromUser($user);
 
-                // Obtener menús del usuario externo
-                $menus = $this->obtenerMenusUsuarioExternoCacheados($user);
-
-                // Cargar la relación con userBusiness
-                $user->load('userBusiness');
-
-                // Preparar información del negocio
-                $business = null;
-                if ($user->userBusiness) {
-                    $business = [
-                        'id' => $user->userBusiness->id,
-                        'name' => $user->userBusiness->name,
-                        'ruc' => $user->userBusiness->ruc,
-                        'comercialCapacity' => $user->userBusiness->comercial_capacity,
-                        'rubric' => $user->userBusiness->rubric,
-                        'socialAddress' => $user->userBusiness->social_address,
-                    ];
-                }
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Iniciando sesión',
-                    'token' => $token,
-                    'token_type' => 'bearer',
-                    'expires_in' => 24 * config('jwt.ttl') * 60,
-                    'user' => [
-                        'id' => $user->id,
-                        'name' => $user->full_name,
-                        'photoUrl' => $this->safePhotoUrl($user->photo_url),
-                        'email' => $user->email,
-                        'dni' => $user->dni, // Campo no disponible en la estructura actual
-                        'fechaNacimiento' => $user->birth_date, // Campo no disponible en la estructura actual
-                        'country' => $user->pais_id, // Campo no disponible en la estructura actual
-                        'city' => $user->provincia_id, // Campo no disponible en la estructura actual
-                        'department' => $user->departamento_id, // Campo no disponible en la estructura actual
-                        'district' => $user->distrito_id, // Campo no disponible en la
-                        'phone' => $user->whatsapp,
-                        'business' => $business,
-                        'importedAmount' => 0, // Campo no disponible en la estructura actual
-                        'importedContainers' => 0, // Campo no disponible en la estructura actual
-                        'goals' => $user->goals,
-                        'domicilio_fiscal' => $user->domicilio_fiscal,
-                        'empresa' => $user->userBusiness,
-                        'raw' => [
-                            'grupo' => [
-                                'id' => 1,
-                                'nombre' => "Cliente",
-                                'descripcion' => "Cliente",
-                                'tipo_privilegio' => 1,
-                                'estado' => 1,
-                                'notificacion' => 1
-                            ],
-                        ],
-                    ],
-
-                    'iCantidadAcessoUsuario' => 1,
-                    'iIdEmpresa' => null,
-                    'menus' => $menus,
-                    'success' => true
-                ]);
+                return response()->json($this->payloadSesionCliente($user, $token, 24 * config('jwt.ttl') * 60));
             } catch (JWTException $e) {
                 return response()->json([
                     'status' => 'error',
@@ -1781,6 +1722,93 @@ class AuthController extends Controller
                 'message' => 'Error al iniciar sesión: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Sesión de «Ver como cliente»: canjea el código de un solo uso que abrió Coordinación desde Entregas.
+     */
+    public function loginVerComoCliente(Request $request, \App\Services\Auth\ImpersonacionClienteService $impersonacion)
+    {
+        $sesion = $impersonacion->canjear(
+            (string) $request->input('codigo', ''),
+            (int) $request->attributes->get('organizacion_id', OrganizacionPortalUrls::ADMIN_ORG),
+            $request->ip()
+        );
+        if ($sesion === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El enlace ya se usó o venció. Ábrelo de nuevo desde Entregas.',
+            ], 422);
+        }
+
+        return response()->json($this->payloadSesionCliente($sesion['user'], $sesion['token'], $sesion['expires_in']));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function payloadSesionCliente(User $user, string $token, int $expiresIn): array
+    {
+        // Obtener menús del usuario externo
+        $menus = $this->obtenerMenusUsuarioExternoCacheados($user);
+
+        // Cargar la relación con userBusiness
+        $user->load('userBusiness');
+
+        // Preparar información del negocio
+        $business = null;
+        if ($user->userBusiness) {
+            $business = [
+                'id' => $user->userBusiness->id,
+                'name' => $user->userBusiness->name,
+                'ruc' => $user->userBusiness->ruc,
+                'comercialCapacity' => $user->userBusiness->comercial_capacity,
+                'rubric' => $user->userBusiness->rubric,
+                'socialAddress' => $user->userBusiness->social_address,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Iniciando sesión',
+            'token' => $token,
+            'token_type' => 'bearer',
+            'expires_in' => $expiresIn,
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->full_name,
+                'photoUrl' => $this->safePhotoUrl($user->photo_url),
+                'email' => $user->email,
+                'dni' => $user->dni, // Campo no disponible en la estructura actual
+                'fechaNacimiento' => $user->birth_date, // Campo no disponible en la estructura actual
+                'country' => $user->pais_id, // Campo no disponible en la estructura actual
+                'city' => $user->provincia_id, // Campo no disponible en la estructura actual
+                'department' => $user->departamento_id, // Campo no disponible en la estructura actual
+                'district' => $user->distrito_id, // Campo no disponible en la
+                'phone' => $user->whatsapp,
+                'business' => $business,
+                'importedAmount' => 0, // Campo no disponible en la estructura actual
+                'importedContainers' => 0, // Campo no disponible en la estructura actual
+                'goals' => $user->goals,
+                'domicilio_fiscal' => $user->domicilio_fiscal,
+                'empresa' => $user->userBusiness,
+                'raw' => [
+                    'grupo' => [
+                        'id' => 1,
+                        'nombre' => "Cliente",
+                        'descripcion' => "Cliente",
+                        'tipo_privilegio' => 1,
+                        'estado' => 1,
+                        'notificacion' => 1
+                    ],
+                ],
+            ],
+
+            'iCantidadAcessoUsuario' => 1,
+            'iIdEmpresa' => null,
+            'menus' => $menus,
+            'success' => true
+        ];
     }
 
     /**
