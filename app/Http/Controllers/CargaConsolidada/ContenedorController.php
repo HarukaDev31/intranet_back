@@ -33,6 +33,7 @@ use App\Models\Pais;
 use App\Support\Organizacion\OrganizacionPaisesHabilitados;
 use App\Services\CargaConsolidada\CargaConsolidadaCacheService;
 use App\Services\CargaConsolidada\CbmImoService;
+use App\Services\CargaConsolidada\ConsolidadoFiltrosService;
 use App\Services\CargaConsolidada\ReporteMarketingService;
 use App\Exports\ContenedoresExport;
 use App\Exports\ReporteMarketingContenedorExport;
@@ -280,16 +281,13 @@ class ContenedorController extends Controller
             $search = trim((string) $request->search);
             $query->where(function ($q) use ($search) {
                 $q->where('carga', 'LIKE', "%$search%")
-                    ->orWhere('mes', 'LIKE', "%$search%");
+                    ->orWhere('mes', 'LIKE', "%$search%")
+                    ->orWhere('empresa', 'LIKE', "%$search%");
             });
         }
 
         if ($request->filled('estado_finanzas') && strtolower((string) $request->estado_finanzas) !== 'todos') {
             $query->where('estado_finanzas', $request->estado_finanzas);
-        }
-
-        if ($request->filled('estado_china') && strtolower((string) $request->estado_china) !== 'todos') {
-            $query->where('estado_china', strtoupper(trim((string) $request->estado_china)));
         }
 
         if (!($authUser instanceof Usuario)) {
@@ -311,103 +309,8 @@ class ContenedorController extends Controller
             }
         }
 
-        $yearsQuery = clone $query;
-        $yearsQuery->getQuery()->orders = null;
-        $aniosDisponibles = $yearsQuery
-            ->without(['pais', 'tcYuan', 'paisFlag', 'organizacion'])
-            ->whereNotNull('f_inicio')
-            ->selectRaw('YEAR(f_inicio) as anio')
-            ->groupBy('anio')
-            ->orderBy('anio', 'desc')
-            ->pluck('anio')
-            ->map(function ($year) {
-                return (int) $year;
-            })
-            ->filter(function ($year) {
-                return $year > 0;
-            })
-            ->values()
-            ->all();
-
-        $anio = $request->input('anio', $request->input('year'));
-        if ($anio !== null && $anio !== '' && strtolower((string) $anio) !== 'todos') {
-            $anioInt = (int) $anio;
-            if ($anioInt >= 2000 && $anioInt <= 2100) {
-                $query->whereYear('f_inicio', $anioInt);
-            }
-        }
-
-        $empresasDisponibles = [];
-        $seenEmpresas = [];
-        $empresasQuery = clone $query;
-        $empresasQuery->getQuery()->orders = null;
-        $nombresEmpresa = $empresasQuery
-            ->without(['pais', 'tcYuan', 'paisFlag', 'organizacion'])
-            ->whereNotNull('empresa')
-            ->where('empresa', '!=', '')
-            ->where('empresa', '!=', '1')
-            ->select('empresa')
-            ->distinct()
-            ->orderBy('empresa')
-            ->pluck('empresa');
-        foreach ($nombresEmpresa as $nombre) {
-            $trimmed = trim((string) $nombre);
-            if ($trimmed === '' || $trimmed === '1') {
-                continue;
-            }
-            $key = mb_strtolower($trimmed);
-            if (isset($seenEmpresas[$key])) {
-                continue;
-            }
-            $seenEmpresas[$key] = true;
-            $empresasDisponibles[] = $trimmed;
-        }
-
-        $empresaFiltro = $request->input('empresa', $request->input('company'));
-        if ($empresaFiltro !== null && $empresaFiltro !== '' && strtolower((string) $empresaFiltro) !== 'todos') {
-            $query->whereRaw('LOWER(TRIM(empresa)) = ?', [mb_strtolower(trim((string) $empresaFiltro))]);
-        }
-
-        $paisesQuery = clone $query;
-        $paisesQuery->getQuery()->orders = null;
-        $paisIds = $paisesQuery
-            ->without(['pais', 'tcYuan', 'paisFlag', 'organizacion'])
-            ->whereNotNull('id_pais')
-            ->where('id_pais', '>', 0)
-            ->distinct()
-            ->pluck('id_pais')
-            ->map(function ($id) {
-                return (int) $id;
-            })
-            ->filter(function ($id) {
-                return $id > 0;
-            })
-            ->values()
-            ->all();
-
-        $paisesDisponibles = [];
-        if ($paisIds !== []) {
-            $paisesDisponibles = DB::table('pais')
-                ->whereIn('ID_Pais', $paisIds)
-                ->orderBy('No_Pais')
-                ->get(['ID_Pais', 'No_Pais'])
-                ->map(function ($pais) {
-                    return [
-                        'label' => trim((string) $pais->No_Pais),
-                        'value' => (string) $pais->ID_Pais,
-                    ];
-                })
-                ->values()
-                ->all();
-        }
-
-        $paisFiltro = $request->input('id_pais', $request->input('pais'));
-        if ($paisFiltro !== null && $paisFiltro !== '' && strtolower((string) $paisFiltro) !== 'todos') {
-            $paisInt = (int) $paisFiltro;
-            if ($paisInt > 0) {
-                $query->where('id_pais', $paisInt);
-            }
-        }
+        // Año, país, empresa y estado China: varios valores por filtro y conteo por opción.
+        $barra = app(ConsolidadoFiltrosService::class)->filtrar($query, $request);
 
         // Completados: primero por fecha de cierre (más reciente primero).
         if ($completado) {
@@ -563,11 +466,14 @@ class ContenedorController extends Controller
                 'to' => $data->lastItem(),
             ],
             'filters' => [
-                'anios' => $aniosDisponibles,
+                'anios' => $barra['anios'],
                 'organizaciones' => $organizacionesFiltro,
-                'empresas' => $empresasDisponibles,
-                'paises' => $paisesDisponibles,
+                'empresas' => $barra['empresas'],
+                'paises' => $barra['paises'],
             ],
+            'facets' => $barra['facets'],
+            // Total antes de año, país, empresa y estado (el «X de Y» de la barra de filtros).
+            'facets_total' => $barra['total'],
         ];
     }
 

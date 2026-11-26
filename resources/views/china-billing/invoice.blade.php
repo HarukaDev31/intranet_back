@@ -48,6 +48,9 @@
     </style>
 </head>
 <body>
+    @if(!empty($watermark))
+        <div style="position: fixed; top: 40%; left: 0; width: 100%; text-align: center; font-size: 84px; font-weight: bold; letter-spacing: 6px; color: #e9b8b8; transform: rotate(-32deg);">{{ $watermark }}</div>
+    @endif
     @include('china-billing.partials.document-header')
 
     <table style="margin: 6px 0 6px;">
@@ -56,7 +59,7 @@
                 <div class="brand">PRO BUSINESS</div>
                 <div class="title">FACTURA CONSOLIDADO</div>
             </td>
-            <td class="right muted" style="vertical-align: bottom;">N° {{ $op['code'] }}<br>Fecha <b style="color: #111;">{{ $dmy($op['issued_on']) }}</b></td>
+            <td class="right muted" style="vertical-align: bottom;">N° {{ $number ?? $op['code'] }}<br>Fecha <b style="color: #111;">{{ $dmy($op['issued_on']) }}</b></td>
         </tr>
     </table>
 
