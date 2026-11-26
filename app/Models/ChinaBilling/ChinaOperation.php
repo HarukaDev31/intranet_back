@@ -21,6 +21,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property float $fob
  * @property float $freight
  * @property int|null $transferred_to_operation_id
+ * @property int|null $updated_by Último usuario que la editó
+ * @property string|null $updated_by_name
  */
 class ChinaOperation extends Model
 {
