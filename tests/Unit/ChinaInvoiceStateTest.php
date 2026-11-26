@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Services\ChinaBilling\ChinaBankAccountService;
 use App\Services\ChinaBilling\ChinaInvoiceState;
 use PHPUnit\Framework\TestCase;
 
@@ -43,5 +44,28 @@ class ChinaInvoiceStateTest extends TestCase
         $changes = ChinaInvoiceState::changes($this->op(), $this->op(['organization' => ['name' => 'Genuino SRL']]));
 
         $this->assertSame([['field' => 'organization.name', 'label' => 'Cliente', 'from' => 'Genuino', 'to' => 'Genuino SRL']], $changes);
+    }
+
+    public function test_misma_cuenta_bancaria_no_marca_cambio(): void
+    {
+        $bank = ['account_number' => 'NRA1560200201059', 'payer_bank' => 'ZHEJIANG'];
+        $active = ['fingerprint' => ChinaBankAccountService::fingerprint($bank + ['company' => '']), 'account' => 'NRA1560200201059'];
+
+        $this->assertNull(ChinaInvoiceState::bankChange($bank, $active));
+    }
+
+    public function test_cuenta_nueva_muestra_los_ultimos_digitos(): void
+    {
+        $active = ['fingerprint' => ChinaBankAccountService::fingerprint(['account_number' => 'NRA999988887777']), 'account' => 'NRA999988887777'];
+
+        $change = ChinaInvoiceState::bankChange(['account_number' => 'NRA1560200201059'], $active);
+        $this->assertSame(['field' => 'bank', 'label' => 'Cuenta bancaria', 'from' => '…1059', 'to' => '…7777'], $change);
+    }
+
+    public function test_otro_dato_bancario_sin_cambiar_la_cuenta(): void
+    {
+        $active = ['fingerprint' => ChinaBankAccountService::fingerprint(['account_number' => 'A1', 'payer_swift' => 'NEW']), 'account' => 'A1'];
+
+        $this->assertSame('Datos bancarios', ChinaInvoiceState::bankChange(['account_number' => 'A1', 'payer_swift' => 'OLD'], $active)['label']);
     }
 }

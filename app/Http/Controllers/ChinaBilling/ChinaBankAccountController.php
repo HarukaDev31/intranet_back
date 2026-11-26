@@ -43,10 +43,10 @@ class ChinaBankAccountController extends Controller
     public function update(Request $request): JsonResponse
     {
         return $this->responder(function () use ($request) {
-            $this->authorization->requireWarehouse($request->user());
+            $actor = $this->authorization->requireWarehouse($request->user());
             $data = $request->validate($this->rules());
 
-            return response()->json(['success' => true, 'data' => $this->accounts->update($data)]);
+            return response()->json(['success' => true, 'data' => $this->accounts->update($data, $actor['name'])]);
         });
     }
 

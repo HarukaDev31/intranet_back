@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Support\CargaConsolidada;
+namespace App\Services\CargaConsolidada;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -10,13 +10,35 @@ use Illuminate\Support\Facades\DB;
  * Filtros de año, país, empresa y estado China del listado de consolidados.
  * Cada filtro acepta varios valores (`anio[]=2026&anio[]=2027` o `anio=2026,2027`);
  * las facetas cuentan cada opción con los demás filtros aplicados.
+ * El controlador solo llama a filtrar(): esto deja el listado filtrado y devuelve lo que pinta la barra.
  */
-class ConsolidadoFiltros
+class ConsolidadoFiltrosService
 {
     public const CLAVES = ['anio', 'id_pais', 'empresa', 'estado_china'];
 
     /** Etiquetas en inglés del Almacén China → valor guardado. */
     private const ESTADOS_ALIAS = ['WAITING' => 'PENDIENTE', 'RECEIVING' => 'RECIBIENDO', 'FINISH' => 'COMPLETADO'];
+
+    /**
+     * Aplica año, país, empresa y estado al listado y devuelve las opciones de la barra.
+     *
+     * @return array{facets: array<string, array<int, array{value: string, label: string, count: int}>>, total: int, anios: array<int, int>, empresas: array<int, string>, paises: array<int, array{label: string, value: string}>}
+     */
+    public function filtrar(Builder $query, Request $request): array
+    {
+        $seleccion = self::seleccion($request);
+        $facetas = self::facetas($query, $seleccion);
+        $total = (clone $query)->count();
+        self::aplicar($query, $seleccion);
+
+        return [
+            'facets' => $facetas,
+            'total' => $total,
+            'anios' => array_map('intval', array_column($facetas['anio'], 'value')),
+            'empresas' => array_column($facetas['empresa'], 'value'),
+            'paises' => array_map(fn ($p) => ['label' => $p['label'], 'value' => $p['value']], $facetas['id_pais']),
+        ];
+    }
 
     /**
      * @return array<string, array<int, string>>

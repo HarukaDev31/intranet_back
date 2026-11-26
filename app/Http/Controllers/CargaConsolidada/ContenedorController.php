@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\CargaConsolidada\Contenedor;
 use App\Support\CargaConsolidada\CargaLabel;
-use App\Support\CargaConsolidada\ConsolidadoFiltros;
 use App\Models\CargaConsolidada\ContenedorPasos;
 use App\Models\CargaConsolidada\ContenedorTcYuan;
 use App\Models\Usuario;
@@ -34,6 +33,7 @@ use App\Models\Pais;
 use App\Support\Organizacion\OrganizacionPaisesHabilitados;
 use App\Services\CargaConsolidada\CargaConsolidadaCacheService;
 use App\Services\CargaConsolidada\CbmImoService;
+use App\Services\CargaConsolidada\ConsolidadoFiltrosService;
 use App\Services\CargaConsolidada\ReporteMarketingService;
 use App\Exports\ContenedoresExport;
 use App\Exports\ReporteMarketingContenedorExport;
@@ -310,13 +310,7 @@ class ContenedorController extends Controller
         }
 
         // Año, país, empresa y estado China: varios valores por filtro y conteo por opción.
-        $seleccion = ConsolidadoFiltros::seleccion($request);
-        $facetas = ConsolidadoFiltros::facetas($query, $seleccion);
-        $totalSinFiltros = (clone $query)->count();
-        ConsolidadoFiltros::aplicar($query, $seleccion);
-        $aniosDisponibles = array_map('intval', array_column($facetas['anio'], 'value'));
-        $empresasDisponibles = array_column($facetas['empresa'], 'value');
-        $paisesDisponibles = array_map(fn ($p) => ['label' => $p['label'], 'value' => $p['value']], $facetas['id_pais']);
+        $barra = app(ConsolidadoFiltrosService::class)->filtrar($query, $request);
 
         // Completados: primero por fecha de cierre (más reciente primero).
         if ($completado) {
@@ -472,14 +466,14 @@ class ContenedorController extends Controller
                 'to' => $data->lastItem(),
             ],
             'filters' => [
-                'anios' => $aniosDisponibles,
+                'anios' => $barra['anios'],
                 'organizaciones' => $organizacionesFiltro,
-                'empresas' => $empresasDisponibles,
-                'paises' => $paisesDisponibles,
+                'empresas' => $barra['empresas'],
+                'paises' => $barra['paises'],
             ],
-            'facets' => $facetas,
+            'facets' => $barra['facets'],
             // Total antes de año, país, empresa y estado (el «X de Y» de la barra de filtros).
-            'facets_total' => $totalSinFiltros,
+            'facets_total' => $barra['total'],
         ];
     }
 

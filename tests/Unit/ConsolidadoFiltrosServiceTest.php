@@ -2,11 +2,11 @@
 
 namespace Tests\Unit;
 
-use App\Support\CargaConsolidada\ConsolidadoFiltros;
+use App\Services\CargaConsolidada\ConsolidadoFiltrosService as ConsolidadoFiltros;
 use Illuminate\Http\Request;
 use PHPUnit\Framework\TestCase;
 
-class ConsolidadoFiltrosTest extends TestCase
+class ConsolidadoFiltrosServiceTest extends TestCase
 {
     public function test_acepta_listas_comas_y_valor_unico(): void
     {

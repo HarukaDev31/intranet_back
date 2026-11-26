@@ -17,7 +17,10 @@ class ChinaBillingReader
 {
     use FileTrait;
 
-    public function __construct(private readonly ChinaDraftService $drafts)
+    public function __construct(
+        private readonly ChinaDraftService $drafts,
+        private readonly ChinaInvoiceState $invoiceState,
+    )
     {
     }
 
@@ -67,7 +70,7 @@ class ChinaBillingReader
         })->values();
 
         $page = $this->paginate($filtered, $filters);
-        $invoices = ChinaInvoiceState::forRows($page->items());
+        $invoices = $this->invoiceState->forRows($page->items());
         $page->setCollection($page->getCollection()->map(
             fn (array $row) => empty($row['is_draft']) ? $row + ['invoice' => $invoices[(int) $row['id']] ?? null] : $row
         ));

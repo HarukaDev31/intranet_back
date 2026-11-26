@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Facturas China por versiones: una vigente por operación, las demás reemplazadas o anuladas, cada una con su motivo.
- * La operación guarda quién la modificó por última vez (para el aviso «Actualizar factura»).
+ * La operación y la cuenta bancaria guardan quién las modificó por última vez (para el aviso «Actualizar factura»).
  */
 return new class extends Migration
 {
@@ -27,6 +27,10 @@ return new class extends Migration
         Schema::table('china_operations', function (Blueprint $table) {
             $table->unsignedBigInteger('updated_by')->nullable()->after('created_by')->comment('Último usuario que la editó');
             $table->string('updated_by_name')->nullable()->after('updated_by')->comment('Nombre de quien la editó por última vez');
+        });
+
+        Schema::table('china_bank_accounts', function (Blueprint $table) {
+            $table->string('updated_by_name')->nullable()->after('is_active')->comment('Nombre de quien cambió la cuenta por última vez');
         });
 
         // Facturas ya emitidas: versiones por orden de emisión; la última queda vigente.
@@ -52,6 +56,9 @@ return new class extends Migration
         });
         Schema::table('china_operations', function (Blueprint $table) {
             $table->dropColumn(['updated_by', 'updated_by_name']);
+        });
+        Schema::table('china_bank_accounts', function (Blueprint $table) {
+            $table->dropColumn('updated_by_name');
         });
     }
 };
