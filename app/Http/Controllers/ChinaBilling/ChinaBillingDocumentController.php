@@ -33,9 +33,32 @@ class ChinaBillingDocumentController extends Controller
     public function issueInvoice(Request $request, int $operationId): JsonResponse
     {
         return $this->responder(function () use ($request, $operationId) {
-            $document = $this->documents->issueInvoice($operationId, $this->actor($request));
+            $actor = $this->actor($request);
+            $document = $request->route('scope') === 'partner'
+                ? $this->documents->currentOrIssueInvoice($operationId, $actor)
+                : $this->documents->issueInvoice($operationId, $actor, $request->input('reason'));
 
             return response()->json(['success' => true, 'data' => $this->documents->present($document)], 201);
+        });
+    }
+
+    /** Marca una versión anterior de la factura como vigente (motivo opcional). */
+    public function markCurrent(Request $request, int $documentId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $documentId) {
+            $document = $this->documents->markCurrent($documentId, $this->actor($request), $request->input('reason'));
+
+            return response()->json(['success' => true, 'data' => $this->documents->present($document)]);
+        });
+    }
+
+    /** Anula la factura vigente (motivo obligatorio). */
+    public function annul(Request $request, int $documentId): JsonResponse
+    {
+        return $this->responder(function () use ($request, $documentId) {
+            $document = $this->documents->annul($documentId, $this->actor($request), $request->input('reason'));
+
+            return response()->json(['success' => true, 'data' => $this->documents->present($document)]);
         });
     }
 

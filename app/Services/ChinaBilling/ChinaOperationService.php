@@ -5,6 +5,7 @@ namespace App\Services\ChinaBilling;
 use App\Models\Usuario;
 use App\Exceptions\ChinaBillingException;
 use App\Models\ChinaBilling\ChinaCreditApplication;
+use App\Models\ChinaBilling\ChinaDocument;
 use App\Models\ChinaBilling\ChinaOperation;
 use App\Models\ChinaBilling\ChinaOperationCost;
 use App\Models\ChinaBilling\ChinaPayment;
@@ -74,8 +75,8 @@ class ChinaOperationService
         $operation = $this->find($id, $actor);
         $this->validateAmounts($data);
 
-        return DB::transaction(function () use ($operation, $data, $packing) {
-            $fields = $this->fields($data);
+        return DB::transaction(function () use ($operation, $data, $packing, $actor) {
+            $fields = $this->fields($data) + ['updated_by' => $actor['id'] ?? null, 'updated_by_name' => $actor['name'] ?? null];
             $sameRate = $operation->rate !== null && $fields['rate'] !== null && abs((float) $operation->rate - (float) $fields['rate']) < 0.005;
             $rateTier = $sameRate && !array_key_exists('rate_tier', $data)
                 ? $operation->rate_tier
@@ -101,6 +102,10 @@ class ChinaOperationService
     public function delete(int $id, array $actor): void
     {
         $operation = $this->find($id, $actor);
+        // Las facturas emitidas (aun anuladas) quedan como historial: la operación ya no se elimina.
+        if (ChinaDocument::query()->where('type', ChinaDocument::TYPE_INVOICE)->where('operation_id', $operation->id)->exists()) {
+            throw new ChinaBillingException('No se puede eliminar: la operación tiene facturas emitidas.', 422);
+        }
 
         DB::transaction(function () use ($operation) {
             ChinaOperation::query()->where('transferred_to_operation_id', $operation->id)->update(['transferred_to_operation_id' => null]);

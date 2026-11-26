@@ -9,6 +9,7 @@ use App\Traits\FileTrait;
 use App\Traits\UsesObjectStorage;
 use Dompdf\Dompdf;
 use Dompdf\Options;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -27,19 +28,33 @@ class ChinaDocumentService
     }
 
     /**
+     * Emite una versión nueva de la factura y la deja vigente (la vigente anterior pasa a reemplazada).
+     * Desde la segunda versión el motivo es obligatorio. Con la operación en caja la vigente queda cerrada:
+     * hay que anularla antes de emitir otra.
+     *
      * @param  array{id: int|null, name: string, organization_ids: array<int, int>}  $actor
      */
-    public function issueInvoice(int $operationId, array $actor): ChinaDocument
+    public function issueInvoice(int $operationId, array $actor, ?string $reason = null): ChinaDocument
     {
-        $operation = ChinaOperation::query()->whereIn('organization_id', $actor['organization_ids'])->find($operationId);
-        if (!$operation) {
-            throw new ChinaBillingException('La operación no existe o no tienes acceso.', 404);
+        $operation = $this->operation($operationId, $actor);
+        $detail = $this->reader->operationDetail($operationId);
+        $current = $this->currentInvoice($operationId);
+        if ($current && $detail['status'] === ChinaBillingCalculator::STATUS_IN_CASH) {
+            throw new ChinaBillingException('La operación está en caja: anula la factura vigente con motivo y genera otra.', 422);
         }
+
+        $previous = (int) ChinaDocument::query()->where('type', ChinaDocument::TYPE_INVOICE)->where('operation_id', $operationId)->max('version');
+        $reason = trim((string) $reason);
+        if ($previous > 0 && $reason === '') {
+            throw new ChinaBillingException('Escribe el motivo de la nueva versión.', 422);
+        }
+        $version = $previous + 1;
 
         $snapshot = [
             'issued_on' => now()->toDateString(),
+            'number' => $operation->code.'-v'.$version,
             'bank' => $this->bankAccount->active(),
-            'operation' => $this->reader->operationDetail($operationId),
+            'operation' => $detail,
             'contact' => $this->contact((int) $operation->organization_id),
         ];
 
@@ -48,10 +63,77 @@ class ChinaDocumentService
             (int) $operation->organization_id,
             $operationId,
             $snapshot,
-            'factura-'.$operation->code,
+            'factura-'.$operation->code.'-v'.$version,
             'china-billing.invoice',
-            $actor
+            $actor,
+            ['version' => $version, 'status' => ChinaDocument::STATUS_CURRENT, 'reason' => mb_substr($reason !== '' ? $reason : 'Emisión inicial', 0, 255)]
         );
+    }
+
+    /**
+     * El socio no versiona: descarga la vigente o, si aún no hay, emite la primera.
+     *
+     * @param  array{id: int|null, name: string, organization_ids: array<int, int>}  $actor
+     */
+    public function currentOrIssueInvoice(int $operationId, array $actor): ChinaDocument
+    {
+        $this->operation($operationId, $actor);
+
+        $current = $this->currentInvoice($operationId);
+        if ($current) {
+            return $current;
+        }
+        if (ChinaDocument::query()->where('type', ChinaDocument::TYPE_INVOICE)->where('operation_id', $operationId)->exists()) {
+            throw new ChinaBillingException('Esta operación aún no tiene una factura vigente.', 422);
+        }
+
+        return $this->issueInvoice($operationId, $actor);
+    }
+
+    /**
+     * Marca una versión anterior como vigente; la vigente actual pasa a reemplazada.
+     *
+     * @param  array{id: int|null, name: string, organization_ids: array<int, int>}  $actor
+     */
+    public function markCurrent(int $documentId, array $actor, ?string $reason): ChinaDocument
+    {
+        $document = $this->invoice($documentId, $actor);
+        if ($document->status === ChinaDocument::STATUS_CURRENT) {
+            return $document;
+        }
+        if ($document->status === ChinaDocument::STATUS_ANNULLED) {
+            throw new ChinaBillingException('Una factura anulada no puede volver a ser vigente.', 422);
+        }
+        if ($this->reader->operationDetail((int) $document->operation_id)['status'] === ChinaBillingCalculator::STATUS_IN_CASH
+            && $this->currentInvoice((int) $document->operation_id)) {
+            throw new ChinaBillingException('La operación está en caja: la factura vigente queda cerrada.', 422);
+        }
+
+        return DB::transaction(function () use ($document, $actor, $reason) {
+            $this->replaceCurrent((int) $document->operation_id, $actor);
+            $document->update($this->statusChange(ChinaDocument::STATUS_CURRENT, $reason, $actor));
+
+            return $document;
+        });
+    }
+
+    /**
+     * Anula la factura vigente con motivo. La operación queda sin vigente hasta generar otra o marcar una anterior.
+     *
+     * @param  array{id: int|null, name: string, organization_ids: array<int, int>}  $actor
+     */
+    public function annul(int $documentId, array $actor, ?string $reason): ChinaDocument
+    {
+        $document = $this->invoice($documentId, $actor);
+        if (trim((string) $reason) === '') {
+            throw new ChinaBillingException('Escribe el motivo de la anulación.', 422);
+        }
+        if ($document->status !== ChinaDocument::STATUS_CURRENT) {
+            throw new ChinaBillingException('Solo se anula la factura vigente.', 422);
+        }
+        $document->update($this->statusChange(ChinaDocument::STATUS_ANNULLED, $reason, $actor));
+
+        return $document;
     }
 
     /**
@@ -104,6 +186,7 @@ class ChinaDocumentService
             ->whereIn('organization_id', $actor['organization_ids'])
             ->when($operationId, fn ($q) => $q->where('operation_id', $operationId))
             ->when($organizationId, fn ($q) => $q->where('organization_id', $organizationId))
+            ->orderByDesc('version')
             ->orderByDesc('id')
             ->get()
             ->map(fn (ChinaDocument $document) => $this->present($document))
@@ -123,6 +206,13 @@ class ChinaDocumentService
             'file_name' => $document->file_name,
             'url' => $this->cdnStorageUrl($document->path),
             'generated_by' => $document->generated_by_name,
+            'version' => $document->version,
+            'number' => $document->type === ChinaDocument::TYPE_INVOICE ? $document->number() : null,
+            'status' => $document->status,
+            'reason' => $document->reason,
+            'status_reason' => $document->status_reason,
+            'status_changed_at' => $document->status_changed_at?->toIso8601String(),
+            'status_changed_by' => $document->status_changed_by_name,
             'total' => $document->type === ChinaDocument::TYPE_INVOICE
                 ? ($document->snapshot['operation']['total'] ?? null)
                 : ($document->snapshot['balance']['total'] ?? null),
@@ -141,6 +231,20 @@ class ChinaDocumentService
             throw new ChinaBillingException('El documento no existe o no tienes acceso.', 404);
         }
 
+        $fileName = $document->file_name ?: ('documento-'.$document->id.'.pdf');
+
+        // Las versiones no vigentes salen con marca de agua (el PDF guardado es el de su emisión).
+        $watermark = match ($document->status) {
+            ChinaDocument::STATUS_REPLACED => 'NO VIGENTE',
+            ChinaDocument::STATUS_ANNULLED => 'ANULADA',
+            default => null,
+        };
+        if ($watermark !== null && $document->type === ChinaDocument::TYPE_INVOICE) {
+            $binary = $this->render('china-billing.invoice', ['watermark' => $watermark, 'number' => $document->number()] + $document->snapshot);
+
+            return response()->streamDownload(fn () => print($binary), $fileName, ['Content-Type' => 'application/pdf']);
+        }
+
         $relativePath = $this->storageUploadPathFromDb($document->path);
         if (!$relativePath) {
             throw new ChinaBillingException('No se encontró el archivo del documento.', 404);
@@ -150,8 +254,6 @@ class ChinaDocumentService
         if (!$stream) {
             throw new ChinaBillingException('No se pudo leer el archivo del documento.', 404);
         }
-
-        $fileName = $document->file_name ?: ('documento-'.$document->id.'.pdf');
 
         return response()->streamDownload(function () use ($stream) {
             fpassthru($stream);
@@ -167,13 +269,29 @@ class ChinaDocumentService
      * @param  array<string, mixed>  $snapshot
      * @param  array{id: int|null, name: string, organization_ids: array<int, int>}  $actor
      */
-    private function store(string $type, int $organizationId, ?int $operationId, array $snapshot, string $baseName, string $view, array $actor): ChinaDocument
+    private function store(string $type, int $organizationId, ?int $operationId, array $snapshot, string $baseName, string $view, array $actor, array $extra = []): ChinaDocument
     {
         $binary = $this->render($view, $snapshot);
         $fileName = $baseName.'-'.now()->format('Ymd-His').'.pdf';
         $path = $this->storagePutContentsForCdn('china-billing/documentos/'.$type.'/'.$organizationId.'/'.$fileName, $binary);
 
-        return ChinaDocument::query()->create([
+        return DB::transaction(function () use ($type, $organizationId, $operationId, $snapshot, $path, $fileName, $actor, $extra) {
+            if ($operationId !== null && ($extra['status'] ?? null) === ChinaDocument::STATUS_CURRENT) {
+                $this->replaceCurrent($operationId, $actor);
+            }
+
+            return $this->createDocument($type, $organizationId, $operationId, $snapshot, $path, $fileName, $actor, $extra);
+        });
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     * @param  array{id: int|null, name: string, organization_ids: array<int, int>}  $actor
+     * @param  array<string, mixed>  $extra
+     */
+    private function createDocument(string $type, int $organizationId, ?int $operationId, array $snapshot, string $path, string $fileName, array $actor, array $extra): ChinaDocument
+    {
+        return ChinaDocument::query()->create($extra + [
             'type' => $type,
             'organization_id' => $organizationId,
             'operation_id' => $operationId,
@@ -184,6 +302,70 @@ class ChinaDocumentService
             'generated_by' => $actor['id'],
             'generated_by_name' => $actor['name'],
         ]);
+    }
+
+    /**
+     * @param  array{id: int|null, name: string, organization_ids: array<int, int>}  $actor
+     */
+    private function operation(int $operationId, array $actor): ChinaOperation
+    {
+        $operation = ChinaOperation::query()->whereIn('organization_id', $actor['organization_ids'])->find($operationId);
+        if (!$operation) {
+            throw new ChinaBillingException('La operación no existe o no tienes acceso.', 404);
+        }
+
+        return $operation;
+    }
+
+    /**
+     * @param  array{id: int|null, name: string, organization_ids: array<int, int>}  $actor
+     */
+    private function invoice(int $documentId, array $actor): ChinaDocument
+    {
+        $document = ChinaDocument::query()->where('type', ChinaDocument::TYPE_INVOICE)
+            ->whereIn('organization_id', $actor['organization_ids'])->find($documentId);
+        if (!$document || !$document->operation_id) {
+            throw new ChinaBillingException('La factura no existe o no tienes acceso.', 404);
+        }
+
+        return $document;
+    }
+
+    private function currentInvoice(int $operationId): ?ChinaDocument
+    {
+        return ChinaDocument::query()->where('type', ChinaDocument::TYPE_INVOICE)->where('operation_id', $operationId)
+            ->where('status', ChinaDocument::STATUS_CURRENT)->orderByDesc('version')->first();
+    }
+
+    /**
+     * @param  array{id: int|null, name: string, organization_ids: array<int, int>}  $actor
+     */
+    private function replaceCurrent(int $operationId, array $actor): void
+    {
+        ChinaDocument::query()->where('type', ChinaDocument::TYPE_INVOICE)->where('operation_id', $operationId)
+            ->where('status', ChinaDocument::STATUS_CURRENT)
+            ->update($this->statusChange(ChinaDocument::STATUS_REPLACED, null, $actor) + ['updated_at' => now()]);
+    }
+
+    /**
+     * @param  array{id: int|null, name: string, organization_ids: array<int, int>}  $actor
+     * @return array<string, mixed>
+     */
+    private function statusChange(string $status, ?string $reason, array $actor): array
+    {
+        $reason = trim((string) $reason);
+        $change = [
+            'status' => $status,
+            'status_changed_at' => now(),
+            'status_changed_by' => $actor['id'],
+            'status_changed_by_name' => $actor['name'],
+        ];
+        // Al pasar a reemplazada se conserva el motivo con el que fue vigente.
+        if ($status !== ChinaDocument::STATUS_REPLACED) {
+            $change['status_reason'] = $reason !== '' ? mb_substr($reason, 0, 255) : null;
+        }
+
+        return $change;
     }
 
     /**

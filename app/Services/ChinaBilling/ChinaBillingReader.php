@@ -66,8 +66,14 @@ class ChinaBillingReader
             ])), $search);
         })->values();
 
+        $page = $this->paginate($filtered, $filters);
+        $invoices = ChinaInvoiceState::forRows($page->items());
+        $page->setCollection($page->getCollection()->map(
+            fn (array $row) => empty($row['is_draft']) ? $row + ['invoice' => $invoices[(int) $row['id']] ?? null] : $row
+        ));
+
         return [
-            'page' => $this->paginate($filtered, $filters),
+            'page' => $page,
             'counts' => $counts,
             'summary' => ChinaBillingCalculator::summary($operations, $payments),
             'credits' => $this->creditsByOrganization($organizationIds, $names),
