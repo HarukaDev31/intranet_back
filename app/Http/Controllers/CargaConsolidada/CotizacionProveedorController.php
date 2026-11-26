@@ -221,7 +221,7 @@ class CotizacionProveedorController extends Controller
                     break;
 
                 case Usuario::ROL_COTIZADOR:
-                    if ($user->getIdUsuario() != 28791 && $user->getIdUsuario() != 28911) {
+                    if (!Usuario::cotizadorVeProspectosDeTodos($user->getIdUsuario())) {
                         $query->where('main.id_usuario', $user->getIdUsuario());
                     }
 
@@ -4108,7 +4108,7 @@ identificar tus paquetes y diferenciarlas de los demás cuando llegue a nuestro 
             // Aplicar filtros de rol
             switch ($rol) {
                 case Usuario::ROL_COTIZADOR:
-                    if ($user->getIdUsuario() != 28791 && $user->getIdUsuario() != 28911) {
+                    if (!Usuario::cotizadorVeProspectosDeTodos($user->getIdUsuario())) {
                         $query->where('main.id_usuario', $user->getIdUsuario());
                     }
                     break;

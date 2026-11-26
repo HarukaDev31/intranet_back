@@ -495,7 +495,7 @@ class CotizacionController extends Controller
                     break;
 
                 case Usuario::ROL_COTIZADOR:
-                    if ($user->getIdUsuario() != 28791 && $user->getIdUsuario() != 28911) {
+                    if (!Usuario::cotizadorVeProspectosDeTodos($user->getIdUsuario())) {
                         $query->where('id_usuario', $user->getIdUsuario());
                     }
                     break;
@@ -1113,7 +1113,7 @@ class CotizacionController extends Controller
         // Headers exclusivos para el tab de pagos (solo contabilidad) - solo en cotizacion-final
         $headersDataPagos = [];
 
-        if ($userIdCheck == "28791" || $userIdCheck == "28911" || $usergroup === Usuario::ROL_RRHH) {
+        if (Usuario::cotizadorVeProspectosDeTodos($userIdCheck) || $usergroup === Usuario::ROL_RRHH) {
             // CBM Vendido por usuario (estado CONFIRMADO)
             //remove cbm_vendido 
             unset($headersData['cbm_vendido']);
