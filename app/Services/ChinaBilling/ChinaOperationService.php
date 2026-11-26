@@ -76,7 +76,7 @@ class ChinaOperationService
         $this->validateAmounts($data);
 
         return DB::transaction(function () use ($operation, $data, $packing, $actor) {
-            $fields = $this->fields($data) + ['updated_by' => $actor['id'] ?? null, 'updated_by_name' => $actor['name'] ?? null];
+            $fields = $this->fields($data);
             $sameRate = $operation->rate !== null && $fields['rate'] !== null && abs((float) $operation->rate - (float) $fields['rate']) < 0.005;
             $rateTier = $sameRate && !array_key_exists('rate_tier', $data)
                 ? $operation->rate_tier
@@ -85,6 +85,8 @@ class ChinaOperationService
                     : $this->rateTier((int) $operation->organization_id, $fields['rate'], $data['rate_tier'] ?? null));
             $operation->update($fields);
             $operation->rate_tier = $rateTier;
+            $operation->updated_by = $actor['id'] ?? null;
+            $operation->updated_by_name = $actor['name'] ?? null;
             $operation->save();
             $this->syncCosts($operation, $data['costs'] ?? []);
             $this->storePacking($operation, $packing);

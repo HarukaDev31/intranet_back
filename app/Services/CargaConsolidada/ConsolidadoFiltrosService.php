@@ -99,7 +99,8 @@ class ConsolidadoFiltrosService
             $query = self::aplicar(clone $base, $seleccion, $clave);
             $query->getQuery()->orders = null;
 
-            return $query->without(['pais', 'tcYuan', 'paisFlag', 'organizacion']);
+            // Consultas agrupadas: se leen como filas planas (stdClass), no como modelos.
+            return $query->without(['pais', 'tcYuan', 'paisFlag', 'organizacion'])->toBase();
         };
 
         $anios = $consulta('anio')->whereNotNull('f_inicio')

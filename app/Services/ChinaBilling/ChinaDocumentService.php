@@ -111,7 +111,7 @@ class ChinaDocumentService
 
         return DB::transaction(function () use ($document, $actor, $reason) {
             $this->replaceCurrent((int) $document->operation_id, $actor);
-            $document->update($this->statusChange(ChinaDocument::STATUS_CURRENT, $reason, $actor));
+            $this->changeStatus($document, ChinaDocument::STATUS_CURRENT, $reason, $actor);
 
             return $document;
         });
@@ -131,7 +131,7 @@ class ChinaDocumentService
         if ($document->status !== ChinaDocument::STATUS_CURRENT) {
             throw new ChinaBillingException('Solo se anula la factura vigente.', 422);
         }
-        $document->update($this->statusChange(ChinaDocument::STATUS_ANNULLED, $reason, $actor));
+        $this->changeStatus($document, ChinaDocument::STATUS_ANNULLED, $reason, $actor);
 
         return $document;
     }
@@ -291,7 +291,10 @@ class ChinaDocumentService
      */
     private function createDocument(string $type, int $organizationId, ?int $operationId, array $snapshot, string $path, string $fileName, array $actor, array $extra): ChinaDocument
     {
-        return ChinaDocument::query()->create($extra + [
+        return ChinaDocument::query()->create([
+            'version' => $extra['version'] ?? null,
+            'status' => $extra['status'] ?? null,
+            'reason' => $extra['reason'] ?? null,
             'type' => $type,
             'organization_id' => $organizationId,
             'operation_id' => $operationId,
@@ -344,28 +347,28 @@ class ChinaDocumentService
     {
         ChinaDocument::query()->where('type', ChinaDocument::TYPE_INVOICE)->where('operation_id', $operationId)
             ->where('status', ChinaDocument::STATUS_CURRENT)
-            ->update($this->statusChange(ChinaDocument::STATUS_REPLACED, null, $actor) + ['updated_at' => now()]);
+            // Al pasar a reemplazada se conserva el motivo con el que fue vigente.
+            ->update([
+                'status' => ChinaDocument::STATUS_REPLACED,
+                'status_changed_at' => now(),
+                'status_changed_by' => $actor['id'],
+                'status_changed_by_name' => $actor['name'],
+                'updated_at' => now(),
+            ]);
     }
 
     /**
      * @param  array{id: int|null, name: string, organization_ids: array<int, int>}  $actor
-     * @return array<string, mixed>
      */
-    private function statusChange(string $status, ?string $reason, array $actor): array
+    private function changeStatus(ChinaDocument $document, string $status, ?string $reason, array $actor): void
     {
         $reason = trim((string) $reason);
-        $change = [
-            'status' => $status,
-            'status_changed_at' => now(),
-            'status_changed_by' => $actor['id'],
-            'status_changed_by_name' => $actor['name'],
-        ];
-        // Al pasar a reemplazada se conserva el motivo con el que fue vigente.
-        if ($status !== ChinaDocument::STATUS_REPLACED) {
-            $change['status_reason'] = $reason !== '' ? mb_substr($reason, 0, 255) : null;
-        }
-
-        return $change;
+        $document->status = $status;
+        $document->status_reason = $reason !== '' ? mb_substr($reason, 0, 255) : null;
+        $document->status_changed_at = now();
+        $document->status_changed_by = $actor['id'];
+        $document->status_changed_by_name = $actor['name'];
+        $document->save();
     }
 
     /**

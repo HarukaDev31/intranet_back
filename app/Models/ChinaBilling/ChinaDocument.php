@@ -22,6 +22,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $reason
  * @property string|null $status_reason
  * @property \Illuminate\Support\Carbon|null $status_changed_at
+ * @property int|null $status_changed_by
+ * @property int|null $generated_by
  * @property string|null $status_changed_by_name
  */
 class ChinaDocument extends Model
