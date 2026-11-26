@@ -16,10 +16,11 @@ class PedidosCursoMenuFilter
     /**
      * Cotizadores que gestionan la venta de curso (además del jefe de ventas).
      * 29409 = Kimberly (cotizaciones6), ticket CFG-26-0057.
+     * 29170 = cuenta curso, mismo perfil, ticket CFG-26-0058.
      *
      * @var array<int, int>
      */
-    private const COTIZADORES_CON_CURSO = [29409];
+    private const COTIZADORES_CON_CURSO = [29409, 29170];
 
     public static function usuarioPuedeVerCurso(int $idUsuario): bool
     {
