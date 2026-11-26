@@ -26,6 +26,7 @@ class LandingLeadAdminService
             $query->where(function ($q) use ($search) {
                 $q->where('nombre', 'like', '%' . $search . '%')
                     ->orWhere('whatsapp', 'like', '%' . $search . '%')
+                    ->orWhere('ip_address', 'like', '%' . $search . '%')
                     ->orWhere('codigo_campana', 'like', '%' . $search . '%');
             });
         }
@@ -53,6 +54,7 @@ class LandingLeadAdminService
             $query->where(function ($q) use ($search) {
                 $q->where('nombre', 'like', '%' . $search . '%')
                     ->orWhere('whatsapp', 'like', '%' . $search . '%')
+                    ->orWhere('ip_address', 'like', '%' . $search . '%')
                     ->orWhere('email', 'like', '%' . $search . '%');
             });
         }
