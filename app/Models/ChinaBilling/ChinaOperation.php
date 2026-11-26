@@ -21,6 +21,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property float $fob
  * @property float $freight
  * @property int|null $transferred_to_operation_id
+ * @property int|null $updated_by Último usuario que la editó
+ * @property string|null $updated_by_name
  */
 class ChinaOperation extends Model
 {
@@ -33,7 +35,7 @@ class ChinaOperation extends Model
     protected $fillable = [
         'code', 'organization_id', 'service_name', 'billing_type', 'variant_name',
         'container_id', 'issued_on', 'description', 'cbm', 'rate', 'rate_tier', 'amount', 'fob',
-        'freight', 'packing_list_path', 'packing_list_name', 'transferred_to_operation_id', 'created_by',
+        'freight', 'packing_list_path', 'packing_list_name', 'transferred_to_operation_id', 'created_by', 'updated_by', 'updated_by_name',
     ];
 
     protected $casts = [

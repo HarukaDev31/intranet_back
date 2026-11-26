@@ -42,6 +42,9 @@ Route::group(['prefix' => 'china-billing', 'middleware' => 'jwt.auth'], function
     Route::get('organizations/{organizationId}/balance-documents', [ChinaBillingDocumentController::class, 'balanceHistory'])->whereNumber('organizationId');
     Route::post('organizations/{organizationId}/balance-documents', [ChinaBillingDocumentController::class, 'issueBalance'])->whereNumber('organizationId');
     Route::get('documents/{documentId}/download', [ChinaBillingDocumentController::class, 'download'])->whereNumber('documentId');
+    // Versiones de factura: marcar vigente o anular (con motivo)
+    Route::post('documents/{documentId}/current', [ChinaBillingDocumentController::class, 'markCurrent'])->whereNumber('documentId');
+    Route::post('documents/{documentId}/annul', [ChinaBillingDocumentController::class, 'annul'])->whereNumber('documentId');
 
     // Clientes de Almacén China (socios e importadores)
     Route::get('clients', [ChinaClientController::class, 'index']);
