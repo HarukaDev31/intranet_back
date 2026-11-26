@@ -122,6 +122,12 @@ class RotuladoPdfService
             }
         }
 
+        // Genuino con consolidado a Chile: la tarjeta va sin bandera y sin el nombre del país en chino.
+        $tarjetaChile = $tema !== null && $tema['iso2'] === 'cl';
+        if ($tarjetaChile) {
+            $htmlContent = preg_replace('#<td class="flag-cell">.*?</td>#s', '', $htmlContent, 1);
+        }
+
         $htmlContent = str_replace('{{cliente}}', htmlspecialchars((string) $cliente, ENT_QUOTES, 'UTF-8'), $htmlContent);
         $htmlContent = str_replace('{{supplier_code}}', htmlspecialchars((string) $supplierCode, ENT_QUOTES, 'UTF-8'), $htmlContent);
         $htmlContent = str_replace('{{carga}}', htmlspecialchars((string) $carga, ENT_QUOTES, 'UTF-8'), $htmlContent);
@@ -132,7 +138,7 @@ class RotuladoPdfService
         $htmlContent = str_replace('{{marca_size}}', $marcaSize, $htmlContent);
         $htmlContent = str_replace('{{sheet_color}}', $sheetColor, $htmlContent);
         $htmlContent = str_replace('{{pais_banner}}', htmlspecialchars($paisBanner, ENT_QUOTES, 'UTF-8'), $htmlContent);
-        $htmlContent = str_replace('{{pais_zh}}', htmlspecialchars($this->paisZh($iso2), ENT_QUOTES, 'UTF-8'), $htmlContent);
+        $htmlContent = str_replace('{{pais_zh}}', $tarjetaChile ? '' : htmlspecialchars($this->paisZh($iso2), ENT_QUOTES, 'UTF-8'), $htmlContent);
         $htmlContent = str_replace('{{socio_nombre}}', htmlspecialchars($socio, ENT_QUOTES, 'UTF-8'), $htmlContent);
         $htmlContent = str_replace('{{noto_face}}', $this->notoFaceCss(), $htmlContent);
 
