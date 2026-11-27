@@ -67,6 +67,9 @@ class Kernel extends ConsoleKernel
             })
             ->withoutOverlapping();
 
+        // China: valida CERRADO (3 etapas listas / etapa vuelta atrás) todos los días
+        $schedule->command('china:sincronizar-cerrado')->dailyAt('04:00')->withoutOverlapping();
+
         // Telescope: borrar entries > 7 días (domingo 04:00 Lima) para no inflar la BD en prod
         $schedule->command('telescope:prune --hours=48')
             ->weeklyOn(0, '04:00')
