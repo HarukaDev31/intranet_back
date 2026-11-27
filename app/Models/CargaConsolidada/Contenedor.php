@@ -15,6 +15,7 @@ use App\Support\CargaConsolidada\CargaLabel;
 
 /**
  * @property int $id
+ * @property \Illuminate\Support\Carbon|null $china_cerrado_at
  * @property string|null $mes
  * @property int|null $id_pais
  * @property int|null $organizacion_id
@@ -65,6 +66,8 @@ class Contenedor extends Model
     use SoftDeletes;
 
     const CONTEDOR_CERRADO="COMPLETADO";
+    /** Estado que se muestra en Completados cuando el Encargado China completó las 3 etapas (china_cerrado_at). */
+    const ESTADO_CHINA_CERRADO = 'CERRADO';
     const CONTEDOR_PENDIENTE="PENDIENTE";
 
     /** Letras disponibles al partir (máx. 10 subconsolidados). */
@@ -90,6 +93,7 @@ class Contenedor extends Model
      * @var array
      */
     protected $fillable = [
+        'china_cerrado_at',
         'mes',
         'id_pais',
         'organizacion_id',
@@ -190,6 +194,7 @@ class Contenedor extends Model
      * @var array
      */
     protected $casts = [
+        'china_cerrado_at' => 'datetime',
         'f_puerto' => 'datetime',
         'f_entrega' => 'datetime',
         'f_cierre' => 'date',

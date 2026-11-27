@@ -274,6 +274,10 @@ class ContenedorController extends Controller
             } else {
                 $query->where('estado_china', '!=', Contenedor::CONTEDOR_CERRADO);
             }
+            // Completados → filtro CERRADO (COMPLETADO con las 3 etapas completas).
+            if ($completado && strtoupper((string) $request->estado_china) === Contenedor::ESTADO_CHINA_CERRADO) {
+                $query->whereNotNull('china_cerrado_at');
+            }
         }
         $query->where('empresa', '!=', 1);
 
@@ -409,7 +413,8 @@ class ContenedorController extends Controller
                 'fecha_zarpe' => $c->fecha_zarpe,
                 'empresa' => $c->empresa,
                 'estado_documentacion' => $c->estado_documentacion,
-                'estado_china' => $c->estado_china,
+                // Completados: COMPLETADO con las 3 etapas listas se muestra como CERRADO (china_cerrado_at).
+                'estado_china' => $c->china_cerrado_at ? Contenedor::ESTADO_CHINA_CERRADO : $c->estado_china,
                 'estado_finanzas' => $c->estado_finanzas,
                 'pais' => $c->pais,
                 'pais_iso2' => $c->paisFlag ? strtolower((string) $c->paisFlag->iso2) : null,
