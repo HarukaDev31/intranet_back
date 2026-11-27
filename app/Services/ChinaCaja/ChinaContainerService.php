@@ -37,6 +37,7 @@ class ChinaContainerService
     public function __construct(
         private readonly ChinaBillingReader $billing,
         private readonly ChinaDraftService $drafts,
+        private readonly ChinaBlDraftReader $blDraft,
     ) {
     }
 
@@ -117,6 +118,13 @@ class ChinaContainerService
             if (!empty($files[$kind])) {
                 $values[$kind.'_path'] = $this->storeFile($files[$kind], 'china-contenedores', $kind.'-'.$containerId);
                 $values[$kind.'_name'] = $files[$kind]->getClientOriginalName();
+            }
+        }
+        if (!empty($files['bl_draft'])) {
+            // El N. BL sale de la celda «B/L. NO.» del Excel; si no se encuentra se conserva el que ya tenía.
+            $detected = $this->blDraft->blNumber($files['bl_draft']);
+            if ($detected !== null) {
+                $values['bl_number'] = $detected;
             }
         }
 
