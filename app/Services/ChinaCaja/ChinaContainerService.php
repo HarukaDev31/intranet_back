@@ -137,8 +137,27 @@ class ChinaContainerService
             }
         });
         $this->memo = [];
+        $this->marcarCerradoSiCompleto($containerId, $this->find($containerId, $actor['organization_ids']));
+        $this->memo = [];
 
         return $this->find($containerId, $actor['organization_ids']);
+    }
+
+    /**
+     * CERRADO: cuando el consolidado ya está en COMPLETADO y se completan las 3 etapas, se marca la fecha una sola vez.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function marcarCerradoSiCompleto(int $containerId, array $row): void
+    {
+        if (!($row['progress']['complete'] ?? false)) {
+            return;
+        }
+        $contenedor = Contenedor::query()->withoutGlobalScopes()->find($containerId);
+        if (!$contenedor || $contenedor->estado_china !== Contenedor::CONTEDOR_CERRADO || $contenedor->china_cerrado_at) {
+            return;
+        }
+        $contenedor->forceFill(['china_cerrado_at' => now()])->save();
     }
 
     /** @return array{lines: array<int, string>, shippers: array<int, string>, container_types: array<int, string>} */
