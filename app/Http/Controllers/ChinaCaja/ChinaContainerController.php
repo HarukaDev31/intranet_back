@@ -21,6 +21,9 @@ class ChinaContainerController extends Controller
 
     private const FILE_RULE = ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:20480'];
 
+    /** El BL draft es el Excel de la naviera: de ahí se toma el N. BL (celda «B/L. NO.»). */
+    private const BL_DRAFT_RULE = ['nullable', 'file', 'mimes:xlsx,xls', 'max:20480'];
+
     public function __construct(
         private readonly ChinaBillingAuthorization $authorization,
         private readonly ChinaContainerService $containers,
@@ -54,7 +57,7 @@ class ChinaContainerController extends Controller
                 'bl_consignee' => ['nullable', 'string', 'max:200'], 'bl_description' => ['nullable', 'string', 'max:255'], 'bl_number' => ['nullable', 'string', 'max:60'],
                 'list_updated' => ['sometimes', 'boolean'], 'telex' => ['sometimes', 'boolean'],
                 'remove_bl_draft' => ['sometimes', 'boolean'], 'remove_bl_official' => ['sometimes', 'boolean'],
-                'bl_draft' => self::FILE_RULE, 'bl_official' => self::FILE_RULE,
+                'bl_draft' => self::BL_DRAFT_RULE, 'bl_official' => self::FILE_RULE,
             ]);
             unset($data['bl_draft'], $data['bl_official']);
             $files = ['bl_draft' => $request->file('bl_draft'), 'bl_official' => $request->file('bl_official')];
