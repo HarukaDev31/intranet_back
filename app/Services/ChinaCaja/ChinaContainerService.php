@@ -282,7 +282,8 @@ class ChinaContainerService
 
             return [
                 'id' => $id,
-                'label' => 'Consolidado #'.$container->cargaConParte(),
+                // Como en la tabla: «Consolidado #24-2026» (año de inicio del consolidado).
+                'label' => 'Consolidado #'.$container->cargaConParte().($container->f_inicio ? '-'.date('Y', strtotime((string) $container->f_inicio)) : ''),
                 'country' => (string) ($container->pais->No_Pais ?? ''),
                 'organization_id' => (int) $container->organizacion_id,
                 'client' => $names[(int) $container->organizacion_id]['name'] ?? (string) $container->empresa,

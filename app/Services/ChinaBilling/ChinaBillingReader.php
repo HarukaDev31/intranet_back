@@ -4,6 +4,7 @@ namespace App\Services\ChinaBilling;
 
 use App\Models\CargaConsolidada\Contenedor;
 use App\Models\ChinaBilling\ChinaOperation;
+use App\Models\ChinaCaja\ChinaContainerStage;
 use App\Models\ChinaBilling\ChinaPayment;
 use App\Traits\FileTrait;
 use Illuminate\Support\Collection;
@@ -39,9 +40,15 @@ class ChinaBillingReader
         $names = $this->organizationNames($organizationIds);
 
         $rows = $operations->map(fn (ChinaOperation $op) => $this->presentOperation($op, ChinaBillingCalculator::operationMetrics($op), $names));
-        $drafts = $this->drafts->list($organizationIds)
-            ->filter(fn (array $draft) => $this->inRange($draft['issued_on'], $filters['from'] ?? null, $filters['to'] ?? null))
-            ->map(fn (array $draft) => $this->presentDraft($draft, $names));
+        $draftList = $this->drafts->list($organizationIds)
+            ->filter(fn (array $draft) => $this->inRange($draft['issued_on'], $filters['from'] ?? null, $filters['to'] ?? null));
+        // Flete de la Etapa 1 del contenedor: se prellena al aprobar el borrador.
+        $freights = ChinaContainerStage::query()
+            ->whereIn('container_id', $draftList->pluck('container_id'))
+            ->pluck('freight_usd', 'container_id');
+        $drafts = $draftList->map(fn (array $draft) => $this->presentDraft($draft + [
+            'freight' => $freights->has($draft['container_id']) ? round((float) $freights->get($draft['container_id']), 2) : null,
+        ], $names));
 
         $all = $rows->concat($drafts)->sortByDesc('issued_on')->values();
         $search = mb_strtolower(trim((string) ($filters['search'] ?? '')));
@@ -319,6 +326,7 @@ class ChinaBillingReader
             'billing_type' => ChinaOperation::BILLING_CBM,
             'container_id' => $draft['container_id'],
             'cbm' => $draft['cbm'],
+            'freight' => $draft['freight'] ?? null,
             'status' => 'draft',
             'total' => 0.0,
         ];
