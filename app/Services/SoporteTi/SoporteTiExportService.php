@@ -101,7 +101,7 @@ class SoporteTiExportService
             'Mensajes: ' . $mensajes . ' | Adjuntos: ' . $adjuntos
                 . ' | Desde: ' . ($primero ? $this->fecha($primero->created_at) : '-')
                 . ' | Hasta: ' . ($ultimo ? $this->fecha($ultimo->created_at) : '-'),
-            'Exportado: ' . $generado . ' (' . self::TZ . ') por ' . ($user instanceof Usuario ? trim((string) $user->No_Nombres_Apellidos) : 'Soporte'),
+            'Exportado: ' . $generado . ' (' . self::TZ . ') por ' . ($user instanceof Usuario ? $this->nombre($user) : 'Soporte'),
         );
         if ($s->maqueta) {
             $out[] = 'Maqueta: ' . $s->maqueta->nombre . ' | ruta: ' . $s->maqueta->ruta_archivo . ' | aprobada: ' . ($s->maqueta->aprobada ? 'sí' : 'no');
@@ -125,7 +125,7 @@ class SoporteTiExportService
         foreach ($historial as $h) {
             $de = $h->estadoAnterior ? ($h->estadoAnterior->nombre ?: $h->estadoAnterior->codigo) : '(inicio)';
             $a = $h->estado ? ($h->estado->nombre ?: $h->estado->codigo) : '?';
-            $quien = $h->usuario ? trim((string) $h->usuario->No_Nombres_Apellidos) : ($h->usuario_id ? 'user ' . $h->usuario_id : 'sistema');
+            $quien = $h->usuario ? $this->nombre($h->usuario) : ($h->usuario_id ? 'user ' . $h->usuario_id : 'sistema');
             $out[] = '[' . $this->fecha($h->created_at) . '] ' . $de . ' -> ' . $a . ' por ' . $quien
                 . (trim((string) $h->comentario) !== '' ? ' | ' . trim((string) $h->comentario) : '');
         }
@@ -173,6 +173,11 @@ class SoporteTiExportService
         }
 
         return $out;
+    }
+
+    private function nombre(Usuario $usuario): string
+    {
+        return trim((string) $usuario->getAttribute('No_Nombres_Apellidos'));
     }
 
     private function fecha($valor): string

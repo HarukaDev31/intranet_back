@@ -4,6 +4,7 @@ namespace App\Models\SoporteTi;
 
 use App\Models\Usuario;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SoporteTiMensaje extends Model
 {
@@ -44,7 +45,10 @@ class SoporteTiMensaje extends Model
         return $this->belongsTo(self::class, 'reply_to_id');
     }
 
-    public function imagenes()
+    /**
+     * @return HasMany<SoporteTiMensajeImagen, $this>
+     */
+    public function imagenes(): HasMany
     {
         return $this->hasMany(SoporteTiMensajeImagen::class, 'mensaje_id')->orderBy('orden');
     }
