@@ -50,6 +50,7 @@ Route::group(['prefix' => 'soporte-ti', 'middleware' => 'jwt.auth'], function ()
     Route::post('/solicitudes/{id}/mensajes', [SoporteTiSolicitudController::class, 'postMensaje']);
     Route::post('/solicitudes/{id}/maqueta', [SoporteTiSolicitudController::class, 'postMaqueta']);
 
+    Route::get('/solicitudes/{id}/exportar', [SoporteTiSolicitudController::class, 'exportar']);
     Route::get('/solicitudes/{id}', [SoporteTiSolicitudController::class, 'show']);
     Route::put('/solicitudes/{id}', [SoporteTiSolicitudController::class, 'update']);
     Route::delete('/solicitudes/{id}', [SoporteTiSolicitudController::class, 'destroy']);
