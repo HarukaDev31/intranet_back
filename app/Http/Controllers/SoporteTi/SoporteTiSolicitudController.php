@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\SoporteTi;
 
 use App\Http\Controllers\Controller;
+use App\Services\SoporteTi\SoporteTiExportService;
 use App\Services\SoporteTi\SoporteTiService;
 use App\Support\SoporteTi\RespondsSoporteTiJson;
 use Illuminate\Http\Request;
@@ -53,6 +54,16 @@ class SoporteTiSolicitudController extends Controller
     {
         try {
             return $this->soporteTiOk($this->service->obtenerSolicitud($id, Auth::user()));
+        } catch (\Throwable $e) {
+            return $this->soporteTiFail($e);
+        }
+    }
+
+    /** Texto completo del ticket y su chat (con rutas de adjuntos). Solo rol Soporte. */
+    public function exportar($id, SoporteTiExportService $export)
+    {
+        try {
+            return $this->soporteTiOk($export->exportar($id, Auth::user()));
         } catch (\Throwable $e) {
             return $this->soporteTiFail($e);
         }
