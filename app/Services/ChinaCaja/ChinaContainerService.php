@@ -137,27 +137,70 @@ class ChinaContainerService
             }
         });
         $this->memo = [];
-        $this->marcarCerradoSiCompleto($containerId, $this->find($containerId, $actor['organization_ids']));
+        $this->sincronizarCerrado($containerId, $this->find($containerId, $actor['organization_ids']));
         $this->memo = [];
 
         return $this->find($containerId, $actor['organization_ids']);
     }
 
     /**
-     * CERRADO: cuando el consolidado ya está en COMPLETADO y se completan las 3 etapas, se marca la fecha una sola vez.
+     * Alinea china_cerrado_at con las 3 etapas para todos los consolidados candidatos:
+     * marca la fecha si están COMPLETADO y las 3 etapas listas; la limpia si alguna etapa volvió atrás.
+     *
+     * @return array{revisados: int, marcados: int, limpiados: int}
+     */
+    public function sincronizarCerrados(bool $dryRun = false): array
+    {
+        $candidatos = Contenedor::query()->withoutGlobalScopes()
+            ->whereNull('deleted_at')
+            ->where(fn ($query) => $query->where('estado_china', Contenedor::CONTEDOR_CERRADO)->orWhereNotNull('china_cerrado_at'))
+            ->get(['id', 'organizacion_id']);
+        $resumen = ['revisados' => $candidatos->count(), 'marcados' => 0, 'limpiados' => 0];
+        if ($candidatos->isEmpty()) {
+            return $resumen;
+        }
+
+        $organizationIds = $candidatos->pluck('organizacion_id')->filter()->map(fn ($id) => (int) $id)->unique()->values()->all();
+        $rows = $this->rows($organizationIds)->keyBy('id');
+        foreach ($candidatos as $contenedor) {
+            // Fuera del flujo de China (p. ej. cerrados antes de borradores_desde): no se toca.
+            $row = $rows->get((int) $contenedor->id);
+            if ($row === null) {
+                continue;
+            }
+            $accion = $this->sincronizarCerrado((int) $contenedor->id, $row, $dryRun);
+            if ($accion === 'marcar') {
+                $resumen['marcados']++;
+            } elseif ($accion === 'limpiar') {
+                $resumen['limpiados']++;
+            }
+        }
+
+        return $resumen;
+    }
+
+    /**
+     * CERRADO = consolidado COMPLETADO con las 3 etapas listas. Devuelve la acción aplicada: 'marcar', 'limpiar' o null.
      *
      * @param  array<string, mixed>  $row
      */
-    private function marcarCerradoSiCompleto(int $containerId, array $row): void
+    private function sincronizarCerrado(int $containerId, array $row, bool $dryRun = false): ?string
     {
-        if (!($row['progress']['complete'] ?? false)) {
-            return;
-        }
         $contenedor = Contenedor::query()->withoutGlobalScopes()->find($containerId);
-        if (!$contenedor || $contenedor->estado_china !== Contenedor::CONTEDOR_CERRADO || $contenedor->china_cerrado_at) {
-            return;
+        if (!$contenedor) {
+            return null;
         }
-        $contenedor->forceFill(['china_cerrado_at' => now()])->save();
+        $debeEstarCerrado = $contenedor->estado_china === Contenedor::CONTEDOR_CERRADO && (bool) ($row['progress']['complete'] ?? false);
+        $accion = match (true) {
+            $debeEstarCerrado && !$contenedor->china_cerrado_at => 'marcar',
+            !$debeEstarCerrado && $contenedor->china_cerrado_at !== null => 'limpiar',
+            default => null,
+        };
+        if ($accion !== null && !$dryRun) {
+            $contenedor->forceFill(['china_cerrado_at' => $accion === 'marcar' ? now() : null])->save();
+        }
+
+        return $accion;
     }
 
     /** @return array{lines: array<int, string>, shippers: array<int, string>, container_types: array<int, string>} */
